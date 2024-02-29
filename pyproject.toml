@@ -7,9 +7,13 @@ license = "MIT"
 readme = "README.md"
 packages = [{include = "bids_ngff_tools"}]
 
+
+[tool.poetry.scripts]
+bids-ngff-tools = "bids_ngff_tools.main:app"
+
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0"
-typer = "^0.9.0"
+typer = {extras = ["all"], version = "^0.9.0"}
 zarr = "^2.17.0"
 nibabel = "^5.2.0"
 dask = "^2024.2.0"
