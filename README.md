@@ -1,1 +1,1 @@
-# bids-ngff-tools
+# ome-zarr-neuro
