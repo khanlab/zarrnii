@@ -1,15 +1,15 @@
 [tool.poetry]
-name = "bids-ngff-tools"
+name = "ome-zarr-neuro"
 version = "0.1.0"
 description = ""
 authors = ["Ali Khan <alik@robarts.ca>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "bids_ngff_tools"}]
+packages = [{include = "ome_zarr_neuro"}]
 
 
 [tool.poetry.scripts]
-bids-ngff-tools = "bids_ngff_tools.main:app"
+ozn-tool = "ome_zarr_neuro.main:app"
 
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0"
