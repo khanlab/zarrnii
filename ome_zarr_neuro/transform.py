@@ -6,7 +6,8 @@ from scipy.interpolate import interpn
 from dask.diagnostics import ProgressBar
 
 
-
+#this global variable is set by apply_transform, then used in map_blocks with interp_by_blocks
+global _flo_darr
 
 
 def get_vox2ras_zarr(in_zarr_path:str,level=0) -> np.array:
@@ -38,7 +39,7 @@ def get_ras2vox_zarr(in_zarr_path:str,level=0) -> np.array:
 
 
 
-def get_bounded_subregion(points: np.array, darr: da.Array):
+def get_bounded_subregion(points: np.array ):
 
     """ 
     Uses the extent of points, along with the shape of the dask array,
@@ -51,14 +52,18 @@ def get_bounded_subregion(points: np.array, darr: da.Array):
 
     points are Nx3 or Nx4 coordinates (with/without homog coord)
     darr is the floating image dask array
+
+    We use compute() on the floating dask array to immediately get it
+    since dask doesn't support nd fancy indexing yet that interpn seems to use 
     """ 
-    min_extent=points.min(axis=1)[:3]
-    max_extent=points.max(axis=1)[:3]
+    pad=1
+    min_extent=np.floor(points.min(axis=1)[:3]-pad).astype('int') 
+    max_extent=np.ceil(points.max(axis=1)[:3]+pad).astype('int')
 
-    min_extent=np.floor(np.maximum(min_extent,np.zeros(min_extent.shape)))
-    max_extent=np.ceil(np.minimum(max_extent,(darr.shape[-3],darr.shape[-2],darr.shape[-1])))
+    min_extent=np.maximum(min_extent,np.zeros(min_extent.shape))
+    max_extent=np.minimum(max_extent,(_flo_darr.shape[-3],_flo_darr.shape[-2],_flo_darr.shape[-1]))
 
-    subvol = darr[min_extent[0]:max_extent[0],
+    subvol = _flo_darr[min_extent[0]:max_extent[0],
                           min_extent[1]:max_extent[1],
                           min_extent[2]:max_extent[2]].compute()
 
@@ -67,12 +72,11 @@ def get_bounded_subregion(points: np.array, darr: da.Array):
                    np.arange(min_extent[1],max_extent[1]),
                    np.arange(min_extent[2],max_extent[2]))
 
-    return (subvol,grid_points)
+    return (grid_points,subvol)
     
 
 def interp_by_block(x,
                     matrix_transform,
-                    flo_darr,
                     block_info=None,
                     interp_method='linear'
                     ):
@@ -85,7 +89,6 @@ def interp_by_block(x,
     subset of it -- we use the bounds of the points in the transformed 
      space to define what range of the floating image we load in
     """
-
     arr_location = block_info[0]['array-location']
     
     xv,yv,zv=np.meshgrid(np.arange(arr_location[0][0],arr_location[0][1]),
@@ -103,9 +106,8 @@ def interp_by_block(x,
     xfm_vecs = matrix_transform @ vecs
     
     #find bounding box required for flo vol
-    (grid_points,flo_vol) = get_bounded_subregion(xfm_vecs,flo_darr)    
+    (grid_points,flo_vol) = get_bounded_subregion(xfm_vecs)
                   
-    
     #then finally interpolate those points on the template dseg volume
     interpolated = interpn(grid_points,flo_vol,
                         xfm_vecs[:3,:].T, #
@@ -113,26 +115,31 @@ def interp_by_block(x,
                         bounds_error=False,
                         fill_value=0)
     
-    return interpolated.reshape(x.shape)
+    return interpolated.reshape(x.shape).astype(block_info[None]['dtype'])
 
 
 def apply_transform(flo_ome_zarr:str,
                     ref_nii:str,
                     flo_to_ref_affine_xfm:str,
                     channel=0,
+                    ref_chunks='auto',
                     level=0) -> da.Array:
     """ return dask array applying transform to floating image.
         this is a lazy function, doesn't do any work until you compute() 
         on the returned dask array.
 
+        note: global _flo_darr variable is needed since I can't pass
+        a dask array as a kwarg to map_blocks -- could get around this
+        by using a class, can do that later...
     """
 
     #load dask array for floating image
-    flo_darr = da.from_zarr(flo_ome_zarr,component=f'/{level}')[channel,:,:,:].squeeze()
+    global _flo_darr
+    _flo_darr = da.from_zarr(flo_ome_zarr,component=f'/{level}')[channel,:,:,:].squeeze()
 
     #load reference template dseg (this will be ref space for now)
     ref_nib = nib.load(ref_nii)
-    ref_darr = da.from_array(ref_nib.get_fdata())
+    ref_darr = da.from_array(ref_nib.get_fdata(),chunks=ref_chunks)
 
 
     #the transform can be put together from flo to ref, then inverted
@@ -144,21 +151,29 @@ def apply_transform(flo_ome_zarr:str,
     # or, from ref to flo:
     #  flo_ras2vox @ affine_ref_to_flo @ ref_vox2ras 
 
-    #we take the latter below:
+    # both options are below for educational sake:
 
-    #get affine inverse
-    affine_ref_to_flo= np.linalg.inv(np.loadtxt(flo_to_ref_affine_xfm))
+    #the inverse of the affine is used for warping images
+    affine_ref_to_flo = np.loadtxt(flo_to_ref_affine_xfm)
+    affine_flo_to_ref= np.linalg.inv(affine_ref_to_flo)
 
     ref_vox2ras = ref_nib.affine
+    ref_ras2vox = np.linalg.inv(ref_vox2ras)
 
-    matrix_transform = get_ras2vox_zarr(flo_ome_zarr) @ affine_ref_to_flo @ ref_vox2ras
+    flo_ras2vox = get_ras2vox_zarr(flo_ome_zarr)
+    flo_vox2ras = get_vox2ras_zarr(flo_ome_zarr)
 
-    
+
+    inv_matrix_transform = ref_ras2vox @ affine_flo_to_ref @ flo_vox2ras
+    matrix_transform_alt = np.linalg.inv(inv_matrix_transform)
+
+    matrix_transform = flo_ras2vox @ affine_ref_to_flo @ ref_vox2ras
+
+
     #perform interpolation on each block in parallel
     darr_interp=da.map_blocks(interp_by_block,
                         ref_darr, dtype=np.uint16,
-                        matrix_transform=matrix_transform,
-                        flo_darr=flo_darr)
+                        matrix_transform=matrix_transform)
 
     return darr_interp
                     
