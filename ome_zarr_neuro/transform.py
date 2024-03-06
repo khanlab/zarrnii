@@ -2,12 +2,80 @@ import zarr
 import dask.array as da
 import nibabel as nib
 import numpy as np
+from pathlib import Path
 from scipy.interpolate import interpn
 from dask.diagnostics import ProgressBar
 
 
+
+
+
+
 #this global variable is set by apply_transform, then used in map_blocks with interp_by_blocks
 global _flo_darr
+
+
+#vox2ras now works for both ome_zarr and nifti.. next, set-up image volume reading for each..
+
+
+def get_dask_array_from_path(in_path,level,channel,chunks):
+    """ returns a dask array whether a nifti or ome_zarr is provided """
+    img_type = check_img_type(in_path)
+    if img_type == 'ome_zarr':
+        return da.from_zarr(in_path,component=f'/{level}')[channel,:,:,:].squeeze()
+    elif img_type == 'nifti':
+        return da.from_array(nib.load(in_path).get_fdata(),chunks=chunks)
+    else:
+        return None
+
+
+
+def check_img_type(in_path):
+    suffixes=Path(in_path).suffixes
+
+    if len(suffixes) >1:
+        if suffixes[-2] == '.ome' and suffixes[-1] == '.zarr':
+            return 'ome_zarr'
+        if suffixes[-2] == '.nii' and suffixes[-1] == '.gz':
+            return 'nifti'
+    if suffixes[-1] == '.zarr':
+        return 'zarr'
+    elif suffixes[-1] == 'nii':
+        return 'nifti'
+    else:
+        return 'unknown'
+   
+
+def get_vox2ras(in_path:str,level=0) -> np.array:
+    img_type = check_img_type(in_path)
+
+    if img_type == 'ome_zarr':
+        return get_vox2ras_zarr(in_path,level)
+    elif img_type == 'nifti':
+        return get_vox2ras_nii(in_path)
+    else:
+        print('unknown image type for vox2ras')
+        return None
+
+
+def get_ras2vox(in_path:str,level=0) -> np.array:
+    img_type = check_img_type(in_path)
+    if img_type == 'ome_zarr':
+        return get_ras2vox_zarr(in_path,level)
+    elif img_type == 'nifti':
+        return get_ras2vox_nii(in_path)
+    else:
+        print('unknown image type for ras2vox')
+        return None
+
+def get_vox2ras_nii(in_nii_path:str) -> np.array:
+
+    return nib.load(in_nii_path).affine
+
+def get_ras2vox_nii(in_nii_path:str) -> np.array:
+
+    return np.linalg.inv(get_vox2ras_nii(in_nii_path))
+
 
 
 def get_vox2ras_zarr(in_zarr_path:str,level=0) -> np.array:
@@ -76,7 +144,7 @@ def get_bounded_subregion(points: np.array ):
     
 
 def interp_by_block(x,
-                    matrix_transform,
+                    transform_stack,
                     block_info=None,
                     interp_method='linear'
                     ):
@@ -101,10 +169,14 @@ def interp_by_block(x,
     zvf=zv.reshape((1,np.product(zv.shape)))
     homog=np.ones(xvf.shape)
     
-    vecs=np.vstack((xvf,yvf,zvf,homog))
+    xfm_vecs=np.vstack((xvf,yvf,zvf,homog))
     
-    xfm_vecs = matrix_transform @ vecs
+
+    #apply transforms one at a time (will need to edit this for warps)
+    for transform in transform_stack:
+        xfm_vecs = transform @ xfm_vecs
     
+
     #find bounding box required for flo vol
     (grid_points,flo_vol) = get_bounded_subregion(xfm_vecs)
                   
@@ -118,12 +190,15 @@ def interp_by_block(x,
     return interpolated.reshape(x.shape).astype(block_info[None]['dtype'])
 
 
-def apply_transform(flo_ome_zarr:str,
-                    ref_nii:str,
-                    flo_to_ref_affine_xfm:str,
-                    channel=0,
-                    ref_chunks='auto',
-                    level=0) -> da.Array:
+def apply_transform(flo_img_path:str, #can be ome_zarr or nifti
+                    ref_img_path:str, #can be ome_zarr or nifti
+                    transform_specs:list[str],
+                    ref_channel=0,#channel to use if ref is ome_zarr
+                    flo_channel=0,#channel to use if flo is ome_zarr
+                    ref_level=0,#downsampling level to use if ref is ome_zarr
+                    flo_level=0,#downsampling level to use if ref is ome_zarr
+                    ref_chunks='auto', 
+                    flo_chunks='auto') -> da.Array:
     """ return dask array applying transform to floating image.
         this is a lazy function, doesn't do any work until you compute() 
         on the returned dask array.
@@ -135,11 +210,10 @@ def apply_transform(flo_ome_zarr:str,
 
     #load dask array for floating image
     global _flo_darr
-    _flo_darr = da.from_zarr(flo_ome_zarr,component=f'/{level}')[channel,:,:,:].squeeze()
+    _flo_darr = get_dask_array_from_path(flo_img_path,level=flo_level,channel=flo_channel,chunks=flo_chunks)
 
-    #load reference template dseg (this will be ref space for now)
-    ref_nib = nib.load(ref_nii)
-    ref_darr = da.from_array(ref_nib.get_fdata(),chunks=ref_chunks)
+    #load reference  (this will be ref space for now)
+    ref_darr = get_dask_array_from_path(ref_img_path,level=ref_level,channel=ref_channel,chunks=ref_chunks)
 
 
     #the transform can be put together from flo to ref, then inverted
@@ -154,26 +228,31 @@ def apply_transform(flo_ome_zarr:str,
     # both options are below for educational sake:
 
     #the inverse of the affine is used for warping images
-    affine_ref_to_flo = np.loadtxt(flo_to_ref_affine_xfm)
-    affine_flo_to_ref= np.linalg.inv(affine_ref_to_flo)
+   # affine_ref_to_flo = np.loadtxt(flo_to_ref_affine_xfm)
+   # affine_flo_to_ref= np.linalg.inv(affine_ref_to_flo)
 
-    ref_vox2ras = ref_nib.affine
-    ref_ras2vox = np.linalg.inv(ref_vox2ras)
+    transform_stack=[]
+    
+    transform_stack.append(get_vox2ras(ref_img_path))
 
-    flo_ras2vox = get_ras2vox_zarr(flo_ome_zarr)
-    flo_vox2ras = get_vox2ras_zarr(flo_ome_zarr)
+    for tfm_spec in transform_specs:
+        if tfm_spec['type'] == 'affine_ras':
+            aff = np.loadtxt(tfm_spec['path'])
+            if tfm_spec.get('invert',False):
+                aff = np.linalg.inv(aff)
+            transform_stack.append(aff)
 
+    transform_stack.append(get_ras2vox(flo_img_path))
 
-    inv_matrix_transform = ref_ras2vox @ affine_flo_to_ref @ flo_vox2ras
-    matrix_transform_alt = np.linalg.inv(inv_matrix_transform)
+#    inv_matrix_transform = ref_ras2vox @ affine_flo_to_ref @ flo_vox2ras
+#    matrix_transform_alt = np.linalg.inv(inv_matrix_transform)
 
-    matrix_transform = flo_ras2vox @ affine_ref_to_flo @ ref_vox2ras
-
+#    matrix_transform = flo_ras2vox @ affine_ref_to_flo @ ref_vox2ras
 
     #perform interpolation on each block in parallel
     darr_interp=da.map_blocks(interp_by_block,
                         ref_darr, dtype=np.uint16,
-                        matrix_transform=matrix_transform)
+                        transform_stack=transform_stack)
 
     return darr_interp
                     
