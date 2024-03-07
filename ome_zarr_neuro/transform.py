@@ -5,6 +5,144 @@ import numpy as np
 from pathlib import Path
 from scipy.interpolate import interpn
 from dask.diagnostics import ProgressBar
+from attrs import define
+from enum import Enum, auto
+
+class TransformType(Enum):
+    AFFINE_RAS = auto()
+    DISPLACEMENT_RAS = auto()
+
+class ImageType(Enum):
+    OME_ZARR = auto()
+    ZARR = auto()
+    NIFTI = auto()
+    UNKNOWN = auto()
+
+
+@define
+class TransformSpec:
+    tfm_type: TransformType
+    affine: np.array = None
+    disp_xyz: np.array = None
+    disp_grid: np.array = None
+    disp_ras2vox: np.array = None
+
+    @classmethod
+    def affine_ras_from_txt(cls,path,invert=False):
+        affine = np.loadtxt(path)
+        if invert:
+            affine=np.linalg.inv(self.affine)
+
+        return cls(TransformType.AFFINE_RAS,affine=affine)
+
+    @classmethod
+    def affine_ras_from_array(cls,affine,invert=False):
+        if invert:
+            affine=np.linalg.inv(affine)
+
+        return cls(TransformType.AFFINE_RAS,affine=affine)
+
+    @classmethod
+    def displacement_from_nifti(cls,path):
+        disp_nib = nib.load(path)
+        disp_xyz = disp_nib.get_fdata().squeeze()
+        disp_ras2vox = np.linalg.inv(disp_nib.affine)
+    
+
+        disp_grid = (np.arange(disp_xyz.shape[0]),
+                np.arange(disp_xyz.shape[1]),
+                np.arange(disp_xyz.shape[2]))
+
+
+        return cls(TransformType.DISPLACEMENT_RAS,disp_xyz=disp_xyz,disp_grid=disp_grid,disp_ras2vox=disp_ras2vox)
+
+    @classmethod
+    def vox2ras_from_image(cls, path:str,level=0):
+        img_type = check_img_type(path)
+
+        if img_type is ImageType.OME_ZARR:
+            return cls(TransformType.AFFINE_RAS,affine=cls.get_vox2ras_zarr(path,level))
+        elif img_type is ImageType.NIFTI:
+            return cls(TransformType.AFFINE_RAS,affine=cls.get_vox2ras_nii(path))
+        else:
+            print('unknown image type for vox2ras')
+            return None
+
+    @classmethod
+    def ras2vox_from_image(cls, path:str,level=0):
+        img_type = check_img_type(path)
+        if img_type is ImageType.OME_ZARR:
+            return cls(TransformType.AFFINE_RAS,affine=cls.get_ras2vox_zarr(path,level))
+        elif img_type is ImageType.NIFTI:
+            return cls(TransformType.AFFINE_RAS,affine=cls.get_ras2vox_nii(path))
+        else:
+            print('unknown image type for ras2vox')
+            return None
+
+    @staticmethod
+    def get_vox2ras_nii(in_nii_path:str) -> np.array:
+
+        return nib.load(in_nii_path).affine
+
+    @staticmethod
+    def get_ras2vox_nii(in_nii_path:str) -> np.array:
+
+        return np.linalg.inv(TransformSpec.get_vox2ras_nii(in_nii_path))
+
+    @staticmethod
+    def get_vox2ras_zarr(in_zarr_path:str,level=0) -> np.array:
+
+        #read coordinate transform from ome-zarr
+        zi = zarr.open(in_zarr_path)
+        attrs=zi['/'].attrs.asdict()
+        multiscale=0 #first multiscale image
+        transforms = attrs['multiscales'][multiscale]['datasets'][level]['coordinateTransformations']
+
+        # 0. reorder_xfm -- changes from z,y,x to x,y,z ordering
+        reorder_xfm = np.eye(4)
+        reorder_xfm[:3,:3] = np.flip(reorder_xfm[:3,:3],axis=0) #reorders z-y-x to x-y-z and vice versa
+
+        # 1. scaling_xfm (vox2ras in spim space)
+        # this matches what the ome_zarr_to_nii affine has
+
+        scaling_xfm = np.eye(4)
+        scaling_xfm[0,0]=-transforms[0]['scale'][-1] #x  # 0-index in transforms is the first (and only) transform 
+        scaling_xfm[1,1]=-transforms[0]['scale'][-2] #y
+        scaling_xfm[2,2]=-transforms[0]['scale'][-3] #z
+
+
+        return scaling_xfm @ reorder_xfm
+
+    @staticmethod
+    def get_ras2vox_zarr(in_zarr_path:str,level=0) -> np.array:
+        return np.linalg.inv(TransformSpec.get_vox2ras_zarr(in_zarr_path,level=level))
+
+
+
+
+    def apply_transform(self, vecs:np.array) -> np.array:
+        
+        if self.tfm_type == TransformType.AFFINE_RAS:
+            return  self.affine @ vecs
+
+        elif self.tfm_type == TransformType.DISPLACEMENT_RAS:
+            #we have the grid points, the volumes to interpolate displacements
+            
+            #first we need to transform points to vox space of the warp
+            vox_vecs = self.disp_ras2vox @ vecs
+
+            #then interpolate the displacement in x, y, z:
+            disp_vecs = np.zeros(vox_vecs.shape)
+
+            for ax in range(3):
+                disp_vecs[ax,:] = interpn(self.disp_grid,
+                                self.disp_xyz[:,:,:,ax].squeeze(),
+                                vox_vecs[:3,:].T,
+                                method='linear',
+                                bounds_error=True,
+                                fill_value=0)
+            
+            return vecs - disp_vecs
 
 
 
@@ -21,90 +159,30 @@ global _flo_darr
 def get_dask_array_from_path(in_path,level,channel,chunks):
     """ returns a dask array whether a nifti or ome_zarr is provided """
     img_type = check_img_type(in_path)
-    if img_type == 'ome_zarr':
+    if img_type is ImageType.OME_ZARR:
         return da.from_zarr(in_path,component=f'/{level}')[channel,:,:,:].squeeze()
-    elif img_type == 'nifti':
+    elif img_type is ImageType.NIFTI:
         return da.from_array(nib.load(in_path).get_fdata(),chunks=chunks)
     else:
         return None
 
 
 
-def check_img_type(in_path):
+def check_img_type(in_path) -> ImageType:
     suffixes=Path(in_path).suffixes
 
     if len(suffixes) >1:
         if suffixes[-2] == '.ome' and suffixes[-1] == '.zarr':
-            return 'ome_zarr'
+            return ImageType.OME_ZARR
         if suffixes[-2] == '.nii' and suffixes[-1] == '.gz':
-            return 'nifti'
+            return ImageType.NIFTI
     if suffixes[-1] == '.zarr':
-        return 'zarr'
+        return ImageType.ZARR
     elif suffixes[-1] == 'nii':
-        return 'nifti'
+        return ImageType.NIFTI
     else:
-        return 'unknown'
+        return ImageType.UNKNOWN
    
-
-def get_vox2ras(in_path:str,level=0) -> np.array:
-    img_type = check_img_type(in_path)
-
-    if img_type == 'ome_zarr':
-        return get_vox2ras_zarr(in_path,level)
-    elif img_type == 'nifti':
-        return get_vox2ras_nii(in_path)
-    else:
-        print('unknown image type for vox2ras')
-        return None
-
-
-def get_ras2vox(in_path:str,level=0) -> np.array:
-    img_type = check_img_type(in_path)
-    if img_type == 'ome_zarr':
-        return get_ras2vox_zarr(in_path,level)
-    elif img_type == 'nifti':
-        return get_ras2vox_nii(in_path)
-    else:
-        print('unknown image type for ras2vox')
-        return None
-
-def get_vox2ras_nii(in_nii_path:str) -> np.array:
-
-    return nib.load(in_nii_path).affine
-
-def get_ras2vox_nii(in_nii_path:str) -> np.array:
-
-    return np.linalg.inv(get_vox2ras_nii(in_nii_path))
-
-
-
-def get_vox2ras_zarr(in_zarr_path:str,level=0) -> np.array:
-
-    #read coordinate transform from ome-zarr
-    zi = zarr.open(in_zarr_path)
-    attrs=zi['/'].attrs.asdict()
-    multiscale=0 #first multiscale image
-    transforms = attrs['multiscales'][multiscale]['datasets'][level]['coordinateTransformations']
-
-    # 0. reorder_xfm -- changes from z,y,x to x,y,z ordering
-    reorder_xfm = np.eye(4)
-    reorder_xfm[:3,:3] = np.flip(reorder_xfm[:3,:3],axis=0) #reorders z-y-x to x-y-z and vice versa
-
-    # 1. scaling_xfm (vox2ras in spim space)
-    # this matches what the ome_zarr_to_nii affine has
-
-    scaling_xfm = np.eye(4)
-    scaling_xfm[0,0]=-transforms[0]['scale'][-1] #x  # 0-index in transforms is the first (and only) transform 
-    scaling_xfm[1,1]=-transforms[0]['scale'][-2] #y
-    scaling_xfm[2,2]=-transforms[0]['scale'][-3] #z
-
-
-    return scaling_xfm @ reorder_xfm
-
-def get_ras2vox_zarr(in_zarr_path:str,level=0) -> np.array:
-    return np.linalg.inv(get_vox2ras_zarr(in_zarr_path,level=level))
-
-
 
 
 def get_bounded_subregion(points: np.array ):
@@ -144,7 +222,7 @@ def get_bounded_subregion(points: np.array ):
     
 
 def interp_by_block(x,
-                    transform_stack,
+                    transform_specs,
                     block_info=None,
                     interp_method='linear'
                     ):
@@ -173,8 +251,8 @@ def interp_by_block(x,
     
 
     #apply transforms one at a time (will need to edit this for warps)
-    for transform in transform_stack:
-        xfm_vecs = transform @ xfm_vecs
+    for tfm_spec in transform_specs:
+        xfm_vecs = tfm_spec.apply_transform(xfm_vecs)
     
 
     #find bounding box required for flo vol
@@ -216,43 +294,17 @@ def apply_transform(flo_img_path:str, #can be ome_zarr or nifti
     ref_darr = get_dask_array_from_path(ref_img_path,level=ref_level,channel=ref_channel,chunks=ref_chunks)
 
 
-    #the transform can be put together from flo to ref, then inverted
-    # or equivalent to going from ref to flo
-    
-    # e.g., from flo to ref:
-    # ref_ras2vox @ affine_flo_to_ref @ flo_vox2ras
+    #transform specs already has the transformations to apply, just need the conversion to/from vox/ras at start and end
 
-    # or, from ref to flo:
-    #  flo_ras2vox @ affine_ref_to_flo @ ref_vox2ras 
+    transform_specs.insert(0,TransformSpec.vox2ras_from_image(ref_img_path)) 
 
-    # both options are below for educational sake:
+    transform_specs.append(TransformSpec.ras2vox_from_image(flo_img_path)) 
 
-    #the inverse of the affine is used for warping images
-   # affine_ref_to_flo = np.loadtxt(flo_to_ref_affine_xfm)
-   # affine_flo_to_ref= np.linalg.inv(affine_ref_to_flo)
-
-    transform_stack=[]
-    
-    transform_stack.append(get_vox2ras(ref_img_path))
-
-    for tfm_spec in transform_specs:
-        if tfm_spec['type'] == 'affine_ras':
-            aff = np.loadtxt(tfm_spec['path'])
-            if tfm_spec.get('invert',False):
-                aff = np.linalg.inv(aff)
-            transform_stack.append(aff)
-
-    transform_stack.append(get_ras2vox(flo_img_path))
-
-#    inv_matrix_transform = ref_ras2vox @ affine_flo_to_ref @ flo_vox2ras
-#    matrix_transform_alt = np.linalg.inv(inv_matrix_transform)
-
-#    matrix_transform = flo_ras2vox @ affine_ref_to_flo @ ref_vox2ras
 
     #perform interpolation on each block in parallel
     darr_interp=da.map_blocks(interp_by_block,
                         ref_darr, dtype=np.uint16,
-                        transform_stack=transform_stack)
+                        transform_specs=transform_specs)
 
     return darr_interp
                     
