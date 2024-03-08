@@ -47,7 +47,10 @@ class TransformSpec:
         disp_nib = nib.load(path)
         disp_xyz = disp_nib.get_fdata().squeeze()
         disp_ras2vox = np.linalg.inv(disp_nib.affine)
-    
+   
+        #convert from itk transform
+        disp_xyz[:,:,:,0] = -disp_xyz[:,:,:,0]
+        disp_xyz[:,:,:,1] = -disp_xyz[:,:,:,1]
 
         disp_grid = (np.arange(disp_xyz.shape[0]),
                 np.arange(disp_xyz.shape[1]),
@@ -141,8 +144,9 @@ class TransformSpec:
                                 method='linear',
                                 bounds_error=True,
                                 fill_value=0)
-            
-            return vecs - disp_vecs
+           
+                    
+            return vecs + disp_vecs
 
 
 
