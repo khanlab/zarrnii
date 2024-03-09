@@ -18,7 +18,6 @@ class ImageType(Enum):
     NIFTI = auto()
     UNKNOWN = auto()
 
-
 @define
 class TransformSpec:
     tfm_type: TransformType
@@ -61,7 +60,7 @@ class TransformSpec:
 
     @classmethod
     def vox2ras_from_image(cls, path:str,level=0):
-        img_type = check_img_type(path)
+        img_type = ImageSpec.check_img_type(path)
 
         if img_type is ImageType.OME_ZARR:
             return cls(TransformType.AFFINE_RAS,affine=cls.get_vox2ras_zarr(path,level))
@@ -73,7 +72,7 @@ class TransformSpec:
 
     @classmethod
     def ras2vox_from_image(cls, path:str,level=0):
-        img_type = check_img_type(path)
+        img_type = ImageSpec.check_img_type(path)
         if img_type is ImageType.OME_ZARR:
             return cls(TransformType.AFFINE_RAS,affine=cls.get_ras2vox_zarr(path,level))
         elif img_type is ImageType.NIFTI:
@@ -148,48 +147,84 @@ class TransformSpec:
                     
             return vecs + disp_vecs
 
+@define
+class ImageSpec:
+    darr: da.Array
+    ras2vox: TransformSpec = None
+    vox2ras: TransformSpec = None
+
+    @classmethod
+    def ref_from_path(cls,path,level,channels,chunks):
+        """ ref image we dont need actual intensities, just the shape and affine"""
+        img_type = cls.check_img_type(path)
+        if img_type is ImageType.OME_ZARR:
+            darr_base = da.from_zarr(path,component=f'/{level}')[channels,:,:,:]
+            darr = da.empty(darr_base)
+        elif img_type is ImageType.NIFTI:
+            darr_base = da.from_array(nib.load(path).get_fdata(),chunks=chunks)
+            darr_empty = da.empty(darr_base,shape=(len(channels),darr_base.shape[-3],darr_base.shape[-2],darr_base.shape[-1]))
+        else:
+            print('unknown image type')
+            return None
+        
+        #ensure chunks include all channels
+        if darr_empty.chunksize[0] < len(channels):
+            darr_empty.rechunk(chunks=(len(channels),darr_empty.chunksize[1],darr_empty.chunksize[2],darr_empty.chunksize[3]))
+
+        return cls(darr_empty, 
+                    ras2vox=TransformSpec.ras2vox_from_image(path),
+                    vox2ras=TransformSpec.vox2ras_from_image(path))
+
+
+       
+
+    @classmethod
+    def img_from_path(cls, path,level,channels,chunks):
+        """ returns a dask array whether a nifti or ome_zarr is provided """
+        img_type = cls.check_img_type(path)
+        if img_type is ImageType.OME_ZARR:
+            darr = da.from_zarr(path,component=f'/{level}')[channels,:,:,:]
+        elif img_type is ImageType.NIFTI:
+            darr = da.from_array(np.expand_dims(nib.load(path).get_fdata(),axis=0),chunks=chunks)
+        else:
+            print('unknown image type')
+            return None
+
+        return cls(darr, 
+                    ras2vox=TransformSpec.ras2vox_from_image(path),
+                    vox2ras=TransformSpec.vox2ras_from_image(path))
+
+
+
+    @staticmethod
+    def check_img_type(path) -> ImageType:
+        suffixes=Path(path).suffixes
+
+        if len(suffixes) >1:
+            if suffixes[-2] == '.ome' and suffixes[-1] == '.zarr':
+                return ImageType.OME_ZARR
+            if suffixes[-2] == '.nii' and suffixes[-1] == '.gz':
+                return ImageType.NIFTI
+        if suffixes[-1] == '.zarr':
+            return ImageType.ZARR
+        elif suffixes[-1] == 'nii':
+            return ImageType.NIFTI
+        else:
+            return ImageType.UNKNOWN
+       
+
 
 
 
 
 
 #this global variable is set by apply_transform, then used in map_blocks with interp_by_blocks
-global _flo_darr
-
-
-#vox2ras now works for both ome_zarr and nifti.. next, set-up image volume reading for each..
-
-
-def get_dask_array_from_path(in_path,level,channel,chunks):
-    """ returns a dask array whether a nifti or ome_zarr is provided """
-    img_type = check_img_type(in_path)
-    if img_type is ImageType.OME_ZARR:
-        return da.from_zarr(in_path,component=f'/{level}')[channel,:,:,:].squeeze()
-    elif img_type is ImageType.NIFTI:
-        return da.from_array(nib.load(in_path).get_fdata(),chunks=chunks)
-    else:
-        return None
+#global _flo_darr
 
 
 
-def check_img_type(in_path) -> ImageType:
-    suffixes=Path(in_path).suffixes
 
-    if len(suffixes) >1:
-        if suffixes[-2] == '.ome' and suffixes[-1] == '.zarr':
-            return ImageType.OME_ZARR
-        if suffixes[-2] == '.nii' and suffixes[-1] == '.gz':
-            return ImageType.NIFTI
-    if suffixes[-1] == '.zarr':
-        return ImageType.ZARR
-    elif suffixes[-1] == 'nii':
-        return ImageType.NIFTI
-    else:
-        return ImageType.UNKNOWN
-   
-
-
-def get_bounded_subregion(points: np.array ):
+def get_bounded_subregion(points: np.array,flo_img: ImageSpec ):
 
     """ 
     Uses the extent of points, along with the shape of the dask array,
@@ -211,11 +246,13 @@ def get_bounded_subregion(points: np.array ):
     max_extent=np.ceil(points.max(axis=1)[:3]+pad).astype('int')
 
     min_extent=np.maximum(min_extent,np.zeros(min_extent.shape))
-    max_extent=np.minimum(max_extent,(_flo_darr.shape[-3],_flo_darr.shape[-2],_flo_darr.shape[-1]))
+    max_extent=np.minimum(max_extent,(flo_img.darr.shape[-3],flo_img.darr.shape[-2],flo_img.darr.shape[-1]))
 
-    subvol = _flo_darr[min_extent[0]:max_extent[0],
+
+    subvol = flo_img.darr[:,min_extent[0]:max_extent[0],
                           min_extent[1]:max_extent[1],
                           min_extent[2]:max_extent[2]].compute()
+
 
      # along with grid points for interpolation
     grid_points = (np.arange(min_extent[0],max_extent[0]),
@@ -226,7 +263,8 @@ def get_bounded_subregion(points: np.array ):
     
 
 def interp_by_block(x,
-                    transform_specs,
+                    transform_specs:list[TransformSpec],
+                    flo_img:ImageSpec,
                     block_info=None,
                     interp_method='linear'
                     ):
@@ -240,43 +278,56 @@ def interp_by_block(x,
      space to define what range of the floating image we load in
     """
     arr_location = block_info[0]['array-location']
-    
-    xv,yv,zv=np.meshgrid(np.arange(arr_location[0][0],arr_location[0][1]),
-            np.arange(arr_location[1][0],arr_location[1][1]),
-            np.arange(arr_location[2][0],arr_location[2][1]),indexing='ij')
+    xv,yv,zv=np.meshgrid(np.arange(arr_location[-3][0],arr_location[-3][1]),
+            np.arange(arr_location[-2][0],arr_location[-2][1]),
+            np.arange(arr_location[-1][0],arr_location[-1][1]),indexing='ij')
 
     #reshape them into a vectors (x,y,z,1) for each point, so we can matrix multiply
     xvf=xv.reshape((1,np.product(xv.shape)))
     yvf=yv.reshape((1,np.product(yv.shape)))
     zvf=zv.reshape((1,np.product(zv.shape)))
     homog=np.ones(xvf.shape)
-    
+   
+
     xfm_vecs=np.vstack((xvf,yvf,zvf,homog))
-    
+
+#    print(xfm_vecs[:,0])
 
     #apply transforms one at a time (will need to edit this for warps)
     for tfm_spec in transform_specs:
         xfm_vecs = tfm_spec.apply_transform(xfm_vecs)
+#        print(xfm_vecs[:,0])
     
 
+    
     #find bounding box required for flo vol
-    (grid_points,flo_vol) = get_bounded_subregion(xfm_vecs)
-                  
+    (grid_points,flo_vol) = get_bounded_subregion(xfm_vecs,flo_img)
+
     #then finally interpolate those points on the template dseg volume
-    interpolated = interpn(grid_points,flo_vol,
+    #need to interpolate for each channel
+
+    interpolated = np.zeros(x.shape)
+
+    for c in range(flo_vol.shape[0]):
+        interpolated[c,:,:,:] = interpn(grid_points,flo_vol[c,:,:,:],
                         xfm_vecs[:3,:].T, #
                         method=interp_method,
                         bounds_error=False,
-                        fill_value=0)
+                        fill_value=0).reshape((x.shape[-3],x.shape[-2],x.shape[-1])).astype(block_info[None]['dtype'])
+#        print(interpolated[c,0,0,0])
+
+
     
-    return interpolated.reshape(x.shape).astype(block_info[None]['dtype'])
+
+    return interpolated
 
 
 def apply_transform(flo_img_path:str, #can be ome_zarr or nifti
                     ref_img_path:str, #can be ome_zarr or nifti
                     transform_specs:list[str],
-                    ref_channel=0,#channel to use if ref is ome_zarr
-                    flo_channel=0,#channel to use if flo is ome_zarr
+                    channels=[0], #channels to use
+#                    ref_channel=0,#channel to use if ref is ome_zarr
+#                    flo_channel=0,#channel to use if flo is ome_zarr
                     ref_level=0,#downsampling level to use if ref is ome_zarr
                     flo_level=0,#downsampling level to use if ref is ome_zarr
                     ref_chunks='auto', 
@@ -291,26 +342,34 @@ def apply_transform(flo_img_path:str, #can be ome_zarr or nifti
     """
 
     #load dask array for floating image
-    global _flo_darr
-    _flo_darr = get_dask_array_from_path(flo_img_path,level=flo_level,channel=flo_channel,chunks=flo_chunks)
+#    global _flo_darr
+#    _flo_darr = get_dask_array_from_path(flo_img_path,level=flo_level,channels=channels,chunks=flo_chunks)
 
     #load reference  (this will be ref space for now)
-    ref_darr = get_dask_array_from_path(ref_img_path,level=ref_level,channel=ref_channel,chunks=ref_chunks)
+#    ref_darr = get_dask_array_from_path(ref_img_path,level=ref_level,channels=channels,chunks=ref_chunks)
+
+
+    flo_img = ImageSpec.img_from_path(flo_img_path,level=flo_level,channels=channels,chunks=flo_chunks)
+    ref_img = ImageSpec.ref_from_path(ref_img_path,level=ref_level,channels=channels,chunks=ref_chunks)
 
 
     #transform specs already has the transformations to apply, just need the conversion to/from vox/ras at start and end
-
-    transform_specs.insert(0,TransformSpec.vox2ras_from_image(ref_img_path)) 
-
-    transform_specs.append(TransformSpec.ras2vox_from_image(flo_img_path)) 
+    transform_specs.insert(0,ref_img.vox2ras) #prepend
+    transform_specs.append(flo_img.ras2vox)
 
 
     #perform interpolation on each block in parallel
     darr_interp=da.map_blocks(interp_by_block,
-                        ref_darr, dtype=np.uint16,
-                        transform_specs=transform_specs)
+                        ref_img.darr, dtype=np.float32,
+                        transform_specs=transform_specs,
+                        flo_img=flo_img)
 
     return darr_interp
                     
-    
+
+
+
+
+
+
 
