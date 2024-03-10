@@ -7,6 +7,8 @@ from scipy.interpolate import interpn
 from dask.diagnostics import ProgressBar
 from attrs import define
 from enum import Enum, auto
+from ome_zarr.writer import write_image
+from ome_zarr.scale import Scaler
 
 class TransformType(Enum):
     AFFINE_RAS = auto()
@@ -152,28 +154,49 @@ class DaskImage:
     darr: da.Array
     ras2vox: TransformSpec = None
     vox2ras: TransformSpec = None
+    axes_nifti: bool = False #set to true if the axes are ordered for NIFTI (X,Y,Z,C,T)
 
     @classmethod
-    def from_path_as_ref(cls,path,level=0,channels=[0],chunks='auto'):
+    def from_path_as_ref(cls,path,level=0,channels=[0],chunks='auto',zooms=None):
         """ ref image we dont need actual intensities, just the shape and affine"""
+
         img_type = cls.check_img_type(path)
         if img_type is ImageType.OME_ZARR:
             darr_base = da.from_zarr(path,component=f'/{level}')[channels,:,:,:]
-            darr = da.empty(darr_base)
+            axes_nifti = False
         elif img_type is ImageType.NIFTI:
             darr_base = da.from_array(nib.load(path).get_fdata(),chunks=chunks)
-            darr_empty = da.empty(darr_base,shape=(len(channels),darr_base.shape[-3],darr_base.shape[-2],darr_base.shape[-1]))
+            axes_nifti = True
         else:
             print('unknown image type')
             return None
-        
+ 
+        vox2ras = TransformSpec.vox2ras_from_image(path)
+        ras2vox = TransformSpec.ras2vox_from_image(path)
+
+        out_shape = [len(channels),darr_base.shape[-3],darr_base.shape[-2],darr_base.shape[-1]]
+
+        if zooms is not None:
+            #zooms sets the target spacing in xyz
+            
+            in_zooms = np.diag(vox2ras.affine)[:3]
+            nvox_scaling_factor =  in_zooms / zooms
+            out_shape[1:] = np.ceil(out_shape[1:] * nvox_scaling_factor)
+            #adjust affine too
+            np.fill_diagonal(vox2ras.affine[:3,:3],zooms)
+            
+        ras2vox.affine = np.linalg.inv(vox2ras.affine)
+
+        darr_empty = da.empty(darr_base,shape=out_shape)
+    
         #ensure chunks include all channels
         if darr_empty.chunksize[0] < len(channels):
             darr_empty.rechunk(chunks=(len(channels),darr_empty.chunksize[1],darr_empty.chunksize[2],darr_empty.chunksize[3]))
 
         return cls(darr_empty, 
-                    ras2vox=TransformSpec.ras2vox_from_image(path),
-                    vox2ras=TransformSpec.vox2ras_from_image(path))
+                    ras2vox=ras2vox,
+                    vox2ras=vox2ras,
+                    axes_nifti=axes_nifti)
 
 
        
@@ -184,15 +207,19 @@ class DaskImage:
         img_type = cls.check_img_type(path)
         if img_type is ImageType.OME_ZARR:
             darr = da.from_zarr(path,component=f'/{level}')[channels,:,:,:]
+            axes_nifti = False
         elif img_type is ImageType.NIFTI:
             darr = da.from_array(np.expand_dims(nib.load(path).get_fdata(),axis=0),chunks=chunks)
+            axes_nifti = True
         else:
             print('unknown image type')
             return None
 
         return cls(darr, 
                     ras2vox=TransformSpec.ras2vox_from_image(path),
-                    vox2ras=TransformSpec.vox2ras_from_image(path))
+                    vox2ras=TransformSpec.vox2ras_from_image(path),
+                    axes_nifti=axes_nifti)
+        
 
 
 
@@ -282,17 +309,25 @@ class DaskImage:
 
 
     def to_nifti(self,filename,**kwargs):
-        out_nib = nib.Nifti1Image(self.darr.squeeze().compute(**kwargs),
+        with ProgressBar():
+            out_nib = nib.Nifti1Image(self.darr.squeeze().compute(**kwargs),
                        affine=self.vox2ras.affine)
         out_nib.to_filename(filename)
 
-    def to_ome_zarr(self,filename,max_layer=4,scaling_method='local_mean'):
+    def to_ome_zarr(self,filename,max_layer=4,scaling_method='local_mean',**kwargs):
+
+        voxdim = np.diag(self.vox2ras.affine)[:3]
 
 
+        if self.axes_nifti:
+            #if the reference image came from nifti space, we need to swap axes ordering and flip
+            out_darr = da.flip(da.moveaxis(self.darr,(0,1,2,3),(0,3,2,1)))
+            voxdim = voxdim[::-1]
+
+        print(out_darr.shape)
         coordinate_transformations = []
         #for each resolution (dataset), we have a list of dicts, transformations to apply.. 
         #in this case just a single one (scaling by voxel size)
-        voxdim=np.diag(self.vox2ras)[:3]
 
         for l in range(max_layer+1):
             
@@ -306,19 +341,29 @@ class DaskImage:
 
         store = zarr.DirectoryStore(filename)
         root = zarr.group(store,path='/',overwrite=True)
+
+
+        print('writing full-res image to zarr single threaded')
+        out_delayed=out_darr.rechunk().to_zarr('tmpfile_8790.zarr',compute=False,overwrite=True)
+        with ProgressBar():
+            out_delayed.compute(scheduler='single-threaded')
+
+
+        #then use scaler, using written image as starting point
         scaler = Scaler(max_layer=max_layer,method=scaling_method)
 
+
+        print('writing downsampled images to zarr')
         with ProgressBar():
-            write_image(image=self.darr,
-                                    group=root,
-                                    scaler=scaler,
-                                    coordinate_transformations=coordinate_transformations,
-                                    storage_options={'dimension_separator': '/'},
-                                    axes=axes,
-                               #     metadata={'omero':omero}
-                                        )
+            write_image(image=da.from_zarr('tmpfile_8790.zarr'),
+                                        group=root,
+                                        scaler=scaler,
+                                        coordinate_transformations=coordinate_transformations,
+                                        storage_options={'dimension_separator': '/'},
+                                        axes=axes,
+                            )
 
-
+    
 
 
 
