@@ -143,7 +143,7 @@ class TransformSpec:
                                 self.disp_xyz[:,:,:,ax].squeeze(),
                                 vox_vecs[:3,:].T,
                                 method='linear',
-                                bounds_error=True,
+                                bounds_error=False,
                                 fill_value=0)
            
                     
@@ -157,7 +157,7 @@ class DaskImage:
     axes_nifti: bool = False #set to true if the axes are ordered for NIFTI (X,Y,Z,C,T)
 
     @classmethod
-    def from_path_as_ref(cls,path,level=0,channels=[0],chunks='auto',zooms=None):
+    def from_path_as_ref(cls,path,level=0,channels=[0],chunks=(50,50,50),zooms=None):
         """ ref image we dont need actual intensities, just the shape and affine"""
 
         img_type = cls.check_img_type(path)
@@ -165,7 +165,7 @@ class DaskImage:
             darr_base = da.from_zarr(path,component=f'/{level}')[channels,:,:,:]
             axes_nifti = False
         elif img_type is ImageType.NIFTI:
-            darr_base = da.from_array(nib.load(path).get_fdata(),chunks=chunks)
+            darr_base = da.from_array(nib.load(path).get_fdata())
             axes_nifti = True
         else:
             print('unknown image type')
@@ -175,23 +175,32 @@ class DaskImage:
         ras2vox = TransformSpec.ras2vox_from_image(path)
 
         out_shape = [len(channels),darr_base.shape[-3],darr_base.shape[-2],darr_base.shape[-1]]
+        #print('out_shape init')
+        #print(out_shape)
+        #print('zooms')
+        #print(zooms)
 
         if zooms is not None:
             #zooms sets the target spacing in xyz
             
             in_zooms = np.diag(vox2ras.affine)[:3]
             nvox_scaling_factor =  in_zooms / zooms
-            out_shape[1:] = np.ceil(out_shape[1:] * nvox_scaling_factor)
+           
+            #print('nvox_scaling_factor')
+            #print(nvox_scaling_factor)
+
+            out_shape[1:] = np.floor(out_shape[1:] * nvox_scaling_factor)
             #adjust affine too
             np.fill_diagonal(vox2ras.affine[:3,:3],zooms)
             
+
+        #print('resulting shape and affine')
+        #print(out_shape)
+        #print(vox2ras.affine)
         ras2vox.affine = np.linalg.inv(vox2ras.affine)
 
-        darr_empty = da.empty(darr_base,shape=out_shape)
+        darr_empty = da.empty(darr_base,shape=out_shape,chunks=(len(channels),chunks[0],chunks[1],chunks[2]))
     
-        #ensure chunks include all channels
-        if darr_empty.chunksize[0] < len(channels):
-            darr_empty.rechunk(chunks=(len(channels),darr_empty.chunksize[1],darr_empty.chunksize[2],darr_empty.chunksize[3]))
 
         return cls(darr_empty, 
                     ras2vox=ras2vox,
@@ -284,18 +293,45 @@ class DaskImage:
         We use compute() on the floating dask array to immediately get it
         since dask doesn't support nd fancy indexing yet that interpn seems to use 
         """ 
+       
+
         pad=1
         min_extent=np.floor(points.min(axis=1)[:3]-pad).astype('int') 
         max_extent=np.ceil(points.max(axis=1)[:3]+pad).astype('int')
 
-        min_extent=np.maximum(min_extent,np.zeros(min_extent.shape))
-        max_extent=np.minimum(max_extent,(self.darr.shape[-3],self.darr.shape[-2],self.darr.shape[-1]))
+        #print('shape of flo darr')
+        #print(self.darr.shape)
+
+        #print('min/max extent before clipping')
+        #print(min_extent)
+        #print(max_extent)
+
+        clip_min = np.zeros(min_extent.shape)
+        clip_max = np.array([self.darr.shape[-3],self.darr.shape[-2],self.darr.shape[-1]])
+        
+        min_extent = np.clip(min_extent,clip_min,clip_max)
+        max_extent = np.clip(max_extent,clip_min,clip_max)
+
+#        min_extent=np.maximum(min_extent,np.zeros(min_extent.shape))
+#        max_extent=np.minimum(max_extent,(self.darr.shape[-3],self.darr.shape[-2],self.darr.shape[-1]))
+
+        #print('min/max extent after clipping')
+        #print(min_extent)
+        #print(max_extent)
+
+        #problematic if all points are outside the domain -- if so then no need to interpolate, 
+        # just return None to indicate this block should be all zeros
+        if (max_extent == min_extent).sum() > 0:
+            return (None,None)
+            
 
 
         subvol = self.darr[:,min_extent[0]:max_extent[0],
                               min_extent[1]:max_extent[1],
                               min_extent[2]:max_extent[2]].compute()
 
+        #print('subvol_shape')
+        #print(subvol.shape)
 
          # along with grid points for interpolation
         grid_points = (np.arange(min_extent[0],max_extent[0]),
@@ -309,9 +345,8 @@ class DaskImage:
 
 
     def to_nifti(self,filename,**kwargs):
-        with ProgressBar():
-            out_nib = nib.Nifti1Image(self.darr.squeeze().compute(**kwargs),
-                       affine=self.vox2ras.affine)
+        out_nib = nib.Nifti1Image(self.darr.squeeze().compute(**kwargs),
+                   affine=self.vox2ras.affine)
         out_nib.to_filename(filename)
 
     def to_ome_zarr(self,filename,max_layer=4,scaling_method='local_mean',**kwargs):
@@ -324,7 +359,7 @@ class DaskImage:
             out_darr = da.flip(da.moveaxis(self.darr,(0,1,2,3),(0,3,2,1)))
             voxdim = voxdim[::-1]
 
-        print(out_darr.shape)
+        #print(out_darr.shape)
         coordinate_transformations = []
         #for each resolution (dataset), we have a list of dicts, transformations to apply.. 
         #in this case just a single one (scaling by voxel size)
@@ -343,6 +378,7 @@ class DaskImage:
         root = zarr.group(store,path='/',overwrite=True)
 
 
+        #TODO - fix this 
         print('writing full-res image to zarr single threaded')
         out_delayed=out_darr.rechunk().to_zarr('tmpfile_8790.zarr',compute=False,overwrite=True)
         with ProgressBar():
@@ -401,30 +437,34 @@ def interp_by_block(x,
 
     xfm_vecs=np.vstack((xvf,yvf,zvf,homog))
 
-#    print(xfm_vecs[:,0])
+    print(xfm_vecs[:,0])
 
     #apply transforms one at a time (will need to edit this for warps)
     for tfm_spec in transform_specs:
         xfm_vecs = tfm_spec.apply_transform(xfm_vecs)
-#        print(xfm_vecs[:,0])
+        print(xfm_vecs[:,0])
     
 
     
-    #find bounding box required for flo vol
-    (grid_points,flo_vol) = flo_dimg.get_bounded_subregion(xfm_vecs)
-
     #then finally interpolate those points on the template dseg volume
     #need to interpolate for each channel
 
     interpolated = np.zeros(x.shape)
 
-    for c in range(flo_vol.shape[0]):
-        interpolated[c,:,:,:] = interpn(grid_points,flo_vol[c,:,:,:],
-                        xfm_vecs[:3,:].T, #
-                        method=interp_method,
-                        bounds_error=False,
-                        fill_value=0).reshape((x.shape[-3],x.shape[-2],x.shape[-1])).astype(block_info[None]['dtype'])
-#        print(interpolated[c,0,0,0])
+    #find bounding box required for flo vol
+    (grid_points,flo_vol) = flo_dimg.get_bounded_subregion(xfm_vecs)
+    if grid_points == None and flo_vol == None:
+        #points were fully outside the floating image, so just return zeros
+        return interpolated
+    else:
+
+        for c in range(flo_vol.shape[0]):
+            interpolated[c,:,:,:] = interpn(grid_points,flo_vol[c,:,:,:],
+                            xfm_vecs[:3,:].T, #
+                            method=interp_method,
+                            bounds_error=False,
+                            fill_value=0).reshape((x.shape[-3],x.shape[-2],x.shape[-1])).astype(block_info[None]['dtype'])
+    #        print(interpolated[c,0,0,0])
 
 
     
