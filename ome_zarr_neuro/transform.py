@@ -437,12 +437,12 @@ def interp_by_block(x,
 
     xfm_vecs=np.vstack((xvf,yvf,zvf,homog))
 
-    print(xfm_vecs[:,0])
+    #print(xfm_vecs[:,0])
 
     #apply transforms one at a time (will need to edit this for warps)
     for tfm_spec in transform_specs:
         xfm_vecs = tfm_spec.apply_transform(xfm_vecs)
-        print(xfm_vecs[:,0])
+        #print(xfm_vecs[:,0])
     
 
     
