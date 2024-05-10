@@ -1,19 +1,19 @@
 [tool.poetry]
 name = "ome-zarr-neuro"
-version = "0.1.0"
-description = ""
+version = "0.1.0-alpha"
+description = "Package for working with and transforming ome-zarr with nifti transforms"
 authors = ["Ali Khan <alik@robarts.ca>"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "ome_zarr_neuro"}]
 
 
-[tool.poetry.scripts]
-ozn-tool = "ome_zarr_neuro.main:app"
+#[tool.poetry.scripts]
+#ozn-tool = "ome_zarr_neuro.main:app"
 
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0"
-typer = {extras = ["all"], version = "^0.9.0"}
+#typer = {extras = ["all"], version = "^0.9.0"}
 zarr = "^2.17.0"
 nibabel = "^5.2.0"
 dask = "^2024.2.0"
