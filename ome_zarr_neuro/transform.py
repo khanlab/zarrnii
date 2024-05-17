@@ -102,10 +102,12 @@ class TransformSpec:
         multiscale=0 #first multiscale image
         transforms = attrs['multiscales'][multiscale]['datasets'][level]['coordinateTransformations']
 
+        print(transforms)
         # 0. reorder_xfm -- changes from z,y,x to x,y,z ordering
         reorder_xfm = np.eye(4)
         reorder_xfm[:3,:3] = np.flip(reorder_xfm[:3,:3],axis=0) #reorders z-y-x to x-y-z and vice versa
 
+        print(reorder_xfm)        
         # 1. scaling_xfm (vox2ras in spim space)
         # this matches what the ome_zarr_to_nii affine has
 
@@ -114,7 +116,7 @@ class TransformSpec:
         scaling_xfm[1,1]=-transforms[0]['scale'][-2] #y
         scaling_xfm[2,2]=-transforms[0]['scale'][-3] #z
 
-
+        print(scaling_xfm)
         return scaling_xfm @ reorder_xfm
 
     @staticmethod
@@ -353,11 +355,13 @@ class DaskImage:
 
         voxdim = np.diag(self.vox2ras.affine)[:3]
 
-
+        print(voxdim)
         if self.axes_nifti:
             #if the reference image came from nifti space, we need to swap axes ordering and flip
             out_darr = da.flip(da.moveaxis(self.darr,(0,1,2,3),(0,3,2,1)))
             voxdim = voxdim[::-1]
+        else:
+            out_darr = self.darr
 
         #print(out_darr.shape)
         coordinate_transformations = []
