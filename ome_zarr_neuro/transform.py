@@ -96,6 +96,10 @@ class TransformSpec:
     @staticmethod
     def get_vox2ras_zarr(in_zarr_path:str,level=0) -> np.array:
 
+        # TODO - modified this when writing tests -- should be fixed now 
+
+
+        
         #read coordinate transform from ome-zarr
         zi = zarr.open(in_zarr_path)
         attrs=zi['/'].attrs.asdict()
@@ -103,21 +107,29 @@ class TransformSpec:
         transforms = attrs['multiscales'][multiscale]['datasets'][level]['coordinateTransformations']
 
         print(transforms)
-        # 0. reorder_xfm -- changes from z,y,x to x,y,z ordering
-        reorder_xfm = np.eye(4)
-        reorder_xfm[:3,:3] = np.flip(reorder_xfm[:3,:3],axis=0) #reorders z-y-x to x-y-z and vice versa
 
-        print(reorder_xfm)        
-        # 1. scaling_xfm (vox2ras in spim space)
-        # this matches what the ome_zarr_to_nii affine has
-
-        scaling_xfm = np.eye(4)
-        scaling_xfm[0,0]=-transforms[0]['scale'][-1] #x  # 0-index in transforms is the first (and only) transform 
-        scaling_xfm[1,1]=-transforms[0]['scale'][-2] #y
-        scaling_xfm[2,2]=-transforms[0]['scale'][-3] #z
-
+        
+#        # 0. reorder_xfm -- changes from z,y,x to x,y,z ordering
+#        reorder_xfm = np.eye(4)
+#        reorder_xfm[:3,:3] = np.flip(reorder_xfm[:3,:3],axis=0) #reorders z-y-x to x-y-z and vice versa
+#
+#        print(reorder_xfm)        
+#        # 1. scaling_xfm (vox2ras in spim space)
+#        # this matches what the ome_zarr_to_nii affine has
+#
+#        scaling_xfm = np.eye(4)
+#        scaling_xfm[0,0]=-transforms[0]['scale'][-1] #x  # 0-index in transforms is the first (and only) transform 
+#        scaling_xfm[1,1]=-transforms[0]['scale'][-2] #y
+#        scaling_xfm[2,2]=-transforms[0]['scale'][-3] #z
+#
+#        print(scaling_xfm)
+#        return scaling_xfm @ reorder_xfm
+        scaling_vec_zyx = np.array(transforms[0]['scale'][1:])
+        scaling_xfm = np.diag(np.hstack((-scaling_vec_zyx,1)))
+        print('vox2ras after reading zarr')
         print(scaling_xfm)
-        return scaling_xfm @ reorder_xfm
+        return scaling_xfm
+    
 
     @staticmethod
     def get_ras2vox_zarr(in_zarr_path:str,level=0) -> np.array:
@@ -157,6 +169,7 @@ class DaskImage:
     ras2vox: TransformSpec = None
     vox2ras: TransformSpec = None
     axes_nifti: bool = False #set to true if the axes are ordered for NIFTI (X,Y,Z,C,T)
+    attrs = {}
 
     @classmethod
     def from_path_as_ref(cls,path,level=0,channels=[0],chunks=(50,50,50),zooms=None):
@@ -218,6 +231,7 @@ class DaskImage:
         img_type = cls.check_img_type(path)
         if img_type is ImageType.OME_ZARR:
             darr = da.from_zarr(path,component=f'/{level}')[channels,:,:,:]
+            zi=zarr
             axes_nifti = False
         elif img_type is ImageType.NIFTI:
             darr = da.from_array(np.expand_dims(nib.load(path).get_fdata(),axis=0),chunks=chunks)
@@ -245,7 +259,7 @@ class DaskImage:
                 return ImageType.NIFTI
         if suffixes[-1] == '.zarr':
             return ImageType.ZARR
-        elif suffixes[-1] == 'nii':
+        elif suffixes[-1] == '.nii':
             return ImageType.NIFTI
         else:
             return ImageType.UNKNOWN
@@ -347,14 +361,32 @@ class DaskImage:
 
 
     def to_nifti(self,filename,**kwargs):
-        out_nib = nib.Nifti1Image(self.darr.squeeze().compute(**kwargs),
-                   affine=self.vox2ras.affine)
+        print('affine before writing to_nifti')
+        print(self.vox2ras.affine)
+        
+        if self.axes_nifti:
+            out_darr = self.darr.squeeze().compute(**kwargs)
+            out_affine=self.vox2ras.affine
+
+        else:
+            #we need to convert to nifti convention (XYZ by reordering and negating)
+            out_darr = da.flip(da.moveaxis(self.darr,(0,1,2,3),(0,3,2,1))).squeeze().compute(**kwargs)
+            voxdim = np.diag(self.vox2ras.affine)[:3]
+            voxdim = -voxdim[::-1]
+            out_affine = np.diag(np.hstack((voxdim,1)))
+        print('to_nifti')
+        print(out_darr.shape)
+        
+        print(out_affine)
+        out_nib = nib.Nifti1Image(out_darr,affine=out_affine)
         out_nib.to_filename(filename)
 
+    
     def to_ome_zarr(self,filename,max_layer=4,scaling_method='local_mean',**kwargs):
 
         voxdim = np.diag(self.vox2ras.affine)[:3]
 
+        print(self.axes_nifti)
         print(voxdim)
         if self.axes_nifti:
             #if the reference image came from nifti space, we need to swap axes ordering and flip
@@ -362,6 +394,7 @@ class DaskImage:
             voxdim = voxdim[::-1]
         else:
             out_darr = self.darr
+            voxdim = -voxdim
 
         #print(out_darr.shape)
         coordinate_transformations = []
