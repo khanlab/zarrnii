@@ -293,11 +293,11 @@ class DaskImage:
         return interp_dimg
 
     
-    def apply_transform_to_indices(self,
+    def apply_transform_ref_to_flo_indices(self,
                         *tfm_specs,
                         ref_dimg,
                         indices):
-        """ takes indices in flo space, transforms, and provides indices in the ref space.
+        """ takes indices in ref space, transforms, and provides indices in the flo space.
         """
 
         #transform specs already has the transformations to apply, just need the conversion to/from vox/ras at start and end
@@ -325,6 +325,39 @@ class DaskImage:
         #now we should have vecs in space of ref
         return xfm_vecs[:3,:]
 
+    def apply_transform_flo_to_ref_indices(self,
+                        *tfm_specs,
+                        ref_dimg,
+                        indices):
+        """ takes indices in flo space, transforms, and provides indices in the ref space.
+        """
+
+        #transform specs already has the transformations to apply, just need the conversion to/from vox/ras at start and end
+        transforms = []
+        transforms.append(self.vox2ras)
+        for tfm in tfm_specs:
+            transforms.append(tfm)
+        transforms.append(ref_dimg.ras2vox)
+
+        # TODO - DEBUG THIS
+        
+    #--- here we use indices as vectors (indices should be 3xN array), we add ones to make 4xN
+    #  so we can matrix multiply
+
+        homog=np.ones((1,indices.shape[1]))
+        xfm_vecs=np.vstack((indices,homog))
+        print(xfm_vecs)
+
+        #apply transforms one at a time (will need to edit this for warps)
+        for tfm in transforms:
+            print(tfm)
+            xfm_vecs = tfm.apply_transform(xfm_vecs)
+            print(xfm_vecs)
+
+        #now we should have vecs in space of ref
+        return xfm_vecs[:3,:]
+
+ 
                         
     def get_bounded_subregion(self,points: np.array):
 
