@@ -1073,13 +1073,15 @@ files = [
 
 [[package]]
 name = "ome-zarr"
-version = "0.8.4.dev0"
+version = "0.9.0"
 description = "Implementation of images in Zarr files."
 category = "main"
 optional = false
 python-versions = ">=3.6"
-files = []
-develop = false
+files = [
+    {file = "ome-zarr-0.9.0.tar.gz", hash = "sha256:01392f1d1fc54d6b819a0125c99550c14ab89a24e1fccdfd58f09a2c4f2326dc"},
+    {file = "ome_zarr-0.9.0-py3-none-any.whl", hash = "sha256:f8e0fc5ecb5ef8803615be22fb12906f2b9b937baccbee44a534cc1c426f9f97"},
+]
 
 [package.dependencies]
 aiohttp = "<4"
@@ -1091,12 +1093,6 @@ requests = "*"
 scikit-image = "*"
 toolz = "*"
 zarr = ">=2.8.1"
-
-[package.source]
-type = "git"
-url = "https://github.com/ome/ome-zarr-py"
-reference = "master"
-resolved_reference = "1d113cdbfbcbe8c6821ac80affbe8dbe5a71c1a6"
 
 [[package]]
 name = "packaging"
@@ -1875,4 +1871,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<4.0"
-content-hash = "480e9c2697ba27e7f31aa8470a4f2f7fb38f6534a682461dfd128aa840c66dad"
+content-hash = "b86030020809688368aafac379db72300a204957726edec54e1056e24525a0be"

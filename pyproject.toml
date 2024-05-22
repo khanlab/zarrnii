@@ -20,7 +20,7 @@ dask = "^2024.2.0"
 numpy = "^1.26.4"
 scipy = "^1.12.0"
 pandas = "^2.2.0"
-ome-zarr = {git = "https://github.com/ome/ome-zarr-py", rev = 'master'}
+ome-zarr = "^0.9.0"
 
 
 [tool.poetry.group.dev.dependencies]
