@@ -7,7 +7,7 @@ from numpy.testing import assert_array_equal, assert_array_almost_equal
 
 #TODO: use tempfiles for test images
 
-def test_read_write_nii():
+def test_from_nifti_to_nifti():
     """create a nifti with nibabel, read it with DaskImage, then write it back as a nifti.
         ensure data, affine and header do not change."""
 
@@ -27,7 +27,7 @@ def test_read_write_nii():
 
 
 
-def test_compare_daskimage_nii_to_zarr():
+def test_from_nifti_to_zarr_to_nifti():
     """create a nifti with nibabel, read it with DaskImage, write it back as zarr,
         then read it again with DaskImage, 
         ensure data, affine and header do not change."""
@@ -62,7 +62,7 @@ def test_compare_daskimage_nii_to_zarr():
 
 
 
-def test_compare_daskimage_zarr_to_zarr():
+def test_from_nifti_to_zarr_to_zarr():
     """create a nifti with nibabel, read it with DaskImage, write it back as zarr,
         then read it again with DaskImage, 
         ensure data, affine and header do not change."""
@@ -87,17 +87,24 @@ def test_compare_daskimage_zarr_to_zarr():
     #now we have dimg2 with axes_nifti == False
     #  this means, the affine is ZYX vox dims negated
     
-    
+    assert(dimg2.axes_nifti == False)
+    assert_array_equal(np.flip(dimg2.darr.shape[1:],axis=0),img_size)
+
+
     dimg2.to_ome_zarr('test_fromdimg_tozarr.ome.zarr')
     dimg3 = DaskImage.from_path('test_fromdimg_tozarr.ome.zarr')
     
+    assert(dimg3.axes_nifti == False)
+    assert_array_equal(np.flip(dimg3.darr.shape[1:],axis=0),img_size)
+
+
     print(f'dimg3 from zarr: {dimg3}')
     assert_array_equal(dimg2.vox2ras.affine,dimg3.vox2ras.affine)
     assert_array_equal(dimg2.darr.compute(),dimg3.darr.compute())
 
 
 
-def test_identity_transform_nii_refnifti():
+def test_affine_transform_identify():
     """ tests affine transform from nifti to zarr using identity transformation """
     img_size=(100,50,200)
     pix_dims=(0.3,0.2,1.5,1)
@@ -146,5 +153,28 @@ def test_transform_indices_flo_to_ref():
     print(flo_to_ref_to_flo_indices) 
     assert_array_almost_equal(flo_indices,flo_to_ref_to_flo_indices)
 
-#test_transform_indices_flo_to_ref()
+
+def test_transform_indices_ref_to_flo():
+    """ tests transformation of points from reference to floating space"""
+    #first try with just identity, ref as nifti, flo as zarr
+
+    img_size=(100,50,200)
+    pix_dims=(0.3,0.2,1.5,1)
+    
+    nib.Nifti1Image(np.random.rand(*img_size),affine=np.diag(pix_dims)).to_filename('test.nii')
+    
+
+    DaskImage.from_path('./test.nii').to_ome_zarr('./test_ref.ome.zarr')
+
+    ref_dimg = DaskImage.from_path('./test_ref.ome.zarr')
+    flo_dimg = DaskImage.from_path('./test.nii')
+
+    ident = TransformSpec.affine_ras_from_array(np.eye(4))
+    ref_indices = np.array((99,49,199)).reshape(3,1)
+    ref_to_flo_indices = flo_dimg.apply_transform_ref_to_flo_indices(ident,ref_dimg=ref_dimg,indices=ref_indices)
+
+    ref_flo_to_ref_indices = flo_dimg.apply_transform_flo_to_ref_indices(ident,ref_dimg=ref_dimg,indices=ref_to_flo_indices)
+    
+    assert_array_almost_equal(ref_indices,ref_flo_to_ref_indices)
+
 
