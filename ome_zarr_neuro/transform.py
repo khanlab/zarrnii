@@ -110,24 +110,24 @@ class TransformSpec:
 
         
 #        # 0. reorder_xfm -- changes from z,y,x to x,y,z ordering
-#        reorder_xfm = np.eye(4)
-#        reorder_xfm[:3,:3] = np.flip(reorder_xfm[:3,:3],axis=0) #reorders z-y-x to x-y-z and vice versa
+        reorder_xfm = np.eye(4)
+        reorder_xfm[:3,:3] = np.flip(reorder_xfm[:3,:3],axis=0) #reorders z-y-x to x-y-z and vice versa
 #
 #        print(reorder_xfm)        
 #        # 1. scaling_xfm (vox2ras in spim space)
 #        # this matches what the ome_zarr_to_nii affine has
 #
-#        scaling_xfm = np.eye(4)
-#        scaling_xfm[0,0]=-transforms[0]['scale'][-1] #x  # 0-index in transforms is the first (and only) transform 
-#        scaling_xfm[1,1]=-transforms[0]['scale'][-2] #y
-#        scaling_xfm[2,2]=-transforms[0]['scale'][-3] #z
+        scaling_xfm = np.eye(4)
+        scaling_xfm[0,0]=-transforms[0]['scale'][-1] #x  # 0-index in transforms is the first (and only) transform 
+        scaling_xfm[1,1]=-transforms[0]['scale'][-2] #y
+        scaling_xfm[2,2]=-transforms[0]['scale'][-3] #z
 #
 #        print(scaling_xfm)
-#        return scaling_xfm @ reorder_xfm
-        scaling_vec_zyx = np.array(transforms[0]['scale'][1:])
-        scaling_xfm = np.diag(np.hstack((-scaling_vec_zyx,1)))
-        print('vox2ras after reading zarr')
-        print(scaling_xfm)
+        return scaling_xfm @ reorder_xfm
+#        scaling_vec_zyx = np.array(transforms[0]['scale'][1:])
+#        scaling_xfm = np.diag(np.hstack((-scaling_vec_zyx,1)))
+#        print('vox2ras after reading zarr')
+#        print(scaling_xfm)
         return scaling_xfm
     
 
@@ -332,17 +332,38 @@ class DaskImage:
         """ takes indices in flo space, transforms, and provides indices in the ref space.
         """
 
+
+
+
         #transform specs already has the transformations to apply, just need the conversion to/from vox/ras at start and end
         transforms = []
+
+        # we need to reorder coords from XYZ to ZYX -- note: we don't have to do this in the image apply transform because it is done
+        # already when we read the image
+
+        #make this a function:
+        #reorder_xfm = np.eye(4)
+        #reorder_xfm[:3,:3] = np.flip(reorder_xfm[:3,:3],axis=0) #reorders z-y-x to x-y-z and vice versa
+        #reorder_tfm=TransformSpec.affine_ras_from_array(reorder_xfm)
+
+        #if self.axes_nifti:
+        #    transforms.append(reorder_tfm)
+
         transforms.append(self.vox2ras)
         for tfm in tfm_specs:
             transforms.append(tfm)
         transforms.append(ref_dimg.ras2vox)
 
+        #if ref_dimg.axes_nifti:
+        #    transforms.append(reorder_tfm)
+
+
         # TODO - DEBUG THIS
         
     #--- here we use indices as vectors (indices should be 3xN array), we add ones to make 4xN
     #  so we can matrix multiply
+        
+        
 
         homog=np.ones((1,indices.shape[1]))
         xfm_vecs=np.vstack((indices,homog))
@@ -438,7 +459,8 @@ class DaskImage:
         else:
             #we need to convert to nifti convention (XYZ by reordering and negating)
             out_darr = da.flip(da.moveaxis(self.darr,(0,1,2,3),(0,3,2,1))).squeeze().compute(**kwargs)
-            voxdim = np.diag(self.vox2ras.affine)[:3]
+            voxdim = np.diag(np.flip(self.vox2ras.affine[:3,:3],axis=0))
+
             voxdim = -voxdim[::-1]
             out_affine = np.diag(np.hstack((voxdim,1)))
         print('to_nifti')
@@ -451,15 +473,21 @@ class DaskImage:
     
     def to_ome_zarr(self,filename,max_layer=4,scaling_method='local_mean',**kwargs):
 
-        voxdim = np.diag(self.vox2ras.affine)[:3]
-
         print(self.axes_nifti)
-        print(voxdim)
-        if self.axes_nifti:
+
+        if self.axes_nifti: #double check to see if this is needed, add a test too..
+            voxdim = np.diag(self.vox2ras.affine)[:3]
+            
             #if the reference image came from nifti space, we need to swap axes ordering and flip
-            out_darr = da.flip(da.moveaxis(self.darr,(0,1,2,3),(0,3,2,1)))
-            voxdim = voxdim[::-1]
+            if voxdim[0] < 0:
+                out_darr = da.moveaxis(self.darr,(0,1,2,3),(0,3,2,1))
+                voxdim = -voxdim[::-1]
+
+            else:
+                out_darr = da.flip(da.moveaxis(self.darr,(0,1,2,3),(0,3,2,1)))
+                voxdim = voxdim[::-1]
         else:
+            voxdim = np.diag(np.flip(self.vox2ras.affine[:3,:3],axis=0))
             out_darr = self.darr
             voxdim = -voxdim
 
@@ -486,7 +514,7 @@ class DaskImage:
         print('writing full-res image to zarr single threaded')
         out_delayed=out_darr.rechunk().to_zarr('tmpfile_8790.zarr',compute=False,overwrite=True)
         with ProgressBar():
-            out_delayed.compute(scheduler='single-threaded')
+            out_delayed.compute()
 
 
         #then use scaler, using written image as starting point
@@ -507,6 +535,16 @@ class DaskImage:
 
 
 
+    def crop_with_bounding_box(self, bbox):
+
+        #adjust darr using slicing with bbox
+        
+
+        #adjust vox2ras and ras2vox (add offset)
+#        self.vox2ras[:3,3] = offset
+
+
+        return dimg_cropped
 
 
 
@@ -574,7 +612,6 @@ def interp_by_block(x,
     
 
     return interpolated
-
 
 
 
