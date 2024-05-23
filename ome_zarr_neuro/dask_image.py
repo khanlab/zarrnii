@@ -28,6 +28,7 @@ class DaskImage:
     axes_nifti: bool = (
         False  # set to true if the axes are ordered for NIFTI (X,Y,Z,C,T)
     )
+    
 
     @classmethod
     def from_path_as_ref(
@@ -106,6 +107,19 @@ class DaskImage:
             darr,
             ras2vox=TransformSpec.ras2vox_from_image(path),
             vox2ras=TransformSpec.vox2ras_from_image(path),
+            axes_nifti=axes_nifti,
+        )
+
+    @classmethod
+    def from_darr(cls, darr, vox2ras=np.eye(4), axes_nifti=False):
+        from .transform import TransformSpec
+        
+        ras2vox = np.linalg.inv(vox2ras)
+
+        return cls(
+            darr,
+            ras2vox=TransformSpec.affine_ras_from_array(ras2vox),
+            vox2ras=TransformSpec.affine_ras_from_array(vox2ras),
             axes_nifti=axes_nifti,
         )
 
@@ -273,6 +287,8 @@ class DaskImage:
 
             voxdim = -voxdim[::-1]
             out_affine = np.diag(np.hstack((voxdim, 1)))
+            #add back the offset offset 
+            out_affine[:3,3] = -self.vox2ras.affine[:3,3]
 
         out_nib = nib.Nifti1Image(out_darr, affine=out_affine)
         out_nib.to_filename(filename)
@@ -280,6 +296,8 @@ class DaskImage:
     def to_ome_zarr(
         self, filename, max_layer=4, scaling_method="local_mean", **kwargs
     ):
+        offset=self.vox2ras.affine[:3,3]
+
         if (
             self.axes_nifti
         ):  # double check to see if this is needed, add a test too..
@@ -290,15 +308,18 @@ class DaskImage:
             if voxdim[0] < 0:
                 out_darr = da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
                 voxdim = -voxdim[::-1]
+                offset=offset[::-1]
 
             else:
                 out_darr = da.flip(
                     da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
                 )
                 voxdim = voxdim[::-1]
+                offset=offset[::-1]
         else:
             voxdim = np.diag(np.flip(self.vox2ras.affine[:3, :3], axis=0))
             out_darr = self.darr
+            offset=offset[::-1]
             voxdim = -voxdim
 
         coordinate_transformations = []
@@ -307,8 +328,9 @@ class DaskImage:
         # in this case just a single one (scaling by voxel size)
 
         for layer in range(max_layer + 1):
-            coordinate_transformations.append(
-                [
+            coord_transform_layer=[]
+            #add scale
+            coord_transform_layer.append(
                     {
                         "scale": [
                             1,
@@ -318,9 +340,21 @@ class DaskImage:
                         ],  # image-pyramids in XY only
                         "type": "scale",
                     }
-                ]
-            )
+                    )
+            #add translation
+            coord_transform_layer.append({
+                        "translation": [
+                            0,
+                            offset[0],
+                            offset[1] / (2**layer),
+                            offset[2] / (2**layer),
+                        ],  # image-pyramids in XY only
+                        "type": "translation",
+                    }
+                    )
 
+            coordinate_transformations.append(coord_transform_layer)
+            
         axes = [{"name": "c", "type": "channel"}] + [
             {"name": ax, "type": "space", "unit": "micrometer"}
             for ax in ["z", "y", "x"]
@@ -342,10 +376,24 @@ class DaskImage:
                 axes=axes,
             )
 
-    def crop_with_bounding_box(self, bbox):
-        # adjust darr using slicing with bbox
+    def crop_with_bounding_box(self, bbox_min, bbox_max):
+        # adjust darr using slicing with bbox indices
+        # bbox_min and bbox_max are tuples 
+        darr_cropped = self.darr[:,
+                bbox_min[0]:bbox_max[0],
+                bbox_min[1]:bbox_max[1],
+                bbox_min[2]:bbox_max[2]]
 
-        # adjust vox2ras and ras2vox (add offset)
-        #        self.vox2ras[:3,3] = offset
+        # bbox is indices (ie voxels), so need to convert to ras
 
-        return dimg_cropped
+
+        offset_indices = np.array(bbox_min).reshape(3,1)        
+        homog = np.ones((1, offset_indices.shape[1]))
+        vecs = np.vstack((offset_indices, homog))
+
+        xfm_vecs = self.vox2ras.apply_transform(vecs)
+
+        offset_vox2ras = self.vox2ras.affine
+        offset_vox2ras[:3,3]=-xfm_vecs[:3,0]
+
+        return DaskImage.from_darr(darr_cropped,vox2ras=offset_vox2ras,axes_nifti=self.axes_nifti)
