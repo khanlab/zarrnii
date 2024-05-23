@@ -3,13 +3,22 @@ from pathlib import Path
 import nibabel as nib
 import tempfile 
 import os
-from ome_zarr_neuro.transform import DaskImage, TransformSpec
+from ome_zarr_neuro import DaskImage, TransformSpec
 import numpy as np
 from numpy.testing import assert_array_equal, assert_array_almost_equal
 
 
-# TODO: use tempfiles for test images
 
+@pytest.fixture
+def nifti_nib():
+    img_size = (100, 50, 200)
+    pix_dims = (0.3, 0.2, 1.5, 1)
+
+    nifti_nib = nib.Nifti1Image(
+        np.random.rand(*img_size), affine=np.diag(pix_dims)
+    )
+
+    return nifti_nib
 
 @pytest.fixture
 def nifti_nib():
