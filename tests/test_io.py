@@ -1,12 +1,13 @@
-import pytest
-from pathlib import Path
-import nibabel as nib
-import tempfile 
 import os
-from ome_zarr_neuro import DaskImage, TransformSpec
+import tempfile
+from pathlib import Path
+
+import nibabel as nib
 import numpy as np
-from numpy.testing import assert_array_equal, assert_array_almost_equal
+import pytest
+from numpy.testing import assert_array_almost_equal, assert_array_equal
 
+from ome_zarr_neuro import DaskImage, TransformSpec
 
 
 @pytest.fixture
@@ -20,6 +21,7 @@ def nifti_nib():
 
     return nifti_nib
 
+
 @pytest.fixture
 def nifti_nib():
     img_size = (100, 50, 200)
@@ -30,7 +32,6 @@ def nifti_nib():
     )
 
     return nifti_nib
-
 
 
 @pytest.fixture
@@ -40,6 +41,7 @@ def cleandir():
         os.chdir(newpath)
         yield
         os.chdir(old_cwd)
+
 
 @pytest.mark.usefixtures("cleandir")
 def test_from_nifti_to_nifti(nifti_nib):
@@ -85,6 +87,7 @@ def test_from_nifti_to_zarr_to_nifti(nifti_nib):
     assert_array_equal(dimg.vox2ras.affine, dimg3.vox2ras.affine)
     assert_array_equal(dimg.darr.compute(), dimg3.darr.compute())
 
+
 @pytest.mark.usefixtures("cleandir")
 def test_from_nifti_to_zarr_to_zarr(nifti_nib):
     """create a nifti with nibabel, read it with DaskImage, write it back as zarr,
@@ -109,13 +112,17 @@ def test_from_nifti_to_zarr_to_zarr(nifti_nib):
     #  this means, the affine is ZYX vox dims negated
 
     assert dimg2.axes_nifti == False
-    assert_array_equal(np.flip(dimg2.darr.shape[1:], axis=0), nifti_nib.get_fdata().shape)
+    assert_array_equal(
+        np.flip(dimg2.darr.shape[1:], axis=0), nifti_nib.get_fdata().shape
+    )
 
     dimg2.to_ome_zarr("test_fromdimg_tozarr.ome.zarr")
     dimg3 = DaskImage.from_path("test_fromdimg_tozarr.ome.zarr")
 
     assert dimg3.axes_nifti == False
-    assert_array_equal(np.flip(dimg3.darr.shape[1:], axis=0), nifti_nib.get_fdata().shape)
+    assert_array_equal(
+        np.flip(dimg3.darr.shape[1:], axis=0), nifti_nib.get_fdata().shape
+    )
 
     print(f"dimg3 from zarr: {dimg3}")
     assert_array_equal(dimg2.vox2ras.affine, dimg3.vox2ras.affine)
@@ -139,6 +146,7 @@ def test_affine_transform_identify(nifti_nib):
     assert_array_almost_equal(
         flo_dimg.darr.compute(), interp_dimg.darr.compute()
     )
+
 
 @pytest.mark.usefixtures("cleandir")
 def test_transform_indices_flo_to_ref(nifti_nib):
@@ -169,6 +177,7 @@ def test_transform_indices_flo_to_ref(nifti_nib):
     print("flo -> ref -> flo")
     print(flo_to_ref_to_flo_indices)
     assert_array_almost_equal(flo_indices, flo_to_ref_to_flo_indices)
+
 
 @pytest.mark.usefixtures("cleandir")
 def test_transform_indices_ref_to_flo(nifti_nib):

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -6,7 +7,6 @@ if TYPE_CHECKING:
 
 from pathlib import Path
 
-from .enums import ImageType
 import dask.array as da
 import nibabel as nib
 import numpy as np
@@ -15,8 +15,9 @@ from attrs import define
 from dask.diagnostics import ProgressBar
 from ome_zarr.scale import Scaler
 from ome_zarr.writer import write_image
-from .transform import interp_by_block
 
+from .enums import ImageType
+from .transform import interp_by_block
 
 
 @define
@@ -37,6 +38,7 @@ class DaskImage:
         """ref image dont need data,  just the shape and affine"""
 
         from .transform import TransformSpec
+
         img_type = cls.check_img_type(path)
         if img_type is ImageType.OME_ZARR:
             darr_base = da.from_zarr(path, component=f"/{level}")[
@@ -86,6 +88,7 @@ class DaskImage:
     def from_path(cls, path, level=0, channels=[0], chunks="auto"):
         """returns a dask array whether a nifti or ome_zarr is provided"""
         from .transform import TransformSpec
+
         img_type = cls.check_img_type(path)
         if img_type is ImageType.OME_ZARR:
             darr = da.from_zarr(path, component=f"/{level}")[channels, :, :, :]
@@ -130,7 +133,8 @@ class DaskImage:
         on the returned dask array.
         """
 
-        # transform specs already has the transformations to apply, just need the conversion to/from vox/ras at start and end
+        # transform specs already has the transformations to apply, 
+        #just need the conversion to/from vox/ras at start and end
         transforms = []
         transforms.append(ref_dimg.vox2ras)
         for tfm in tfm_specs:
@@ -318,9 +322,10 @@ class DaskImage:
             for ax in ["z", "y", "x"]
         ]
 
-
-        store = zarr.storage.FSStore(filename,dimension_separator='/',mode='w')
-        group = zarr.group(store,overwrite=True)
+        store = zarr.storage.FSStore(
+            filename, dimension_separator="/", mode="w"
+        )
+        group = zarr.group(store, overwrite=True)
 
         scaler = Scaler(max_layer=max_layer, method=scaling_method)
 
@@ -340,5 +345,3 @@ class DaskImage:
         #        self.vox2ras[:3,3] = offset
 
         return dimg_cropped
-
-

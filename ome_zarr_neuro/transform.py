@@ -1,5 +1,5 @@
-
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -11,6 +11,7 @@ import zarr
 from attrs import define
 from dask.diagnostics import ProgressBar
 from scipy.interpolate import interpn
+
 from .enums import ImageType, TransformType
 
 
@@ -63,6 +64,7 @@ class TransformSpec:
     @classmethod
     def vox2ras_from_image(cls, path: str, level=0):
         from .dask_image import DaskImage
+
         img_type = DaskImage.check_img_type(path)
 
         if img_type is ImageType.OME_ZARR:
@@ -81,6 +83,7 @@ class TransformSpec:
     @classmethod
     def ras2vox_from_image(cls, path: str, level=0):
         from .dask_image import DaskImage
+
         img_type = DaskImage.check_img_type(path)
         if img_type is ImageType.OME_ZARR:
             return cls(
@@ -159,7 +162,6 @@ class TransformSpec:
                 )
 
             return vecs + disp_vecs
-
 
 
 def interp_by_block(
