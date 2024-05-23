@@ -133,8 +133,8 @@ class DaskImage:
         on the returned dask array.
         """
 
-        # transform specs already has the transformations to apply, 
-        #just need the conversion to/from vox/ras at start and end
+        # transform specs already has the transformations to apply,
+        # just need the conversion to/from vox/ras at start and end
         transforms = []
         transforms.append(ref_dimg.vox2ras)
         for tfm in tfm_specs:
