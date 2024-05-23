@@ -29,8 +29,6 @@ class DaskImage:
         False  # set to true if the axes are ordered for NIFTI (X,Y,Z,C,T)
     )
 
-    attrs = {}  # TODO: need to store ome-zarr attributes somehow?
-
     @classmethod
     def from_path_as_ref(
         cls, path, level=0, channels=[0], chunks=(50, 50, 50), zooms=None
@@ -158,17 +156,19 @@ class DaskImage:
     def apply_transform_ref_to_flo_indices(
         self, *tfm_specs, ref_dimg, indices
     ):
-        """takes indices in ref space, transforms, and provides indices in the flo space."""
+        """takes indices in ref space, transforms, and provides
+        indices in the flo space."""
 
-        # transform specs already has the transformations to apply, just need the conversion to/from vox/ras at start and end
+        # transform specs already has the transformations to apply, just
+        # need the conversion to/from vox/ras at start and end
         transforms = []
         transforms.append(ref_dimg.vox2ras)
         for tfm in tfm_specs:
             transforms.append(tfm)
         transforms.append(self.ras2vox)
 
-        # --- here we use indices as vectors (indices should be 3xN array), we add ones to make 4xN
-        #  so we can matrix multiply
+        # here we use indices as vectors (indices should be 3xN array),
+        # we add ones to make 4xN so we can matrix multiply
 
         homog = np.ones((1, indices.shape[1]))
         xfm_vecs = np.vstack((indices, homog))
@@ -183,17 +183,16 @@ class DaskImage:
     def apply_transform_flo_to_ref_indices(
         self, *tfm_specs, ref_dimg, indices
     ):
-        """takes indices in flo space, transforms, and provides indices in the ref space."""
+        """takes indices in flo space, transforms, and
+        provides indices in the ref space."""
 
-        # transform specs already has the transformations to apply, just need the conversion to/from vox/ras at start and end
+        # transform specs already has the transformations to apply,
+        # just need the conversion to/from vox/ras at start and end
         transforms = []
         transforms.append(self.vox2ras)
         for tfm in tfm_specs:
             transforms.append(tfm)
         transforms.append(ref_dimg.ras2vox)
-
-        # --- here we use indices as vectors (indices should be 3xN array), we add ones to make 4xN
-        #  so we can matrix multiply
 
         homog = np.ones((1, indices.shape[1]))
         xfm_vecs = np.vstack((indices, homog))
@@ -219,7 +218,8 @@ class DaskImage:
         darr is the floating image dask array
 
         We use compute() on the floating dask array to immediately get it
-        since dask doesn't support nd fancy indexing yet that interpn seems to use
+        since dask doesn't support nd fancy indexing yet that
+        interpn seems to use
         """
 
         pad = 1
@@ -234,7 +234,8 @@ class DaskImage:
         min_extent = np.clip(min_extent, clip_min, clip_max)
         max_extent = np.clip(max_extent, clip_min, clip_max)
 
-        # problematic if all points are outside the domain -- if so then no need to interpolate,
+        # problematic if all points are outside the domain --
+        # - if so then no need to interpolate,
         # just return None to indicate this block should be all zeros
         if (max_extent == min_extent).sum() > 0:
             return (None, None)
@@ -261,7 +262,8 @@ class DaskImage:
             out_affine = self.vox2ras.affine
 
         else:
-            # we need to convert to nifti convention (XYZ by reordering and negating)
+            # we need to convert to nifti convention
+            # (XYZ by reordering and negating)
             out_darr = (
                 da.flip(da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1)))
                 .squeeze()
@@ -283,7 +285,8 @@ class DaskImage:
         ):  # double check to see if this is needed, add a test too..
             voxdim = np.diag(self.vox2ras.affine)[:3]
 
-            # if the reference image came from nifti space, we need to swap axes ordering and flip
+            # if the reference image came from nifti space, we need to
+            # swap axes ordering and flip
             if voxdim[0] < 0:
                 out_darr = da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
                 voxdim = -voxdim[::-1]
@@ -299,18 +302,19 @@ class DaskImage:
             voxdim = -voxdim
 
         coordinate_transformations = []
-        # for each resolution (dataset), we have a list of dicts, transformations to apply..
+        # for each resolution (dataset), we have a list of dicts,
+        # transformations to apply..
         # in this case just a single one (scaling by voxel size)
 
-        for l in range(max_layer + 1):
+        for layer in range(max_layer + 1):
             coordinate_transformations.append(
                 [
                     {
                         "scale": [
                             1,
                             voxdim[0],
-                            (2**l) * voxdim[1],
-                            (2**l) * voxdim[2],
+                            (2**layer) * voxdim[1],
+                            (2**layer) * voxdim[2],
                         ],  # image-pyramids in XY only
                         "type": "scale",
                     }

@@ -188,7 +188,8 @@ def interp_by_block(
         indexing="ij",
     )
 
-    # reshape them into a vectors (x,y,z,1) for each point, so we can matrix multiply
+    # reshape them into a vectors (x,y,z,1) for each point, so we can
+    # matrix multiply
     xvf = xv.reshape((1, np.product(xv.shape)))
     yvf = yv.reshape((1, np.product(yv.shape)))
     zvf = zv.reshape((1, np.product(zv.shape)))
