@@ -26,6 +26,8 @@ poethepoet = "^0.13.1"
 pre-commit = "^2.17.0"
 ruff = "^0.1.14"
 jupyterlab = "^4.2.1"
+matplotlib = "^3.9.0"
+bokeh = "^3.4.1"
 
 [build-system]
 requires = ["poetry-core"]
