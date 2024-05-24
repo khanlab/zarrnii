@@ -1,6 +1,4 @@
-# ome_zarr_neuro/__init__.py
+from .core import ZarrNii
+from .transform import Transform
 
-from .dask_image import DaskImage
-from .transform import TransformSpec
-
-__all__ = ["DaskImage", "TransformSpec"]
+__all__ = ["ZarrNii", "Transform"]
