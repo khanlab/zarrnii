@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-from ome_zarr_neuro import DaskImage, TransformSpec
+from zarrnii import ZarrNii, Transform
 
 
 @pytest.fixture
@@ -45,13 +45,13 @@ def cleandir():
 
 @pytest.mark.usefixtures("cleandir")
 def test_from_nifti_to_nifti(nifti_nib):
-    """create a nifti with nibabel, read it with DaskImage, then write it back as a nifti.
+    """create a nifti with nibabel, read it with ZarrNii, then write it back as a nifti.
     ensure data, affine and header do not change."""
 
     nifti_nib.to_filename("test.nii")
     nib_orig = nib.load("test.nii")
 
-    dimg = DaskImage.from_path("test.nii")
+    dimg = ZarrNii.from_path("test.nii")
     dimg.to_nifti("test_fromdimg.nii")
     nib_dimg = nib.load("test_fromdimg.nii")
 
@@ -62,27 +62,27 @@ def test_from_nifti_to_nifti(nifti_nib):
 
 @pytest.mark.usefixtures("cleandir")
 def test_from_nifti_to_zarr_to_nifti(nifti_nib):
-    """create a nifti with nibabel, read it with DaskImage, write it back as zarr,
-    then read it again with DaskImage,
+    """create a nifti with nibabel, read it with ZarrNii, write it back as zarr,
+    then read it again with ZarrNii,
     ensure data, affine and header do not change."""
 
     nifti_nib.to_filename("test.nii")
     nib_orig = nib.load("test.nii")
 
-    dimg = DaskImage.from_path("test.nii")
+    dimg = ZarrNii.from_path("test.nii")
 
     # now we have dimg with axes_nifti == True
     #  this means, the affine is XYZ vox dims
 
     dimg.to_ome_zarr("test_fromdimg.ome.zarr")
-    dimg2 = DaskImage.from_path("test_fromdimg.ome.zarr")
+    dimg2 = ZarrNii.from_path("test_fromdimg.ome.zarr")
     dimg2
 
     # now we have dimg2 with axes_nifti == False
     #  this means, the affine is ZYX vox dims negated
 
     dimg2.to_nifti("test_fromdimg_tonii.nii")
-    dimg3 = DaskImage.from_path("test_fromdimg_tonii.nii")
+    dimg3 = ZarrNii.from_path("test_fromdimg_tonii.nii")
 
     assert_array_equal(dimg.vox2ras.affine, dimg3.vox2ras.affine)
     assert_array_equal(dimg.darr.compute(), dimg3.darr.compute())
@@ -90,21 +90,21 @@ def test_from_nifti_to_zarr_to_nifti(nifti_nib):
 
 @pytest.mark.usefixtures("cleandir")
 def test_from_nifti_to_zarr_to_zarr(nifti_nib):
-    """create a nifti with nibabel, read it with DaskImage, write it back as zarr,
-    then read it again with DaskImage,
+    """create a nifti with nibabel, read it with ZarrNii, write it back as zarr,
+    then read it again with ZarrNii,
     ensure data, affine and header do not change."""
 
     nifti_nib.to_filename("test.nii")
     nib_orig = nib.load("test.nii")
 
-    dimg = DaskImage.from_path("test.nii")
+    dimg = ZarrNii.from_path("test.nii")
 
     # now we have dimg with axes_nifti == True
     #  this means, the affine is XYZ vox dims
 
     print(f"dimg from nii: {dimg}")
     dimg.to_ome_zarr("test_fromdimg.ome.zarr")
-    dimg2 = DaskImage.from_path("test_fromdimg.ome.zarr")
+    dimg2 = ZarrNii.from_path("test_fromdimg.ome.zarr")
     dimg2
 
     print(f"dimg2 from zarr: {dimg2}")
@@ -117,7 +117,7 @@ def test_from_nifti_to_zarr_to_zarr(nifti_nib):
     )
 
     dimg2.to_ome_zarr("test_fromdimg_tozarr.ome.zarr")
-    dimg3 = DaskImage.from_path("test_fromdimg_tozarr.ome.zarr")
+    dimg3 = ZarrNii.from_path("test_fromdimg_tozarr.ome.zarr")
 
     assert dimg3.axes_nifti == False
     assert_array_equal(
@@ -135,12 +135,12 @@ def test_affine_transform_identify(nifti_nib):
 
     nifti_nib.to_filename("test.nii")
 
-    flo_dimg = DaskImage.from_path("test.nii")
+    flo_dimg = ZarrNii.from_path("test.nii")
 
-    ref_dimg = DaskImage.from_path("test.nii")
+    ref_dimg = ZarrNii.from_path("test.nii")
 
     interp_dimg = flo_dimg.apply_transform(
-        TransformSpec.affine_ras_from_array(np.eye(4)), ref_dimg=ref_dimg
+        Transform.affine_ras_from_array(np.eye(4)), ref_dimg=ref_dimg
     )
 
     assert_array_almost_equal(
@@ -155,12 +155,12 @@ def test_transform_indices_flo_to_ref(nifti_nib):
 
     nifti_nib.to_filename("test.nii")
 
-    DaskImage.from_path("test.nii").to_ome_zarr("test_flo.ome.zarr")
+    ZarrNii.from_path("test.nii").to_ome_zarr("test_flo.ome.zarr")
 
-    ref_dimg = DaskImage.from_path("test_flo.ome.zarr")
-    flo_dimg = DaskImage.from_path("test.nii")
+    ref_dimg = ZarrNii.from_path("test_flo.ome.zarr")
+    flo_dimg = ZarrNii.from_path("test.nii")
 
-    ident = TransformSpec.affine_ras_from_array(np.eye(4))
+    ident = Transform.affine_ras_from_array(np.eye(4))
     flo_indices = np.array((99, 49, 199)).reshape(3, 1)
     flo_to_ref_indices = flo_dimg.apply_transform_flo_to_ref_indices(
         ident, ref_dimg=ref_dimg, indices=flo_indices
@@ -186,12 +186,12 @@ def test_transform_indices_ref_to_flo(nifti_nib):
 
     nifti_nib.to_filename("test.nii")
 
-    DaskImage.from_path("test.nii").to_ome_zarr("test_ref.ome.zarr")
+    ZarrNii.from_path("test.nii").to_ome_zarr("test_ref.ome.zarr")
 
-    ref_dimg = DaskImage.from_path("test_ref.ome.zarr")
-    flo_dimg = DaskImage.from_path("test.nii")
+    ref_dimg = ZarrNii.from_path("test_ref.ome.zarr")
+    flo_dimg = ZarrNii.from_path("test.nii")
 
-    ident = TransformSpec.affine_ras_from_array(np.eye(4))
+    ident = Transform.affine_ras_from_array(np.eye(4))
     ref_indices = np.array((99, 49, 199)).reshape(3, 1)
     ref_to_flo_indices = flo_dimg.apply_transform_ref_to_flo_indices(
         ident, ref_dimg=ref_dimg, indices=ref_indices

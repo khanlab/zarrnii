@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .transform import TransformSpec
+    from .transform import Transform
 
 from pathlib import Path
 
@@ -21,10 +21,10 @@ from .transform import interp_by_block
 
 
 @define
-class DaskImage:
+class ZarrNii:
     darr: da.Array
-    ras2vox: TransformSpec = None
-    vox2ras: TransformSpec = None
+    ras2vox: Transform = None
+    vox2ras: Transform = None
     axes_nifti: bool = (
         False  # set to true if the axes are ordered for NIFTI (X,Y,Z,C,T)
     )
@@ -36,7 +36,7 @@ class DaskImage:
     ):
         """ref image dont need data,  just the shape and affine"""
 
-        from .transform import TransformSpec
+        from .transform import Transform
 
         img_type = cls.check_img_type(path)
         if img_type is ImageType.OME_ZARR:
@@ -51,8 +51,8 @@ class DaskImage:
             print("unknown image type")
             return None
 
-        vox2ras = TransformSpec.vox2ras_from_image(path)
-        ras2vox = TransformSpec.ras2vox_from_image(path)
+        vox2ras = Transform.vox2ras_from_image(path)
+        ras2vox = Transform.ras2vox_from_image(path)
 
         out_shape = [
             len(channels),
@@ -86,7 +86,7 @@ class DaskImage:
     @classmethod
     def from_path(cls, path, level=0, channels=[0], chunks="auto"):
         """returns a dask array whether a nifti or ome_zarr is provided"""
-        from .transform import TransformSpec
+        from .transform import Transform
 
         img_type = cls.check_img_type(path)
         if img_type is ImageType.OME_ZARR:
@@ -105,21 +105,21 @@ class DaskImage:
 
         return cls(
             darr,
-            ras2vox=TransformSpec.ras2vox_from_image(path),
-            vox2ras=TransformSpec.vox2ras_from_image(path),
+            ras2vox=Transform.ras2vox_from_image(path),
+            vox2ras=Transform.vox2ras_from_image(path),
             axes_nifti=axes_nifti,
         )
 
     @classmethod
     def from_darr(cls, darr, vox2ras=np.eye(4), axes_nifti=False):
-        from .transform import TransformSpec
+        from .transform import Transform
         
         ras2vox = np.linalg.inv(vox2ras)
 
         return cls(
             darr,
-            ras2vox=TransformSpec.affine_ras_from_array(ras2vox),
-            vox2ras=TransformSpec.affine_ras_from_array(vox2ras),
+            ras2vox=Transform.affine_ras_from_array(ras2vox),
+            vox2ras=Transform.affine_ras_from_array(vox2ras),
             axes_nifti=axes_nifti,
         )
 
@@ -139,19 +139,19 @@ class DaskImage:
         else:
             return ImageType.UNKNOWN
 
-    def apply_transform(self, *tfm_specs, ref_dimg):
-        """return DaskImage applying transform to floating image.
+    def apply_transform(self, *tfms, ref_dimg):
+        """return ZarrNii applying transform to floating image.
         this is a lazy function, doesn't do any work until you compute()
         on the returned dask array.
         """
 
-        # transform specs already has the transformations to apply,
+        # tfms already has the transformations to apply,
         # just need the conversion to/from vox/ras at start and end
-        transforms = []
-        transforms.append(ref_dimg.vox2ras)
-        for tfm in tfm_specs:
-            transforms.append(tfm)
-        transforms.append(self.ras2vox)
+        tfms_to_apply = []
+        tfms_to_apply.append(ref_dimg.vox2ras)
+        for tfm in tfms:
+            tfms_to_apply.append(tfm)
+        tfms_to_apply.append(self.ras2vox)
 
         # out image in space of ref
         interp_dimg = ref_dimg
@@ -161,25 +161,25 @@ class DaskImage:
             interp_by_block,
             ref_dimg.darr,
             dtype=np.float32,
-            transform_specs=transforms,
+            transforms=tfms_to_apply,
             flo_dimg=self,
         )
 
         return interp_dimg
 
     def apply_transform_ref_to_flo_indices(
-        self, *tfm_specs, ref_dimg, indices
+        self, *tfms, ref_dimg, indices
     ):
         """takes indices in ref space, transforms, and provides
         indices in the flo space."""
 
-        # transform specs already has the transformations to apply, just
+        # tfms already has the transformations to apply, just
         # need the conversion to/from vox/ras at start and end
-        transforms = []
-        transforms.append(ref_dimg.vox2ras)
-        for tfm in tfm_specs:
-            transforms.append(tfm)
-        transforms.append(self.ras2vox)
+        tfms_to_apply = []
+        tfms_to_apply.append(ref_dimg.vox2ras)
+        for tfm in tfms:
+            tfms_to_apply.append(tfm)
+        tfms_to_apply.append(self.ras2vox)
 
         # here we use indices as vectors (indices should be 3xN array),
         # we add ones to make 4xN so we can matrix multiply
@@ -187,32 +187,32 @@ class DaskImage:
         homog = np.ones((1, indices.shape[1]))
         xfm_vecs = np.vstack((indices, homog))
 
-        # apply transforms one at a time (will need to edit this for warps)
-        for tfm in transforms:
+        # apply tfms_to_apply one at a time (will need to edit this for warps)
+        for tfm in tfms_to_apply:
             xfm_vecs = tfm.apply_transform(xfm_vecs)
 
         # now we should have vecs in space of ref
         return xfm_vecs[:3, :]
 
     def apply_transform_flo_to_ref_indices(
-        self, *tfm_specs, ref_dimg, indices
+        self, *tfms, ref_dimg, indices
     ):
         """takes indices in flo space, transforms, and
         provides indices in the ref space."""
 
-        # transform specs already has the transformations to apply,
+        # tfms already has the transformations to apply,
         # just need the conversion to/from vox/ras at start and end
-        transforms = []
-        transforms.append(self.vox2ras)
-        for tfm in tfm_specs:
-            transforms.append(tfm)
-        transforms.append(ref_dimg.ras2vox)
+        tfms_to_apply = []
+        tfms_to_apply.append(self.vox2ras)
+        for tfm in tfms:
+            tfms_to_apply.append(tfm)
+        tfms_to_apply.append(ref_dimg.ras2vox)
 
         homog = np.ones((1, indices.shape[1]))
         xfm_vecs = np.vstack((indices, homog))
 
-        # apply transforms one at a time
-        for tfm in transforms:
+        # apply tfms_to_apply one at a time
+        for tfm in tfms_to_apply:
             xfm_vecs = tfm.apply_transform(xfm_vecs)
 
         # now we should have vecs in space of ref
@@ -396,4 +396,4 @@ class DaskImage:
         offset_vox2ras = self.vox2ras.affine
         offset_vox2ras[:3,3]=-xfm_vecs[:3,0]
 
-        return DaskImage.from_darr(darr_cropped,vox2ras=offset_vox2ras,axes_nifti=self.axes_nifti)
+        return ZarrNii.from_darr(darr_cropped,vox2ras=offset_vox2ras,axes_nifti=self.axes_nifti)

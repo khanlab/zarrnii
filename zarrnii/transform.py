@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .dask_image import DaskImage
+    from .core import ZarrNii
 
 import nibabel as nib
 import numpy as np
@@ -16,7 +16,7 @@ from .enums import ImageType, TransformType
 
 
 @define
-class TransformSpec:
+class Transform:
     tfm_type: TransformType
     affine: np.array = None
     disp_xyz: np.array = None
@@ -63,9 +63,9 @@ class TransformSpec:
 
     @classmethod
     def vox2ras_from_image(cls, path: str, level=0):
-        from .dask_image import DaskImage
+        from .core import ZarrNii
 
-        img_type = DaskImage.check_img_type(path)
+        img_type = ZarrNii.check_img_type(path)
 
         if img_type is ImageType.OME_ZARR:
             return cls(
@@ -82,9 +82,9 @@ class TransformSpec:
 
     @classmethod
     def ras2vox_from_image(cls, path: str, level=0):
-        from .dask_image import DaskImage
+        from .core import ZarrNii
 
-        img_type = DaskImage.check_img_type(path)
+        img_type = ZarrNii.check_img_type(path)
         if img_type is ImageType.OME_ZARR:
             return cls(
                 TransformType.AFFINE_RAS,
@@ -104,7 +104,7 @@ class TransformSpec:
 
     @staticmethod
     def get_ras2vox_nii(in_nii_path: str) -> np.array:
-        return np.linalg.inv(TransformSpec.get_vox2ras_nii(in_nii_path))
+        return np.linalg.inv(Transform.get_vox2ras_nii(in_nii_path))
 
     @staticmethod
     def get_vox2ras_zarr(in_zarr_path: str, level=0) -> np.array:
@@ -135,7 +135,7 @@ class TransformSpec:
     @staticmethod
     def get_ras2vox_zarr(in_zarr_path: str, level=0) -> np.array:
         return np.linalg.inv(
-            TransformSpec.get_vox2ras_zarr(in_zarr_path, level=level)
+            Transform.get_vox2ras_zarr(in_zarr_path, level=level)
         )
 
     def apply_transform(self, vecs: np.array) -> np.array:
@@ -166,8 +166,8 @@ class TransformSpec:
 
 def interp_by_block(
     x,
-    transform_specs: list[TransformSpec],
-    flo_dimg: DaskImage,
+    transforms: list[Transform],
+    flo_dimg: ZarrNii,
     block_info=None,
     interp_method="linear",
 ):
@@ -198,8 +198,8 @@ def interp_by_block(
     xfm_vecs = np.vstack((xvf, yvf, zvf, homog))
 
     # apply transforms one at a time (will need to edit this for warps)
-    for tfm_spec in transform_specs:
-        xfm_vecs = tfm_spec.apply_transform(xfm_vecs)
+    for tfm in transforms:
+        xfm_vecs = tfm.apply_transform(xfm_vecs)
 
     # then finally interpolate those points on the template dseg volume
     # need to interpolate for each channel
