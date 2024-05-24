@@ -105,8 +105,8 @@ class ZarrNii:
 
         return cls(
             darr,
-            ras2vox=Transform.ras2vox_from_image(path),
-            vox2ras=Transform.vox2ras_from_image(path),
+            ras2vox=Transform.ras2vox_from_image(path,level=level),
+            vox2ras=Transform.vox2ras_from_image(path,level=level),
             axes_nifti=axes_nifti,
         )
 
@@ -384,16 +384,9 @@ class ZarrNii:
                 bbox_min[1]:bbox_max[1],
                 bbox_min[2]:bbox_max[2]]
 
-        # bbox is indices (ie voxels), so need to convert to ras
-
-
-        offset_indices = np.array(bbox_min).reshape(3,1)        
-        homog = np.ones((1, offset_indices.shape[1]))
-        vecs = np.vstack((offset_indices, homog))
-
-        xfm_vecs = self.vox2ras.apply_transform(vecs)
-
-        offset_vox2ras = self.vox2ras.affine
-        offset_vox2ras[:3,3]=-xfm_vecs[:3,0]
-
-        return ZarrNii.from_darr(darr_cropped,vox2ras=offset_vox2ras,axes_nifti=self.axes_nifti)
+        trans_vox = np.eye(4,4)
+        trans_vox[:3,3] = bbox_min
+        
+        new_vox2ras = self.vox2ras.affine @ trans_vox
+        
+        return ZarrNii.from_darr(darr_cropped,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
