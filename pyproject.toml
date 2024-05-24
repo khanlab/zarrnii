@@ -1,29 +1,49 @@
 [tool.poetry]
-name = "ome-zarr-neuro"
+name = "zarrnii"
 version = "0.1.0-alpha"
-description = "Package for working with and transforming ome-zarr with nifti transforms"
+description = "Package for working with OME-Zarr and NIFTI images in a unified manner, with a focus on spatial transformations"
 authors = ["Ali Khan <alik@robarts.ca>"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "ome_zarr_neuro"}]
 
 
-#[tool.poetry.scripts]
-#ozn-tool = "ome_zarr_neuro.main:app"
 
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0"
-#typer = {extras = ["all"], version = "^0.9.0"}
 zarr = "^2.17.0"
 nibabel = "^5.2.0"
 dask = "^2024.2.0"
 numpy = "^1.26.4"
 scipy = "^1.12.0"
 pandas = "^2.2.0"
-ome-zarr = "^0.8.3"
+ome-zarr = "^0.9.0"
 
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.0"
+poethepoet = "^0.13.1"
+pre-commit = "^2.17.0"
+ruff = "^0.1.14"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+
+[tool.poe.tasks]
+setup = "pre-commit install"
+ruff-lint = "ruff check --fix ome_zarr_neuro"
+ruff-lint-check = "ruff check ome_zarr_neuro"
+ruff-format = "ruff format ."
+pytest = "pytest -v"
+quality = [ "ruff-lint", "ruff-format"]
+quality-check = ["ruff-lint-check"]
+test = [ "pytest" ]
+
+
+[tool.ruff]
+select = ["E", "W", "N", "RUF", "I", "UP"]
+line-length = 79
+
 
