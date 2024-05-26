@@ -32,7 +32,7 @@ class ZarrNii:
 
     @classmethod
     def from_path_as_ref(
-        cls, path, level=0, channels=[0], chunks=(50, 50, 50), zooms=None
+        cls, path, level=0, channels=[0], chunks='auto', zooms=None
     ):
         """ref image dont need data,  just the shape and affine"""
 
@@ -76,7 +76,7 @@ class ZarrNii:
         darr_empty = da.empty(
             darr_base,
             shape=out_shape,
-            chunks=(len(channels), chunks[0], chunks[1], chunks[2]),
+            chunks=chunks,
         )
 
         return cls(
@@ -84,13 +84,15 @@ class ZarrNii:
         )
 
     @classmethod
-    def from_path(cls, path, level=0, channels=[0], chunks="auto"):
+    def from_path(cls, path, level=0, channels=[0], chunks="auto", rechunk=False):
         """returns a dask array whether a nifti or ome_zarr is provided"""
         from .transform import Transform
 
         img_type = cls.check_img_type(path)
         if img_type is ImageType.OME_ZARR:
             darr = da.from_zarr(path, component=f"/{level}")[channels, :, :, :]
+            if rechunk:
+                darr = darr.rechunk(chunks)
             zi = zarr
             axes_nifti = False
         elif img_type is ImageType.NIFTI:
@@ -270,34 +272,85 @@ class ZarrNii:
 
         return (grid_points, subvol)
 
+    def as_Nifti1Image(self, filename, **kwargs):
+        
+        return nib.Nifti1Image(self.darr.squeeze(), affine=self.vox2ras.affine)
+    
+        
     def to_nifti(self, filename, **kwargs):
-        if self.axes_nifti:
-            out_darr = self.darr.squeeze().compute(**kwargs)
-            out_affine = self.vox2ras.affine
 
-        else:
-            # we need to convert to nifti convention
-            # (XYZ by reordering and negating)
-            out_darr = (
-                da.flip(da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1)))
-                .squeeze()
-                .compute(**kwargs)
-            )
-            voxdim = np.diag(np.flip(self.vox2ras.affine[:3, :3], axis=0))
+        if self.axes_nifti: #this means it was read-in as a NIFTI, so we write out as normal
+            out_darr = self.darr.squeeze()
+            affine = self.vox2ras.affine
 
-            voxdim = -voxdim[::-1]
-            out_affine = np.diag(np.hstack((voxdim, 1)))
-            #add back the offset offset 
-            out_affine[:3,3] = -self.vox2ras.affine[:3,3]
-
-        out_nib = nib.Nifti1Image(out_darr, affine=out_affine)
+        else: #was read-in as a Zarr, so we reorder/flip data, and adjust affine accordingly
+    
+            out_darr = da.flip(
+                    da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
+            ).squeeze()
+            #adjust affine accordingly
+    
+            # reorder_xfm -- changes from z,y,x to x,y,z ordering
+            reorder_xfm = np.eye(4)
+            reorder_xfm[:3, :3] = np.flip(
+                reorder_xfm[:3, :3], axis=0
+            )  # reorders z-y-x to x-y-z and vice versa
+            
+            flip_xfm = np.diag((-1,-1,-1,1))
+    
+            affine = reorder_xfm @ flip_xfm @ self.vox2ras.affine
+            
+        
+        out_nib = nib.Nifti1Image(out_darr, affine=affine)
         out_nib.to_filename(filename)
 
     def to_ome_zarr(
         self, filename, max_layer=4, scaling_method="local_mean", **kwargs
     ):
+        #the affine specifies how to go from the darr to nifti RAS space
+
+        #in creating affine for zarr, we had to apply scale, translation
+        # then reorder, flip
+
+        # we can apply steps 
+
+        
         offset=self.vox2ras.affine[:3,3]
 
+        if self.axes_nifti:
+            #we have a nifti image -- need to apply the transformations (reorder, flip) to the 
+            # data in the OME_Zarr, so it is consistent.
+            out_darr = da.flip(
+                    da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
+            )
+        else:
+            out_darr = self.darr
+
+        
+        if self.vox2ras.affine[1,1]>0:
+            #we have voxdims on the diagonal
+            voxdim = np.diag(self.vox2ras.affine)[:3]
+        else:
+            
+            # reorder_xfm -- changes from z,y,x to x,y,z ordering
+            reorder_xfm = np.eye(4)
+            reorder_xfm[:3, :3] = np.flip(
+                reorder_xfm[:3, :3], axis=0
+            )  # reorders z-y-x to x-y-z and vice versa
+            
+            flip_xfm = np.diag((-1,-1,-1,1))
+    
+            affine_zarr = reorder_xfm @ flip_xfm @ self.vox2ras.affine
+            print('affine_zarr')
+            print(affine_zarr)
+
+            voxdim = np.diag(affine_zarr)[:3]
+
+        print(voxdim)
+        print(offset)
+        """
+
+        
         if (
             self.axes_nifti
         ):  # double check to see if this is needed, add a test too..
@@ -317,16 +370,19 @@ class ZarrNii:
                 voxdim = voxdim[::-1]
                 offset=offset[::-1]
         else:
+            
+    
             voxdim = np.diag(np.flip(self.vox2ras.affine[:3, :3], axis=0))
             out_darr = self.darr
             offset=offset[::-1]
             voxdim = -voxdim
+        """
 
         coordinate_transformations = []
         # for each resolution (dataset), we have a list of dicts,
         # transformations to apply..
         # in this case just a single one (scaling by voxel size)
-
+        
         for layer in range(max_layer + 1):
             coord_transform_layer=[]
             #add scale
@@ -390,3 +446,87 @@ class ZarrNii:
         new_vox2ras = self.vox2ras.affine @ trans_vox
         
         return ZarrNii.from_darr(darr_cropped,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
+
+
+    def crop_with_bounding_box_phys(self, bbox_min_ras, bbox_max_ras):
+        """ in this function we pass coordinates in ras space """
+        #get vox coords by using ras2vox
+        bbox_min = np.round(self.ras2vox @ np.vstack(np.array(bbox_min),1))
+        bbox_max = np.round(self.ras2vox @ np.vstack(np.array(bbox_max),1))
+
+        return self.crop_with_bounding_box(bbox_min,bbox_max)
+        
+    def get_bounding_box_around_label(self,label_number):
+
+
+
+        
+    """
+    #this is here temporarily
+    def downsample_by_local_mean_z(self,downsampling):
+        
+
+        ds_z=downsampling
+        ds_x=1
+        ds_y=1
+        n_y = self.darr.shape[2]
+        n_x = self.darr.shape[3]
+        
+        in_chunksize=(1,ds_z,n_y,n_x)
+        out_chunksize=(1,1,n_y,n_x)
+        
+    
+        darr_scaled = self.darr.rechunk(in_chunksize).map_blocks(lambda x: np.mean(x,axis=1).reshape(1,1,n_y,n_x),chunks=out_chunksize,dtype=self.darr.dtype)
+                
+        #we need to also update the affine, scaling by the ds_factor
+        scaling_matrix = np.diag((ds_x,ds_y,ds_z,1))
+        new_vox2ras = scaling_matrix @ self.vox2ras.affine
+
+        return ZarrNii.from_darr(darr_scaled,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
+     """   
+            
+
+    def downsample(self,along_x=1,along_y=1,along_z=1):
+        """ downsamples by local mean"""
+
+        if self.axes_nifti:
+            axes ={0:1, 
+                                                        1: along_x,
+                                                        2: along_y,
+                                                        3: along_z}
+        else:
+            axes ={0:1, 
+                                                        1: along_z,
+                                                        2: along_y,
+                                                        3: along_x}
+
+        #coarsen performs a reduction in a local neighbourhood, defined by axes
+        darr_scaled = da.coarsen(np.mean,x=self.darr,axes=axes, trim_excess=True)
+        
+        
+        #we need to also update the affine, scaling by the ds_factor
+        scaling_matrix = np.diag((along_x,along_y,along_z,1))
+        new_vox2ras = scaling_matrix @ self.vox2ras.affine
+
+        return ZarrNii.from_darr(darr_scaled,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
+
+
+    """ WIP 
+    def set_zooms(self,along_x=1,along_y=1,along_z=1):
+        
+        if self.axes_nifti:
+            new_shape = [self.darr.shape[1]
+        
+    new_shape = tuple(int(dim * zoom) for dim, zoom in zip(dask_array.shape, zoom_factors))
+
+        
+        #we need to also update the affine, scaling by the ds_factor
+        scaling_matrix = np.diag((],1))
+        new_vox2ras = scaling_matrix @ self.vox2ras.affine
+        
+
+        return ZarrNii.from_darr(darr_scaled,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
+        """
+
+
+    

@@ -116,22 +116,34 @@ class Transform:
             "coordinateTransformations"
         ]
 
+        affine = np.eye(4)
+
+        #apply each ome zarr transform sequentially
+        for transform in transforms:
+            print(transform)
+        # (for now, we just assume the transformations will be called scale and translation)
+            if transform['type'] == "scale":
+                scaling_zyx = transform["scale"][1:]
+                scaling_xfm = np.diag(np.hstack((scaling_zyx,1)))
+                affine = scaling_xfm @ affine
+            elif transform['type'] == "translation":
+                translation_xfm = np.eye(4)
+                translation_xfm[:3,3] = transform["translation"][1:]
+                affine = translation_xfm @ affine
+            
         # reorder_xfm -- changes from z,y,x to x,y,z ordering
         reorder_xfm = np.eye(4)
         reorder_xfm[:3, :3] = np.flip(
             reorder_xfm[:3, :3], axis=0
         )  # reorders z-y-x to x-y-z and vice versa
 
-        # scaling xfm
-        scaling_xfm = np.eye(4)
-        scaling_xfm[0, 0] = -transforms[0]["scale"][
-            -1
-        ]  # x  # 0-index in transforms is the first (and only) transform
-        scaling_xfm[1, 1] = -transforms[0]["scale"][-2]  # y
-        scaling_xfm[2, 2] = -transforms[0]["scale"][-3]  # z
-
-        return scaling_xfm @ reorder_xfm
-
+        affine = reorder_xfm @ affine
+        
+        flip_xfm = np.diag((-1,-1,-1,1))
+        affine = flip_xfm @ affine
+        
+        return affine
+        
     @staticmethod
     def get_ras2vox_zarr(in_zarr_path: str, level=0) -> np.array:
         return np.linalg.inv(

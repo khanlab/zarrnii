@@ -84,6 +84,10 @@ def test_from_nifti_to_zarr_to_nifti(nifti_nib):
     dimg2.to_nifti("test_fromdimg_tonii.nii")
     dimg3 = ZarrNii.from_path("test_fromdimg_tonii.nii")
 
+
+    print(dimg)
+    print(dimg2)
+    print(dimg3)
     assert_array_equal(dimg.vox2ras.affine, dimg3.vox2ras.affine)
     assert_array_equal(dimg.darr.compute(), dimg3.darr.compute())
 
