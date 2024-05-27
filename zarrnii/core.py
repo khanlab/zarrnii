@@ -456,12 +456,13 @@ class ZarrNii:
 
         return self.crop_with_bounding_box(bbox_min,bbox_max)
         
+    """
     def get_bounding_box_around_label(self,label_number):
 
 
 
         
-    """
+
     #this is here temporarily
     def downsample_by_local_mean_z(self,downsampling):
         
@@ -483,7 +484,7 @@ class ZarrNii:
         new_vox2ras = scaling_matrix @ self.vox2ras.affine
 
         return ZarrNii.from_darr(darr_scaled,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
-     """   
+    """   
             
 
     def downsample(self,along_x=1,along_y=1,along_z=1):
