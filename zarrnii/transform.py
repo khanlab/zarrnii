@@ -31,6 +31,8 @@ class Transform:
 
         return cls(TransformType.AFFINE_RAS, affine=affine)
 
+
+    
     @classmethod
     def affine_ras_from_array(cls, affine, invert=False):
         if invert:
@@ -38,6 +40,9 @@ class Transform:
 
         return cls(TransformType.AFFINE_RAS, affine=affine)
 
+    
+
+    
     @classmethod
     def displacement_from_nifti(cls, path):
         disp_nib = nib.load(path)
@@ -98,6 +103,29 @@ class Transform:
             print("unknown image type for ras2vox")
             return None
 
+    def __matmul__(self, other):
+
+        if self.tfm_type == TransformType.AFFINE_RAS and isinstance(other, np.ndarray):
+            if other.shape == (3,) or other.shape == (3, 1):
+                # Convert 3D point/vector to homogeneous coordinates
+                homog_point = np.append(other, 1)
+                result = self.affine @ homog_point
+                # Convert back from homogeneous coordinates to 3D
+                return result[:3] / result[3]
+            elif other.shape == (4,) or other.shape == (4, 1):
+                # Directly use 4D point/vector
+                result = self.affine @ other
+                # Convert back from homogeneous coordinates to 3D
+                return result[:3] / result[3]
+            elif other.shape == (4,4):
+                #perform matrix multiplication, and return a Transform object
+                return Transform.affine_ras_from_array(self.affine @ other)
+            else:
+                raise ValueError("Unsupported shape for multiplication.")
+        else:
+            raise TypeError("Unsupported type for multiplication.")
+    
+    
     @staticmethod
     def get_vox2ras_nii(in_nii_path: str) -> np.array:
         return nib.load(in_nii_path).affine

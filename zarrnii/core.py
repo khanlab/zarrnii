@@ -432,9 +432,17 @@ class ZarrNii:
                 axes=axes,
             )
 
-    def crop_with_bounding_box(self, bbox_min, bbox_max):
+    def crop_with_bounding_box(self, bbox_min, bbox_max, ras_coords=False):
         # adjust darr using slicing with bbox indices
         # bbox_min and bbox_max are tuples 
+
+        if ras_coords:
+            #get vox coords by using ras2vox
+            bbox_min = np.round(self.ras2vox @ np.array(bbox_min))
+            bbox_max = np.round(self.ras2vox @ np.array(bbox_max))
+            bbox_min = tuple(bbox_min[:3].flatten())
+            bbox_max = tuple(bbox_max[:3].flatten())        
+
         darr_cropped = self.darr[:,
                 bbox_min[0]:bbox_max[0],
                 bbox_min[1]:bbox_max[1],
@@ -447,45 +455,27 @@ class ZarrNii:
         
         return ZarrNii.from_darr(darr_cropped,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
 
-
-    def crop_with_bounding_box_phys(self, bbox_min_ras, bbox_max_ras):
-        """ in this function we pass coordinates in ras space """
-        #get vox coords by using ras2vox
-        bbox_min = np.round(self.ras2vox @ np.vstack(np.array(bbox_min),1))
-        bbox_max = np.round(self.ras2vox @ np.vstack(np.array(bbox_max),1))
-
-        return self.crop_with_bounding_box(bbox_min,bbox_max)
         
-    """
-    def get_bounding_box_around_label(self,label_number):
-
-
-
+    def get_bounding_box_around_label(self,label_number, padding=0, ras_coords=False):
         
+        indices = da.argwhere(self.darr==label_number).compute()
 
-    #this is here temporarily
-    def downsample_by_local_mean_z(self,downsampling):
-        
+        # Compute the minimum and maximum extents in each dimension
+        bbox_min = indices.min(axis=0).reshape((4,1))[1:] - padding
+        bbox_max = indices.max(axis=0).reshape((4,1))[1:] + 1 + padding
 
-        ds_z=downsampling
-        ds_x=1
-        ds_y=1
-        n_y = self.darr.shape[2]
-        n_x = self.darr.shape[3]
+        #clip the data in case padding puts it out of bounds
+        bbox_min = np.clip(bbox_min,np.zeros((3,1)),np.array(self.darr.shape[1:]).reshape(3,1))
+        bbox_max = np.clip(bbox_max,np.zeros((3,1)),np.array(self.darr.shape[1:]).reshape(3,1))
         
-        in_chunksize=(1,ds_z,n_y,n_x)
-        out_chunksize=(1,1,n_y,n_x)
-        
-    
-        darr_scaled = self.darr.rechunk(in_chunksize).map_blocks(lambda x: np.mean(x,axis=1).reshape(1,1,n_y,n_x),chunks=out_chunksize,dtype=self.darr.dtype)
-                
-        #we need to also update the affine, scaling by the ds_factor
-        scaling_matrix = np.diag((ds_x,ds_y,ds_z,1))
-        new_vox2ras = scaling_matrix @ self.vox2ras.affine
-
-        return ZarrNii.from_darr(darr_scaled,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
-    """   
+        if ras_coords:
+            bbox_min = self.vox2ras @ np.array(bbox_min)
+            bbox_max = self.vox2ras @ np.array(bbox_max)
             
+        return (bbox_min,bbox_max)
+
+        
+
 
     def downsample(self,along_x=1,along_y=1,along_z=1):
         """ downsamples by local mean"""
