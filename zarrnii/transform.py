@@ -82,8 +82,7 @@ class Transform:
                 TransformType.AFFINE_RAS, affine=cls.get_vox2ras_nii(path)
             )
         else:
-            print("unknown image type for vox2ras")
-            return None
+            raise TypeError("Unsupported image type for vox2ras_from_image()")
 
     @classmethod
     def ras2vox_from_image(cls, path: str, level=0):
@@ -100,8 +99,7 @@ class Transform:
                 TransformType.AFFINE_RAS, affine=cls.get_ras2vox_nii(path)
             )
         else:
-            print("unknown image type for ras2vox")
-            return None
+            raise TypeError("Unsupported image type for ras2vox_from_image()")
 
     def __matmul__(self, other):
 
@@ -148,7 +146,6 @@ class Transform:
 
         #apply each ome zarr transform sequentially
         for transform in transforms:
-            print(transform)
         # (for now, we just assume the transformations will be called scale and translation)
             if transform['type'] == "scale":
                 scaling_zyx = transform["scale"][1:]

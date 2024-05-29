@@ -48,8 +48,7 @@ class ZarrNii:
             darr_base = da.from_array(nib.load(path).get_fdata())
             axes_nifti = True
         else:
-            print("unknown image type")
-            return None
+            raise TypeError("Unsupported image type for ZarrNii")
 
         vox2ras = Transform.vox2ras_from_image(path)
         ras2vox = Transform.ras2vox_from_image(path)
@@ -102,8 +101,7 @@ class ZarrNii:
             )
             axes_nifti = True
         else:
-            print("unknown image type")
-            return None
+            raise TypeError("Unsupported image type for ZarrNii")
 
         return cls(
             darr,
@@ -341,42 +339,9 @@ class ZarrNii:
             flip_xfm = np.diag((-1,-1,-1,1))
     
             affine_zarr = reorder_xfm @ flip_xfm @ self.vox2ras.affine
-            print('affine_zarr')
-            print(affine_zarr)
 
             voxdim = np.diag(affine_zarr)[:3]
 
-        print(voxdim)
-        print(offset)
-        """
-
-        
-        if (
-            self.axes_nifti
-        ):  # double check to see if this is needed, add a test too..
-            voxdim = np.diag(self.vox2ras.affine)[:3]
-
-            # if the reference image came from nifti space, we need to
-            # swap axes ordering and flip
-            if voxdim[0] < 0:
-                out_darr = da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
-                voxdim = -voxdim[::-1]
-                offset=offset[::-1]
-
-            else:
-                out_darr = da.flip(
-                    da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
-                )
-                voxdim = voxdim[::-1]
-                offset=offset[::-1]
-        else:
-            
-    
-            voxdim = np.diag(np.flip(self.vox2ras.affine[:3, :3], axis=0))
-            out_darr = self.darr
-            offset=offset[::-1]
-            voxdim = -voxdim
-        """
 
         coordinate_transformations = []
         # for each resolution (dataset), we have a list of dicts,
