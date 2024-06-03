@@ -139,7 +139,7 @@ class ZarrNii:
         else:
             return ImageType.UNKNOWN
 
-    def apply_transform(self, *tfms, ref_dimg):
+    def apply_transform(self, *tfms, ref_znimg):
         """return ZarrNii applying transform to floating image.
         this is a lazy function, doesn't do any work until you compute()
         on the returned dask array.
@@ -148,27 +148,27 @@ class ZarrNii:
         # tfms already has the transformations to apply,
         # just need the conversion to/from vox/ras at start and end
         tfms_to_apply = []
-        tfms_to_apply.append(ref_dimg.vox2ras)
+        tfms_to_apply.append(ref_znimg.vox2ras)
         for tfm in tfms:
             tfms_to_apply.append(tfm)
         tfms_to_apply.append(self.ras2vox)
 
         # out image in space of ref
-        interp_dimg = ref_dimg
+        interp_znimg = ref_znimg
 
         # perform interpolation on each block in parallel
-        interp_dimg.darr = da.map_blocks(
+        interp_znimg.darr = da.map_blocks(
             interp_by_block,
-            ref_dimg.darr,
+            ref_znimg.darr,
             dtype=np.float32,
             transforms=tfms_to_apply,
-            flo_dimg=self,
+            flo_znimg=self,
         )
 
-        return interp_dimg
+        return interp_znimg
 
     def apply_transform_ref_to_flo_indices(
-        self, *tfms, ref_dimg, indices
+        self, *tfms, ref_znimg, indices
     ):
         """takes indices in ref space, transforms, and provides
         indices in the flo space."""
@@ -176,7 +176,7 @@ class ZarrNii:
         # tfms already has the transformations to apply, just
         # need the conversion to/from vox/ras at start and end
         tfms_to_apply = []
-        tfms_to_apply.append(ref_dimg.vox2ras)
+        tfms_to_apply.append(ref_znimg.vox2ras)
         for tfm in tfms:
             tfms_to_apply.append(tfm)
         tfms_to_apply.append(self.ras2vox)
@@ -195,7 +195,7 @@ class ZarrNii:
         return xfm_vecs[:3, :]
 
     def apply_transform_flo_to_ref_indices(
-        self, *tfms, ref_dimg, indices
+        self, *tfms, ref_znimg, indices
     ):
         """takes indices in flo space, transforms, and
         provides indices in the ref space."""
@@ -206,7 +206,7 @@ class ZarrNii:
         tfms_to_apply.append(self.vox2ras)
         for tfm in tfms:
             tfms_to_apply.append(tfm)
-        tfms_to_apply.append(ref_dimg.ras2vox)
+        tfms_to_apply.append(ref_znimg.ras2vox)
 
         homog = np.ones((1, indices.shape[1]))
         xfm_vecs = np.vstack((indices, homog))

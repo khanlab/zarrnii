@@ -204,7 +204,7 @@ class Transform:
 def interp_by_block(
     x,
     transforms: list[Transform],
-    flo_dimg: ZarrNii,
+    flo_znimg: ZarrNii,
     block_info=None,
     interp_method="linear",
 ):
@@ -244,7 +244,7 @@ def interp_by_block(
     interpolated = np.zeros(x.shape)
 
     # find bounding box required for flo vol
-    (grid_points, flo_vol) = flo_dimg.get_bounded_subregion(xfm_vecs)
+    (grid_points, flo_vol) = flo_znimg.get_bounded_subregion(xfm_vecs)
     if grid_points is None and flo_vol is None:
         # points were fully outside the floating image, so just return zeros
         return interpolated
