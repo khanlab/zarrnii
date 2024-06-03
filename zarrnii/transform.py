@@ -31,6 +31,8 @@ class Transform:
 
         return cls(TransformType.AFFINE_RAS, affine=affine)
 
+
+    
     @classmethod
     def affine_ras_from_array(cls, affine, invert=False):
         if invert:
@@ -38,6 +40,9 @@ class Transform:
 
         return cls(TransformType.AFFINE_RAS, affine=affine)
 
+    
+
+    
     @classmethod
     def displacement_from_nifti(cls, path):
         disp_nib = nib.load(path)
@@ -77,8 +82,7 @@ class Transform:
                 TransformType.AFFINE_RAS, affine=cls.get_vox2ras_nii(path)
             )
         else:
-            print("unknown image type for vox2ras")
-            return None
+            raise TypeError("Unsupported image type for vox2ras_from_image()")
 
     @classmethod
     def ras2vox_from_image(cls, path: str, level=0):
@@ -95,9 +99,31 @@ class Transform:
                 TransformType.AFFINE_RAS, affine=cls.get_ras2vox_nii(path)
             )
         else:
-            print("unknown image type for ras2vox")
-            return None
+            raise TypeError("Unsupported image type for ras2vox_from_image()")
 
+    def __matmul__(self, other):
+
+        if self.tfm_type == TransformType.AFFINE_RAS and isinstance(other, np.ndarray):
+            if other.shape == (3,) or other.shape == (3, 1):
+                # Convert 3D point/vector to homogeneous coordinates
+                homog_point = np.append(other, 1)
+                result = self.affine @ homog_point
+                # Convert back from homogeneous coordinates to 3D
+                return result[:3] / result[3]
+            elif other.shape == (4,) or other.shape == (4, 1):
+                # Directly use 4D point/vector
+                result = self.affine @ other
+                # Convert back from homogeneous coordinates to 3D
+                return result[:3] / result[3]
+            elif other.shape == (4,4):
+                #perform matrix multiplication, and return a Transform object
+                return Transform.affine_ras_from_array(self.affine @ other)
+            else:
+                raise ValueError("Unsupported shape for multiplication.")
+        else:
+            raise TypeError("Unsupported type for multiplication.")
+    
+    
     @staticmethod
     def get_vox2ras_nii(in_nii_path: str) -> np.array:
         return nib.load(in_nii_path).affine
@@ -116,22 +142,33 @@ class Transform:
             "coordinateTransformations"
         ]
 
+        affine = np.eye(4)
+
+        #apply each ome zarr transform sequentially
+        for transform in transforms:
+        # (for now, we just assume the transformations will be called scale and translation)
+            if transform['type'] == "scale":
+                scaling_zyx = transform["scale"][1:]
+                scaling_xfm = np.diag(np.hstack((scaling_zyx,1)))
+                affine = scaling_xfm @ affine
+            elif transform['type'] == "translation":
+                translation_xfm = np.eye(4)
+                translation_xfm[:3,3] = transform["translation"][1:]
+                affine = translation_xfm @ affine
+            
         # reorder_xfm -- changes from z,y,x to x,y,z ordering
         reorder_xfm = np.eye(4)
         reorder_xfm[:3, :3] = np.flip(
             reorder_xfm[:3, :3], axis=0
         )  # reorders z-y-x to x-y-z and vice versa
 
-        # scaling xfm
-        scaling_xfm = np.eye(4)
-        scaling_xfm[0, 0] = -transforms[0]["scale"][
-            -1
-        ]  # x  # 0-index in transforms is the first (and only) transform
-        scaling_xfm[1, 1] = -transforms[0]["scale"][-2]  # y
-        scaling_xfm[2, 2] = -transforms[0]["scale"][-3]  # z
-
-        return scaling_xfm @ reorder_xfm
-
+        affine = reorder_xfm @ affine
+        
+        flip_xfm = np.diag((-1,-1,-1,1))
+        affine = flip_xfm @ affine
+        
+        return affine
+        
     @staticmethod
     def get_ras2vox_zarr(in_zarr_path: str, level=0) -> np.array:
         return np.linalg.inv(
@@ -167,7 +204,7 @@ class Transform:
 def interp_by_block(
     x,
     transforms: list[Transform],
-    flo_dimg: ZarrNii,
+    flo_znimg: ZarrNii,
     block_info=None,
     interp_method="linear",
 ):
@@ -207,7 +244,7 @@ def interp_by_block(
     interpolated = np.zeros(x.shape)
 
     # find bounding box required for flo vol
-    (grid_points, flo_vol) = flo_dimg.get_bounded_subregion(xfm_vecs)
+    (grid_points, flo_vol) = flo_znimg.get_bounded_subregion(xfm_vecs)
     if grid_points is None and flo_vol is None:
         # points were fully outside the floating image, so just return zeros
         return interpolated
