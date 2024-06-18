@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "zarrnii"
-version = "0.1.1-alpha.1"
+version = "0.1.2-alpha.1"
 description = "Package for working with OME-Zarr and NIFTI images in a unified manner, with a focus on spatial transformations"
 authors = ["Ali Khan <alik@robarts.ca>"]
 license = "MIT"
@@ -36,8 +36,8 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poe.tasks]
 setup = "pre-commit install"
-ruff-lint = "ruff check --fix ome_zarr_neuro"
-ruff-lint-check = "ruff check ome_zarr_neuro"
+ruff-lint = "ruff check --fix zarrnii"
+ruff-lint-check = "ruff check zarrnii"
 ruff-format = "ruff format ."
 pytest = "pytest -v"
 quality = [ "ruff-lint", "ruff-format"]
