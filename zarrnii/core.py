@@ -296,7 +296,8 @@ class ZarrNii:
             
             flip_xfm = np.diag((-1,-1,-1,1))
     
-            affine = reorder_xfm @ flip_xfm @ self.vox2ras.affine
+            #right-multiply to reorder cols
+            affine = flip_xfm @ self.vox2ras.affine @ reorder_xfm
             
         
         out_nib = nib.Nifti1Image(out_darr, affine=affine)
@@ -321,15 +322,13 @@ class ZarrNii:
             out_darr = da.flip(
                     da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
             )
+            out_affine = self.vox2ras.affine
+            # voxdim needs to be Z Y Z
+            voxdim=np.flip(np.diag(out_affine)[:3])
         else:
             out_darr = self.darr
-
-        
-        if self.vox2ras.affine[1,1]>0:
-            #we have voxdims on the diagonal
-            voxdim = np.diag(self.vox2ras.affine)[:3]
-        else:
             
+            # adjust affine accordingly
             # reorder_xfm -- changes from z,y,x to x,y,z ordering
             reorder_xfm = np.eye(4)
             reorder_xfm[:3, :3] = np.flip(
@@ -338,11 +337,10 @@ class ZarrNii:
             
             flip_xfm = np.diag((-1,-1,-1,1))
     
-            affine_zarr = reorder_xfm @ flip_xfm @ self.vox2ras.affine
-
-            voxdim = np.diag(affine_zarr)[:3]
-
-
+            out_affine = flip_xfm @ reorder_xfm @ self.vox2ras.affine 
+            
+            voxdim=np.diag(out_affine)[:3]
+        
         coordinate_transformations = []
         # for each resolution (dataset), we have a list of dicts,
         # transformations to apply..
