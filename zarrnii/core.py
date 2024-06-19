@@ -283,9 +283,7 @@ class ZarrNii:
 
         else: #was read-in as a Zarr, so we reorder/flip data, and adjust affine accordingly
     
-            out_darr = da.flip(
-                    da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
-            ).squeeze()
+            out_darr = da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1)).squeeze()
             #adjust affine accordingly
     
             # reorder_xfm -- changes from z,y,x to x,y,z ordering
@@ -297,9 +295,8 @@ class ZarrNii:
             flip_xfm = np.diag((-1,-1,-1,1))
     
             #right-multiply to reorder cols
-            affine = flip_xfm @ self.vox2ras.affine @ reorder_xfm
-            
-        
+            affine = self.vox2ras.affine @ reorder_xfm
+           
         out_nib = nib.Nifti1Image(out_darr, affine=affine)
         out_nib.to_filename(filename)
 
@@ -319,10 +316,16 @@ class ZarrNii:
         if self.axes_nifti:
             #we have a nifti image -- need to apply the transformations (reorder, flip) to the 
             # data in the OME_Zarr, so it is consistent.
-            out_darr = da.flip(
-                    da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
-            )
-            out_affine = self.vox2ras.affine
+            out_darr=da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
+
+            reorder_xfm = np.eye(4)
+            reorder_xfm[:3, :3] = np.flip(
+                reorder_xfm[:3, :3], axis=0
+            )  # reorders z-y-x to x-y-z and vice versa
+ 
+            #out_affine = self.vox2ras.affine
+            flip_xfm = np.diag((-1,-1,-1,1))
+            out_affine = flip_xfm @ self.vox2ras.affine 
             # voxdim needs to be Z Y Z
             voxdim=np.flip(np.diag(out_affine)[:3])
         else:
