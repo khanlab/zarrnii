@@ -48,7 +48,7 @@ class ZarrNii:
             darr_base = da.from_array(nib.load(path).get_fdata())
             axes_nifti = True
         else:
-            raise TypeError("Unsupported image type for ZarrNii")
+            raise TypeError(f"Unsupported image type for ZarrNii: {path}")
 
         vox2ras = Transform.vox2ras_from_image(path)
         ras2vox = Transform.ras2vox_from_image(path)
@@ -101,7 +101,7 @@ class ZarrNii:
             )
             axes_nifti = True
         else:
-            raise TypeError("Unsupported image type for ZarrNii")
+            raise TypeError(f"Unsupported image type for ZarrNii: {path}")
 
         return cls(
             darr,
