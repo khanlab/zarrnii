@@ -135,7 +135,7 @@ class Transform:
     @staticmethod
     def get_vox2ras_zarr(in_zarr_path: str, level=0) -> np.array:
         # read coordinate transform from ome-zarr
-        zi = zarr.open(in_zarr_path)
+        zi = zarr.open(in_zarr_path, mode='r')
         attrs = zi["/"].attrs.asdict()
         multiscale = 0  # first multiscale image
         transforms = attrs["multiscales"][multiscale]["datasets"][level][
