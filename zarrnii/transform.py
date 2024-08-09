@@ -27,7 +27,7 @@ class Transform:
     def affine_ras_from_txt(cls, path, invert=False):
         affine = np.loadtxt(path)
         if invert:
-            affine = np.linalg.inv(self.affine)
+            affine = np.linalg.inv(affine)
 
         return cls(TransformType.AFFINE_RAS, affine=affine)
 
@@ -135,7 +135,7 @@ class Transform:
     @staticmethod
     def get_vox2ras_zarr(in_zarr_path: str, level=0) -> np.array:
         # read coordinate transform from ome-zarr
-        zi = zarr.open(in_zarr_path)
+        zi = zarr.open(in_zarr_path, mode='r')
         attrs = zi["/"].attrs.asdict()
         multiscale = 0  # first multiscale image
         transforms = attrs["multiscales"][multiscale]["datasets"][level][

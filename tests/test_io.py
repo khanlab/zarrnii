@@ -8,6 +8,7 @@ import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 from zarrnii import ZarrNii, Transform
+from synthetic_ome_zarr import generate_synthetic_dataset
 
 
 @pytest.fixture
@@ -194,3 +195,30 @@ def test_transform_indices_ref_to_flo(nifti_nib):
     )
 
     assert_array_almost_equal(ref_indices, ref_flo_to_ref_indices)
+
+
+class TestOMEZarr:
+    @pytest.mark.usefixtures("cleandir")
+    def test_ome_zarr(self):
+        # test reading and writing ome zarr
+        OME_ZARR_PATH = './test.ome.zarr'
+        generate_synthetic_dataset(
+            OME_ZARR_PATH,
+            arr_sz=(1, 16, 128, 128),
+            MAX_LAYER=1  # layer 0 and 1
+        )
+        arr = ZarrNii.from_path(OME_ZARR_PATH, level=0, channels=[0]).darr
+        assert arr.compute().sum() > 0
+
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_ome_zarr_zip(self):
+        # test reading and writing ome zarr
+        OME_ZARR_PATH = './test.ome.zarr.zip'
+        generate_synthetic_dataset(
+            OME_ZARR_PATH,
+            arr_sz=(1, 16, 128, 128),
+            MAX_LAYER=1  # layer 0 and 1
+        )
+        arr = ZarrNii.from_path(OME_ZARR_PATH, level=1, channels=[0]).darr
+        assert arr.compute().sum() > 0
