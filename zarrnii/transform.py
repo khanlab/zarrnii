@@ -27,7 +27,7 @@ class Transform:
     def affine_ras_from_txt(cls, path, invert=False):
         affine = np.loadtxt(path)
         if invert:
-            affine = np.linalg.inv(self.affine)
+            affine = np.linalg.inv(affine)
 
         return cls(TransformType.AFFINE_RAS, affine=affine)
 
