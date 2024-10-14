@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .transform import Transform
 
+from collections.abc import MutableMapping
 from pathlib import Path
 
 import dask.array as da
@@ -125,6 +126,8 @@ class ZarrNii:
 
     @staticmethod
     def check_img_type(path) -> ImageType:
+        if isinstance(path,MutableMapping):
+            return ImageType.OME_ZARR
         suffixes = Path(path).suffixes
         if len(suffixes) > 2:
             if suffixes[-3] == ".ome" and suffixes[-2] == ".zarr" and suffixes[-1] == ".zip":
