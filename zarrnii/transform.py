@@ -32,7 +32,7 @@ class Transform:
         return cls(TransformType.AFFINE_RAS, affine=affine)
 
 
-    
+
     @classmethod
     def affine_ras_from_array(cls, affine, invert=False):
         if invert:
@@ -40,9 +40,9 @@ class Transform:
 
         return cls(TransformType.AFFINE_RAS, affine=affine)
 
-    
 
-    
+
+
     @classmethod
     def displacement_from_nifti(cls, path):
         disp_nib = nib.load(path)
@@ -122,8 +122,8 @@ class Transform:
                 raise ValueError("Unsupported shape for multiplication.")
         else:
             raise TypeError("Unsupported type for multiplication.")
-    
-    
+
+
     @staticmethod
     def get_vox2ras_nii(in_nii_path: str) -> np.array:
         return nib.load(in_nii_path).affine
@@ -155,7 +155,7 @@ class Transform:
                 translation_xfm = np.eye(4)
                 translation_xfm[:3,3] = transform["translation"][-3:]
                 affine = translation_xfm @ affine
-            
+
         # reorder_xfm -- changes from z,y,x to x,y,z ordering
         reorder_xfm = np.eye(4)
         reorder_xfm[:3, :3] = np.flip(
@@ -163,12 +163,12 @@ class Transform:
         )  # reorders z-y-x to x-y-z and vice versa
 
         affine = reorder_xfm @ affine
-        
+
         flip_xfm = np.diag((-1,-1,-1,1))
         affine = flip_xfm @ affine
-        
+
         return affine
-        
+
     @staticmethod
     def get_ras2vox_zarr(in_zarr_path: str, level=0) -> np.array:
         return np.linalg.inv(
