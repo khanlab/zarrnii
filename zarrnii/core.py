@@ -397,7 +397,7 @@ class ZarrNii:
 
         with ProgressBar():
             write_image(
-                image=out_darr.rechunk(),
+                image=out_darr,
                 group=group,
                 scaler=scaler,
                 coordinate_transformations=coordinate_transformations,
@@ -474,22 +474,30 @@ class ZarrNii:
         return ZarrNii.from_darr(darr_scaled,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
 
 
-    """ WIP
-    def set_zooms(self,along_x=1,along_y=1,along_z=1):
+    def upsample(self,along_x=1,along_y=1,along_z=1):
+        """ upsamples with scipy.ndimage.zoom"""
+        from scipy.ndimage import zoom
+        #we run map_blocks with chunk sizes modulated by upsampling rate
 
         if self.axes_nifti:
-            new_shape = [self.darr.shape[1]
+            scaling = (1,along_x, along_y, along_z)
+        else:
+            scaling = (1,along_z, along_y, along_x)
 
-    new_shape = tuple(int(dim * zoom) for dim, zoom in zip(dask_array.shape, zoom_factors))
+        chunks_in = self.darr.chunks
+        chunks_out = tuple(tuple(c * scale for c in chunks_i) for chunks_i, scale in zip(chunks_in, scaling))
+
+        darr_scaled = da.map_blocks(lambda x: zoom(x,scaling),
+                    self.darr,
+                    dtype=self.darr.dtype,
+                    chunks=chunks_out)
 
 
         #we need to also update the affine, scaling by the ds_factor
-        scaling_matrix = np.diag((],1))
+        scaling_matrix = np.diag((1/along_x,1/along_y,1/along_z,1))
         new_vox2ras = scaling_matrix @ self.vox2ras.affine
 
-
         return ZarrNii.from_darr(darr_scaled,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
-        """
 
 
 
