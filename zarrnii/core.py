@@ -30,8 +30,12 @@ def zoom_blocks(x,block_info):
 
     return zoom(x,scaling,order=1,prefilter=False)
 
-def get_max_level(ome_zarr_path):
-    store = fsspec.get_mapper(ome_zarr_path)
+def get_max_level(path,storage_options=None):
+    
+    if isinstance(path,MutableMapping):
+        store = path
+    else:
+        store = fsspec.get_mapper(path,storage_options=storage_options)
 
     # Open the Zarr group
     group = zarr.open(store, mode='r')
@@ -48,9 +52,9 @@ def get_max_level(ome_zarr_path):
         return None
 
 
-def get_level_and_downsampling_kwargs(ome_zarr_path,level,z_level_offset=-2):
+def get_level_and_downsampling_kwargs(ome_zarr_path,level,z_level_offset=-2,storage_options=None):
 
-    max_level = get_max_level(ome_zarr_path)
+    max_level = get_max_level(ome_zarr_path,storage_options=storage_options)
     if level > max_level: #if we want to ds more than ds_levels in pyramid
         level_xy = level-max_level
         level_z = max(level+z_level_offset,0)
@@ -130,7 +134,7 @@ class ZarrNii:
         )
 
     @classmethod
-    def from_path(cls, path, level=0, channels=[0], chunks="auto", z_level_offset=-2, rechunk=False):
+    def from_path(cls, path, level=0, channels=[0], chunks="auto", z_level_offset=-2, rechunk=False,storage_options=None):
         """returns a dask array whether a nifti or ome_zarr is provided.
             performs downsampling if level isn't stored in pyramid.
             Also downsamples Z, but to an adjusted level based on z_level_offset (since z is typically lower resolution than xy)"""
@@ -140,9 +144,9 @@ class ZarrNii:
         do_downsample=False
         if img_type is ImageType.OME_ZARR:
         
-            level,do_downsample,downsampling_kwargs = get_level_and_downsampling_kwargs(path,level,z_level_offset)
+            level,do_downsample,downsampling_kwargs = get_level_and_downsampling_kwargs(path,level,z_level_offset,storage_options=storage_options)
              
-            darr = da.from_zarr(path, component=f"/{level}")[channels, :, :, :]
+            darr = da.from_zarr(path, component=f"/{level}",storage_options=storage_options)[channels, :, :, :]
 
             if rechunk:
                 darr = darr.rechunk(chunks)
