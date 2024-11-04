@@ -1,4 +1,5 @@
 from __future__ import annotations
+import fsspec
 
 from typing import TYPE_CHECKING
 
@@ -29,6 +30,41 @@ def zoom_blocks(x,block_info):
 
     return zoom(x,scaling,order=1,prefilter=False)
 
+def get_max_level(ome_zarr_path):
+    store = fsspec.get_mapper(ome_zarr_path)
+
+    # Open the Zarr group
+    group = zarr.open(store, mode='r')
+
+    # Access the multiscale metadata
+    multiscales = group.attrs.get('multiscales', [])
+
+    # Get the number of levels (number of arrays in the multiscale hierarchy)
+    if multiscales:
+        max_level = len(multiscales[0]['datasets'])-1
+        return max_level
+    else:
+        print("No multiscale levels found.")
+        return None
+
+
+def get_level_and_downsampling_kwargs(ome_zarr_path,level,z_level_offset=-2):
+
+    max_level = get_max_level(ome_zarr_path)
+    if level > max_level: #if we want to ds more than ds_levels in pyramid
+        level_xy = level-max_level
+        level_z = max(level+z_level_offset,0)
+        level = max_level
+    else:
+        level_xy=0
+        level_z=max(level+z_level_offset,0)
+
+    print(f'level: {level}, level_xy: {level_xy}, level_z: {level_z}, max_level: {max_level}')
+    if level_xy>0 or level_z>0:
+        do_downsample=True
+    else:
+        do_downsample=False
+    return (level,do_downsample,{'along_x':2**level_xy,'along_y':2**level_xy,'along_z':2**level_z})
 
 
 @define
@@ -94,15 +130,23 @@ class ZarrNii:
         )
 
     @classmethod
-    def from_path(cls, path, level=0, channels=[0], chunks="auto", rechunk=False):
-        """returns a dask array whether a nifti or ome_zarr is provided"""
+    def from_path(cls, path, level=0, channels=[0], chunks="auto", z_level_offset=-2, rechunk=False):
+        """returns a dask array whether a nifti or ome_zarr is provided.
+            performs downsampling if level isn't stored in pyramid.
+            Also downsamples Z, but to an adjusted level based on z_level_offset (since z is typically lower resolution than xy)"""
         from .transform import Transform
 
         img_type = cls.check_img_type(path)
+        do_downsample=False
         if img_type is ImageType.OME_ZARR:
+        
+            level,do_downsample,downsampling_kwargs = get_level_and_downsampling_kwargs(path,level,z_level_offset)
+             
             darr = da.from_zarr(path, component=f"/{level}")[channels, :, :, :]
+
             if rechunk:
                 darr = darr.rechunk(chunks)
+
             zi = zarr
             axes_nifti = False
         elif img_type is ImageType.NIFTI:
@@ -114,12 +158,22 @@ class ZarrNii:
         else:
             raise TypeError(f"Unsupported image type for ZarrNii: {path}")
 
-        return cls(
-            darr,
-            ras2vox=Transform.ras2vox_from_image(path,level=level),
-            vox2ras=Transform.vox2ras_from_image(path,level=level),
-            axes_nifti=axes_nifti,
-        )
+        if do_downsample:
+            #return downsampled
+            return cls(
+                darr,
+                ras2vox=Transform.ras2vox_from_image(path,level=level),
+                vox2ras=Transform.vox2ras_from_image(path,level=level),
+                axes_nifti=axes_nifti,
+            ).downsample(**downsampling_kwargs)
+
+        else:
+            return cls(
+                darr,
+                ras2vox=Transform.ras2vox_from_image(path,level=level),
+                vox2ras=Transform.vox2ras_from_image(path,level=level),
+                axes_nifti=axes_nifti,
+            )
 
     @classmethod
     def from_darr(cls, darr, vox2ras=np.eye(4), axes_nifti=False):
