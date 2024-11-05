@@ -22,55 +22,6 @@ from scipy.ndimage import zoom
 from .enums import ImageType
 from .transform import interp_by_block
 
-def zoom_blocks(x,block_info):
-    
-    # get desired scaling by comparing input shape to output shape
-    # block_info[None] is the output block info
-    scaling = tuple(out_n / in_n for out_n,in_n in zip(block_info[None]['chunk-shape'],x.shape))
-
-    return zoom(x,scaling,order=1,prefilter=False)
-
-def get_max_level(path,storage_options=None):
-    
-    if isinstance(path,MutableMapping):
-        store = path
-    else:
-        store = fsspec.get_mapper(path,storage_options=storage_options)
-
-    # Open the Zarr group
-    group = zarr.open(store, mode='r')
-
-    # Access the multiscale metadata
-    multiscales = group.attrs.get('multiscales', [])
-
-    # Get the number of levels (number of arrays in the multiscale hierarchy)
-    if multiscales:
-        max_level = len(multiscales[0]['datasets'])-1
-        return max_level
-    else:
-        print("No multiscale levels found.")
-        return None
-
-
-def get_level_and_downsampling_kwargs(ome_zarr_path,level,z_level_offset=-2,storage_options=None):
-
-    max_level = get_max_level(ome_zarr_path,storage_options=storage_options)
-    if level > max_level: #if we want to ds more than ds_levels in pyramid
-        level_xy = level-max_level
-        level_z = max(level+z_level_offset,0)
-        level = max_level
-    else:
-        level_xy=0
-        level_z=max(level+z_level_offset,0)
-
-    print(f'level: {level}, level_xy: {level_xy}, level_z: {level_z}, max_level: {max_level}')
-    if level_xy>0 or level_z>0:
-        do_downsample=True
-    else:
-        do_downsample=False
-    return (level,do_downsample,{'along_x':2**level_xy,'along_y':2**level_xy,'along_z':2**level_z})
-
-
 @define
 class ZarrNii:
     darr: da.Array
@@ -144,7 +95,7 @@ class ZarrNii:
         do_downsample=False
         if img_type is ImageType.OME_ZARR:
         
-            level,do_downsample,downsampling_kwargs = get_level_and_downsampling_kwargs(path,level,z_level_offset,storage_options=storage_options)
+            level,do_downsample,downsampling_kwargs = cls.get_level_and_downsampling_kwargs(path,level,z_level_offset,storage_options=storage_options)
              
             darr = da.from_zarr(path, component=f"/{level}",storage_options=storage_options)[channels, :, :, :]
 
@@ -520,8 +471,21 @@ class ZarrNii:
 
 
 
-    def downsample(self,along_x=1,along_y=1,along_z=1):
-        """ downsamples by local mean"""
+    def downsample(self,along_x=1,along_y=1,along_z=1,level=None,do_normalized_sum=False,z_level_offset=-2):
+        """ Downsamples by local mean. Can either specify along_x,along_y,along_z, 
+            or specify the level, and the downsampling factors will be calculated, 
+            taking into account the z_level_offset.
+
+            Setting do_normalized_sum=True uses a local sum intead of a local mean
+            and normalizes by the product of the local dimensions (ie # of local voxels). 
+            This is used for calculating a field fraction from a mask."""
+
+        if level is not None:
+            along_x = 2**level
+            along_y = 2**level
+            level_z = max(level+z_level_offset,0)
+            along_z = 2**level_z
+        
 
         if self.axes_nifti:
             axes ={0:1,
@@ -534,9 +498,18 @@ class ZarrNii:
                                                         2: along_y,
                                                         3: along_x}
 
-        #coarsen performs a reduction in a local neighbourhood, defined by axes
-        darr_scaled = da.coarsen(np.mean,x=self.darr,axes=axes, trim_excess=True)
+        def norm_sum(x, *args, **kwargs):
+            return np.sum(x, *args, **kwargs) / float(along_x*along_y*along_z)
+        
+        if do_normalized_sum:
+            agg_func = norm_sum
+        else:
+            agg_func = np.mean
 
+        #coarsen performs a reduction in a local neighbourhood, defined by axes
+        #TODO: check if astype is needed..
+#        darr_scaled = da.coarsen(agg_func,x=self.darr.astype(dtype),axes=axes, trim_excess=True)
+        darr_scaled = da.coarsen(agg_func,x=self.darr,axes=axes, trim_excess=True)
 
         #we need to also update the affine, scaling by the ds_factor
         scaling_matrix = np.diag((along_x,along_y,along_z,1))
@@ -628,7 +601,15 @@ class ZarrNii:
         else:
             chunks_out,scaling = self.__get_upsampled_chunks(to_shape)
 
-        
+        def zoom_blocks(x,block_info):
+            
+            # get desired scaling by comparing input shape to output shape
+            # block_info[None] is the output block info
+            scaling = tuple(out_n / in_n for out_n,in_n in zip(block_info[None]['chunk-shape'],x.shape))
+
+            return zoom(x,scaling,order=1,prefilter=False)
+
+
         darr_scaled = da.map_blocks(zoom_blocks,
                     self.darr,
                     dtype=self.darr.dtype,
@@ -644,5 +625,48 @@ class ZarrNii:
 
         return ZarrNii.from_darr(darr_scaled.rechunk(),vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
 
+
+
+    @staticmethod
+    def get_max_level(path,storage_options=None):
+        
+        if isinstance(path,MutableMapping):
+            store = path
+        else:
+            store = fsspec.get_mapper(path,storage_options=storage_options)
+
+        # Open the Zarr group
+        group = zarr.open(store, mode='r')
+
+        # Access the multiscale metadata
+        multiscales = group.attrs.get('multiscales', [])
+
+        # Get the number of levels (number of arrays in the multiscale hierarchy)
+        if multiscales:
+            max_level = len(multiscales[0]['datasets'])-1
+            return max_level
+        else:
+            print("No multiscale levels found.")
+            return None
+
+
+    @staticmethod
+    def get_level_and_downsampling_kwargs(ome_zarr_path,level,z_level_offset=-2,storage_options=None):
+
+        max_level = ZarrNii.get_max_level(ome_zarr_path,storage_options=storage_options)
+        if level > max_level: #if we want to ds more than ds_levels in pyramid
+            level_xy = level-max_level
+            level_z = max(level+z_level_offset,0)
+            level = max_level
+        else:
+            level_xy=0
+            level_z=max(level+z_level_offset,0)
+
+        print(f'level: {level}, level_xy: {level_xy}, level_z: {level_z}, max_level: {max_level}')
+        if level_xy>0 or level_z>0:
+            do_downsample=True
+        else:
+            do_downsample=False
+        return (level,do_downsample,{'along_x':2**level_xy,'along_y':2**level_xy,'along_z':2**level_z})
 
 
