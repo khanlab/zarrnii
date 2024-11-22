@@ -471,14 +471,11 @@ class ZarrNii:
 
 
 
-    def downsample(self,along_x=1,along_y=1,along_z=1,level=None,do_normalized_sum=False,z_level_offset=-2):
+    def downsample(self,along_x=1,along_y=1,along_z=1,level=None,z_level_offset=-2):
         """ Downsamples by local mean. Can either specify along_x,along_y,along_z, 
             or specify the level, and the downsampling factors will be calculated, 
-            taking into account the z_level_offset.
+            taking into account the z_level_offset."""
 
-            Setting do_normalized_sum=True uses a local sum intead of a local mean
-            and normalizes by the product of the local dimensions (ie # of local voxels). 
-            This is used for calculating a field fraction from a mask."""
 
         if level is not None:
             along_x = 2**level
@@ -498,13 +495,7 @@ class ZarrNii:
                                                         2: along_y,
                                                         3: along_x}
 
-        def norm_sum(x, *args, **kwargs):
-            return np.sum(x, *args, **kwargs) / float(along_x*along_y*along_z)
-        
-        if do_normalized_sum:
-            agg_func = norm_sum
-        else:
-            agg_func = np.mean
+        agg_func = np.mean
 
         #coarsen performs a reduction in a local neighbourhood, defined by axes
         #TODO: check if astype is needed..
