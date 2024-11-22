@@ -1,4 +1,5 @@
 from __future__ import annotations
+import fsspec
 
 from typing import TYPE_CHECKING
 
@@ -16,10 +17,10 @@ from attrs import define
 from dask.diagnostics import ProgressBar
 from ome_zarr.scale import Scaler
 from ome_zarr.writer import write_image
+from scipy.ndimage import zoom
 
 from .enums import ImageType
 from .transform import interp_by_block
-
 
 @define
 class ZarrNii:
@@ -84,15 +85,23 @@ class ZarrNii:
         )
 
     @classmethod
-    def from_path(cls, path, level=0, channels=[0], chunks="auto", rechunk=False):
-        """returns a dask array whether a nifti or ome_zarr is provided"""
+    def from_path(cls, path, level=0, channels=[0], chunks="auto", z_level_offset=-2, rechunk=False,storage_options=None):
+        """returns a dask array whether a nifti or ome_zarr is provided.
+            performs downsampling if level isn't stored in pyramid.
+            Also downsamples Z, but to an adjusted level based on z_level_offset (since z is typically lower resolution than xy)"""
         from .transform import Transform
 
         img_type = cls.check_img_type(path)
+        do_downsample=False
         if img_type is ImageType.OME_ZARR:
-            darr = da.from_zarr(path, component=f"/{level}")[channels, :, :, :]
+        
+            level,do_downsample,downsampling_kwargs = cls.get_level_and_downsampling_kwargs(path,level,z_level_offset,storage_options=storage_options)
+             
+            darr = da.from_zarr(path, component=f"/{level}",storage_options=storage_options)[channels, :, :, :]
+
             if rechunk:
                 darr = darr.rechunk(chunks)
+
             zi = zarr
             axes_nifti = False
         elif img_type is ImageType.NIFTI:
@@ -104,12 +113,22 @@ class ZarrNii:
         else:
             raise TypeError(f"Unsupported image type for ZarrNii: {path}")
 
-        return cls(
-            darr,
-            ras2vox=Transform.ras2vox_from_image(path,level=level),
-            vox2ras=Transform.vox2ras_from_image(path,level=level),
-            axes_nifti=axes_nifti,
-        )
+        if do_downsample:
+            #return downsampled
+            return cls(
+                darr,
+                ras2vox=Transform.ras2vox_from_image(path,level=level),
+                vox2ras=Transform.vox2ras_from_image(path,level=level),
+                axes_nifti=axes_nifti,
+            ).downsample(**downsampling_kwargs)
+
+        else:
+            return cls(
+                darr,
+                ras2vox=Transform.ras2vox_from_image(path,level=level),
+                vox2ras=Transform.vox2ras_from_image(path,level=level),
+                axes_nifti=axes_nifti,
+            )
 
     @classmethod
     def from_darr(cls, darr, vox2ras=np.eye(4), axes_nifti=False):
@@ -393,7 +412,10 @@ class ZarrNii:
         )
         group = zarr.group(store, overwrite=True)
 
-        scaler = Scaler(max_layer=max_layer, method=scaling_method)
+        if max_layer ==0:
+            scaler = None
+        else:
+            scaler = Scaler(max_layer=max_layer, method=scaling_method)
 
         with ProgressBar():
             write_image(
@@ -449,8 +471,18 @@ class ZarrNii:
 
 
 
-    def downsample(self,along_x=1,along_y=1,along_z=1):
-        """ downsamples by local mean"""
+    def downsample(self,along_x=1,along_y=1,along_z=1,level=None,z_level_offset=-2):
+        """ Downsamples by local mean. Can either specify along_x,along_y,along_z, 
+            or specify the level, and the downsampling factors will be calculated, 
+            taking into account the z_level_offset."""
+
+
+        if level is not None:
+            along_x = 2**level
+            along_y = 2**level
+            level_z = max(level+z_level_offset,0)
+            along_z = 2**level_z
+        
 
         if self.axes_nifti:
             axes ={0:1,
@@ -463,9 +495,12 @@ class ZarrNii:
                                                         2: along_y,
                                                         3: along_x}
 
-        #coarsen performs a reduction in a local neighbourhood, defined by axes
-        darr_scaled = da.coarsen(np.mean,x=self.darr,axes=axes, trim_excess=True)
+        agg_func = np.mean
 
+        #coarsen performs a reduction in a local neighbourhood, defined by axes
+        #TODO: check if astype is needed..
+#        darr_scaled = da.coarsen(agg_func,x=self.darr.astype(dtype),axes=axes, trim_excess=True)
+        darr_scaled = da.coarsen(agg_func,x=self.darr,axes=axes, trim_excess=True)
 
         #we need to also update the affine, scaling by the ds_factor
         scaling_matrix = np.diag((along_x,along_y,along_z,1))
@@ -474,30 +509,155 @@ class ZarrNii:
         return ZarrNii.from_darr(darr_scaled,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
 
 
-    def upsample(self,along_x=1,along_y=1,along_z=1):
-        """ upsamples with scipy.ndimage.zoom"""
-        from scipy.ndimage import zoom
-        #we run map_blocks with chunk sizes modulated by upsampling rate
+    def __get_upsampled_chunks(self, target_shape,return_scaling=True):
+        """ given a target shape, this calculates new chunking 
+        by scaling the input chunks by a scaling factor, adjusting the
+        last chunk if needed. This can be used for upsampling the data, 
+        or ensuring 1-1 correspondence between downsampled and upsampled arrays"""
 
-        if self.axes_nifti:
-            scaling = (1,along_x, along_y, along_z)
+        new_chunks = []
+        scaling = []
+
+        for dim, (orig_shape, orig_chunks, new_shape) in enumerate(zip(self.darr.shape, self.darr.chunks, target_shape)):
+            # Calculate the scaling factor for this dimension
+            scaling_factor = new_shape / orig_shape
+
+            # Scale each chunk size and round to get an initial estimate
+            scaled_chunks = [int(round(chunk * scaling_factor)) for chunk in orig_chunks]
+            total = sum(scaled_chunks)
+            
+            # Adjust the chunks to ensure they sum up to the target shape exactly
+            diff = new_shape - total
+            if diff != 0:
+                # Correct rounding errors by adjusting the last chunk size in the dimension
+                scaled_chunks[-1] += diff
+
+            new_chunks.append(tuple(scaled_chunks))
+            scaling.append(scaling_factor)
+        if return_scaling:
+            return (tuple(new_chunks),scaling)
         else:
-            scaling = (1,along_z, along_y, along_x)
+            return new_chunks
 
-        chunks_in = self.darr.chunks
-        chunks_out = tuple(tuple(c * scale for c in chunks_i) for chunks_i, scale in zip(chunks_in, scaling))
 
-        darr_scaled = da.map_blocks(lambda x: zoom(x,scaling),
+    def divide_by_downsampled(self,znimg_ds):
+        """takes current darr and divides by another darr (which is a downsampled version)"""
+
+        #first, given the chunks of the downsampled darr and the high-res shape, 
+        # we get the upsampled chunks (ie these chunks then have 1-1 correspondence
+        # with downsampled
+        target_chunks = znimg_ds.__get_upsampled_chunks(self.darr.shape,return_scaling=False)
+
+        #we rechunk our original high-res image to that chunking 
+        darr_rechunk = self.darr.rechunk(chunks=target_chunks)
+        
+        #now, self.darr and znimg_ds.darr have matching blocks
+        #so we can use map_blocks to perform operation
+
+        def block_zoom_and_divide_by(x1,x2,block_info):
+            """ this zooms x2 to the size of x1, then does x1 / x2"""
+            # get desired scaling by x2 to x1
+
+            scaling = tuple(n_1 / n_2 for n_1,n_2 in zip(x1.shape,x2.shape))
+
+            return x1 / zoom(x2,scaling,order=1,prefilter=False)
+
+        darr_div = da.map_blocks(
+                    block_zoom_and_divide_by,
+                    darr_rechunk,
+                    znimg_ds.darr,
+                    dtype=self.darr.dtype)
+
+
+        return ZarrNii(darr_div,self.vox2ras,self.ras2vox,self.axes_nifti)
+
+
+    def upsample(self,along_x=1,along_y=1,along_z=1,to_shape=None):
+        """ upsamples with scipy.ndimage.zoom
+            specify either along_x/along_y/along_z, or the target
+            shape with to_shape=(c,z,y,x) or (c,x,y,z) if nifti axes
+            
+            note: this doesn't work yet if self has axes_nifti=True"""
+        
+        
+        #we run map_blocks with chunk sizes modulated by upsampling rate
+        if to_shape == None:
+            if self.axes_nifti:
+                scaling = (1,along_x, along_y, along_z)
+            else:
+                scaling = (1,along_z, along_y, along_x)
+
+            chunks_out = tuple(tuple(c * scale for c in chunks_i) for chunks_i, scale in zip(self.darr.chunks, scaling))
+
+        else:
+            chunks_out,scaling = self.__get_upsampled_chunks(to_shape)
+
+        def zoom_blocks(x,block_info):
+            
+            # get desired scaling by comparing input shape to output shape
+            # block_info[None] is the output block info
+            scaling = tuple(out_n / in_n for out_n,in_n in zip(block_info[None]['chunk-shape'],x.shape))
+
+            return zoom(x,scaling,order=1,prefilter=False)
+
+
+        darr_scaled = da.map_blocks(zoom_blocks,
                     self.darr,
                     dtype=self.darr.dtype,
                     chunks=chunks_out)
 
 
         #we need to also update the affine, scaling by the ds_factor
-        scaling_matrix = np.diag((1/along_x,1/along_y,1/along_z,1))
+        if self.axes_nifti:
+            scaling_matrix = np.diag((1/scaling[1],1/scaling[2],1/scaling[3],1))
+        else:
+            scaling_matrix = np.diag((1/scaling[-1],1/scaling[-2],1/scaling[-3],1))
         new_vox2ras = scaling_matrix @ self.vox2ras.affine
 
-        return ZarrNii.from_darr(darr_scaled,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
+        return ZarrNii.from_darr(darr_scaled.rechunk(),vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
 
+
+
+    @staticmethod
+    def get_max_level(path,storage_options=None):
+        
+        if isinstance(path,MutableMapping):
+            store = path
+        else:
+            store = fsspec.get_mapper(path,storage_options=storage_options)
+
+        # Open the Zarr group
+        group = zarr.open(store, mode='r')
+
+        # Access the multiscale metadata
+        multiscales = group.attrs.get('multiscales', [])
+
+        # Get the number of levels (number of arrays in the multiscale hierarchy)
+        if multiscales:
+            max_level = len(multiscales[0]['datasets'])-1
+            return max_level
+        else:
+            print("No multiscale levels found.")
+            return None
+
+
+    @staticmethod
+    def get_level_and_downsampling_kwargs(ome_zarr_path,level,z_level_offset=-2,storage_options=None):
+
+        max_level = ZarrNii.get_max_level(ome_zarr_path,storage_options=storage_options)
+        if level > max_level: #if we want to ds more than ds_levels in pyramid
+            level_xy = level-max_level
+            level_z = max(level+z_level_offset,0)
+            level = max_level
+        else:
+            level_xy=0
+            level_z=max(level+z_level_offset,0)
+
+        print(f'level: {level}, level_xy: {level_xy}, level_z: {level_z}, max_level: {max_level}')
+        if level_xy>0 or level_z>0:
+            do_downsample=True
+        else:
+            do_downsample=False
+        return (level,do_downsample,{'along_x':2**level_xy,'along_y':2**level_xy,'along_z':2**level_z})
 
 
