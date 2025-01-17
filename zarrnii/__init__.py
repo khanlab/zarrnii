@@ -1,4 +1,3 @@
-from .core import ZarrNii
-from .transform import Transform
+from .core import ZarrNii, Transform, AffineTransform
 
-__all__ = ["ZarrNii", "Transform"]
+__all__ = ["ZarrNii", "Transform", "AffineTransform"]

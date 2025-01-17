@@ -3,8 +3,6 @@ import fsspec
 
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from .transform import Transform
 
 from collections.abc import MutableMapping
 from pathlib import Path
@@ -14,22 +12,21 @@ import nibabel as nib
 import numpy as np
 import zarr
 from attrs import define
+from scipy.interpolate import interpn
 from dask.diagnostics import ProgressBar
 from ome_zarr.scale import Scaler
 from ome_zarr.writer import write_image
 from scipy.ndimage import zoom
 
 from .enums import ImageType
-from .transform import interp_by_block
+from abc import ABC, abstractmethod
 
 @define
 class ZarrNii:
     darr: da.Array
-    ras2vox: Transform = None
-    vox2ras: Transform = None
-    axes_nifti: bool = (
-        False  # set to true if the axes are ordered for NIFTI (X,Y,Z,C,T)
-    )
+    ras2vox: AffineTransform = None
+    vox2ras: AffineTransform = None
+    axes_order: str = 'ZYX'
 
 
     @classmethod
@@ -38,22 +35,22 @@ class ZarrNii:
     ):
         """ref image dont need data,  just the shape and affine"""
 
-        from .transform import Transform
 
         img_type = cls.check_img_type(path)
         if img_type is ImageType.OME_ZARR:
             darr_base = da.from_zarr(path, component=f"/{level}")[
                 channels, :, :, :
             ]
-            axes_nifti = False
+            axes_order = 'ZYX'
+            vox2ras = vox2ras_from_zarr(path)
+
         elif img_type is ImageType.NIFTI:
             darr_base = da.from_array(nib.load(path).get_fdata())
-            axes_nifti = True
+            axes_order = 'XYZ'
+            vox2ras = vox2ras_from_nii(path)
         else:
             raise TypeError(f"Unsupported image type for ZarrNii: {path}")
 
-        vox2ras = Transform.vox2ras_from_image(path)
-        ras2vox = Transform.ras2vox_from_image(path)
 
         out_shape = [
             len(channels),
@@ -72,7 +69,6 @@ class ZarrNii:
             # adjust affine too
             np.fill_diagonal(vox2ras.affine[:3, :3], zooms)
 
-        ras2vox.affine = np.linalg.inv(vox2ras.affine)
 
         darr_empty = da.empty(
             darr_base,
@@ -81,7 +77,7 @@ class ZarrNii:
         )
 
         return cls(
-            darr_empty, ras2vox=ras2vox, vox2ras=vox2ras, axes_nifti=axes_nifti
+            darr_empty, ras2vox=vox2ras.invert(), vox2ras=vox2ras, axes_order=axes_order
         )
 
     @classmethod
@@ -89,7 +85,6 @@ class ZarrNii:
         """returns a dask array whether a nifti or ome_zarr is provided.
             performs downsampling if level isn't stored in pyramid.
             Also downsamples Z, but to an adjusted level based on z_level_offset (since z is typically lower resolution than xy)"""
-        from .transform import Transform
 
         img_type = cls.check_img_type(path)
         do_downsample=False
@@ -103,13 +98,16 @@ class ZarrNii:
                 darr = darr.rechunk(chunks)
 
             zi = zarr
-            axes_nifti = False
+            axes_order = 'ZYX'
+            vox2ras = vox2ras_from_zarr(path,level)
+
         elif img_type is ImageType.NIFTI:
             darr = da.from_array(
                 np.expand_dims(nib.load(path).get_fdata(), axis=0),
                 chunks=chunks,
             )
-            axes_nifti = True
+            axes_order = 'XYZ'
+            vox2ras = vox2ras_from_nii(path)
         else:
             raise TypeError(f"Unsupported image type for ZarrNii: {path}")
 
@@ -117,30 +115,29 @@ class ZarrNii:
             #return downsampled
             return cls(
                 darr,
-                ras2vox=Transform.ras2vox_from_image(path,level=level),
-                vox2ras=Transform.vox2ras_from_image(path,level=level),
-                axes_nifti=axes_nifti,
+                vox2ras=vox2ras,
+                ras2vox=vox2ras.invert(),
+                axes_order=axes_order,
             ).downsample(**downsampling_kwargs)
 
         else:
             return cls(
                 darr,
-                ras2vox=Transform.ras2vox_from_image(path,level=level),
-                vox2ras=Transform.vox2ras_from_image(path,level=level),
-                axes_nifti=axes_nifti,
+                vox2ras=vox2ras,
+                ras2vox=vox2ras.invert(),
+                axes_order=axes_order,
             )
 
     @classmethod
-    def from_darr(cls, darr, vox2ras=np.eye(4), axes_nifti=False):
-        from .transform import Transform
+    def from_darr(cls, darr, vox2ras=np.eye(4), axes_order='ZYX'):
 
-        ras2vox = np.linalg.inv(vox2ras)
+        vox2ras = AffineTransform.from_array(vox2ras)
 
         return cls(
             darr,
-            ras2vox=Transform.affine_ras_from_array(ras2vox),
-            vox2ras=Transform.affine_ras_from_array(vox2ras),
-            axes_nifti=axes_nifti,
+            vox2ras=vox2ras,
+            ras2vox=vox2ras.invert(),
+            axes_order=axes_order,
         )
 
     @staticmethod
@@ -302,7 +299,7 @@ class ZarrNii:
 
     def to_nifti(self, filename, **kwargs):
 
-        if self.axes_nifti: #this means it was read-in as a NIFTI, so we write out as normal
+        if self.axes_order == 'XYZ': #this means it was read-in as a NIFTI, so we write out as normal
             out_darr = self.darr.squeeze()
             affine = self.vox2ras.affine
 
@@ -338,7 +335,7 @@ class ZarrNii:
 
         offset=self.vox2ras.affine[:3,3]
 
-        if self.axes_nifti:
+        if self.axes_order == 'XYZ':
             #we have a nifti image -- need to apply the transformations (reorder, flip) to the
             # data in the OME_Zarr, so it is consistent.
             out_darr=da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
@@ -447,7 +444,7 @@ class ZarrNii:
 
         new_vox2ras = self.vox2ras.affine @ trans_vox
 
-        return ZarrNii.from_darr(darr_cropped,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
+        return ZarrNii.from_darr(darr_cropped,vox2ras=new_vox2ras,axes_order=self.axes_order)
 
 
     def get_bounding_box_around_label(self,label_number, padding=0, ras_coords=False):
@@ -484,7 +481,7 @@ class ZarrNii:
             along_z = 2**level_z
         
 
-        if self.axes_nifti:
+        if self.axes_order=='XYZ':
             axes ={0:1,
                                                         1: along_x,
                                                         2: along_y,
@@ -506,7 +503,7 @@ class ZarrNii:
         scaling_matrix = np.diag((along_x,along_y,along_z,1))
         new_vox2ras = scaling_matrix @ self.vox2ras.affine
 
-        return ZarrNii.from_darr(darr_scaled,vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
+        return ZarrNii.from_darr(darr_scaled,vox2ras=new_vox2ras,axes_order=self.axes_order)
 
 
     def __get_upsampled_chunks(self, target_shape,return_scaling=True):
@@ -569,7 +566,7 @@ class ZarrNii:
                     dtype=self.darr.dtype)
 
 
-        return ZarrNii(darr_div,self.vox2ras,self.ras2vox,self.axes_nifti)
+        return ZarrNii(darr_div,self.vox2ras,self.ras2vox,self.axes_order)
 
 
     def upsample(self,along_x=1,along_y=1,along_z=1,to_shape=None):
@@ -577,12 +574,12 @@ class ZarrNii:
             specify either along_x/along_y/along_z, or the target
             shape with to_shape=(c,z,y,x) or (c,x,y,z) if nifti axes
             
-            note: this doesn't work yet if self has axes_nifti=True"""
+            note: this doesn't work yet if self has axes_order=='XYZ'"""
         
         
         #we run map_blocks with chunk sizes modulated by upsampling rate
         if to_shape == None:
-            if self.axes_nifti:
+            if self.axes_order == 'XYZ':
                 scaling = (1,along_x, along_y, along_z)
             else:
                 scaling = (1,along_z, along_y, along_x)
@@ -608,13 +605,13 @@ class ZarrNii:
 
 
         #we need to also update the affine, scaling by the ds_factor
-        if self.axes_nifti:
+        if self.axes_order == 'XYZ':
             scaling_matrix = np.diag((1/scaling[1],1/scaling[2],1/scaling[3],1))
         else:
             scaling_matrix = np.diag((1/scaling[-1],1/scaling[-2],1/scaling[-3],1))
         new_vox2ras = scaling_matrix @ self.vox2ras.affine
 
-        return ZarrNii.from_darr(darr_scaled.rechunk(),vox2ras=new_vox2ras,axes_nifti=self.axes_nifti)
+        return ZarrNii.from_darr(darr_scaled.rechunk(),vox2ras=new_vox2ras,axes_order=self.axes_order)
 
 
 
@@ -661,3 +658,227 @@ class ZarrNii:
         return (level,do_downsample,{'along_x':2**level_xy,'along_y':2**level_xy,'along_z':2**level_z})
 
 
+def vox2ras_from_zarr(in_zarr_path: str, level=0) -> np.array:
+    # read coordinate transform from ome-zarr
+    zi = zarr.open(in_zarr_path, mode='r')
+    attrs = zi["/"].attrs.asdict()
+    multiscale = 0  # first multiscale image
+    transforms = attrs["multiscales"][multiscale]["datasets"][level][
+        "coordinateTransformations"
+    ]
+
+    affine = np.eye(4)
+
+    #apply each ome zarr transform sequentially
+    for transform in transforms:
+    # (for now, we just assume the transformations will be called scale and translation)
+        if transform['type'] == "scale":
+            scaling_zyx = transform["scale"][-3:]
+            scaling_xfm = np.diag(np.hstack((scaling_zyx,1)))
+            affine = scaling_xfm @ affine
+        elif transform['type'] == "translation":
+            translation_xfm = np.eye(4)
+            translation_xfm[:3,3] = transform["translation"][-3:]
+            affine = translation_xfm @ affine
+        
+    # reorder_xfm -- changes from z,y,x to x,y,z ordering
+    reorder_xfm = np.eye(4)
+    reorder_xfm[:3, :3] = np.flip(
+        reorder_xfm[:3, :3], axis=0
+    )  # reorders z-y-x to x-y-z and vice versa
+
+    affine = reorder_xfm @ affine
+    
+    flip_xfm = np.diag((-1,-1,-1,1))
+    affine = flip_xfm @ affine
+    
+    return AffineTransform.from_array(affine)
+
+def vox2ras_from_nii(in_nii_path: str) -> np.array:
+    return AffineTransform.from_array(nib.load(in_nii_path).affine)
+
+
+@define
+class Transform(ABC):
+    """Base class for transformations"""
+
+    
+    @abstractmethod
+    def apply_transform(self, vecs: np.array) -> np.array:
+        """ Apply transformation to an image """
+
+        pass
+
+@define
+class AffineTransform(Transform):
+    
+    affine: np.array = None
+
+    @classmethod
+    def from_txt(cls, path, invert=False):
+        affine = np.loadtxt(path)
+        if invert:
+            affine = np.linalg.inv(affine)
+
+        return cls(affine=affine)
+
+
+    
+    @classmethod
+    def from_array(cls, affine, invert=False):
+        if invert:
+            affine = np.linalg.inv(affine)
+
+        return cls(affine=affine)
+
+    def __matmul__(self, other):
+
+        if isinstance(other, np.ndarray):
+            if other.shape == (3,) or other.shape == (3, 1):
+                # Convert 3D point/vector to homogeneous coordinates
+                homog_point = np.append(other, 1)
+                result = self.affine @ homog_point
+                # Convert back from homogeneous coordinates to 3D
+                return result[:3] / result[3]
+            elif other.shape == (4,) or other.shape == (4, 1):
+                # Directly use 4D point/vector
+                result = self.affine @ other
+                # Convert back from homogeneous coordinates to 3D
+                return result[:3] / result[3]
+            elif other.shape == (4,4):
+                #perform matrix multiplication, and return a Transform object
+                return Transform.affine_ras_from_array(self.affine @ other)
+            else:
+                raise ValueError("Unsupported shape for multiplication.")
+        else:
+            raise TypeError("Unsupported type for multiplication.")
+    
+
+    def apply_transform(self, vecs: np.array) -> np.array:
+        return self.affine @ vecs
+
+    def invert(self):
+        """Return the inverse of the affine transformation."""
+        return AffineTransform.from_array(np.linalg.inv(self.affine))
+
+
+
+@define
+class DisplacementTransform(Transform):
+
+    disp_xyz: np.array = None
+    disp_grid: np.array = None
+    disp_ras2vox: np.array = None
+
+    
+    @classmethod
+    def displacement_from_nifti(cls, path):
+        disp_nib = nib.load(path)
+        disp_xyz = disp_nib.get_fdata().squeeze()
+        disp_ras2vox = np.linalg.inv(disp_nib.affine)
+
+        # convert from itk transform
+        disp_xyz[:, :, :, 0] = -disp_xyz[:, :, :, 0]
+        disp_xyz[:, :, :, 1] = -disp_xyz[:, :, :, 1]
+
+        disp_grid = (
+            np.arange(disp_xyz.shape[0]),
+            np.arange(disp_xyz.shape[1]),
+            np.arange(disp_xyz.shape[2]),
+        )
+
+        return cls(
+            disp_xyz=disp_xyz,
+            disp_grid=disp_grid,
+            disp_ras2vox=disp_ras2vox,
+        )
+
+    def apply_transform(self, vecs: np.array) -> np.array:
+
+        # we have the grid points, the volumes to interpolate displacements
+
+        # first we need to transform points to vox space of the warp
+        vox_vecs = self.disp_ras2vox @ vecs
+
+        # then interpolate the displacement in x, y, z:
+        disp_vecs = np.zeros(vox_vecs.shape)
+
+        for ax in range(3):
+            disp_vecs[ax, :] = interpn(
+                self.disp_grid,
+                self.disp_xyz[:, :, :, ax].squeeze(),
+                vox_vecs[:3, :].T,
+                method="linear",
+                bounds_error=False,
+                fill_value=0,
+            )
+
+        return vecs + disp_vecs
+
+
+
+
+# -- this isn't in a class, just int his module for organization        
+def interp_by_block(
+    x,
+    transforms: list[Transform],
+    flo_znimg: ZarrNii,
+    block_info=None,
+    interp_method="linear",
+):
+    """
+    main idea here is we take coordinates from the current block (ref image)
+    transform them, then in that transformed space, then interpolate the
+    floating image intensities
+
+    since the floating image is a dask array, we need to just load a
+    subset of it -- we use the bounds of the points in the transformed
+     space to define what range of the floating image we load in
+    """
+    arr_location = block_info[0]["array-location"]
+    xv, yv, zv = np.meshgrid(
+        np.arange(arr_location[-3][0], arr_location[-3][1]),
+        np.arange(arr_location[-2][0], arr_location[-2][1]),
+        np.arange(arr_location[-1][0], arr_location[-1][1]),
+        indexing="ij",
+    )
+
+    # reshape them into a vectors (x,y,z,1) for each point, so we can
+    # matrix multiply
+    xvf = xv.reshape((1, np.product(xv.shape)))
+    yvf = yv.reshape((1, np.product(yv.shape)))
+    zvf = zv.reshape((1, np.product(zv.shape)))
+    homog = np.ones(xvf.shape)
+
+    xfm_vecs = np.vstack((xvf, yvf, zvf, homog))
+
+    # apply transforms one at a time (will need to edit this for warps)
+    for tfm in transforms:
+        xfm_vecs = tfm.apply_transform(xfm_vecs)
+
+    # then finally interpolate those points on the template dseg volume
+    # need to interpolate for each channel
+
+    interpolated = np.zeros(x.shape)
+
+    # find bounding box required for flo vol
+    (grid_points, flo_vol) = flo_znimg.get_bounded_subregion(xfm_vecs)
+    if grid_points is None and flo_vol is None:
+        # points were fully outside the floating image, so just return zeros
+        return interpolated
+    else:
+        for c in range(flo_vol.shape[0]):
+            interpolated[c, :, :, :] = (
+                interpn(
+                    grid_points,
+                    flo_vol[c, :, :, :],
+                    xfm_vecs[:3, :].T,  #
+                    method=interp_method,
+                    bounds_error=False,
+                    fill_value=0,
+                )
+                .reshape((x.shape[-3], x.shape[-2], x.shape[-1]))
+                .astype(block_info[None]["dtype"])
+            )
+
+    return interpolated
