@@ -145,14 +145,14 @@ class DisplacementTransform(Transform):
 
     disp_xyz: np.array = None
     disp_grid: np.array = None
-    disp_ras2vox: np.array = None
+    disp_affine: AffineTransform = None
 
     
     @classmethod
     def from_nifti(cls, path):
         disp_nib = nib.load(path)
         disp_xyz = disp_nib.get_fdata().squeeze()
-        disp_ras2vox = np.linalg.inv(disp_nib.affine)
+        disp_affine = AffineTransform.from_array(disp_nib.affine)
 
         # convert from itk transform
         disp_xyz[:, :, :, 0] = -disp_xyz[:, :, :, 0]
@@ -167,7 +167,7 @@ class DisplacementTransform(Transform):
         return cls(
             disp_xyz=disp_xyz,
             disp_grid=disp_grid,
-            disp_ras2vox=disp_ras2vox,
+            disp_affine=disp_affine,
         )
 
     def apply_transform(self, vecs: np.array) -> np.array:
@@ -175,7 +175,7 @@ class DisplacementTransform(Transform):
         # we have the grid points, the volumes to interpolate displacements
 
         # first we need to transform points to vox space of the warp
-        vox_vecs = self.disp_ras2vox @ vecs
+        vox_vecs = self.disp_affine.invert() @ vecs
 
         # then interpolate the displacement in x, y, z:
         disp_vecs = np.zeros(vox_vecs.shape)
