@@ -113,37 +113,137 @@ class ZarrNii:
 
 
     @classmethod
-    def from_ome_zarr(cls, path, level=0, channels=[0], chunks="auto", z_level_offset=-2, rechunk=False,storage_options=None,in_orientation='RAS'):
-        """ reads in ome zarr as a ZarrNii image. Performs lazy downsampling if level isn't stored in pyramid.
-            Also downsamples Z, but to an adjusted level based on z_level_offset (since z is typically lower resolution than xy)"""
+    def from_ome_zarr(
+        cls,
+        path,
+        level=0,
+        channels=[0],
+        chunks="auto",
+        z_level_offset=-2,
+        rechunk=False,
+        storage_options=None,
+        in_orientation="IPL",
+    ):
+        """
+        Reads in an OME-Zarr file as a ZarrNii image. Performs lazy downsampling if the
+        specified level isn't stored in the pyramid. Also downsamples Z, adjusted by
+        z_level_offset (since Z typically has lower resolution than XY).
 
- 
-        level,do_downsample,downsampling_kwargs = cls.get_level_and_downsampling_kwargs(path,level,z_level_offset,storage_options=storage_options)
-         
-        darr = da.from_zarr(path, component=f"/{level}",storage_options=storage_options)[channels, :, :, :]
+        Populates OME-Zarr metadata fields and constructs the affine matrix based on
+        the input orientation.
+        """
+        # Determine the level and whether downsampling is required
+        level, do_downsample, downsampling_kwargs = cls.get_level_and_downsampling_kwargs(
+            path, level, z_level_offset, storage_options=storage_options
+        )
+
+        # Load the data array for the specified level and channels
+        darr = da.from_zarr(path, component=f"/{level}", storage_options=storage_options)[
+            channels, :, :, :
+        ]
 
         if rechunk:
             darr = darr.rechunk(chunks)
 
-        zi = zarr
-        axes_order = 'ZYX'
+        # Open the Zarr metadata
+        store = zarr.open(path, mode="r")
+        multiscales = store.attrs.get("multiscales", [{}])
+        datasets = multiscales[0].get("datasets", [{}])
+        coordinate_transformations = datasets[level].get("coordinateTransformations", [])
+        axes = multiscales[0].get("axes", [])
+        omero = store.attrs.get("omero", {})
 
-        affine = affine_from_zarr(path,level).update_for_orientation(in_orientation,'RAS')
+        # Default axes order for OME-Zarr
+        axes_order = "ZYX"
 
+        # Construct the affine matrix and update it for the input orientation
+        affine = cls.construct_affine(coordinate_transformations, in_orientation)
+        print('affine created in from_ome_zarr()')
+        print(affine)
         if do_downsample:
-            #return downsampled
+            # Return downsampled instance
             return cls(
                 darr,
-                affine=affine,
+                affine=AffineTransform.from_array(affine),
                 axes_order=axes_order,
+                axes=axes,
+                coordinate_transformations=coordinate_transformations,
+                omero=omero,
             ).downsample(**downsampling_kwargs)
-
         else:
+            # Return instance without downsampling
             return cls(
                 darr,
-                affine=affine,
+                affine=AffineTransform.from_array(affine),
                 axes_order=axes_order,
+                axes=axes,
+                coordinate_transformations=coordinate_transformations,
+                omero=omero,
             )
+
+    @staticmethod
+    def reorder_affine(affine, in_orientation):
+        """
+        Reorders and flips the affine matrix based on the input orientation.
+
+        Parameters:
+            affine (np.ndarray): Initial affine matrix.
+            in_orientation (str): Input orientation (e.g., 'RAS').
+
+        Returns:
+            np.ndarray: Reordered and flipped affine matrix.
+        """
+        axis_map = {'R': 0, 'L': 0, 'A': 1, 'P': 1, 'S': 2, 'I': 2}
+        sign_map = {'R': 1, 'L': -1, 'A': 1, 'P': -1, 'S': 1, 'I': -1}
+
+        input_axes = [axis_map[ax] for ax in in_orientation]
+        input_signs = [sign_map[ax] for ax in in_orientation]
+
+        reordered_affine = np.zeros_like(affine)
+        for i, (axis, sign) in enumerate(zip(input_axes, input_signs)):
+            reordered_affine[i, :3] = sign * affine[axis, :3]
+            reordered_affine[i, 3] = sign * affine[axis, 3]
+        reordered_affine[3, :] = affine[3, :]  # Preserve homogeneous row
+
+        return reordered_affine
+
+
+    @staticmethod
+    def construct_affine(coordinate_transformations, in_orientation):
+        """
+        Constructs the affine matrix based on OME-Zarr coordinate transformations
+        and adjusts it for the input orientation.
+
+        Parameters:
+            coordinate_transformations (list): Coordinate transformations from OME-Zarr metadata.
+            in_orientation (str): Input orientation (e.g., 'RAS').
+
+        Returns:
+            np.ndarray: A 4x4 affine matrix.
+        """
+        # Initialize affine as an identity matrix
+        affine = np.eye(4)
+
+        # Parse scales and translations
+        scales = [1.0, 1.0, 1.0]
+        translations = [0.0, 0.0, 0.0]
+
+        for transform in coordinate_transformations:
+            if transform["type"] == "scale":
+                scales = transform["scale"][1:]  # Ignore the channel/time dimension
+            elif transform["type"] == "translation":
+                translations = transform["translation"][1:]  # Ignore the channel/time dimension
+
+        # Populate the affine matrix
+        affine[:3, :3] = np.diag(scales)  # Set scaling
+        affine[:3, 3] = translations     # Set translation
+
+        print(f'affine constructed from {in_orientation}, and scales {scales}, translations {translations}')
+        print(affine)
+
+        # Reorder the affine matrix for the input orientation
+        return ZarrNii.reorder_affine(affine, in_orientation)
+
 
 
     @staticmethod
