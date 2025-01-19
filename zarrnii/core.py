@@ -193,13 +193,16 @@ class ZarrNii:
         axes = multiscales[0].get("axes", [])
         omero = store.attrs.get("omero", {})
 
+
+        # Read orientation metadata (default to `in_orientation` if not present)
+        orientation = store.attrs.get("orientation", in_orientation)
+
+
         # Default axes order for OME-Zarr
         axes_order = "ZYX"
 
         # Construct the affine matrix and update it for the input orientation
-        affine = cls.construct_affine(coordinate_transformations, in_orientation)
-        print('affine created in from_ome_zarr()')
-        print(affine)
+        affine = cls.construct_affine(coordinate_transformations, orientation)
         if do_downsample:
             # Return downsampled instance
             return cls(
@@ -222,9 +225,9 @@ class ZarrNii:
             )
 
     @staticmethod
-    def reorder_affine(affine, in_orientation):
+    def align_affine_to_input_orientation(affine, in_orientation):
         """
-        Reorders and flips the affine matrix based on the input orientation.
+        Reorders and flips the affine matrix to align with the specified input orientation.
 
         Parameters:
             affine (np.ndarray): Initial affine matrix.
@@ -235,17 +238,18 @@ class ZarrNii:
         """
         axis_map = {'R': 0, 'L': 0, 'A': 1, 'P': 1, 'S': 2, 'I': 2}
         sign_map = {'R': 1, 'L': -1, 'A': 1, 'P': -1, 'S': 1, 'I': -1}
-
+        
         input_axes = [axis_map[ax] for ax in in_orientation]
         input_signs = [sign_map[ax] for ax in in_orientation]
-
-        reordered_affine = np.zeros_like(affine)
+            
+        reordered_affine = np.zeros_like(affine) 
         for i, (axis, sign) in enumerate(zip(input_axes, input_signs)):
             reordered_affine[i, :3] = sign * affine[axis, :3]
             reordered_affine[i, 3] = sign * affine[axis, 3]
         reordered_affine[3, :] = affine[3, :]  # Preserve homogeneous row
 
         return reordered_affine
+
 
 
     @staticmethod
@@ -278,12 +282,31 @@ class ZarrNii:
         affine[:3, :3] = np.diag(scales)  # Set scaling
         affine[:3, 3] = translations     # Set translation
 
-        print(f'affine constructed from {in_orientation}, and scales {scales}, translations {translations}')
-        print(affine)
 
         # Reorder the affine matrix for the input orientation
-        return ZarrNii.reorder_affine(affine, in_orientation)
+        return ZarrNii.align_affine_to_input_orientation(affine, in_orientation)
 
+
+
+    @staticmethod
+    def reorder_affine_for_xyz(affine):
+        """
+        Reorders the affine matrix from ZYX to XYZ axes order.
+
+        Parameters:
+            affine (np.ndarray): Affine matrix in ZYX order.
+
+        Returns:
+            np.ndarray: Affine matrix reordered to XYZ order.
+        """
+        # Reordering matrix to go from ZYX to XYZ
+        reorder_xfm = np.array([
+            [0, 0, 1, 0],  # Z -> X
+            [0, 1, 0, 0],  # Y -> Y
+            [1, 0, 0, 0],  # X -> Z
+            [0, 0, 0, 1],  # Homogeneous row
+        ])
+        return reorder_xfm @ affine
 
 
     @staticmethod
@@ -442,124 +465,106 @@ class ZarrNii:
 
         return nib.Nifti1Image(self.darr.squeeze(), matrix=self.affine)
 
+    def to_nifti(self, filename):
+        """
+        Save the current ZarrNii instance to a NIfTI file.
 
-    def to_nifti(self, filename, **kwargs):
-
-        if self.axes_order == 'XYZ': #this means it was read-in as a NIFTI, so we write out as normal
-            out_darr = self.darr.squeeze()
-            affine = self.affine
-
-        else: #was read-in as a Zarr, so we reorder/flip data, and adjust affine accordingly
-
-            out_darr = da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1)).squeeze()
-            #adjust affine accordingly
-
-            # reorder_xfm -- changes from z,y,x to x,y,z ordering
-            reorder_xfm = np.eye(4)
-            reorder_xfm[:3, :3] = np.flip(
-                reorder_xfm[:3, :3], axis=0
-            )  # reorders z-y-x to x-y-z and vice versa
-
-            flip_xfm = np.diag((-1,-1,-1,1))
-
-            #right-multiply to reorder cols
-            affine = self.affine @ reorder_xfm
-
-        out_nib = nib.Nifti1Image(out_darr, affine=affine.matrix)
-        with ProgressBar():
-            out_nib.to_filename(filename)
-
-    def to_ome_zarr(
-        self, filename, max_layer=4, scaling_method="local_mean", **kwargs
-    ):
-        #the affine specifies how to go from the darr to nifti RAS space
-
-        #in creating affine for zarr, we had to apply scale, translation
-        # then reorder, flip
-
-        # we can apply steps
-
-
-        offset=self.affine[:3,3]
-
-        if self.axes_order == 'XYZ':
-            #we have a nifti image -- need to apply the transformations (reorder, flip) to the
-            # data in the OME_Zarr, so it is consistent.
-            out_darr=da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
-
-            reorder_xfm = np.eye(4)
-            reorder_xfm[:3, :3] = np.flip(
-                reorder_xfm[:3, :3], axis=0
-            )  # reorders z-y-x to x-y-z and vice versa
-
-            flip_xfm = np.diag((-1,-1,-1,1))
-            out_affine = flip_xfm @ self.affine
-            # voxdim needs to be Z Y Z
-            voxdim=np.flip(np.diag(out_affine)[:3])
+        Parameters:
+            filename (str): Output path for the NIfTI file.
+        """
+        # Reorder data to match NIfTI's expected XYZ order if necessary
+        if self.axes_order == "ZYX":
+            data = da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1)).compute()  # Reorder to XYZ
+            affine = self.reorder_affine_for_xyz(self.affine)  # Reorder affine to match
         else:
-            out_darr = self.darr
+            data = self.darr.compute()
+            affine = self.affine.matrix  # No reordering needed
 
-            # adjust affine accordingly
-            # reorder_xfm -- changes from z,y,x to x,y,z ordering
-            reorder_xfm = np.eye(4)
-            reorder_xfm[:3, :3] = np.flip(
-                reorder_xfm[:3, :3], axis=0
-            )  # reorders z-y-x to x-y-z and vice versa
 
-            flip_xfm = np.diag((-1,-1,-1,1))
+        # Create the NIfTI image
+        nii_img = nib.Nifti1Image(data[0], affine)  # Remove the channel dimension for NIfTI
 
-            out_affine = flip_xfm @ reorder_xfm @ self.affine
+        # Save the NIfTI file
+        nib.save(nii_img, filename)
 
-            voxdim=np.diag(out_affine)[:3]
 
-        coordinate_transformations = []
-        # for each resolution (dataset), we have a list of dicts,
-        # transformations to apply..
-        # in this case just a single one (scaling by voxel size)
 
-        for layer in range(max_layer + 1):
-            coord_transform_layer=[]
-            #add scale
-            coord_transform_layer.append(
-                    {
-                        "scale": [
-                            1,
-                            voxdim[0],
-                            (2**layer) * voxdim[1],
-                            (2**layer) * voxdim[2],
-                        ],  # image-pyramids in XY only
-                        "type": "scale",
-                    }
-                    )
-            #add translation
-            coord_transform_layer.append({
-                        "translation": [
-                            0,
-                            offset[0],
-                            offset[1] / (2**layer),
-                            offset[2] / (2**layer),
-                        ],  # image-pyramids in XY only
-                        "type": "translation",
-                    }
-                    )
+    def to_ome_zarr(self, filename, max_layer=4, scaling_method="local_mean", **kwargs):
+        """
+        Save the current ZarrNii instance to an OME-Zarr file, always writing
+        axes in ZYX order.
 
-            coordinate_transformations.append(coord_transform_layer)
-
-        axes = [{"name": "c", "type": "channel"}] + [
-            {"name": ax, "type": "space", "unit": "micrometer"}
-            for ax in ["z", "y", "x"]
+        Parameters:
+            filename (str): Output path for the OME-Zarr file.
+            max_layer (int): Maximum number of downsampling layers (default: 4).
+            scaling_method (str): Method for downsampling (default: "local_mean").
+            **kwargs: Additional arguments for `write_image`.
+        """
+        # Always write OME-Zarr axes as ZYX
+        axes = [
+            {"name": "c", "type": "channel", "unit": None},
+            {"name": "z", "type": "space", "unit": "micrometer"},
+            {"name": "y", "type": "space", "unit": "micrometer"},
+            {"name": "x", "type": "space", "unit": "micrometer"},
         ]
 
-        store = zarr.storage.FSStore(
-            filename, dimension_separator="/", mode="w"
-        )
+
+        # Reorder data if the axes order is XYZ (NIfTI-like)
+        if self.axes_order == "XYZ":
+            out_darr = da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))  # Reorder to ZYX
+         #   flip_xfm = np.diag((-1, -1, -1, 1))  # Apply flips for consistency
+            #out_affine = flip_xfm @ self.affine
+            out_affine = self.reorder_affine_for_xyz(self.affine)
+          #  voxdim = np.flip(voxdim)  # Adjust voxel dimensions to ZYX
+        else:
+            out_darr = self.darr
+            out_affine = self.affine
+
+        # Extract offset and voxel dimensions from the affine matrix
+        offset = out_affine[:3, 3]
+        voxdim = np.sqrt((out_affine[:3, :3] ** 2).sum(axis=0))  # Extract scales
+
+
+        # Prepare coordinate transformations
+        coordinate_transformations = []
+        for layer in range(max_layer + 1):
+            scale = [
+                1,
+                voxdim[0],
+                (2**layer) * voxdim[1],  # Downsampling in Y
+                (2**layer) * voxdim[2],  # Downsampling in X
+            ]
+            translation = [
+                0,
+                offset[0],
+                offset[1] / (2**layer),
+                offset[2] / (2**layer),
+            ]
+            coordinate_transformations.append(
+                [
+                    {"type": "scale", "scale": scale},
+                    {"type": "translation", "translation": translation},
+                ]
+            )
+
+        # Set up Zarr store
+        store = zarr.storage.FSStore(filename, dimension_separator="/", mode="w")
         group = zarr.group(store, overwrite=True)
 
-        if max_layer ==0:
+   
+        # Add metadata for orientation
+        group.attrs["orientation"] = affine_to_orientation(out_affine) # Write current orientation
+
+
+        # Set up scaler for multi-resolution pyramid
+        if max_layer == 0:
             scaler = None
         else:
             scaler = Scaler(max_layer=max_layer, method=scaling_method)
 
+
+
+        # Write the data to OME-Zarr
         with ProgressBar():
             write_image(
                 image=out_darr,
@@ -567,7 +572,9 @@ class ZarrNii:
                 scaler=scaler,
                 coordinate_transformations=coordinate_transformations,
                 axes=axes,
+                **kwargs,
             )
+
 
     def crop_with_bounding_box(self, bbox_min, bbox_max, ras_coords=False):
         # adjust darr using slicing with bbox indices

@@ -72,10 +72,6 @@ def test_from_nifti_to_zarr_to_nifti(nifti_nib):
     znimg2.to_nifti("test_fromznimg_tonii.nii")
     znimg3 = ZarrNii.from_nifti("test_fromznimg_tonii.nii")
 
-
-    print(znimg)
-    print(znimg2)
-    print(znimg3)
     assert_array_equal(znimg.affine, znimg3.affine)
     assert_array_equal(znimg.darr.compute(), znimg3.darr.compute())
     assert_array_equal(nib_orig.header.get_zooms(),nib.load("test_fromznimg_tonii.nii").header.get_zooms())
