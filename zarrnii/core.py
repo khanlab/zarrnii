@@ -94,24 +94,64 @@ class ZarrNii:
             affine=affine,
             axes_order=axes_order,
         )
-
     @classmethod
-    def from_nifti(cls, path, chunks="auto" ):
+    def from_nifti(cls, path, chunks="auto"):
+        """
+        Creates a ZarrNii instance from a NIfTI file. Populates OME-Zarr metadata
+        based on the NIfTI affine matrix.
 
-        darr = da.from_array(
-            np.expand_dims(nib.load(path).get_fdata(), axis=0),
-            chunks=chunks,
-        )
-        axes_order = 'XYZ'
-        affine = affine_from_nii(path)
+        Parameters:
+            path (str): Path to the NIfTI file.
+            chunks (str or tuple): Chunk size for dask array (default: "auto").
 
+        Returns:
+            ZarrNii: A populated ZarrNii instance.
+        """
+        # Load the NIfTI file and data
+        nii = nib.load(path)
+        data = np.expand_dims(nii.get_fdata(), axis=0)  # Add a channel dimension
+
+        # Convert to a dask array with specified chunks
+        darr = da.from_array(data, chunks=chunks)
+
+        # Extract the affine matrix
+        affine = nii.affine
+
+        # Define axes order and metadata
+        axes_order = "XYZ"
+        axes = [
+            {"name": "channel", "type": "channel", "unit": None},
+            {"name": "x", "type": "space", "unit": "millimeter"},
+            {"name": "y", "type": "space", "unit": "millimeter"},
+            {"name": "z", "type": "space", "unit": "millimeter"},
+        ]
+
+        # Extract coordinate transformations from the affine matrix
+        scale = np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Diagonal scales
+        translation = affine[:3, 3]  # Translation vector
+        coordinate_transformations = [
+            {"type": "scale", "scale": [1] + scale.tolist()},  # Add channel scale
+            {"type": "translation", "translation": [0] + translation.tolist()},  # Add channel translation
+        ]
+
+        # Define basic Omero metadata
+        omero = {
+            "channels": [{"label": "Channel-0"}],  # Placeholder channel information
+            "rdefs": {"model": "color"},
+        }
+
+        # Create and return the ZarrNii instance
         return cls(
-                darr,
-                affine=affine,
-                axes_order=axes_order,
-            )
+            darr,
+            affine=AffineTransform.from_array(affine),
+            axes_order=axes_order,
+            axes=axes,
+            coordinate_transformations=coordinate_transformations,
+            omero=omero,
+        )
 
 
+        
     @classmethod
     def from_ome_zarr(
         cls,
