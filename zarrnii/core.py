@@ -12,14 +12,14 @@ import nibabel as nib
 import numpy as np
 import zarr
 from attrs import define
-from scipy.interpolate import interpn
 from dask.diagnostics import ProgressBar
 from ome_zarr.scale import Scaler
 from ome_zarr.writer import write_image
 from scipy.ndimage import zoom
+from scipy.interpolate import interpn
 
 from .enums import ImageType
-from abc import ABC, abstractmethod
+from .transform import Transform, AffineTransform
 
 @define
 class ZarrNii:
@@ -81,7 +81,7 @@ class ZarrNii:
         )
 
     @classmethod
-    def from_path(cls, path, level=0, channels=[0], chunks="auto", z_level_offset=-2, rechunk=False,storage_options=None):
+    def from_path(cls, path, level=0, channels=[0], chunks="auto", z_level_offset=-2, rechunk=False,storage_options=None,in_orientation='RAS'):
         """returns a dask array whether a nifti or ome_zarr is provided.
             performs downsampling if level isn't stored in pyramid.
             Also downsamples Z, but to an adjusted level based on z_level_offset (since z is typically lower resolution than xy)"""
@@ -99,7 +99,7 @@ class ZarrNii:
 
             zi = zarr
             axes_order = 'ZYX'
-            vox2ras = vox2ras_from_zarr(path,level)
+            vox2ras = vox2ras_from_zarr(path,level).update_for_orientation(in_orientation,'RAS')
 
         elif img_type is ImageType.NIFTI:
             darr = da.from_array(
@@ -320,7 +320,8 @@ class ZarrNii:
             affine = self.vox2ras.affine @ reorder_xfm
 
         out_nib = nib.Nifti1Image(out_darr, affine=affine)
-        out_nib.to_filename(filename)
+        with ProgressBar():
+            out_nib.to_filename(filename)
 
     def to_ome_zarr(
         self, filename, max_layer=4, scaling_method="local_mean", **kwargs
@@ -657,8 +658,35 @@ class ZarrNii:
             do_downsample=False
         return (level,do_downsample,{'along_x':2**level_xy,'along_y':2**level_xy,'along_z':2**level_z})
 
+    def get_vox2ras_for_axes_order(self, target_axes_order='XYZ'):
+        """
+        Get the affine matrix for a target axes order.
 
-def vox2ras_from_zarr(in_zarr_path: str, level=0) -> np.array:
+        Parameters:
+            target_axes_order (str): Desired voxel axes order ('ZYX' or 'XYZ').
+
+        Returns:
+            numpy.ndarray: Affine matrix for the target axes order.
+        """
+
+        affine = self.vox2ras.affine
+
+        if self.axes_order == target_axes_order:
+            return affine
+        else:
+
+            # reorder_xfm -- changes from z,y,x to x,y,z ordering
+            reorder_xfm = np.eye(4)
+            reorder_xfm[:3, :3] = np.flip(
+                reorder_xfm[:3, :3], axis=0
+            )  # reorders z-y-x to x-y-z and vice versa
+
+            return reorder_xfm @ affine
+         
+
+# -- inline helper functions
+
+def vox2ras_from_zarr(in_zarr_path: str, level=0) -> AffineTransform:
     # read coordinate transform from ome-zarr
     zi = zarr.open(in_zarr_path, mode='r')
     attrs = zi["/"].attrs.asdict()
@@ -694,131 +722,12 @@ def vox2ras_from_zarr(in_zarr_path: str, level=0) -> np.array:
     
     return AffineTransform.from_array(affine)
 
-def vox2ras_from_nii(in_nii_path: str) -> np.array:
+def vox2ras_from_nii(in_nii_path: str) -> AffineTransform:
     return AffineTransform.from_array(nib.load(in_nii_path).affine)
 
 
-@define
-class Transform(ABC):
-    """Base class for transformations"""
-
-    
-    @abstractmethod
-    def apply_transform(self, vecs: np.array) -> np.array:
-        """ Apply transformation to an image """
-
-        pass
-
-@define
-class AffineTransform(Transform):
-    
-    affine: np.array = None
-
-    @classmethod
-    def from_txt(cls, path, invert=False):
-        affine = np.loadtxt(path)
-        if invert:
-            affine = np.linalg.inv(affine)
-
-        return cls(affine=affine)
 
 
-    
-    @classmethod
-    def from_array(cls, affine, invert=False):
-        if invert:
-            affine = np.linalg.inv(affine)
-
-        return cls(affine=affine)
-
-    def __matmul__(self, other):
-
-        if isinstance(other, np.ndarray):
-            if other.shape == (3,) or other.shape == (3, 1):
-                # Convert 3D point/vector to homogeneous coordinates
-                homog_point = np.append(other, 1)
-                result = self.affine @ homog_point
-                # Convert back from homogeneous coordinates to 3D
-                return result[:3] / result[3]
-            elif other.shape == (4,) or other.shape == (4, 1):
-                # Directly use 4D point/vector
-                result = self.affine @ other
-                # Convert back from homogeneous coordinates to 3D
-                return result[:3] / result[3]
-            elif other.shape == (4,4):
-                #perform matrix multiplication, and return a Transform object
-                return Transform.affine_ras_from_array(self.affine @ other)
-            else:
-                raise ValueError("Unsupported shape for multiplication.")
-        else:
-            raise TypeError("Unsupported type for multiplication.")
-    
-
-    def apply_transform(self, vecs: np.array) -> np.array:
-        return self.affine @ vecs
-
-    def invert(self):
-        """Return the inverse of the affine transformation."""
-        return AffineTransform.from_array(np.linalg.inv(self.affine))
-
-
-
-@define
-class DisplacementTransform(Transform):
-
-    disp_xyz: np.array = None
-    disp_grid: np.array = None
-    disp_ras2vox: np.array = None
-
-    
-    @classmethod
-    def displacement_from_nifti(cls, path):
-        disp_nib = nib.load(path)
-        disp_xyz = disp_nib.get_fdata().squeeze()
-        disp_ras2vox = np.linalg.inv(disp_nib.affine)
-
-        # convert from itk transform
-        disp_xyz[:, :, :, 0] = -disp_xyz[:, :, :, 0]
-        disp_xyz[:, :, :, 1] = -disp_xyz[:, :, :, 1]
-
-        disp_grid = (
-            np.arange(disp_xyz.shape[0]),
-            np.arange(disp_xyz.shape[1]),
-            np.arange(disp_xyz.shape[2]),
-        )
-
-        return cls(
-            disp_xyz=disp_xyz,
-            disp_grid=disp_grid,
-            disp_ras2vox=disp_ras2vox,
-        )
-
-    def apply_transform(self, vecs: np.array) -> np.array:
-
-        # we have the grid points, the volumes to interpolate displacements
-
-        # first we need to transform points to vox space of the warp
-        vox_vecs = self.disp_ras2vox @ vecs
-
-        # then interpolate the displacement in x, y, z:
-        disp_vecs = np.zeros(vox_vecs.shape)
-
-        for ax in range(3):
-            disp_vecs[ax, :] = interpn(
-                self.disp_grid,
-                self.disp_xyz[:, :, :, ax].squeeze(),
-                vox_vecs[:3, :].T,
-                method="linear",
-                bounds_error=False,
-                fill_value=0,
-            )
-
-        return vecs + disp_vecs
-
-
-
-
-# -- this isn't in a class, just int his module for organization        
 def interp_by_block(
     x,
     transforms: list[Transform],
@@ -882,3 +791,34 @@ def interp_by_block(
             )
 
     return interpolated
+
+
+def affine_to_orientation(affine):
+    """
+    Convert an affine matrix to an anatomical orientation string (e.g., 'RAS').
+    
+    Parameters:
+        affine (numpy.ndarray): Affine matrix from voxel to world coordinates.
+        
+    Returns:
+        str: Anatomical orientation (e.g., 'RAS', 'LPI').
+    """
+    from nibabel.orientations import io_orientation
+
+    # Get voxel-to-world mapping
+    orient = io_orientation(affine)
+
+    # Maps for axis labels
+    axis_labels = ['R', 'A', 'S']
+    flipped_labels = ['L', 'P', 'I']
+
+    orientation = []
+    for axis, direction in orient:
+        axis = int(axis)
+        if direction == 1:
+            orientation.append(axis_labels[axis])
+        else:
+            orientation.append(flipped_labels[axis])
+
+    return ''.join(orientation)
+

@@ -10,7 +10,7 @@ packages = [{include = "zarrnii"}]
 
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.12"
+python = ">=3.10,<4.0"
 zarr = "^2.17.0"
 nibabel = "^5.2.0"
 dask = "^2024.2.0"
