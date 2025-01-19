@@ -24,7 +24,6 @@ from .transform import Transform, AffineTransform
 @define
 class ZarrNii:
     darr: da.Array
-    ras2vox: AffineTransform = None
     vox2ras: AffineTransform = None
     axes_order: str = 'ZYX'
 
@@ -77,7 +76,7 @@ class ZarrNii:
         )
 
         return cls(
-            darr_empty, ras2vox=vox2ras.invert(), vox2ras=vox2ras, axes_order=axes_order
+            darr_empty, vox2ras=vox2ras, axes_order=axes_order
         )
 
     @classmethod
@@ -116,7 +115,6 @@ class ZarrNii:
             return cls(
                 darr,
                 vox2ras=vox2ras,
-                ras2vox=vox2ras.invert(),
                 axes_order=axes_order,
             ).downsample(**downsampling_kwargs)
 
@@ -124,7 +122,6 @@ class ZarrNii:
             return cls(
                 darr,
                 vox2ras=vox2ras,
-                ras2vox=vox2ras.invert(),
                 axes_order=axes_order,
             )
 
@@ -136,7 +133,6 @@ class ZarrNii:
         return cls(
             darr,
             vox2ras=vox2ras,
-            ras2vox=vox2ras.invert(),
             axes_order=axes_order,
         )
 
@@ -173,7 +169,7 @@ class ZarrNii:
         tfms_to_apply.append(ref_znimg.vox2ras)
         for tfm in tfms:
             tfms_to_apply.append(tfm)
-        tfms_to_apply.append(self.ras2vox)
+        tfms_to_apply.append(self.vox2ras.invert())
 
         # out image in space of ref
         interp_znimg = ref_znimg
@@ -201,7 +197,7 @@ class ZarrNii:
         tfms_to_apply.append(ref_znimg.vox2ras)
         for tfm in tfms:
             tfms_to_apply.append(tfm)
-        tfms_to_apply.append(self.ras2vox)
+        tfms_to_apply.append(self.vox2ras.invert())
 
         # here we use indices as vectors (indices should be 3xN array),
         # we add ones to make 4xN so we can matrix multiply
@@ -228,7 +224,7 @@ class ZarrNii:
         tfms_to_apply.append(self.vox2ras)
         for tfm in tfms:
             tfms_to_apply.append(tfm)
-        tfms_to_apply.append(ref_znimg.ras2vox)
+        tfms_to_apply.append(ref_znimg.vox2ras.invert())
 
         homog = np.ones((1, indices.shape[1]))
         xfm_vecs = np.vstack((indices, homog))
@@ -429,8 +425,8 @@ class ZarrNii:
 
         if ras_coords:
             #get vox coords by using ras2vox
-            bbox_min = np.round(self.ras2vox @ np.array(bbox_min))
-            bbox_max = np.round(self.ras2vox @ np.array(bbox_max))
+            bbox_min = np.round(self.vox2ras.invert() @ np.array(bbox_min))
+            bbox_max = np.round(self.vox2ras.invert() @ np.array(bbox_max))
             bbox_min = tuple(bbox_min[:3].flatten())
             bbox_max = tuple(bbox_max[:3].flatten())
 
@@ -566,7 +562,7 @@ class ZarrNii:
                     dtype=self.darr.dtype)
 
 
-        return ZarrNii(darr_div,self.vox2ras,self.ras2vox,self.axes_order)
+        return ZarrNii(darr_div,self.vox2ras,self.axes_order)
 
 
     def upsample(self,along_x=1,along_y=1,along_z=1,to_shape=None):
