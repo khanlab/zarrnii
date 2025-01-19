@@ -76,7 +76,7 @@ def test_from_nifti_to_zarr_to_nifti(nifti_nib):
     print(znimg)
     print(znimg2)
     print(znimg3)
-    assert_array_equal(znimg.vox2ras.affine, znimg3.vox2ras.affine)
+    assert_array_equal(znimg.vox2ras.matrix, znimg3.vox2ras.matrix)
     assert_array_equal(znimg.darr.compute(), znimg3.darr.compute())
     assert_array_equal(nib_orig.header.get_zooms(),nib.load("test_fromznimg_tonii.nii").header.get_zooms())
 
@@ -117,7 +117,7 @@ def test_from_nifti_to_zarr_to_zarr(nifti_nib):
     )
 
     print(f"znimg3 from zarr: {znimg3}")
-    assert_array_equal(znimg2.vox2ras.affine, znimg3.vox2ras.affine)
+    assert_array_equal(znimg2.vox2ras.matrix, znimg3.vox2ras.matrix)
     assert_array_equal(znimg2.darr.compute(), znimg3.darr.compute())
 
 

@@ -62,12 +62,12 @@ class ZarrNii:
         if zooms is not None:
             # zooms sets the target spacing in xyz
 
-            in_zooms = np.diag(vox2ras.affine)[:3]
+            in_zooms = np.diag(vox2ras.matrix)[:3]
             nvox_scaling_factor = in_zooms / zooms
 
             out_shape[1:] = np.floor(out_shape[1:] * nvox_scaling_factor)
-            # adjust affine too
-            np.fill_diagonal(vox2ras.affine[:3, :3], zooms)
+            # adjust matrix too
+            np.fill_diagonal(vox2ras.matrix[:3, :3], zooms)
 
 
         darr_empty = da.empty(
@@ -294,14 +294,14 @@ class ZarrNii:
 
     def as_Nifti1Image(self, filename, **kwargs):
 
-        return nib.Nifti1Image(self.darr.squeeze(), affine=self.vox2ras.affine)
+        return nib.Nifti1Image(self.darr.squeeze(), matrix=self.vox2ras.matrix)
 
 
     def to_nifti(self, filename, **kwargs):
 
         if self.axes_order == 'XYZ': #this means it was read-in as a NIFTI, so we write out as normal
             out_darr = self.darr.squeeze()
-            affine = self.vox2ras.affine
+            affine = self.vox2ras.matrix
 
         else: #was read-in as a Zarr, so we reorder/flip data, and adjust affine accordingly
 
@@ -317,7 +317,7 @@ class ZarrNii:
             flip_xfm = np.diag((-1,-1,-1,1))
 
             #right-multiply to reorder cols
-            affine = self.vox2ras.affine @ reorder_xfm
+            affine = self.vox2ras.matrix @ reorder_xfm
 
         out_nib = nib.Nifti1Image(out_darr, affine=affine)
         with ProgressBar():
@@ -334,7 +334,7 @@ class ZarrNii:
         # we can apply steps
 
 
-        offset=self.vox2ras.affine[:3,3]
+        offset=self.vox2ras.matrix[:3,3]
 
         if self.axes_order == 'XYZ':
             #we have a nifti image -- need to apply the transformations (reorder, flip) to the
@@ -346,9 +346,8 @@ class ZarrNii:
                 reorder_xfm[:3, :3], axis=0
             )  # reorders z-y-x to x-y-z and vice versa
 
-            #out_affine = self.vox2ras.affine
             flip_xfm = np.diag((-1,-1,-1,1))
-            out_affine = flip_xfm @ self.vox2ras.affine
+            out_affine = flip_xfm @ self.vox2ras.matrix
             # voxdim needs to be Z Y Z
             voxdim=np.flip(np.diag(out_affine)[:3])
         else:
@@ -363,7 +362,7 @@ class ZarrNii:
 
             flip_xfm = np.diag((-1,-1,-1,1))
 
-            out_affine = flip_xfm @ reorder_xfm @ self.vox2ras.affine
+            out_affine = flip_xfm @ reorder_xfm @ self.vox2ras.matrix
 
             voxdim=np.diag(out_affine)[:3]
 
@@ -443,7 +442,7 @@ class ZarrNii:
         trans_vox = np.eye(4,4)
         trans_vox[:3,3] = bbox_min
 
-        new_vox2ras = self.vox2ras.affine @ trans_vox
+        new_vox2ras = self.vox2ras.matrix @ trans_vox
 
         return ZarrNii.from_darr(darr_cropped,vox2ras=new_vox2ras,axes_order=self.axes_order)
 
@@ -502,7 +501,7 @@ class ZarrNii:
 
         #we need to also update the affine, scaling by the ds_factor
         scaling_matrix = np.diag((along_x,along_y,along_z,1))
-        new_vox2ras = scaling_matrix @ self.vox2ras.affine
+        new_vox2ras = scaling_matrix @ self.vox2ras.matrix
 
         return ZarrNii.from_darr(darr_scaled,vox2ras=new_vox2ras,axes_order=self.axes_order)
 
@@ -610,7 +609,7 @@ class ZarrNii:
             scaling_matrix = np.diag((1/scaling[1],1/scaling[2],1/scaling[3],1))
         else:
             scaling_matrix = np.diag((1/scaling[-1],1/scaling[-2],1/scaling[-3],1))
-        new_vox2ras = scaling_matrix @ self.vox2ras.affine
+        new_vox2ras = scaling_matrix @ self.vox2ras.matrix
 
         return ZarrNii.from_darr(darr_scaled.rechunk(),vox2ras=new_vox2ras,axes_order=self.axes_order)
 
@@ -658,31 +657,7 @@ class ZarrNii:
             do_downsample=False
         return (level,do_downsample,{'along_x':2**level_xy,'along_y':2**level_xy,'along_z':2**level_z})
 
-    def get_vox2ras_for_axes_order(self, target_axes_order='XYZ'):
-        """
-        Get the affine matrix for a target axes order.
-
-        Parameters:
-            target_axes_order (str): Desired voxel axes order ('ZYX' or 'XYZ').
-
-        Returns:
-            numpy.ndarray: Affine matrix for the target axes order.
-        """
-
-        affine = self.vox2ras.affine
-
-        if self.axes_order == target_axes_order:
-            return affine
-        else:
-
-            # reorder_xfm -- changes from z,y,x to x,y,z ordering
-            reorder_xfm = np.eye(4)
-            reorder_xfm[:3, :3] = np.flip(
-                reorder_xfm[:3, :3], axis=0
-            )  # reorders z-y-x to x-y-z and vice versa
-
-            return reorder_xfm @ affine
-         
+        
 
 # -- inline helper functions
 

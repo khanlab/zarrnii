@@ -24,24 +24,46 @@ class Transform(ABC):
 @define
 class AffineTransform(Transform):
     
-    affine: np.array = None
+    matrix: np.array = None
 
     @classmethod
     def from_txt(cls, path, invert=False):
-        affine = np.loadtxt(path)
+        matrix = np.loadtxt(path)
         if invert:
-            affine = np.linalg.inv(affine)
+            matrix = np.linalg.inv(matrix)
 
-        return cls(affine=affine)
+        return cls(matrix=matrix)
 
 
     
     @classmethod
-    def from_array(cls, affine, invert=False):
+    def from_array(cls, matrix, invert=False):
         if invert:
-            affine = np.linalg.inv(affine)
+            matrix = np.linalg.inv(matrix)
 
-        return cls(affine=affine)
+        return cls(matrix=matrix)
+
+
+    def __array__(self):
+        """
+        Define how the object behaves when converted to a numpy array.
+        Returns the matrix of the affine transform.
+        """
+        return self.matrix
+
+
+    def __getitem__(self, key):
+        """
+        Enable array-like indexing on the matrix.
+        """
+        return self.matrix[key]
+
+    def __setitem__(self, key, value):
+        """
+        Enable array-like assignment to the matrix.
+        """
+        self.matrix[key] = value
+
 
     def __matmul__(self, other):
 
@@ -49,17 +71,17 @@ class AffineTransform(Transform):
             if other.shape == (3,) or other.shape == (3, 1):
                 # Convert 3D point/vector to homogeneous coordinates
                 homog_point = np.append(other, 1)
-                result = self.affine @ homog_point
+                result = self.matrix @ homog_point
                 # Convert back from homogeneous coordinates to 3D
                 return result[:3] / result[3]
             elif other.shape == (4,) or other.shape == (4, 1):
                 # Directly use 4D point/vector
-                result = self.affine @ other
+                result = self.matrix @ other
                 # Convert back from homogeneous coordinates to 3D
                 return result[:3] / result[3]
             elif other.shape == (4,4):
                 #perform matrix multiplication, and return a Transform object
-                return Transform.affine_ras_from_array(self.affine @ other)
+                return AffineTransform.from_array(self.matrix @ other)
             else:
                 raise ValueError("Unsupported shape for multiplication.")
         else:
@@ -67,15 +89,15 @@ class AffineTransform(Transform):
     
 
     def apply_transform(self, vecs: np.array) -> np.array:
-        return self.affine @ vecs
+        return self.matrix @ vecs
 
     def invert(self):
-        """Return the inverse of the affine transformation."""
-        return AffineTransform.from_array(np.linalg.inv(self.affine))
+        """Return the inverse of the matrix transformation."""
+        return AffineTransform.from_array(np.linalg.inv(self.matrix))
 
     def update_for_orientation(self, input_orientation, output_orientation):
         """
-        Update the affine matrix to map from the input orientation to the output orientation.
+        Update the matrix to map from the input orientation to the output orientation.
 
         Parameters:
             input_orientation (str): Current anatomical orientation (e.g., 'RPI').
@@ -104,16 +126,16 @@ class AffineTransform(Transform):
                     break
 
         # Reorder and flip the affine matrix
-        reordered_affine = np.zeros_like(self.affine)
+        reordered_matrix = np.zeros_like(self.matrix)
         for i, (reorder_idx, flip_sign) in enumerate(zip(reorder_indices, flip_signs)):
             if reorder_idx is None:
                 raise ValueError(f"Cannot match all axes from {input_orientation} to {output_orientation}.")
-            reordered_affine[i, :3] = flip_sign * self.affine[reorder_idx, :3]
-            reordered_affine[i, 3] = flip_sign * self.affine[reorder_idx, 3]
-        reordered_affine[3, :] = self.affine[3, :]  # Preserve the homogeneous row
+            reordered_matrix[i, :3] = flip_sign * self.matrix[reorder_idx, :3]
+            reordered_matrix[i, 3] = flip_sign * self.matrix[reorder_idx, 3]
+        reordered_matrix[3, :] = self.matrix[3, :]  # Preserve the homogeneous row
 
 
-        return AffineTransform.from_array(reordered_affine)
+        return AffineTransform.from_array(reordered_matrix)
 
 
 
