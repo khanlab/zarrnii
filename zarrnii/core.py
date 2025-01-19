@@ -65,12 +65,12 @@ class ZarrNii:
         if zooms is not None:
             # zooms sets the target spacing in xyz
 
-            in_zooms = np.diag(affine.matrix)[:3]
+            in_zooms = np.diag(affine)[:3]
             nvox_scaling_factor = in_zooms / zooms
 
             out_shape[1:] = np.floor(out_shape[1:] * nvox_scaling_factor)
             # adjust matrix too
-            np.fill_diagonal(affine.matrix[:3, :3], zooms)
+            np.fill_diagonal(affine[:3, :3], zooms)
 
 
         darr_empty = da.empty(
@@ -440,14 +440,14 @@ class ZarrNii:
 
     def as_Nifti1Image(self, filename, **kwargs):
 
-        return nib.Nifti1Image(self.darr.squeeze(), matrix=self.affine.matrix)
+        return nib.Nifti1Image(self.darr.squeeze(), matrix=self.affine)
 
 
     def to_nifti(self, filename, **kwargs):
 
         if self.axes_order == 'XYZ': #this means it was read-in as a NIFTI, so we write out as normal
             out_darr = self.darr.squeeze()
-            affine = self.affine.matrix
+            affine = self.affine
 
         else: #was read-in as a Zarr, so we reorder/flip data, and adjust affine accordingly
 
@@ -463,9 +463,9 @@ class ZarrNii:
             flip_xfm = np.diag((-1,-1,-1,1))
 
             #right-multiply to reorder cols
-            affine = self.affine.matrix @ reorder_xfm
+            affine = self.affine @ reorder_xfm
 
-        out_nib = nib.Nifti1Image(out_darr, affine=affine)
+        out_nib = nib.Nifti1Image(out_darr, affine=affine.matrix)
         with ProgressBar():
             out_nib.to_filename(filename)
 
@@ -480,7 +480,7 @@ class ZarrNii:
         # we can apply steps
 
 
-        offset=self.affine.matrix[:3,3]
+        offset=self.affine[:3,3]
 
         if self.axes_order == 'XYZ':
             #we have a nifti image -- need to apply the transformations (reorder, flip) to the
@@ -493,7 +493,7 @@ class ZarrNii:
             )  # reorders z-y-x to x-y-z and vice versa
 
             flip_xfm = np.diag((-1,-1,-1,1))
-            out_affine = flip_xfm @ self.affine.matrix
+            out_affine = flip_xfm @ self.affine
             # voxdim needs to be Z Y Z
             voxdim=np.flip(np.diag(out_affine)[:3])
         else:
@@ -508,7 +508,7 @@ class ZarrNii:
 
             flip_xfm = np.diag((-1,-1,-1,1))
 
-            out_affine = flip_xfm @ reorder_xfm @ self.affine.matrix
+            out_affine = flip_xfm @ reorder_xfm @ self.affine
 
             voxdim=np.diag(out_affine)[:3]
 
@@ -588,7 +588,7 @@ class ZarrNii:
         trans_vox = np.eye(4,4)
         trans_vox[:3,3] = bbox_min
 
-        new_affine = self.affine.matrix @ trans_vox
+        new_affine = self.affine @ trans_vox
 
         return ZarrNii.from_darr(darr_cropped,affine=new_affine,axes_order=self.axes_order)
 
@@ -647,7 +647,7 @@ class ZarrNii:
 
         #we need to also update the affine, scaling by the ds_factor
         scaling_matrix = np.diag((along_x,along_y,along_z,1))
-        new_affine = scaling_matrix @ self.affine.matrix
+        new_affine = scaling_matrix @ self.affine
 
         return ZarrNii.from_darr(darr_scaled,affine=new_affine,axes_order=self.axes_order)
 
@@ -755,7 +755,7 @@ class ZarrNii:
             scaling_matrix = np.diag((1/scaling[1],1/scaling[2],1/scaling[3],1))
         else:
             scaling_matrix = np.diag((1/scaling[-1],1/scaling[-2],1/scaling[-3],1))
-        new_affine = scaling_matrix @ self.affine.matrix
+        new_affine = scaling_matrix @ self.affine
 
         return ZarrNii.from_darr(darr_scaled.rechunk(),affine=new_affine,axes_order=self.axes_order)
 
