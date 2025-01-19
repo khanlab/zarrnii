@@ -40,7 +40,7 @@ def test_from_nifti_to_nifti(nifti_nib):
     nifti_nib.to_filename("test.nii")
     nib_orig = nib.load("test.nii")
 
-    znimg = ZarrNii.from_path("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
     znimg.to_nifti("test_fromznimg.nii")
     nib_znimg = nib.load("test_fromznimg.nii")
 
@@ -58,25 +58,25 @@ def test_from_nifti_to_zarr_to_nifti(nifti_nib):
     nifti_nib.to_filename("test.nii")
     nib_orig = nib.load("test.nii")
 
-    znimg = ZarrNii.from_path("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
 
     # now we have znimg with axes_order == 'XYZ'
 
     znimg.to_ome_zarr("test_fromznimg.ome.zarr")
-    znimg2 = ZarrNii.from_path("test_fromznimg.ome.zarr")
+    znimg2 = ZarrNii.from_ome_zarr("test_fromznimg.ome.zarr")
     znimg2
 
     # now we have znimg2 with axes_order == 'ZYX'
     #  this means, the affine is ZYX vox dims negated
 
     znimg2.to_nifti("test_fromznimg_tonii.nii")
-    znimg3 = ZarrNii.from_path("test_fromznimg_tonii.nii")
+    znimg3 = ZarrNii.from_nifti("test_fromznimg_tonii.nii")
 
 
     print(znimg)
     print(znimg2)
     print(znimg3)
-    assert_array_equal(znimg.affine.matrix, znimg3.affine.matrix)
+    assert_array_equal(znimg.affine, znimg3.affine)
     assert_array_equal(znimg.darr.compute(), znimg3.darr.compute())
     assert_array_equal(nib_orig.header.get_zooms(),nib.load("test_fromznimg_tonii.nii").header.get_zooms())
 
@@ -89,14 +89,14 @@ def test_from_nifti_to_zarr_to_zarr(nifti_nib):
     nifti_nib.to_filename("test.nii")
     nib_orig = nib.load("test.nii")
 
-    znimg = ZarrNii.from_path("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
 
     # now we have znimg with axes_order == XYZ
     #  this means, the affine is XYZ vox dims
 
     print(f"znimg from nii: {znimg}")
     znimg.to_ome_zarr("test_fromznimg.ome.zarr")
-    znimg2 = ZarrNii.from_path("test_fromznimg.ome.zarr")
+    znimg2 = ZarrNii.from_ome_zarr("test_fromznimg.ome.zarr")
     znimg2
 
     print(f"znimg2 from zarr: {znimg2}")
@@ -109,7 +109,7 @@ def test_from_nifti_to_zarr_to_zarr(nifti_nib):
     )
 
     znimg2.to_ome_zarr("test_fromznimg_tozarr.ome.zarr")
-    znimg3 = ZarrNii.from_path("test_fromznimg_tozarr.ome.zarr")
+    znimg3 = ZarrNii.from_ome_zarr("test_fromznimg_tozarr.ome.zarr")
 
     assert znimg3.axes_order == 'ZYX'
     assert_array_equal(
@@ -117,7 +117,7 @@ def test_from_nifti_to_zarr_to_zarr(nifti_nib):
     )
 
     print(f"znimg3 from zarr: {znimg3}")
-    assert_array_equal(znimg2.affine.matrix, znimg3.affine.matrix)
+    assert_array_equal(znimg2.affine, znimg3.affine)
     assert_array_equal(znimg2.darr.compute(), znimg3.darr.compute())
 
 
@@ -127,9 +127,9 @@ def test_affine_transform_identify(nifti_nib):
 
     nifti_nib.to_filename("test.nii")
 
-    flo_znimg = ZarrNii.from_path("test.nii")
+    flo_znimg = ZarrNii.from_nifti("test.nii")
 
-    ref_znimg = ZarrNii.from_path("test.nii")
+    ref_znimg = ZarrNii.from_nifti("test.nii")
 
     interp_znimg = flo_znimg.apply_transform(
         AffineTransform.from_array(np.eye(4)), ref_znimg=ref_znimg
@@ -147,10 +147,10 @@ def test_transform_indices_flo_to_ref(nifti_nib):
 
     nifti_nib.to_filename("test.nii")
 
-    ZarrNii.from_path("test.nii").to_ome_zarr("test_flo.ome.zarr")
+    ZarrNii.from_nifti("test.nii").to_ome_zarr("test_flo.ome.zarr")
 
-    ref_znimg = ZarrNii.from_path("test_flo.ome.zarr")
-    flo_znimg = ZarrNii.from_path("test.nii")
+    ref_znimg = ZarrNii.from_ome_zarr("test_flo.ome.zarr")
+    flo_znimg = ZarrNii.from_nifti("test.nii")
 
     ident = AffineTransform.from_array(np.eye(4))
     flo_indices = np.array((99, 49, 199)).reshape(3, 1)
@@ -178,10 +178,10 @@ def test_transform_indices_ref_to_flo(nifti_nib):
 
     nifti_nib.to_filename("test.nii")
 
-    ZarrNii.from_path("test.nii").to_ome_zarr("test_ref.ome.zarr")
+    ZarrNii.from_nifti("test.nii").to_ome_zarr("test_ref.ome.zarr")
 
-    ref_znimg = ZarrNii.from_path("test_ref.ome.zarr")
-    flo_znimg = ZarrNii.from_path("test.nii")
+    ref_znimg = ZarrNii.from_ome_zarr("test_ref.ome.zarr")
+    flo_znimg = ZarrNii.from_nifti("test.nii")
 
     ident = AffineTransform.from_array(np.eye(4))
     ref_indices = np.array((99, 49, 199)).reshape(3, 1)
@@ -206,7 +206,7 @@ class TestOMEZarr:
             arr_sz=(1, 16, 128, 128),
             MAX_LAYER=1  # layer 0 and 1
         )
-        arr = ZarrNii.from_path(OME_ZARR_PATH, level=0, channels=[0]).darr
+        arr = ZarrNii.from_ome_zarr(OME_ZARR_PATH, level=0, channels=[0]).darr
         assert arr.compute().sum() > 0
 
 """
@@ -219,6 +219,6 @@ class TestOMEZarr:
             arr_sz=(1, 16, 128, 128),
             MAX_LAYER=1  # layer 0 and 1
         )
-        arr = ZarrNii.from_path(OME_ZARR_PATH, level=1, channels=[0]).darr
+        arr = ZarrNii.from_ome_zarr(OME_ZARR_PATH, level=1, channels=[0]).darr
         assert arr.compute().sum() > 0
 """

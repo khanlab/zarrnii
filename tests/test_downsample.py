@@ -8,7 +8,7 @@ from zarrnii import ZarrNii
 def test_downsample(nifti_nib):
 
     nifti_nib.to_filename("test.nii")
-    znimg = ZarrNii.from_path("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
     
     ds=np.array([2,5,8])
     znimg_downsampled = znimg.downsample(along_x=ds[0],along_y=ds[1],along_z=ds[2])

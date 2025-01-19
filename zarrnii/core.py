@@ -26,7 +26,11 @@ class ZarrNii:
     darr: da.Array
     affine: AffineTransform = None
     axes_order: str = 'ZYX'
-
+  
+    # for maintaining ome_zarr metadata:
+    axes: dict = None # from ome_zarr
+    coordinate_transformations: list(dict) = None  # from ome_zarr
+    omero: dict = None # from ome_zarr
 
     @classmethod
     def from_path_as_ref(
@@ -79,36 +83,52 @@ class ZarrNii:
             darr_empty, affine=affine, axes_order=axes_order
         )
 
+  
     @classmethod
-    def from_path(cls, path, level=0, channels=[0], chunks="auto", z_level_offset=-2, rechunk=False,storage_options=None,in_orientation='RAS'):
-        """returns a dask array whether a nifti or ome_zarr is provided.
-            performs downsampling if level isn't stored in pyramid.
+    def from_darr(cls, darr, affine=np.eye(4), axes_order='ZYX'):
+
+        affine = AffineTransform.from_array(affine)
+
+        return cls(
+            darr,
+            affine=affine,
+            axes_order=axes_order,
+        )
+
+    @classmethod
+    def from_nifti(cls, path, chunks="auto" ):
+
+        darr = da.from_array(
+            np.expand_dims(nib.load(path).get_fdata(), axis=0),
+            chunks=chunks,
+        )
+        axes_order = 'XYZ'
+        affine = affine_from_nii(path)
+
+        return cls(
+                darr,
+                affine=affine,
+                axes_order=axes_order,
+            )
+
+
+    @classmethod
+    def from_ome_zarr(cls, path, level=0, channels=[0], chunks="auto", z_level_offset=-2, rechunk=False,storage_options=None,in_orientation='RAS'):
+        """ reads in ome zarr as a ZarrNii image. Performs lazy downsampling if level isn't stored in pyramid.
             Also downsamples Z, but to an adjusted level based on z_level_offset (since z is typically lower resolution than xy)"""
 
-        img_type = cls.check_img_type(path)
-        do_downsample=False
-        if img_type is ImageType.OME_ZARR:
-        
-            level,do_downsample,downsampling_kwargs = cls.get_level_and_downsampling_kwargs(path,level,z_level_offset,storage_options=storage_options)
-             
-            darr = da.from_zarr(path, component=f"/{level}",storage_options=storage_options)[channels, :, :, :]
+ 
+        level,do_downsample,downsampling_kwargs = cls.get_level_and_downsampling_kwargs(path,level,z_level_offset,storage_options=storage_options)
+         
+        darr = da.from_zarr(path, component=f"/{level}",storage_options=storage_options)[channels, :, :, :]
 
-            if rechunk:
-                darr = darr.rechunk(chunks)
+        if rechunk:
+            darr = darr.rechunk(chunks)
 
-            zi = zarr
-            axes_order = 'ZYX'
-            affine = affine_from_zarr(path,level).update_for_orientation(in_orientation,'RAS')
+        zi = zarr
+        axes_order = 'ZYX'
 
-        elif img_type is ImageType.NIFTI:
-            darr = da.from_array(
-                np.expand_dims(nib.load(path).get_fdata(), axis=0),
-                chunks=chunks,
-            )
-            axes_order = 'XYZ'
-            affine = affine_from_nii(path)
-        else:
-            raise TypeError(f"Unsupported image type for ZarrNii: {path}")
+        affine = affine_from_zarr(path,level).update_for_orientation(in_orientation,'RAS')
 
         if do_downsample:
             #return downsampled
@@ -125,16 +145,6 @@ class ZarrNii:
                 axes_order=axes_order,
             )
 
-    @classmethod
-    def from_darr(cls, darr, affine=np.eye(4), axes_order='ZYX'):
-
-        affine = AffineTransform.from_array(affine)
-
-        return cls(
-            darr,
-            affine=affine,
-            axes_order=axes_order,
-        )
 
     @staticmethod
     def check_img_type(path) -> ImageType:
