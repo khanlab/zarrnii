@@ -25,10 +25,7 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
 
       - name: Install dependencies
-        run: poetry install --only main
-
-      - name: Install bump2version
-        run: poetry add --dev bump2version
+        run: poetry install --dev
 
       - name: Determine Version Type
         id: version_type
