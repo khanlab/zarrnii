@@ -43,6 +43,7 @@ class AffineTransform(Transform):
 
         return cls(matrix=matrix)
 
+    @classmethod
     def identity(cls):
         return cls(matrix=np.eye(4,4))
 
