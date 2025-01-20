@@ -1,5 +1,5 @@
 site_name: ZarrNii Documentation
-site_url:  https://khanlab.github.io/zarrnii/
+site_url:  http://www.khanlab.ca/zarrnii/
 
 nav:
   - Home: index.md
