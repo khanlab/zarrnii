@@ -11,7 +11,6 @@ import dask.array as da
 import nibabel as nib
 import numpy as np
 import zarr
-from attrs import define
 from dask.diagnostics import ProgressBar
 from ome_zarr.scale import Scaler
 from ome_zarr.writer import write_image
@@ -21,17 +20,36 @@ from scipy.interpolate import interpn
 from .enums import ImageType
 from .transform import Transform, AffineTransform
 
+from attrs import define, field
+from typing import Optional, List, Dict
+
 @define
 class ZarrNii:
+    """
+    Represents a Zarr-based image with NIfTI compatibility and OME-Zarr metadata.
+
+    Attributes:
+        darr (da.Array): The main dask array holding image data.
+        affine (AffineTransform, optional): The affine transformation matrix.
+        axes_order (str): The order of the axes in the data array ('ZYX' or 'XYZ').
+        axes (Optional[List[Dict]], optional): Metadata about the axes (from OME-Zarr).
+        coordinate_transformations (Optional[List[Dict]], optional): Transformations applied to the data
+            (from OME-Zarr metadata).
+        omero (Optional[Dict], optional): Metadata related to visualization and channels (from OME-Zarr).
+    """
     darr: da.Array
-    affine: AffineTransform = None
-    axes_order: str = 'ZYX'
-  
-    # for maintaining ome_zarr metadata:
-    axes: dict = None # from ome_zarr
-    coordinate_transformations: list(dict) = None 
-    omero: dict = None # from ome_zarr
-  
+    affine: Optional[AffineTransform] = None
+    axes_order: str = "ZYX"
+
+    # Metadata for OME-Zarr
+    axes: Optional[List[Dict]] = field(default=None, metadata={"description": "Metadata about the axes"})
+    coordinate_transformations: Optional[List[Dict]] = field(
+        default=None, metadata={"description": "OME-Zarr coordinate transformations"}
+    )
+    omero: Optional[Dict] = field(default=None, metadata={"description": "OME-Zarr Omero metadata"})
+
+
+ 
 
     @classmethod
     def from_darr(
