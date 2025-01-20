@@ -31,73 +31,75 @@ class ZarrNii:
     axes: dict = None # from ome_zarr
     coordinate_transformations: list(dict) = None  # from ome_zarr
     omero: dict = None # from ome_zarr
-
-    @classmethod
-    def from_path_as_ref(
-        cls, path, level=0, channels=[0], chunks='auto', zooms=None
-    ):
-        """ref image dont need data,  just the shape and affine"""
-
-
-        img_type = cls.check_img_type(path)
-        if img_type is ImageType.OME_ZARR:
-            darr_base = da.from_zarr(path, component=f"/{level}")[
-                channels, :, :, :
-            ]
-            axes_order = 'ZYX'
-            affine = affine_from_zarr(path)
-
-        elif img_type is ImageType.NIFTI:
-            darr_base = da.from_array(nib.load(path).get_fdata())
-            axes_order = 'XYZ'
-            affine = affine_from_nii(path)
-        else:
-            raise TypeError(f"Unsupported image type for ZarrNii: {path}")
-
-
-        out_shape = [
-            len(channels),
-            darr_base.shape[-3],
-            darr_base.shape[-2],
-            darr_base.shape[-1],
-        ]
-
-        if zooms is not None:
-            # zooms sets the target spacing in xyz
-
-            in_zooms = np.diag(affine)[:3]
-            nvox_scaling_factor = in_zooms / zooms
-
-            out_shape[1:] = np.floor(out_shape[1:] * nvox_scaling_factor)
-            # adjust matrix too
-            np.fill_diagonal(affine[:3, :3], zooms)
-
-
-        darr_empty = da.empty(
-            darr_base,
-            shape=out_shape,
-            chunks=chunks,
-        )
-
-        return cls(
-            darr_empty, affine=affine, axes_order=axes_order
-        )
-
   
+
     @classmethod
-    def from_darr(cls, darr, affine=np.eye(4), axes_order='ZYX'):
+    def from_darr(
+        cls,
+        darr,
+        affine=None,
+        axes_order="ZYX",
+        axes=None,
+        coordinate_transformations=None,
+        omero=None,
+    ):
+        """
+        Creates a ZarrNii instance from an existing Dask array.
 
-        affine = AffineTransform.from_array(affine)
+        Parameters:
+            darr (da.Array): Input Dask array.
+            affine (AffineTransform or np.ndarray, optional): Affine transform to associate with the array.
+                If None, an identity affine transform is used.
+            axes_order (str): The axes order of the input array (default: "ZYX").
+            axes (list, optional): Axes metadata for OME-Zarr. If None, default axes are generated.
+            coordinate_transformations (list, optional): Coordinate transformations for OME-Zarr metadata.
+            omero (dict, optional): Omero metadata for OME-Zarr.
 
+        Returns:
+            ZarrNii: A populated ZarrNii instance.
+        """
+        # Validate affine input and convert if necessary
+        if affine is None:
+            affine = AffineTransform.identity()  # Default to identity transform
+        elif isinstance(affine, np.ndarray):
+            affine = AffineTransform.from_array(affine)
+
+        # Generate default axes if none are provided
+        if axes is None:
+            axes = [{"name": "c", "type": "channel", "unit": None}] + [
+                {"name": ax, "type": "space", "unit": "micrometer"} for ax in axes_order
+            ]
+
+        # Generate default coordinate transformations if none are provided
+        if coordinate_transformations is None:
+            # Derive scale and translation from the affine
+            scale = np.sqrt((affine.matrix[:3, :3] ** 2).sum(axis=0))  # Diagonal scales
+            translation = affine.matrix[:3, 3]  # Translation vector
+            coordinate_transformations = [
+                {"type": "scale", "scale": [1] + scale.tolist()},  # Add channel scale
+                {"type": "translation", "translation": [0] + translation.tolist()},  # Add channel translation
+            ]
+
+        # Generate default omero metadata if none is provided
+        if omero is None:
+            omero = {
+                "channels": [{"label": f"Channel-{i}"} for i in range(darr.shape[0])],
+                "rdefs": {"model": "color"},
+            }
+
+        # Create and return the ZarrNii instance
         return cls(
             darr,
             affine=affine,
             axes_order=axes_order,
+            axes=axes,
+            coordinate_transformations=coordinate_transformations,
+            omero=omero,
         )
 
 
     @classmethod
-    def from_nifti(cls, path, chunks="auto"):
+    def from_nifti(cls, path, chunks="auto", as_ref=False, zooms=None):
         """
         Creates a ZarrNii instance from a NIfTI file. Populates OME-Zarr metadata
         based on the NIfTI affine matrix.
@@ -105,19 +107,43 @@ class ZarrNii:
         Parameters:
             path (str): Path to the NIfTI file.
             chunks (str or tuple): Chunk size for dask array (default: "auto").
+            as_ref (bool): If True, creates an empty dask array with the correct shape instead of loading data.
+            zooms (list or np.ndarray): Target voxel spacing in xyz (only valid if as_ref=True).
 
         Returns:
             ZarrNii: A populated ZarrNii instance.
+
+        Raises:
+            ValueError: If `zooms` is specified when `as_ref=False`.
         """
-        # Load the NIfTI file and data
+        if not as_ref and zooms is not None:
+            raise ValueError("`zooms` can only be used when `as_ref=True`.")
+
+        # Load the NIfTI file and extract metadata
         nii = nib.load(path)
-        data = np.expand_dims(nii.get_fdata(), axis=0)  # Add a channel dimension
-
-        # Convert to a dask array with specified chunks
-        darr = da.from_array(data, chunks=chunks)
-
-        # Extract the affine matrix
+        shape = nii.header.get_data_shape()
         affine = nii.affine
+
+        # Adjust shape and affine if zooms are provided
+        if zooms is not None:
+            in_zooms = np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Current voxel spacing
+            scaling_factor = in_zooms / zooms
+            new_shape = [
+                int(np.floor(shape[0] * scaling_factor[2])),  # Z
+                int(np.floor(shape[1] * scaling_factor[1])),  # Y
+                int(np.floor(shape[2] * scaling_factor[0])),  # X
+            ]
+            np.fill_diagonal(affine[:3, :3], zooms)
+        else:
+            new_shape = shape
+
+        if as_ref:
+            # Create an empty dask array with the adjusted shape
+            darr = da.empty((1, *new_shape), chunks=chunks, dtype="float32")
+        else:
+            # Load the NIfTI data and convert to a dask array
+            data = np.expand_dims(nii.get_fdata(), axis=0)  # Add a channel dimension
+            darr = da.from_array(data, chunks=chunks)
 
         # Define axes order and metadata
         axes_order = "XYZ"
@@ -164,7 +190,7 @@ class ZarrNii:
         z_level_offset=-2,
         rechunk=False,
         storage_options=None,
-        in_orientation="IPL",
+        orientation="IPL",
         as_ref=False,
         zooms=None,
     ):
@@ -179,7 +205,7 @@ class ZarrNii:
             z_level_offset (int): Offset for Z downsampling level (default: -2).
             rechunk (bool): Whether to rechunk the data (default: False).
             storage_options (dict): Storage options for Zarr.
-            in_orientation (str): Default input orientation if none is specified in metadata (default: 'RAS').
+            orientation (str): Default input orientation if none is specified in metadata (default: 'IPL').
             as_ref (bool): If True, creates an empty dask array with the correct shape instead of loading data.
             zooms (list or np.ndarray): Target voxel spacing in xyz (only valid if as_ref=True).
 
@@ -203,8 +229,8 @@ class ZarrNii:
         omero = store.attrs.get("omero", {})
 
 
-        # Read orientation metadata (default to `in_orientation` if not present)
-        orientation = store.attrs.get("orientation", in_orientation)
+        # Read orientation metadata (default to `orientation` if not present)
+        orientation = store.attrs.get("orientation", orientation)
     
         
         # Determine the level and whether downsampling is required
@@ -220,8 +246,9 @@ class ZarrNii:
             channels, :, :, :
         ]
         shape = darr_base.shape
-        affine = cls.construct_affine(coordinate_transformations, orientation)
 
+        
+        affine = cls.construct_affine(coordinate_transformations, orientation)
 
         if zooms is not None:
             # Handle zoom adjustments
@@ -270,7 +297,7 @@ class ZarrNii:
 
 
     @staticmethod
-    def align_affine_to_input_orientation(affine, in_orientation):
+    def align_affine_to_input_orientation(affine, orientation):
         """
         Reorders and flips the affine matrix to align with the specified input orientation.
 
@@ -284,8 +311,8 @@ class ZarrNii:
         axis_map = {'R': 0, 'L': 0, 'A': 1, 'P': 1, 'S': 2, 'I': 2}
         sign_map = {'R': 1, 'L': -1, 'A': 1, 'P': -1, 'S': 1, 'I': -1}
         
-        input_axes = [axis_map[ax] for ax in in_orientation]
-        input_signs = [sign_map[ax] for ax in in_orientation]
+        input_axes = [axis_map[ax] for ax in orientation]
+        input_signs = [sign_map[ax] for ax in orientation]
             
         reordered_affine = np.zeros_like(affine) 
         for i, (axis, sign) in enumerate(zip(input_axes, input_signs)):
@@ -298,14 +325,14 @@ class ZarrNii:
 
 
     @staticmethod
-    def construct_affine(coordinate_transformations, in_orientation):
+    def construct_affine(coordinate_transformations, orientation):
         """
         Constructs the affine matrix based on OME-Zarr coordinate transformations
         and adjusts it for the input orientation.
 
         Parameters:
             coordinate_transformations (list): Coordinate transformations from OME-Zarr metadata.
-            in_orientation (str): Input orientation (e.g., 'RAS').
+            orientation (str): Input orientation (e.g., 'RAS').
 
         Returns:
             np.ndarray: A 4x4 affine matrix.
@@ -327,9 +354,8 @@ class ZarrNii:
         affine[:3, :3] = np.diag(scales)  # Set scaling
         affine[:3, 3] = translations     # Set translation
 
-
         # Reorder the affine matrix for the input orientation
-        return ZarrNii.align_affine_to_input_orientation(affine, in_orientation)
+        return ZarrNii.align_affine_to_input_orientation(affine, orientation)
 
 
 
@@ -351,7 +377,7 @@ class ZarrNii:
             [1, 0, 0, 0],  # X -> Z
             [0, 0, 0, 1],  # Homogeneous row
         ])
-        return reorder_xfm @ affine
+        return affine @ reorder_xfm #use right-multiply so columns get reordered
 
 
     @staticmethod
@@ -520,7 +546,7 @@ class ZarrNii:
         # Reorder data to match NIfTI's expected XYZ order if necessary
         if self.axes_order == "ZYX":
             data = da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1)).compute()  # Reorder to XYZ
-            affine = self.reorder_affine_for_xyz(self.affine)  # Reorder affine to match
+            affine = self.reorder_affine_for_xyz(self.affine.matrix)  # Reorder affine to match
         else:
             data = self.darr.compute()
             affine = self.affine.matrix  # No reordering needed
@@ -554,12 +580,13 @@ class ZarrNii:
         ]
 
 
+
         # Reorder data if the axes order is XYZ (NIfTI-like)
         if self.axes_order == "XYZ":
             out_darr = da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))  # Reorder to ZYX
          #   flip_xfm = np.diag((-1, -1, -1, 1))  # Apply flips for consistency
             #out_affine = flip_xfm @ self.affine
-            out_affine = self.reorder_affine_for_xyz(self.affine)
+            out_affine = self.reorder_affine_for_xyz(self.affine.matrix)
           #  voxdim = np.flip(voxdim)  # Adjust voxel dimensions to ZYX
         else:
             out_darr = self.darr
@@ -856,50 +883,7 @@ class ZarrNii:
         return (level,do_downsample,{'along_x':2**level_xy,'along_y':2**level_xy,'along_z':2**level_z})
 
         
-
-# -- inline helper functions
-
-def affine_from_zarr(in_zarr_path: str, level=0) -> AffineTransform:
-    # read coordinate transform from ome-zarr
-    zi = zarr.open(in_zarr_path, mode='r')
-    attrs = zi["/"].attrs.asdict()
-    multiscale = 0  # first multiscale image
-    transforms = attrs["multiscales"][multiscale]["datasets"][level][
-        "coordinateTransformations"
-    ]
-
-    affine = np.eye(4)
-
-    #apply each ome zarr transform sequentially
-    for transform in transforms:
-    # (for now, we just assume the transformations will be called scale and translation)
-        if transform['type'] == "scale":
-            scaling_zyx = transform["scale"][-3:]
-            scaling_xfm = np.diag(np.hstack((scaling_zyx,1)))
-            affine = scaling_xfm @ affine
-        elif transform['type'] == "translation":
-            translation_xfm = np.eye(4)
-            translation_xfm[:3,3] = transform["translation"][-3:]
-            affine = translation_xfm @ affine
-        
-    # reorder_xfm -- changes from z,y,x to x,y,z ordering
-    reorder_xfm = np.eye(4)
-    reorder_xfm[:3, :3] = np.flip(
-        reorder_xfm[:3, :3], axis=0
-    )  # reorders z-y-x to x-y-z and vice versa
-
-    affine = reorder_xfm @ affine
-    
-    flip_xfm = np.diag((-1,-1,-1,1))
-    affine = flip_xfm @ affine
-    
-    return AffineTransform.from_array(affine)
-
-def affine_from_nii(in_nii_path: str) -> AffineTransform:
-    return AffineTransform.from_array(nib.load(in_nii_path).affine)
-
-
-
+#-- inline functions
 
 def interp_by_block(
     x,

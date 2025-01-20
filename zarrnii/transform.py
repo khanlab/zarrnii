@@ -43,6 +43,8 @@ class AffineTransform(Transform):
 
         return cls(matrix=matrix)
 
+    def identity(cls):
+        return cls(matrix=np.eye(4,4))
 
     def __array__(self):
         """
