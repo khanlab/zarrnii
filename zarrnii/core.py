@@ -23,6 +23,7 @@ from .transform import Transform, AffineTransform
 from attrs import define, field
 from typing import Optional, List, Dict
 
+
 @define
 class ZarrNii:
     """
@@ -37,19 +38,21 @@ class ZarrNii:
             (from OME-Zarr metadata).
         omero (Optional[Dict], optional): Metadata related to visualization and channels (from OME-Zarr).
     """
+
     darr: da.Array
     affine: Optional[AffineTransform] = None
     axes_order: str = "ZYX"
 
     # Metadata for OME-Zarr
-    axes: Optional[List[Dict]] = field(default=None, metadata={"description": "Metadata about the axes"})
+    axes: Optional[List[Dict]] = field(
+        default=None, metadata={"description": "Metadata about the axes"}
+    )
     coordinate_transformations: Optional[List[Dict]] = field(
         default=None, metadata={"description": "OME-Zarr coordinate transformations"}
     )
-    omero: Optional[Dict] = field(default=None, metadata={"description": "OME-Zarr Omero metadata"})
-
-
- 
+    omero: Optional[Dict] = field(
+        default=None, metadata={"description": "OME-Zarr Omero metadata"}
+    )
 
     @classmethod
     def from_darr(
@@ -95,7 +98,10 @@ class ZarrNii:
             translation = affine.matrix[:3, 3]  # Translation vector
             coordinate_transformations = [
                 {"type": "scale", "scale": [1] + scale.tolist()},  # Add channel scale
-                {"type": "translation", "translation": [0] + translation.tolist()},  # Add channel translation
+                {
+                    "type": "translation",
+                    "translation": [0] + translation.tolist(),
+                },  # Add channel translation
             ]
 
         # Generate default omero metadata if none is provided
@@ -114,7 +120,6 @@ class ZarrNii:
             coordinate_transformations=coordinate_transformations,
             omero=omero,
         )
-
 
     @classmethod
     def from_nifti(cls, path, chunks="auto", as_ref=False, zooms=None):
@@ -144,7 +149,9 @@ class ZarrNii:
 
         # Adjust shape and affine if zooms are provided
         if zooms is not None:
-            in_zooms = np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Current voxel spacing
+            in_zooms = np.sqrt(
+                (affine[:3, :3] ** 2).sum(axis=0)
+            )  # Current voxel spacing
             scaling_factor = in_zooms / zooms
             new_shape = [
                 int(np.floor(shape[0] * scaling_factor[2])),  # Z
@@ -177,7 +184,10 @@ class ZarrNii:
         translation = affine[:3, 3]  # Translation vector
         coordinate_transformations = [
             {"type": "scale", "scale": [1] + scale.tolist()},  # Add channel scale
-            {"type": "translation", "translation": [0] + translation.tolist()},  # Add channel translation
+            {
+                "type": "translation",
+                "translation": [0] + translation.tolist(),
+            },  # Add channel translation
         ]
 
         # Define basic Omero metadata
@@ -196,8 +206,6 @@ class ZarrNii:
             omero=omero,
         )
 
-
-        
     @classmethod
     def from_ome_zarr(
         cls,
@@ -237,40 +245,42 @@ class ZarrNii:
         if not as_ref and zooms is not None:
             raise ValueError("`zooms` can only be used when `as_ref=True`.")
 
-
         # Open the Zarr metadata
         store = zarr.open(path, mode="r")
         multiscales = store.attrs.get("multiscales", [{}])
         datasets = multiscales[0].get("datasets", [{}])
-        coordinate_transformations = datasets[level].get("coordinateTransformations", [])
+        coordinate_transformations = datasets[level].get(
+            "coordinateTransformations", []
+        )
         axes = multiscales[0].get("axes", [])
         omero = store.attrs.get("omero", {})
 
-
         # Read orientation metadata (default to `orientation` if not present)
         orientation = store.attrs.get("orientation", orientation)
-    
-        
+
         # Determine the level and whether downsampling is required
         if not as_ref:
-            level, do_downsample, downsampling_kwargs = cls.get_level_and_downsampling_kwargs(
-                path, level, z_level_offset, storage_options=storage_options
+            level, do_downsample, downsampling_kwargs = (
+                cls.get_level_and_downsampling_kwargs(
+                    path, level, z_level_offset, storage_options=storage_options
+                )
             )
         else:
             do_downsample = False
 
         # Load data or metadata as needed
-        darr_base = da.from_zarr(path, component=f"/{level}", storage_options=storage_options)[
-            channels, :, :, :
-        ]
+        darr_base = da.from_zarr(
+            path, component=f"/{level}", storage_options=storage_options
+        )[channels, :, :, :]
         shape = darr_base.shape
 
-        
         affine = cls.construct_affine(coordinate_transformations, orientation)
 
         if zooms is not None:
             # Handle zoom adjustments
-            in_zooms = np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Current voxel spacing
+            in_zooms = np.sqrt(
+                (affine[:3, :3] ** 2).sum(axis=0)
+            )  # Current voxel spacing
             scaling_factor = in_zooms / zooms
             new_shape = [
                 shape[0],
@@ -293,7 +303,6 @@ class ZarrNii:
         if rechunk:
             darr = darr.rechunk(chunks)
 
-
         if do_downsample:
             return cls(
                 darr,
@@ -313,7 +322,6 @@ class ZarrNii:
                 omero=omero,
             )
 
-
     @staticmethod
     def align_affine_to_input_orientation(affine, orientation):
         """
@@ -326,21 +334,19 @@ class ZarrNii:
         Returns:
             np.ndarray: Reordered and flipped affine matrix.
         """
-        axis_map = {'R': 0, 'L': 0, 'A': 1, 'P': 1, 'S': 2, 'I': 2}
-        sign_map = {'R': 1, 'L': -1, 'A': 1, 'P': -1, 'S': 1, 'I': -1}
-        
+        axis_map = {"R": 0, "L": 0, "A": 1, "P": 1, "S": 2, "I": 2}
+        sign_map = {"R": 1, "L": -1, "A": 1, "P": -1, "S": 1, "I": -1}
+
         input_axes = [axis_map[ax] for ax in orientation]
         input_signs = [sign_map[ax] for ax in orientation]
-            
-        reordered_affine = np.zeros_like(affine) 
+
+        reordered_affine = np.zeros_like(affine)
         for i, (axis, sign) in enumerate(zip(input_axes, input_signs)):
             reordered_affine[i, :3] = sign * affine[axis, :3]
             reordered_affine[i, 3] = sign * affine[axis, 3]
         reordered_affine[3, :] = affine[3, :]  # Preserve homogeneous row
 
         return reordered_affine
-
-
 
     @staticmethod
     def construct_affine(coordinate_transformations, orientation):
@@ -366,16 +372,16 @@ class ZarrNii:
             if transform["type"] == "scale":
                 scales = transform["scale"][1:]  # Ignore the channel/time dimension
             elif transform["type"] == "translation":
-                translations = transform["translation"][1:]  # Ignore the channel/time dimension
+                translations = transform["translation"][
+                    1:
+                ]  # Ignore the channel/time dimension
 
         # Populate the affine matrix
         affine[:3, :3] = np.diag(scales)  # Set scaling
-        affine[:3, 3] = translations     # Set translation
+        affine[:3, 3] = translations  # Set translation
 
         # Reorder the affine matrix for the input orientation
         return ZarrNii.align_affine_to_input_orientation(affine, orientation)
-
-
 
     @staticmethod
     def reorder_affine_for_xyz(affine):
@@ -389,14 +395,15 @@ class ZarrNii:
             np.ndarray: Affine matrix reordered to XYZ order.
         """
         # Reordering matrix to go from ZYX to XYZ
-        reorder_xfm = np.array([
-            [0, 0, 1, 0],  # Z -> X
-            [0, 1, 0, 0],  # Y -> Y
-            [1, 0, 0, 0],  # X -> Z
-            [0, 0, 0, 1],  # Homogeneous row
-        ])
-        return affine @ reorder_xfm #use right-multiply so columns get reordered
-
+        reorder_xfm = np.array(
+            [
+                [0, 0, 1, 0],  # Z -> X
+                [0, 1, 0, 0],  # Y -> Y
+                [1, 0, 0, 0],  # X -> Z
+                [0, 0, 0, 1],  # Homogeneous row
+            ]
+        )
+        return affine @ reorder_xfm  # use right-multiply so columns get reordered
 
     def apply_transform(self, *tfms, ref_znimg):
         """
@@ -544,14 +551,13 @@ class ZarrNii:
         # Return the transformed indices in non-homogeneous coordinates
         return xfm_vecs[:3, :]
 
-
     def get_bounded_subregion(self, points: np.ndarray):
         """
-        Extracts a bounded subregion of the dask array containing the specified points, 
+        Extracts a bounded subregion of the dask array containing the specified points,
         along with the grid points for interpolation.
 
-        If the points extend beyond the domain of the dask array, the extent is capped 
-        at the boundaries. If all points are outside the domain, the function returns 
+        If the points extend beyond the domain of the dask array, the extent is capped
+        at the boundaries. If all points are outside the domain, the function returns
         `(None, None)`.
 
         Parameters:
@@ -561,15 +567,15 @@ class ZarrNii:
 
         Returns:
             tuple:
-                grid_points (tuple): A tuple of three 1D arrays representing the grid 
+                grid_points (tuple): A tuple of three 1D arrays representing the grid
                                      points along each axis (X, Y, Z) in the subregion.
                 subvol (np.ndarray or None): The extracted subregion as a NumPy array.
-                                             Returns `None` if all points are outside 
+                                             Returns `None` if all points are outside
                                              the array domain.
 
         Notes:
-            - The function uses `compute()` on the dask array to immediately load the 
-              subregion, as Dask doesn't support the type of indexing required for 
+            - The function uses `compute()` on the dask array to immediately load the
+              subregion, as Dask doesn't support the type of indexing required for
               interpolation.
             - A padding of 1 voxel is applied around the extent of the points.
 
@@ -614,7 +620,7 @@ class ZarrNii:
 
     def to_nifti(self, filename=None):
         """
-        Convert the current ZarrNii instance to a NIfTI-1 image (Nifti1Image) 
+        Convert the current ZarrNii instance to a NIfTI-1 image (Nifti1Image)
         and optionally save it to a file.
 
         Parameters:
@@ -631,22 +637,26 @@ class ZarrNii:
         """
         # Reorder data to match NIfTI's expected XYZ order if necessary
         if self.axes_order == "ZYX":
-            data = da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1)).compute()  # Reorder to XYZ
-            affine = self.reorder_affine_for_xyz(self.affine.matrix)  # Reorder affine to match
+            data = da.moveaxis(
+                self.darr, (0, 1, 2, 3), (0, 3, 2, 1)
+            ).compute()  # Reorder to XYZ
+            affine = self.reorder_affine_for_xyz(
+                self.affine.matrix
+            )  # Reorder affine to match
         else:
             data = self.darr.compute()
             affine = self.affine.matrix  # No reordering needed
 
         # Create the NIfTI-1 image
-        nii_img = nib.Nifti1Image(data[0], affine)  # Remove the channel dimension for NIfTI
+        nii_img = nib.Nifti1Image(
+            data[0], affine
+        )  # Remove the channel dimension for NIfTI
 
         # Save the NIfTI file if a filename is provided
         if filename:
             nib.save(nii_img, filename)
         else:
             return nii_img
-
-
 
     def to_ome_zarr(self, filename, max_layer=4, scaling_method="local_mean", **kwargs):
         """
@@ -667,15 +677,15 @@ class ZarrNii:
             {"name": "x", "type": "space", "unit": "micrometer"},
         ]
 
-
-
         # Reorder data if the axes order is XYZ (NIfTI-like)
         if self.axes_order == "XYZ":
-            out_darr = da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))  # Reorder to ZYX
-         #   flip_xfm = np.diag((-1, -1, -1, 1))  # Apply flips for consistency
-            #out_affine = flip_xfm @ self.affine
+            out_darr = da.moveaxis(
+                self.darr, (0, 1, 2, 3), (0, 3, 2, 1)
+            )  # Reorder to ZYX
+            #   flip_xfm = np.diag((-1, -1, -1, 1))  # Apply flips for consistency
+            # out_affine = flip_xfm @ self.affine
             out_affine = self.reorder_affine_for_xyz(self.affine.matrix)
-          #  voxdim = np.flip(voxdim)  # Adjust voxel dimensions to ZYX
+        #  voxdim = np.flip(voxdim)  # Adjust voxel dimensions to ZYX
         else:
             out_darr = self.darr
             out_affine = self.affine
@@ -683,7 +693,6 @@ class ZarrNii:
         # Extract offset and voxel dimensions from the affine matrix
         offset = out_affine[:3, 3]
         voxdim = np.sqrt((out_affine[:3, :3] ** 2).sum(axis=0))  # Extract scales
-
 
         # Prepare coordinate transformations
         coordinate_transformations = []
@@ -711,18 +720,16 @@ class ZarrNii:
         store = zarr.storage.FSStore(filename, dimension_separator="/", mode="w")
         group = zarr.group(store, overwrite=True)
 
-   
         # Add metadata for orientation
-        group.attrs["orientation"] = affine_to_orientation(out_affine) # Write current orientation
-
+        group.attrs["orientation"] = affine_to_orientation(
+            out_affine
+        )  # Write current orientation
 
         # Set up scaler for multi-resolution pyramid
         if max_layer == 0:
             scaler = None
         else:
             scaler = Scaler(max_layer=max_layer, method=scaling_method)
-
-
 
         # Write the data to OME-Zarr
         with ProgressBar():
@@ -734,7 +741,6 @@ class ZarrNii:
                 axes=axes,
                 **kwargs,
             )
-
 
     def crop_with_bounding_box(self, bbox_min, bbox_max, ras_coords=False):
         """
@@ -781,9 +787,9 @@ class ZarrNii:
         # Slice the dask array based on the bounding box
         darr_cropped = self.darr[
             :,
-            bbox_min[0]:bbox_max[0],  # Z
-            bbox_min[1]:bbox_max[1],  # Y
-            bbox_min[2]:bbox_max[2],  # X
+            bbox_min[0] : bbox_max[0],  # Z
+            bbox_min[1] : bbox_max[1],  # Y
+            bbox_min[2] : bbox_max[2],  # X
         ]
 
         # Update the affine to reflect the cropped region
@@ -795,7 +801,6 @@ class ZarrNii:
         return ZarrNii.from_darr(
             darr_cropped, affine=new_affine, axes_order=self.axes_order
         )
-
 
     def get_bounding_box_around_label(self, label_number, padding=0, ras_coords=False):
         """
@@ -833,7 +838,9 @@ class ZarrNii:
             raise ValueError(f"Label {label_number} not found in the array.")
 
         # Compute the minimum and maximum extents in each dimension
-        bbox_min = indices.min(axis=0).reshape((4, 1))[1:] - padding  # Exclude channel axis
+        bbox_min = (
+            indices.min(axis=0).reshape((4, 1))[1:] - padding
+        )  # Exclude channel axis
         bbox_max = indices.max(axis=0).reshape((4, 1))[1:] + 1 + padding
 
         # Clip the extents to ensure they stay within bounds
@@ -847,8 +854,9 @@ class ZarrNii:
 
         return bbox_min, bbox_max
 
-
-    def downsample(self, along_x=1, along_y=1, along_z=1, level=None, z_level_offset=-2):
+    def downsample(
+        self, along_x=1, along_y=1, along_z=1, level=None, z_level_offset=-2
+    ):
         """
         Downsamples the ZarrNii instance by local mean reduction.
 
@@ -893,9 +901,7 @@ class ZarrNii:
 
         # Perform local mean reduction using coarsen
         agg_func = np.mean
-        darr_scaled = da.coarsen(
-            agg_func, x=self.darr, axes=axes, trim_excess=True
-        )
+        darr_scaled = da.coarsen(agg_func, x=self.darr, axes=axes, trim_excess=True)
 
         # Update the affine matrix to reflect downsampling
         scaling_matrix = np.diag((along_x, along_y, along_z, 1))
@@ -905,8 +911,6 @@ class ZarrNii:
         return ZarrNii.from_darr(
             darr_scaled, affine=new_affine, axes_order=self.axes_order
         )
-
-
 
     def __get_upsampled_chunks(self, target_shape, return_scaling=True):
         """
@@ -960,7 +964,9 @@ class ZarrNii:
             scaling_factor = new_shape / orig_shape
 
             # Scale each chunk size and round to get an initial estimate
-            scaled_chunks = [int(round(chunk * scaling_factor)) for chunk in orig_chunks]
+            scaled_chunks = [
+                int(round(chunk * scaling_factor)) for chunk in orig_chunks
+            ]
             total = sum(scaled_chunks)
 
             # Adjust the chunks to ensure they sum up to the target shape exactly
@@ -976,7 +982,6 @@ class ZarrNii:
             return tuple(new_chunks), scaling
         else:
             return tuple(new_chunks)
-
 
     def divide_by_downsampled(self, znimg_ds):
         """
@@ -1002,7 +1007,9 @@ class ZarrNii:
             print("Result shape:", znimg_divided.darr.shape)
         """
         # Calculate upsampled chunks for the downsampled array
-        target_chunks = znimg_ds.__get_upsampled_chunks(self.darr.shape, return_scaling=False)
+        target_chunks = znimg_ds.__get_upsampled_chunks(
+            self.darr.shape, return_scaling=False
+        )
 
         # Rechunk the current high-resolution array to match the target chunks
         darr_rechunk = self.darr.rechunk(chunks=target_chunks)
@@ -1034,7 +1041,6 @@ class ZarrNii:
 
         # Return the result as a new ZarrNii instance
         return ZarrNii(darr_div, self.affine, self.axes_order)
-
 
     def upsample(self, along_x=1, along_y=1, along_z=1, to_shape=None):
         """
@@ -1072,7 +1078,8 @@ class ZarrNii:
                 scaling = (1, along_z, along_y, along_x)
 
             chunks_out = tuple(
-                tuple(c * scale for c in chunks_i) for chunks_i, scale in zip(self.darr.chunks, scaling)
+                tuple(c * scale for c in chunks_i)
+                for chunks_i, scale in zip(self.darr.chunks, scaling)
             )
         else:
             chunks_out, scaling = self.__get_upsampled_chunks(to_shape)
@@ -1091,7 +1098,8 @@ class ZarrNii:
             """
             # Calculate scaling factors based on input and output chunk shapes
             scaling = tuple(
-                out_n / in_n for out_n, in_n in zip(block_info[None]["chunk-shape"], x.shape)
+                out_n / in_n
+                for out_n, in_n in zip(block_info[None]["chunk-shape"], x.shape)
             )
             return zoom(x, scaling, order=1, prefilter=False)
 
@@ -1102,16 +1110,19 @@ class ZarrNii:
 
         # Update the affine matrix to reflect the new voxel size
         if self.axes_order == "XYZ":
-            scaling_matrix = np.diag((1 / scaling[1], 1 / scaling[2], 1 / scaling[3], 1))
+            scaling_matrix = np.diag(
+                (1 / scaling[1], 1 / scaling[2], 1 / scaling[3], 1)
+            )
         else:
-            scaling_matrix = np.diag((1 / scaling[-1], 1 / scaling[-2], 1 / scaling[-3], 1))
+            scaling_matrix = np.diag(
+                (1 / scaling[-1], 1 / scaling[-2], 1 / scaling[-3], 1)
+            )
         new_affine = AffineTransform.from_array(scaling_matrix @ self.affine.matrix)
 
         # Return a new ZarrNii instance with the upsampled data
         return ZarrNii.from_darr(
             darr_scaled.rechunk(), affine=new_affine, axes_order=self.axes_order
         )
-
 
     @staticmethod
     def get_max_level(path, storage_options=None):
@@ -1150,9 +1161,10 @@ class ZarrNii:
             print("No multiscale levels found.")
             return None
 
-
     @staticmethod
-    def get_level_and_downsampling_kwargs(ome_zarr_path, level, z_level_offset=-2, storage_options=None):
+    def get_level_and_downsampling_kwargs(
+        ome_zarr_path, level, z_level_offset=-2, storage_options=None
+    ):
         """
         Determines the appropriate pyramid level and additional downsampling factors for an OME-Zarr dataset.
 
@@ -1172,7 +1184,9 @@ class ZarrNii:
             - If the requested level exceeds the available pyramid levels, the function calculates
               additional downsampling factors (`level_xy`, `level_z`) for XY and Z axes.
         """
-        max_level = ZarrNii.get_max_level(ome_zarr_path, storage_options=storage_options)
+        max_level = ZarrNii.get_max_level(
+            ome_zarr_path, storage_options=storage_options
+        )
 
         # Determine the pyramid level and additional downsampling factors
         if level > max_level:  # Requested level exceeds pyramid levels
@@ -1183,19 +1197,26 @@ class ZarrNii:
             level_xy = 0
             level_z = max(level + z_level_offset, 0)
 
-        print(f"level: {level}, level_xy: {level_xy}, level_z: {level_z}, max_level: {max_level}")
+        print(
+            f"level: {level}, level_xy: {level_xy}, level_z: {level_z}, max_level: {max_level}"
+        )
 
         # Determine if additional downsampling is needed
         do_downsample = level_xy > 0 or level_z > 0
 
         # Return the level, downsampling flag, and downsampling parameters
-        return level, do_downsample, {
-            "along_x": 2**level_xy,
-            "along_y": 2**level_xy,
-            "along_z": 2**level_z,
-        }
-            
-#-- inline functions
+        return (
+            level,
+            do_downsample,
+            {
+                "along_x": 2**level_xy,
+                "along_y": 2**level_xy,
+                "along_z": 2**level_z,
+            },
+        )
+
+
+# -- inline functions
 def interp_by_block(
     x,
     transforms: list[Transform],
@@ -1213,7 +1234,7 @@ def interp_by_block(
 
     Parameters:
         x (np.ndarray): The reference image block to interpolate onto.
-        transforms (list[Transform]): A list of `Transform` objects to apply to the 
+        transforms (list[Transform]): A list of `Transform` objects to apply to the
                                        reference image coordinates.
         flo_znimg (ZarrNii): The floating ZarrNii instance to interpolate from.
         block_info (dict, optional): Metadata about the current block being processed.
@@ -1290,10 +1311,10 @@ def interp_by_block(
 def affine_to_orientation(affine):
     """
     Convert an affine matrix to an anatomical orientation string (e.g., 'RAS').
-    
+
     Parameters:
         affine (numpy.ndarray): Affine matrix from voxel to world coordinates.
-        
+
     Returns:
         str: Anatomical orientation (e.g., 'RAS', 'LPI').
     """
@@ -1303,8 +1324,8 @@ def affine_to_orientation(affine):
     orient = io_orientation(affine)
 
     # Maps for axis labels
-    axis_labels = ['R', 'A', 'S']
-    flipped_labels = ['L', 'P', 'I']
+    axis_labels = ["R", "A", "S"]
+    flipped_labels = ["L", "P", "I"]
 
     orientation = []
     for axis, direction in orient:
@@ -1314,5 +1335,4 @@ def affine_to_orientation(affine):
         else:
             orientation.append(flipped_labels[axis])
 
-    return ''.join(orientation)
-
+    return "".join(orientation)

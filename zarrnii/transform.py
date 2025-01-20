@@ -10,20 +10,21 @@ from attrs import define
 
 from nibabel.orientations import ornt_transform, io_orientation, apply_orientation
 
+
 @define
 class Transform(ABC):
     """Base class for transformations"""
 
-    
     @abstractmethod
     def apply_transform(self, vecs: np.array) -> np.array:
-        """ Apply transformation to an image """
+        """Apply transformation to an image"""
 
         pass
 
+
 @define
 class AffineTransform(Transform):
-    
+
     matrix: np.array = None
 
     @classmethod
@@ -34,8 +35,6 @@ class AffineTransform(Transform):
 
         return cls(matrix=matrix)
 
-
-    
     @classmethod
     def from_array(cls, matrix, invert=False):
         if invert:
@@ -45,7 +44,7 @@ class AffineTransform(Transform):
 
     @classmethod
     def identity(cls):
-        return cls(matrix=np.eye(4,4))
+        return cls(matrix=np.eye(4, 4))
 
     def __array__(self):
         """
@@ -53,7 +52,6 @@ class AffineTransform(Transform):
         Returns the matrix of the affine transform.
         """
         return self.matrix
-
 
     def __getitem__(self, key):
         """
@@ -66,7 +64,6 @@ class AffineTransform(Transform):
         Enable array-like assignment to the matrix.
         """
         self.matrix[key] = value
-
 
     def __matmul__(self, other):
 
@@ -82,14 +79,13 @@ class AffineTransform(Transform):
                 result = self.matrix @ other
                 # Convert back from homogeneous coordinates to 3D
                 return result[:3] / result[3]
-            elif other.shape == (4,4):
-                #perform matrix multiplication, and return a Transform object
+            elif other.shape == (4, 4):
+                # perform matrix multiplication, and return a Transform object
                 return AffineTransform.from_array(self.matrix @ other)
             else:
                 raise ValueError("Unsupported shape for multiplication.")
         else:
             raise TypeError("Unsupported type for multiplication.")
-    
 
     def apply_transform(self, vecs: np.array) -> np.array:
         return self.matrix @ vecs
@@ -107,11 +103,15 @@ class AffineTransform(Transform):
             output_orientation (str): Target anatomical orientation (e.g., 'RAS').
         """
 
-
         # Define a mapping of anatomical directions to axis indices and flips
-        axis_map = {'R': (0, 1), 'L': (0, -1),
-                    'A': (1, 1), 'P': (1, -1),
-                    'S': (2, 1), 'I': (2, -1)}
+        axis_map = {
+            "R": (0, 1),
+            "L": (0, -1),
+            "A": (1, 1),
+            "P": (1, -1),
+            "S": (2, 1),
+            "I": (2, -1),
+        }
 
         # Parse the input and output orientations
         input_axes = [axis_map[ax] for ax in input_orientation]
@@ -132,15 +132,14 @@ class AffineTransform(Transform):
         reordered_matrix = np.zeros_like(self.matrix)
         for i, (reorder_idx, flip_sign) in enumerate(zip(reorder_indices, flip_signs)):
             if reorder_idx is None:
-                raise ValueError(f"Cannot match all axes from {input_orientation} to {output_orientation}.")
+                raise ValueError(
+                    f"Cannot match all axes from {input_orientation} to {output_orientation}."
+                )
             reordered_matrix[i, :3] = flip_sign * self.matrix[reorder_idx, :3]
             reordered_matrix[i, 3] = flip_sign * self.matrix[reorder_idx, 3]
         reordered_matrix[3, :] = self.matrix[3, :]  # Preserve the homogeneous row
 
-
         return AffineTransform.from_array(reordered_matrix)
-
-
 
 
 @define
@@ -150,7 +149,6 @@ class DisplacementTransform(Transform):
     disp_grid: np.array = None
     disp_affine: AffineTransform = None
 
-    
     @classmethod
     def from_nifti(cls, path):
         disp_nib = nib.load(path)
@@ -194,4 +192,3 @@ class DisplacementTransform(Transform):
             )
 
         return vecs + disp_vecs
-
