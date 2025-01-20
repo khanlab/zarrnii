@@ -94,6 +94,8 @@ class ZarrNii:
             affine=affine,
             axes_order=axes_order,
         )
+
+
     @classmethod
     def from_nifti(cls, path, chunks="auto"):
         """
@@ -163,27 +165,34 @@ class ZarrNii:
         rechunk=False,
         storage_options=None,
         in_orientation="IPL",
+        as_ref=False,
+        zooms=None,
     ):
         """
-        Reads in an OME-Zarr file as a ZarrNii image. Performs lazy downsampling if the
-        specified level isn't stored in the pyramid. Also downsamples Z, adjusted by
-        z_level_offset (since Z typically has lower resolution than XY).
+        Reads in an OME-Zarr file as a ZarrNii image, optionally as a reference.
 
-        Populates OME-Zarr metadata fields and constructs the affine matrix based on
-        the input orientation.
+        Parameters:
+            path (str): Path to the OME-Zarr file.
+            level (int): Pyramid level to load (default: 0).
+            channels (list): Channels to load (default: [0]).
+            chunks (str or tuple): Chunk size for dask array (default: "auto").
+            z_level_offset (int): Offset for Z downsampling level (default: -2).
+            rechunk (bool): Whether to rechunk the data (default: False).
+            storage_options (dict): Storage options for Zarr.
+            in_orientation (str): Default input orientation if none is specified in metadata (default: 'RAS').
+            as_ref (bool): If True, creates an empty dask array with the correct shape instead of loading data.
+            zooms (list or np.ndarray): Target voxel spacing in xyz (only valid if as_ref=True).
+
+        Returns:
+            ZarrNii: A populated ZarrNii instance.
+
+        Raises:
+            ValueError: If `zooms` is specified when `as_ref=False`.
         """
-        # Determine the level and whether downsampling is required
-        level, do_downsample, downsampling_kwargs = cls.get_level_and_downsampling_kwargs(
-            path, level, z_level_offset, storage_options=storage_options
-        )
 
-        # Load the data array for the specified level and channels
-        darr = da.from_zarr(path, component=f"/{level}", storage_options=storage_options)[
-            channels, :, :, :
-        ]
+        if not as_ref and zooms is not None:
+            raise ValueError("`zooms` can only be used when `as_ref=True`.")
 
-        if rechunk:
-            darr = darr.rechunk(chunks)
 
         # Open the Zarr metadata
         store = zarr.open(path, mode="r")
@@ -196,33 +205,69 @@ class ZarrNii:
 
         # Read orientation metadata (default to `in_orientation` if not present)
         orientation = store.attrs.get("orientation", in_orientation)
+    
+        
+        # Determine the level and whether downsampling is required
+        if not as_ref:
+            level, do_downsample, downsampling_kwargs = cls.get_level_and_downsampling_kwargs(
+                path, level, z_level_offset, storage_options=storage_options
+            )
+        else:
+            do_downsample = False
 
-
-        # Default axes order for OME-Zarr
-        axes_order = "ZYX"
-
-        # Construct the affine matrix and update it for the input orientation
+        # Load data or metadata as needed
+        darr_base = da.from_zarr(path, component=f"/{level}", storage_options=storage_options)[
+            channels, :, :, :
+        ]
+        shape = darr_base.shape
         affine = cls.construct_affine(coordinate_transformations, orientation)
+
+
+        if zooms is not None:
+            # Handle zoom adjustments
+            in_zooms = np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Current voxel spacing
+            scaling_factor = in_zooms / zooms
+            new_shape = [
+                shape[0],
+                int(np.floor(shape[1] * scaling_factor[2])),  # Z
+                int(np.floor(shape[2] * scaling_factor[1])),  # Y
+                int(np.floor(shape[3] * scaling_factor[0])),  # X
+            ]
+            np.fill_diagonal(affine[:3, :3], zooms)
+        else:
+            new_shape = shape
+
+        if as_ref:
+            # Create an empty array with the updated shape
+            darr = da.empty(new_shape, chunks=chunks, dtype=darr_base.dtype)
+        else:
+            darr = darr_base
+            if rechunk:
+                darr = darr.rechunk(chunks)
+
+        if rechunk:
+            darr = darr.rechunk(chunks)
+
+
         if do_downsample:
-            # Return downsampled instance
             return cls(
                 darr,
                 affine=AffineTransform.from_array(affine),
-                axes_order=axes_order,
+                axes_order="ZYX",
                 axes=axes,
                 coordinate_transformations=coordinate_transformations,
                 omero=omero,
             ).downsample(**downsampling_kwargs)
         else:
-            # Return instance without downsampling
             return cls(
                 darr,
                 affine=AffineTransform.from_array(affine),
-                axes_order=axes_order,
+                axes_order="ZYX",
                 axes=axes,
                 coordinate_transformations=coordinate_transformations,
                 omero=omero,
             )
+
 
     @staticmethod
     def align_affine_to_input_orientation(affine, in_orientation):
