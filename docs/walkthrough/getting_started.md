@@ -6,7 +6,7 @@ This guide helps you set up **ZarrNii** and get started with its basic functiona
 
 ## Installation
 
-ZarrNii requires Python 3.8 or later. Install it using [Poetry](https://python-poetry.org/), a modern dependency manager for Python.
+ZarrNii requires Python 3.10 or later. Install it using [Poetry](https://python-poetry.org/), a modern dependency manager for Python.
 
 ### **1. Clone the Repository**
 If you're using the source code, clone the ZarrNii repository:
