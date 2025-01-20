@@ -1,4 +1,6 @@
 site_name: ZarrNii Documentation
+site_url:  https://khanlab.github.io/zarrnii/
+
 nav:
   - Home: index.md
   - Walkthrough:

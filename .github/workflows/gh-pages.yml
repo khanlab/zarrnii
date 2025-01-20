@@ -1,0 +1,32 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main  # Deploy when pushing to the main branch
+
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.9  # Adjust based on your project
+
+    - name: Install MkDocs and dependencies
+      run: |
+        pip install mkdocs-material mkdocstrings
+
+    - name: Build and Deploy
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: site  # The output folder for MkDocs builds
+
