@@ -19,15 +19,24 @@ scipy = "^1.12.0"
 pandas = "^2.2.0"
 ome-zarr = "^0.9.0"
 
-
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.0"
 poethepoet = "^0.13.1"
 pre-commit = "^2.17.0"
-ruff = "^0.1.14"
 jupyterlab = "^4.2.1"
 matplotlib = "^3.9.0"
 bokeh = "^3.4.1"
+flake8 = "^7.1.1"
+flake8-docstrings = "^1.7.0"
+flake8-bugbear = "^24.12.12"
+flake8-import-order = "^0.18.2"
+black = "^24.10.0"
+isort = "^5.13.2"
+mkdocs = "^1.6.1"
+mkdocs-material = "^9.5.50"
+mkdocstrings = "^0.27.0"
+mkdocstrings-python = "^1.13.0"
+bump2version = "^1.0.1"
 
 [build-system]
 requires = ["poetry-core"]
@@ -36,17 +45,29 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poe.tasks]
 setup = "pre-commit install"
-ruff-lint = "ruff check --fix zarrnii"
-ruff-lint-check = "ruff check zarrnii"
-ruff-format = "ruff format ."
+lint = "flake8 ."
+format = "black ."
+sort-imports = "isort ."
+check-format = "black --check ."
+check-imports = "isort --check ."
 pytest = "pytest -v"
-quality = [ "ruff-lint", "ruff-format"]
-quality-check = ["ruff-lint-check"]
 test = [ "pytest" ]
+serve-docs = "mkdocs serve"
+build-docs = "mkdocs build"
+deploy-docs = "mkdocs gh-deploy"
 
 
-[tool.ruff]
-select = ["E", "W", "N", "RUF", "I", "UP"]
-line-length = 79
+[tool.flake8]
+max-line-length = 88  # Matches Black's default line length
+extend-ignore = ["E203", "W503"]  # Compatibility with Black
+docstring-convention = "google"  # Enforces Google-style docstrings
+exclude = ["tests/*", ".venv", "build", "dist"]
 
+[tool.black]
+line-length = 88
+target-version = ['py39']  # Set to your target Python version
+
+[tool.isort]
+profile = "black"  # Ensure compatibility with Black
+line_length = 88
 
