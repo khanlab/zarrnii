@@ -6,9 +6,9 @@ import nibabel as nib
 import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
-
-from zarrnii import ZarrNii, AffineTransform
 from synthetic_ome_zarr import generate_synthetic_dataset
+
+from zarrnii import AffineTransform, ZarrNii
 
 
 @pytest.fixture
@@ -16,9 +16,7 @@ def nifti_nib():
     img_size = (100, 50, 200)
     pix_dims = (0.3, 0.2, 1.5, 1)
 
-    nifti_nib = nib.Nifti1Image(
-        np.random.rand(*img_size), affine=np.diag(pix_dims)
-    )
+    nifti_nib = nib.Nifti1Image(np.random.rand(*img_size), affine=np.diag(pix_dims))
 
     return nifti_nib
 
@@ -74,7 +72,11 @@ def test_from_nifti_to_zarr_to_nifti(nifti_nib):
 
     assert_array_equal(znimg.affine, znimg3.affine)
     assert_array_equal(znimg.darr.compute(), znimg3.darr.compute())
-    assert_array_equal(nib_orig.header.get_zooms(),nib.load("test_fromznimg_tonii.nii").header.get_zooms())
+    assert_array_equal(
+        nib_orig.header.get_zooms(),
+        nib.load("test_fromznimg_tonii.nii").header.get_zooms(),
+    )
+
 
 @pytest.mark.usefixtures("cleandir")
 def test_from_nifti_to_zarr_to_zarr(nifti_nib):
@@ -99,7 +101,7 @@ def test_from_nifti_to_zarr_to_zarr(nifti_nib):
     # now we have znimg2 with axes_order == ZYX
     #  this means, the affine is ZYX vox dims negated
 
-    assert znimg2.axes_order == 'ZYX'
+    assert znimg2.axes_order == "ZYX"
     assert_array_equal(
         np.flip(znimg2.darr.shape[1:], axis=0), nifti_nib.get_fdata().shape
     )
@@ -107,7 +109,7 @@ def test_from_nifti_to_zarr_to_zarr(nifti_nib):
     znimg2.to_ome_zarr("test_fromznimg_tozarr.ome.zarr")
     znimg3 = ZarrNii.from_ome_zarr("test_fromznimg_tozarr.ome.zarr")
 
-    assert znimg3.axes_order == 'ZYX'
+    assert znimg3.axes_order == "ZYX"
     assert_array_equal(
         np.flip(znimg3.darr.shape[1:], axis=0), nifti_nib.get_fdata().shape
     )
@@ -131,9 +133,7 @@ def test_affine_transform_identify(nifti_nib):
         AffineTransform.from_array(np.eye(4)), ref_znimg=ref_znimg
     )
 
-    assert_array_almost_equal(
-        flo_znimg.darr.compute(), interp_znimg.darr.compute()
-    )
+    assert_array_almost_equal(flo_znimg.darr.compute(), interp_znimg.darr.compute())
 
 
 @pytest.mark.usefixtures("cleandir")
@@ -196,14 +196,13 @@ class TestOMEZarr:
     @pytest.mark.usefixtures("cleandir")
     def test_ome_zarr(self):
         # test reading and writing ome zarr
-        OME_ZARR_PATH = './test.ome.zarr'
+        OME_ZARR_PATH = "./test.ome.zarr"
         generate_synthetic_dataset(
-            OME_ZARR_PATH,
-            arr_sz=(1, 16, 128, 128),
-            MAX_LAYER=1  # layer 0 and 1
+            OME_ZARR_PATH, arr_sz=(1, 16, 128, 128), MAX_LAYER=1  # layer 0 and 1
         )
         arr = ZarrNii.from_ome_zarr(OME_ZARR_PATH, level=0, channels=[0]).darr
         assert arr.compute().sum() > 0
+
 
 """
     @pytest.mark.usefixtures("cleandir")

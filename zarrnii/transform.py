@@ -1,14 +1,13 @@
 from __future__ import annotations
-import fsspec
+
 from abc import ABC, abstractmethod
 
-
+import fsspec
 import nibabel as nib
 import numpy as np
-from scipy.interpolate import interpn
 from attrs import define
-
-from nibabel.orientations import ornt_transform, io_orientation, apply_orientation
+from nibabel.orientations import apply_orientation, io_orientation, ornt_transform
+from scipy.interpolate import interpn
 
 
 @define

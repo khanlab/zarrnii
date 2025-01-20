@@ -1,27 +1,23 @@
 from __future__ import annotations
-import fsspec
-
-from typing import TYPE_CHECKING
-
 
 from collections.abc import MutableMapping
 from pathlib import Path
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 import dask.array as da
+import fsspec
 import nibabel as nib
 import numpy as np
 import zarr
+from attrs import define, field
 from dask.diagnostics import ProgressBar
 from ome_zarr.scale import Scaler
 from ome_zarr.writer import write_image
-from scipy.ndimage import zoom
 from scipy.interpolate import interpn
+from scipy.ndimage import zoom
 
 from .enums import ImageType
-from .transform import Transform, AffineTransform
-
-from attrs import define, field
-from typing import Optional, List, Dict
+from .transform import AffineTransform, Transform
 
 
 @define

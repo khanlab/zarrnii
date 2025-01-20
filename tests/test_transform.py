@@ -6,9 +6,6 @@ import nibabel as nib
 import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
+from test_io import cleandir, nifti_nib
 
-from zarrnii import ZarrNii, Transform
-
-from test_io import nifti_nib, cleandir
-
-
+from zarrnii import Transform, ZarrNii
