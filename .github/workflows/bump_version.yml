@@ -19,13 +19,9 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-          export PATH="$HOME/.local/bin:$PATH"
 
       - name: Install dependencies
-        run: poetry install
+        run: pip install bump2version
 
       - name: Determine Version Type
         id: version_type
