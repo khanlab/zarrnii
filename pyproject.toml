@@ -32,6 +32,10 @@ flake8-bugbear = "^24.12.12"
 flake8-import-order = "^0.18.2"
 black = "^24.10.0"
 isort = "^5.13.2"
+mkdocs = "^1.6.1"
+mkdocs-material = "^9.5.50"
+mkdocstrings = "^0.27.0"
+mkdocstrings-python = "^1.13.0"
 
 [build-system]
 requires = ["poetry-core"]
@@ -47,6 +51,9 @@ check-format = "black --check ."
 check-imports = "isort --check ."
 pytest = "pytest -v"
 test = [ "pytest" ]
+serve-docs = "mkdocs serve"
+build-docs = "mkdocs build"
+deploy-docs = "mkdocs gh-deploy"
 
 
 [tool.flake8]

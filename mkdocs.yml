@@ -1,0 +1,32 @@
+site_name: ZarrNii Documentation
+nav:
+  - Home: index.md
+  - Walkthrough:
+      - Overview: walkthrough/overview.md
+      - Getting Started: walkthrough/getting_started.md
+      - Basic Tasks: walkthrough/basic_tasks.md
+      - Advanced Use Cases: walkthrough/advanced_use_cases.md
+  - API Reference: reference.md
+  - Examples:
+      - Working with Zarr and NIfTI: examples/zarr_nifti.md
+      - Transformations: examples/transformations.md
+      - Downsampling and Upsampling: examples/downsampling.md
+      - Multiscale OME-Zarr: examples/multiscale.md
+  - FAQ: faq.md
+  - Changelog: changelog.md
+  - Contributing: contributing.md
+
+theme:
+  name: material  # Use the Material theme for a clean look
+markdown_extensions:
+  - toc:
+      toc_depth: 2  # Limits the TOC to 2 levels (e.g., H1 and H2)
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            merge_init_into_class: true
+
