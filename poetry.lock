@@ -445,6 +445,17 @@ jmespath = ">=0.7.1,<1.0.0"
 python-dateutil = {version = ">=2.1,<3.0.0", markers = "python_version >= \"2.7\""}
 
 [[package]]
+name = "bump2version"
+version = "1.0.1"
+description = "Version-bump your software with a single command!"
+optional = false
+python-versions = ">=3.5"
+files = [
+    {file = "bump2version-1.0.1-py2.py3-none-any.whl", hash = "sha256:37f927ea17cde7ae2d7baf832f8e80ce3777624554a653006c9144f8017fe410"},
+    {file = "bump2version-1.0.1.tar.gz", hash = "sha256:762cb2bfad61f4ec8e2bdf452c7c267416f8c70dd9ecb1653fd0bbb01fa936e6"},
+]
+
+[[package]]
 name = "certifi"
 version = "2024.2.2"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -4480,4 +4491,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4.0"
-content-hash = "4139487978a8744a074154738254fb64a69d6b60c816857a8b1604ea911628a7"
+content-hash = "cdb22df94f170df00e34843159fa36b6a7cc75f87add7a1837332416bec19a54"
