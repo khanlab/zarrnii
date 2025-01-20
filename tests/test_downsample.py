@@ -1,14 +1,12 @@
 import numpy as np
 import pytest
-from numpy.testing import assert_array_almost_equal, assert_array_equal
-from test_io import cleandir, nifti_nib
+from numpy.testing import assert_array_equal
 
 from zarrnii import ZarrNii
 
 
 @pytest.mark.usefixtures("cleandir")
 def test_downsample(nifti_nib):
-
     nifti_nib.to_filename("test.nii")
     znimg = ZarrNii.from_nifti("test.nii")
 

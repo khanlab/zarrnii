@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-import fsspec
 import nibabel as nib
 import numpy as np
 from attrs import define
-from nibabel.orientations import apply_orientation, io_orientation, ornt_transform
 from scipy.interpolate import interpn
 
 
@@ -23,7 +21,6 @@ class Transform(ABC):
 
 @define
 class AffineTransform(Transform):
-
     matrix: np.array = None
 
     @classmethod
@@ -65,7 +62,6 @@ class AffineTransform(Transform):
         self.matrix[key] = value
 
     def __matmul__(self, other):
-
         if isinstance(other, np.ndarray):
             if other.shape == (3,) or other.shape == (3, 1):
                 # Convert 3D point/vector to homogeneous coordinates
@@ -143,7 +139,6 @@ class AffineTransform(Transform):
 
 @define
 class DisplacementTransform(Transform):
-
     disp_xyz: np.array = None
     disp_grid: np.array = None
     disp_affine: AffineTransform = None
@@ -171,7 +166,6 @@ class DisplacementTransform(Transform):
         )
 
     def apply_transform(self, vecs: np.array) -> np.array:
-
         # we have the grid points, the volumes to interpolate displacements
 
         # first we need to transform points to vox space of the warp

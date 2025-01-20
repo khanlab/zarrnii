@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import MutableMapping
-from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import dask.array as da
 import fsspec
@@ -16,7 +15,6 @@ from ome_zarr.writer import write_image
 from scipy.interpolate import interpn
 from scipy.ndimage import zoom
 
-from .enums import ImageType
 from .transform import AffineTransform, Transform
 
 
@@ -256,10 +254,12 @@ class ZarrNii:
 
         # Determine the level and whether downsampling is required
         if not as_ref:
-            level, do_downsample, downsampling_kwargs = (
-                cls.get_level_and_downsampling_kwargs(
-                    path, level, z_level_offset, storage_options=storage_options
-                )
+            (
+                level,
+                do_downsample,
+                downsampling_kwargs,
+            ) = cls.get_level_and_downsampling_kwargs(
+                path, level, z_level_offset, storage_options=storage_options
             )
         else:
             do_downsample = False

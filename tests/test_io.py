@@ -1,6 +1,5 @@
 import os
 import tempfile
-from pathlib import Path
 
 import nibabel as nib
 import numpy as np
@@ -85,7 +84,6 @@ def test_from_nifti_to_zarr_to_zarr(nifti_nib):
     ensure data, affine and header do not change."""
 
     nifti_nib.to_filename("test.nii")
-    nib_orig = nib.load("test.nii")
 
     znimg = ZarrNii.from_nifti("test.nii")
 
