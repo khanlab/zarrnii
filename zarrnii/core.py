@@ -116,6 +116,44 @@ class ZarrNii:
         )
 
     @classmethod
+    def from_array(
+        cls,
+        array,
+        affine=None,
+        chunks="auto",
+        axes_order="ZYX",
+        axes=None,
+        coordinate_transformations=None,
+        omero=None,
+    ):
+        """
+        Creates a ZarrNii instance from an existing numpy array.
+
+        Parameters:
+            array (np.ndarray): Input numpy array.
+            affine (AffineTransform or np.ndarray, optional): Affine transform to associate with the array.
+                If None, an identity affine transform is used.
+            chunks (str or tuple): Chunk size for dask array (default: "auto").
+            axes_order (str): The axes order of the input array (default: "ZYX").
+            axes (list, optional): Axes metadata for OME-Zarr. If None, default axes are generated.
+            coordinate_transformations (list, optional): Coordinate transformations for OME-Zarr metadata.
+            omero (dict, optional): Omero metadata for OME-Zarr.
+
+        Returns:
+            ZarrNii: A populated ZarrNii instance.
+
+        """
+
+        return cls.from_darr(
+            da.from_array(array, chunks=chunks),
+            affine,
+            axes_order,
+            axes,
+            coordinate_transformations,
+            omero,
+        )
+
+    @classmethod
     def from_nifti(cls, path, chunks="auto", as_ref=False, zooms=None):
         """
         Creates a ZarrNii instance from a NIfTI file. Populates OME-Zarr metadata
@@ -339,7 +377,7 @@ class ZarrNii:
         reordered_affine = np.zeros_like(affine)
         for i, (axis, sign) in enumerate(zip(input_axes, input_signs)):
             reordered_affine[i, :3] = sign * affine[axis, :3]
-            reordered_affine[i, 3] = sign * affine[axis, 3]
+            reordered_affine[i, 3] = sign * affine[i, 3]
         reordered_affine[3, :] = affine[3, :]  # Preserve homogeneous row
 
         return reordered_affine
@@ -382,7 +420,7 @@ class ZarrNii:
     @staticmethod
     def reorder_affine_for_xyz(affine):
         """
-        Reorders the affine matrix from ZYX to XYZ axes order.
+        Reorders the affine matrix from ZYX to XYZ axes order and adjusts the translation.
 
         Parameters:
             affine (np.ndarray): Affine matrix in ZYX order.
@@ -399,7 +437,18 @@ class ZarrNii:
                 [0, 0, 0, 1],  # Homogeneous row
             ]
         )
-        return affine @ reorder_xfm  # use right-multiply so columns get reordered
+
+        # Apply reordering to the affine matrix
+        affine_reordered = affine @ reorder_xfm
+
+        # Adjust translation (last column)
+        translation_zyx = affine[:3, 3]
+        reorder_perm = [2, 1, 0]  # Map ZYX -> XYZ
+        translation_xyz = translation_zyx[reorder_perm]
+
+        # Update reordered affine with adjusted translation
+        affine_reordered[:3, 3] = translation_xyz
+        return affine_reordered
 
     def apply_transform(self, *tfms, ref_znimg):
         """
@@ -631,6 +680,7 @@ class ZarrNii:
             - Reorders data to XYZ order if the current `axes_order` is ZYX.
             - Adjusts the affine matrix accordingly to match the reordered data.
         """
+
         # Reorder data to match NIfTI's expected XYZ order if necessary
         if self.axes_order == "ZYX":
             data = da.moveaxis(
@@ -642,7 +692,6 @@ class ZarrNii:
         else:
             data = self.darr.compute()
             affine = self.affine.matrix  # No reordering needed
-
         # Create the NIfTI-1 image
         nii_img = nib.Nifti1Image(
             data[0], affine
