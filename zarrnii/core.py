@@ -53,10 +53,13 @@ class ZarrNii:
         cls,
         darr,
         affine=None,
-        axes_order="ZYX",
+        orientation="RAS",
+        axes_order="XYZ",
         axes=None,
         coordinate_transformations=None,
         omero=None,
+        spacing=(1, 1, 1),
+        origin=(0, 0, 0),
     ):
         """
         Creates a ZarrNii instance from an existing Dask array.
@@ -64,20 +67,22 @@ class ZarrNii:
         Parameters:
             darr (da.Array): Input Dask array.
             affine (AffineTransform or np.ndarray, optional): Affine transform to associate with the array.
-                If None, an identity affine transform is used.
-            axes_order (str): The axes order of the input array (default: "ZYX").
+                If None, an affine will be created based on the orientation, spacing, and origin.
+            orientation (str, optional): Orientation string used to generate an affine matrix (default: "RAS").
+            axes_order (str): The axes order of the input array (default: "XYZ").
             axes (list, optional): Axes metadata for OME-Zarr. If None, default axes are generated.
             coordinate_transformations (list, optional): Coordinate transformations for OME-Zarr metadata.
             omero (dict, optional): Omero metadata for OME-Zarr.
+            spacing (tuple, optional): Voxel spacing along each axis (default: (1, 1, 1)).
+            origin (tuple, optional): Origin point in physical space (default: (0, 0, 0)).
 
         Returns:
             ZarrNii: A populated ZarrNii instance.
         """
-        # Validate affine input and convert if necessary
+
+        # Generate affine from orientation if not explicitly provided
         if affine is None:
-            affine = AffineTransform.identity()  # Default to identity transform
-        elif isinstance(affine, np.ndarray):
-            affine = AffineTransform.from_array(affine)
+            affine = orientation_to_affine(orientation, spacing, origin)
 
         # Generate default axes if none are provided
         if axes is None:
@@ -88,8 +93,8 @@ class ZarrNii:
         # Generate default coordinate transformations if none are provided
         if coordinate_transformations is None:
             # Derive scale and translation from the affine
-            scale = np.sqrt((affine.matrix[:3, :3] ** 2).sum(axis=0))  # Diagonal scales
-            translation = affine.matrix[:3, 3]  # Translation vector
+            scale = np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Diagonal scales
+            translation = affine[:3, 3]  # Translation vector
             coordinate_transformations = [
                 {"type": "scale", "scale": [1] + scale.tolist()},  # Add channel scale
                 {
@@ -108,7 +113,7 @@ class ZarrNii:
         # Create and return the ZarrNii instance
         return cls(
             darr,
-            affine=affine,
+            affine=AffineTransform.from_array(affine),
             axes_order=axes_order,
             axes=axes,
             coordinate_transformations=coordinate_transformations,
@@ -121,10 +126,13 @@ class ZarrNii:
         array,
         affine=None,
         chunks="auto",
-        axes_order="ZYX",
+        orientation="RAS",
+        axes_order="XYZ",
         axes=None,
         coordinate_transformations=None,
         omero=None,
+        spacing=(1, 1, 1),
+        origin=(0, 0, 0),
     ):
         """
         Creates a ZarrNii instance from an existing numpy array.
@@ -132,12 +140,16 @@ class ZarrNii:
         Parameters:
             array (np.ndarray): Input numpy array.
             affine (AffineTransform or np.ndarray, optional): Affine transform to associate with the array.
-                If None, an identity affine transform is used.
+                If None, an affine will be created based on the orientation, spacing, and origin.
+            orientation (str, optional): Orientation string used to generate an affine matrix (default: "RAS").
             chunks (str or tuple): Chunk size for dask array (default: "auto").
             axes_order (str): The axes order of the input array (default: "ZYX").
             axes (list, optional): Axes metadata for OME-Zarr. If None, default axes are generated.
             coordinate_transformations (list, optional): Coordinate transformations for OME-Zarr metadata.
             omero (dict, optional): Omero metadata for OME-Zarr.
+            spacing (tuple, optional): Voxel spacing along each axis (default: (1, 1, 1)).
+            origin (tuple, optional): Origin point in physical space (default: (0, 0, 0)).
+
 
         Returns:
             ZarrNii: A populated ZarrNii instance.
@@ -146,11 +158,14 @@ class ZarrNii:
 
         return cls.from_darr(
             da.from_array(array, chunks=chunks),
-            affine,
-            axes_order,
-            axes,
-            coordinate_transformations,
-            omero,
+            affine=affine,
+            orientation=orientation,
+            axes_order=axes_order,
+            axes=axes,
+            coordinate_transformations=coordinate_transformations,
+            omero=omero,
+            spacing=spacing,
+            origin=origin,
         )
 
     @classmethod
@@ -1381,3 +1396,36 @@ def affine_to_orientation(affine):
             orientation.append(flipped_labels[axis])
 
     return "".join(orientation)
+
+
+def orientation_to_affine(orientation, spacing=(1, 1, 1), origin=(0, 0, 0)):
+    """
+    Creates an affine matrix based on an orientation string (e.g., 'RAS').
+
+    Parameters:
+        orientation (str): Orientation string (e.g., 'RAS', 'LPS').
+        spacing (tuple): Voxel spacing along each axis (default: (1, 1, 1)).
+        origin (tuple): Origin point in physical space (default: (0, 0, 0)).
+
+    Returns:
+        affine (numpy.ndarray): Affine matrix from voxel to world coordinates.
+    """
+    # Validate orientation length
+    if len(orientation) != 3:
+        raise ValueError("Orientation must be a 3-character string (e.g., 'RAS').")
+
+    # Axis mapping and flipping
+    axis_map = {"R": 0, "L": 0, "A": 1, "P": 1, "S": 2, "I": 2}
+    sign_map = {"R": 1, "L": -1, "A": 1, "P": -1, "S": 1, "I": -1}
+
+    axes = [axis_map[ax] for ax in orientation]
+    signs = [sign_map[ax] for ax in orientation]
+
+    # Construct the affine matrix
+    affine = np.zeros((4, 4))
+    for i, (axis, sign) in enumerate(zip(axes, signs)):
+        affine[i, axis] = sign * spacing[axis]
+        affine[i, 3] = origin[axis]
+    affine[3, 3] = 1  # set homog coord
+
+    return affine
