@@ -26,6 +26,9 @@ def test_from_nifti_to_nifti(nifti_nib):
     assert_array_equal(nib_orig.affine, nib_znimg.affine)
     assert_array_equal(nib_orig.get_fdata(), nib_znimg.get_fdata())
 
+    assert_array_equal(nib_orig.header.get_zooms(), znimg.get_zooms(axes_order="XYZ"))
+    assert_array_equal(nib_orig.affine[:3, 3], znimg.get_origin(axes_order="XYZ"))
+
 
 @pytest.mark.usefixtures("cleandir")
 def test_from_nifti_to_zarr_to_nifti(nifti_nib):
@@ -43,6 +46,9 @@ def test_from_nifti_to_zarr_to_nifti(nifti_nib):
     znimg.to_ome_zarr("test_fromznimg.ome.zarr")
     znimg2 = ZarrNii.from_ome_zarr("test_fromznimg.ome.zarr")
     znimg2
+
+    assert_array_equal(nib_orig.header.get_zooms(), znimg.get_zooms(axes_order="XYZ"))
+    assert_array_equal(nib_orig.affine[:3, 3], znimg.get_origin(axes_order="XYZ"))
 
     # now we have znimg2 with axes_order == 'ZYX'
     #  this means, the affine is ZYX vox dims negated

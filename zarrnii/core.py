@@ -433,7 +433,7 @@ class ZarrNii:
         return ZarrNii.align_affine_to_input_orientation(affine, orientation)
 
     @staticmethod
-    def reorder_affine_for_xyz(affine):
+    def reorder_affine_xyz_zyx(affine):
         """
         Reorders the affine matrix from ZYX to XYZ axes order and adjusts the translation.
 
@@ -464,6 +464,18 @@ class ZarrNii:
         # Update reordered affine with adjusted translation
         affine_reordered[:3, 3] = translation_xyz
         return affine_reordered
+
+    def get_orientation(self):
+        """
+        Get the anatomical orientation of the dataset based on its affine transformation.
+
+        This function determines the orientation string (e.g., 'RAS', 'LPI') of the dataset
+        by analyzing the affine transformation matrix.
+
+        Returns:
+            str: The orientation string corresponding to the dataset's affine transformation.
+        """
+        return affine_to_orientation(self.affine)
 
     def apply_transform(self, *tfms, ref_znimg):
         """
@@ -701,7 +713,7 @@ class ZarrNii:
             data = da.moveaxis(
                 self.darr, (0, 1, 2, 3), (0, 3, 2, 1)
             ).compute()  # Reorder to XYZ
-            affine = self.reorder_affine_for_xyz(
+            affine = self.reorder_affine_xyz_zyx(
                 self.affine.matrix
             )  # Reorder affine to match
         else:
@@ -717,6 +729,61 @@ class ZarrNii:
             nib.save(nii_img, filename)
         else:
             return nii_img
+
+    def get_origin(self, axes_order="ZYX"):
+        """
+        Get the origin (translation) from the affine matrix, with optional reordering based on axis order.
+
+        The origin is represented as the translation component in the affine matrix (the last column).
+        If the affine matrix's axis order is different from the provided `axes_order`, the matrix will
+        be reordered accordingly before extracting the origin.
+
+        Parameters:
+        axes_order : str, optional
+            The desired order of axes (e.g., 'ZYX', 'XYZ'). The default is 'ZYX'. If the current affine
+            matrix has a different axis order, it will be reordered to match this.
+
+        Returns:
+        ndarray
+            A 3-element array representing the translation (origin) in world coordinates.
+
+        Notes:
+        If the affine's axis order is already the same as `axes_order`, no reordering will be performed.
+        """
+        if axes_order == self.axes_order:
+            affine = self.affine
+        else:
+            affine = self.reorder_affine_xyz_zyx(self.affine)
+
+        return affine[:3, 3]
+
+    def get_zooms(self, axes_order="ZYX"):
+        """
+        Get the voxel spacing (zoom factors) from the affine matrix, with optional reordering based on axis order.
+
+        The zoom factors are derived from the diagonal elements of the upper-left 3x3 part of the affine
+        matrix, representing the voxel spacing along each axis. If the affine matrix's axis order is
+        different from the provided `axes_order`, the matrix will be reordered accordingly before extracting
+        the zoom factors.
+
+        Parameters:
+        axes_order : str, optional
+            The desired order of axes (e.g., 'ZYX', 'XYZ'). The default is 'ZYX'. If the current affine
+            matrix has a different axis order, it will be reordered to match this.
+
+        Returns:
+        ndarray
+            A 3-element array representing the voxel spacing in each dimension (x, y, z).
+
+        Notes:
+        If the affine's axis order is already the same as `axes_order`, no reordering will be performed.
+        """
+        if axes_order == self.axes_order:
+            affine = self.affine
+        else:
+            affine = self.reorder_affine_xyz_zyx(self.affine)
+
+        return np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Extract scales
 
     def to_ome_zarr(self, filename, max_layer=4, scaling_method="local_mean", **kwargs):
         """
@@ -744,7 +811,7 @@ class ZarrNii:
             )  # Reorder to ZYX
             #   flip_xfm = np.diag((-1, -1, -1, 1))  # Apply flips for consistency
             # out_affine = flip_xfm @ self.affine
-            out_affine = self.reorder_affine_for_xyz(self.affine.matrix)
+            out_affine = self.reorder_affine_xyz_zyx(self.affine.matrix)
         #  voxdim = np.flip(voxdim)  # Adjust voxel dimensions to ZYX
         else:
             out_darr = self.darr
