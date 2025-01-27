@@ -1324,9 +1324,9 @@ class ZarrNii:
             level_xy = 0
             level_z = max(level + z_level_offset, 0)
 
-        print(
-            f"level: {level}, level_xy: {level_xy}, level_z: {level_z}, max_level: {max_level}"
-        )
+        # print(
+        #    f"level: {level}, level_xy: {level_xy}, level_z: {level_z}, max_level: {max_level}"
+        # )
 
         # Determine if additional downsampling is needed
         do_downsample = level_xy > 0 or level_z > 0
