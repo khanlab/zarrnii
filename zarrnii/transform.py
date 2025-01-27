@@ -62,28 +62,64 @@ class AffineTransform(Transform):
         self.matrix[key] = value
 
     def __matmul__(self, other):
+        """
+        Perform matrix multiplication with another object.
+
+        Parameters:
+        - other (np.ndarray or AffineTransform): The object to multiply with:
+            - (3,) or (3, 1): A 3D point or vector (voxel coordinates).
+            - (3, N): A batch of N 3D points or vectors (voxel coordinates).
+            - (4,) or (4, 1): A 4D point/vector in homogeneous coordinates.
+            - (4, N): A batch of N 4D points in homogeneous coordinates.
+            - (4, 4): Another affine transformation matrix.
+
+        Returns:
+        - np.ndarray or AffineTransform:
+            - Transformed 3D point(s) or vector(s) as a numpy array.
+            - A new AffineTransform object if multiplying two affine matrices.
+
+        Raises:
+        - ValueError: If the shape of `other` is unsupported.
+        - TypeError: If `other` is not an np.ndarray or AffineTransform.
+        """
         if isinstance(other, np.ndarray):
-            if other.shape == (3,) or other.shape == (3, 1):
-                # Convert 3D point/vector to homogeneous coordinates
-                homog_point = np.append(other, 1)
+            if other.shape == (3,):
+                # Single 3D point/vector
+                homog_point = np.append(other, 1)  # Convert to homogeneous coordinates
                 result = self.matrix @ homog_point
-                # Convert back from homogeneous coordinates to 3D
-                return result[:3] / result[3]
-            elif other.shape == (4,) or other.shape == (4, 1):
-                # Directly use 4D point/vector
+                return result[:3] / result[3]  # Convert back to 3D
+            elif len(other.shape) == 2 and other.shape[0] == 3:
+                # Batch of 3D points/vectors (3 x N)
+                homog_points = np.vstack(
+                    [other, np.ones((1, other.shape[1]))]
+                )  # Add homogeneous row
+                transformed_points = (
+                    self.matrix @ homog_points
+                )  # Apply affine transform
+                return (
+                    transformed_points[:3] / transformed_points[3]
+                )  # Convert back to 3D
+            elif other.shape == (4,):
+                # Single 4D point/vector
                 result = self.matrix @ other
-                # Convert back from homogeneous coordinates to 3D
                 return result[:3] / result[3]
+            elif len(other.shape) == 2 and other.shape[0] == 4:
+                # Batch of 4D points in homogeneous coordinates (4 x N)
+                transformed_points = self.matrix @ other  # Apply affine transform
+                return transformed_points  # No conversion needed, stays in 4D space
             elif other.shape == (4, 4):
-                # perform matrix multiplication, and return a Transform object
+                # Matrix multiplication with another affine matrix
                 return AffineTransform.from_array(self.matrix @ other)
             else:
-                raise ValueError("Unsupported shape for multiplication.")
+                raise ValueError(f"Unsupported shape for multiplication: {other.shape}")
+        elif isinstance(other, AffineTransform):
+            # Matrix multiplication with another AffineTransform object
+            return AffineTransform.from_array(self.matrix @ other.matrix)
         else:
-            raise TypeError("Unsupported type for multiplication.")
+            raise TypeError(f"Unsupported type for multiplication: {type(other)}")
 
     def apply_transform(self, vecs: np.array) -> np.array:
-        return self.matrix @ vecs
+        return self @ vecs
 
     def invert(self):
         """Return the inverse of the matrix transformation."""

@@ -53,10 +53,13 @@ class ZarrNii:
         cls,
         darr,
         affine=None,
-        axes_order="ZYX",
+        orientation="RAS",
+        axes_order="XYZ",
         axes=None,
         coordinate_transformations=None,
         omero=None,
+        spacing=(1, 1, 1),
+        origin=(0, 0, 0),
     ):
         """
         Creates a ZarrNii instance from an existing Dask array.
@@ -64,20 +67,22 @@ class ZarrNii:
         Parameters:
             darr (da.Array): Input Dask array.
             affine (AffineTransform or np.ndarray, optional): Affine transform to associate with the array.
-                If None, an identity affine transform is used.
-            axes_order (str): The axes order of the input array (default: "ZYX").
+                If None, an affine will be created based on the orientation, spacing, and origin.
+            orientation (str, optional): Orientation string used to generate an affine matrix (default: "RAS").
+            axes_order (str): The axes order of the input array (default: "XYZ").
             axes (list, optional): Axes metadata for OME-Zarr. If None, default axes are generated.
             coordinate_transformations (list, optional): Coordinate transformations for OME-Zarr metadata.
             omero (dict, optional): Omero metadata for OME-Zarr.
+            spacing (tuple, optional): Voxel spacing along each axis (default: (1, 1, 1)).
+            origin (tuple, optional): Origin point in physical space (default: (0, 0, 0)).
 
         Returns:
             ZarrNii: A populated ZarrNii instance.
         """
-        # Validate affine input and convert if necessary
+
+        # Generate affine from orientation if not explicitly provided
         if affine is None:
-            affine = AffineTransform.identity()  # Default to identity transform
-        elif isinstance(affine, np.ndarray):
-            affine = AffineTransform.from_array(affine)
+            affine = orientation_to_affine(orientation, spacing, origin)
 
         # Generate default axes if none are provided
         if axes is None:
@@ -88,8 +93,8 @@ class ZarrNii:
         # Generate default coordinate transformations if none are provided
         if coordinate_transformations is None:
             # Derive scale and translation from the affine
-            scale = np.sqrt((affine.matrix[:3, :3] ** 2).sum(axis=0))  # Diagonal scales
-            translation = affine.matrix[:3, 3]  # Translation vector
+            scale = np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Diagonal scales
+            translation = affine[:3, 3]  # Translation vector
             coordinate_transformations = [
                 {"type": "scale", "scale": [1] + scale.tolist()},  # Add channel scale
                 {
@@ -108,11 +113,59 @@ class ZarrNii:
         # Create and return the ZarrNii instance
         return cls(
             darr,
-            affine=affine,
+            affine=AffineTransform.from_array(affine),
             axes_order=axes_order,
             axes=axes,
             coordinate_transformations=coordinate_transformations,
             omero=omero,
+        )
+
+    @classmethod
+    def from_array(
+        cls,
+        array,
+        affine=None,
+        chunks="auto",
+        orientation="RAS",
+        axes_order="XYZ",
+        axes=None,
+        coordinate_transformations=None,
+        omero=None,
+        spacing=(1, 1, 1),
+        origin=(0, 0, 0),
+    ):
+        """
+        Creates a ZarrNii instance from an existing numpy array.
+
+        Parameters:
+            array (np.ndarray): Input numpy array.
+            affine (AffineTransform or np.ndarray, optional): Affine transform to associate with the array.
+                If None, an affine will be created based on the orientation, spacing, and origin.
+            orientation (str, optional): Orientation string used to generate an affine matrix (default: "RAS").
+            chunks (str or tuple): Chunk size for dask array (default: "auto").
+            axes_order (str): The axes order of the input array (default: "ZYX").
+            axes (list, optional): Axes metadata for OME-Zarr. If None, default axes are generated.
+            coordinate_transformations (list, optional): Coordinate transformations for OME-Zarr metadata.
+            omero (dict, optional): Omero metadata for OME-Zarr.
+            spacing (tuple, optional): Voxel spacing along each axis (default: (1, 1, 1)).
+            origin (tuple, optional): Origin point in physical space (default: (0, 0, 0)).
+
+
+        Returns:
+            ZarrNii: A populated ZarrNii instance.
+
+        """
+
+        return cls.from_darr(
+            da.from_array(array, chunks=chunks),
+            affine=affine,
+            orientation=orientation,
+            axes_order=axes_order,
+            axes=axes,
+            coordinate_transformations=coordinate_transformations,
+            omero=omero,
+            spacing=spacing,
+            origin=origin,
         )
 
     @classmethod
@@ -339,7 +392,7 @@ class ZarrNii:
         reordered_affine = np.zeros_like(affine)
         for i, (axis, sign) in enumerate(zip(input_axes, input_signs)):
             reordered_affine[i, :3] = sign * affine[axis, :3]
-            reordered_affine[i, 3] = sign * affine[axis, 3]
+            reordered_affine[i, 3] = sign * affine[i, 3]
         reordered_affine[3, :] = affine[3, :]  # Preserve homogeneous row
 
         return reordered_affine
@@ -380,9 +433,9 @@ class ZarrNii:
         return ZarrNii.align_affine_to_input_orientation(affine, orientation)
 
     @staticmethod
-    def reorder_affine_for_xyz(affine):
+    def reorder_affine_xyz_zyx(affine):
         """
-        Reorders the affine matrix from ZYX to XYZ axes order.
+        Reorders the affine matrix from ZYX to XYZ axes order and adjusts the translation.
 
         Parameters:
             affine (np.ndarray): Affine matrix in ZYX order.
@@ -399,7 +452,30 @@ class ZarrNii:
                 [0, 0, 0, 1],  # Homogeneous row
             ]
         )
-        return affine @ reorder_xfm  # use right-multiply so columns get reordered
+
+        # Apply reordering to the affine matrix
+        affine_reordered = affine @ reorder_xfm
+
+        # Adjust translation (last column)
+        translation_zyx = affine[:3, 3]
+        reorder_perm = [2, 1, 0]  # Map ZYX -> XYZ
+        translation_xyz = translation_zyx[reorder_perm]
+
+        # Update reordered affine with adjusted translation
+        affine_reordered[:3, 3] = translation_xyz
+        return affine_reordered
+
+    def get_orientation(self):
+        """
+        Get the anatomical orientation of the dataset based on its affine transformation.
+
+        This function determines the orientation string (e.g., 'RAS', 'LPI') of the dataset
+        by analyzing the affine transformation matrix.
+
+        Returns:
+            str: The orientation string corresponding to the dataset's affine transformation.
+        """
+        return affine_to_orientation(self.affine)
 
     def apply_transform(self, *tfms, ref_znimg):
         """
@@ -631,18 +707,18 @@ class ZarrNii:
             - Reorders data to XYZ order if the current `axes_order` is ZYX.
             - Adjusts the affine matrix accordingly to match the reordered data.
         """
+
         # Reorder data to match NIfTI's expected XYZ order if necessary
         if self.axes_order == "ZYX":
             data = da.moveaxis(
                 self.darr, (0, 1, 2, 3), (0, 3, 2, 1)
             ).compute()  # Reorder to XYZ
-            affine = self.reorder_affine_for_xyz(
+            affine = self.reorder_affine_xyz_zyx(
                 self.affine.matrix
             )  # Reorder affine to match
         else:
             data = self.darr.compute()
             affine = self.affine.matrix  # No reordering needed
-
         # Create the NIfTI-1 image
         nii_img = nib.Nifti1Image(
             data[0], affine
@@ -653,6 +729,61 @@ class ZarrNii:
             nib.save(nii_img, filename)
         else:
             return nii_img
+
+    def get_origin(self, axes_order="ZYX"):
+        """
+        Get the origin (translation) from the affine matrix, with optional reordering based on axis order.
+
+        The origin is represented as the translation component in the affine matrix (the last column).
+        If the affine matrix's axis order is different from the provided `axes_order`, the matrix will
+        be reordered accordingly before extracting the origin.
+
+        Parameters:
+        axes_order : str, optional
+            The desired order of axes (e.g., 'ZYX', 'XYZ'). The default is 'ZYX'. If the current affine
+            matrix has a different axis order, it will be reordered to match this.
+
+        Returns:
+        ndarray
+            A 3-element array representing the translation (origin) in world coordinates.
+
+        Notes:
+        If the affine's axis order is already the same as `axes_order`, no reordering will be performed.
+        """
+        if axes_order == self.axes_order:
+            affine = self.affine
+        else:
+            affine = self.reorder_affine_xyz_zyx(self.affine)
+
+        return affine[:3, 3]
+
+    def get_zooms(self, axes_order="ZYX"):
+        """
+        Get the voxel spacing (zoom factors) from the affine matrix, with optional reordering based on axis order.
+
+        The zoom factors are derived from the diagonal elements of the upper-left 3x3 part of the affine
+        matrix, representing the voxel spacing along each axis. If the affine matrix's axis order is
+        different from the provided `axes_order`, the matrix will be reordered accordingly before extracting
+        the zoom factors.
+
+        Parameters:
+        axes_order : str, optional
+            The desired order of axes (e.g., 'ZYX', 'XYZ'). The default is 'ZYX'. If the current affine
+            matrix has a different axis order, it will be reordered to match this.
+
+        Returns:
+        ndarray
+            A 3-element array representing the voxel spacing in each dimension (x, y, z).
+
+        Notes:
+        If the affine's axis order is already the same as `axes_order`, no reordering will be performed.
+        """
+        if axes_order == self.axes_order:
+            affine = self.affine
+        else:
+            affine = self.reorder_affine_xyz_zyx(self.affine)
+
+        return np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Extract scales
 
     def to_ome_zarr(self, filename, max_layer=4, scaling_method="local_mean", **kwargs):
         """
@@ -680,7 +811,7 @@ class ZarrNii:
             )  # Reorder to ZYX
             #   flip_xfm = np.diag((-1, -1, -1, 1))  # Apply flips for consistency
             # out_affine = flip_xfm @ self.affine
-            out_affine = self.reorder_affine_for_xyz(self.affine.matrix)
+            out_affine = self.reorder_affine_xyz_zyx(self.affine.matrix)
         #  voxdim = np.flip(voxdim)  # Adjust voxel dimensions to ZYX
         else:
             out_darr = self.darr
@@ -1193,9 +1324,9 @@ class ZarrNii:
             level_xy = 0
             level_z = max(level + z_level_offset, 0)
 
-        print(
-            f"level: {level}, level_xy: {level_xy}, level_z: {level_z}, max_level: {max_level}"
-        )
+        # print(
+        #    f"level: {level}, level_xy: {level_xy}, level_z: {level_z}, max_level: {max_level}"
+        # )
 
         # Determine if additional downsampling is needed
         do_downsample = level_xy > 0 or level_z > 0
@@ -1332,3 +1463,36 @@ def affine_to_orientation(affine):
             orientation.append(flipped_labels[axis])
 
     return "".join(orientation)
+
+
+def orientation_to_affine(orientation, spacing=(1, 1, 1), origin=(0, 0, 0)):
+    """
+    Creates an affine matrix based on an orientation string (e.g., 'RAS').
+
+    Parameters:
+        orientation (str): Orientation string (e.g., 'RAS', 'LPS').
+        spacing (tuple): Voxel spacing along each axis (default: (1, 1, 1)).
+        origin (tuple): Origin point in physical space (default: (0, 0, 0)).
+
+    Returns:
+        affine (numpy.ndarray): Affine matrix from voxel to world coordinates.
+    """
+    # Validate orientation length
+    if len(orientation) != 3:
+        raise ValueError("Orientation must be a 3-character string (e.g., 'RAS').")
+
+    # Axis mapping and flipping
+    axis_map = {"R": 0, "L": 0, "A": 1, "P": 1, "S": 2, "I": 2}
+    sign_map = {"R": 1, "L": -1, "A": 1, "P": -1, "S": 1, "I": -1}
+
+    axes = [axis_map[ax] for ax in orientation]
+    signs = [sign_map[ax] for ax in orientation]
+
+    # Construct the affine matrix
+    affine = np.zeros((4, 4))
+    for i, (axis, sign) in enumerate(zip(axes, signs)):
+        affine[i, axis] = sign * spacing[axis]
+        affine[i, 3] = origin[axis]
+    affine[3, 3] = 1  # set homog coord
+
+    return affine

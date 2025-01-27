@@ -10,25 +10,6 @@ from synthetic_ome_zarr import generate_synthetic_dataset
 from zarrnii import AffineTransform, ZarrNii
 
 
-@pytest.fixture
-def nifti_nib():
-    img_size = (100, 50, 200)
-    pix_dims = (0.3, 0.2, 1.5, 1)
-
-    nifti_nib = nib.Nifti1Image(np.random.rand(*img_size), affine=np.diag(pix_dims))
-
-    return nifti_nib
-
-
-@pytest.fixture
-def cleandir():
-    with tempfile.TemporaryDirectory() as newpath:
-        old_cwd = os.getcwd()
-        os.chdir(newpath)
-        yield
-        os.chdir(old_cwd)
-
-
 @pytest.mark.usefixtures("cleandir")
 def test_from_nifti_to_nifti(nifti_nib):
     """create a nifti with nibabel, read it with ZarrNii, then write it back as a nifti.
@@ -44,6 +25,9 @@ def test_from_nifti_to_nifti(nifti_nib):
     # now compare nib_orig and nib_znimg
     assert_array_equal(nib_orig.affine, nib_znimg.affine)
     assert_array_equal(nib_orig.get_fdata(), nib_znimg.get_fdata())
+
+    assert_array_equal(nib_orig.header.get_zooms(), znimg.get_zooms(axes_order="XYZ"))
+    assert_array_equal(nib_orig.affine[:3, 3], znimg.get_origin(axes_order="XYZ"))
 
 
 @pytest.mark.usefixtures("cleandir")
@@ -62,6 +46,9 @@ def test_from_nifti_to_zarr_to_nifti(nifti_nib):
     znimg.to_ome_zarr("test_fromznimg.ome.zarr")
     znimg2 = ZarrNii.from_ome_zarr("test_fromznimg.ome.zarr")
     znimg2
+
+    assert_array_equal(nib_orig.header.get_zooms(), znimg.get_zooms(axes_order="XYZ"))
+    assert_array_equal(nib_orig.affine[:3, 3], znimg.get_origin(axes_order="XYZ"))
 
     # now we have znimg2 with axes_order == 'ZYX'
     #  this means, the affine is ZYX vox dims negated
