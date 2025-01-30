@@ -341,35 +341,30 @@ class ZarrNii:
         else:
             new_shape = shape
 
+        # we want to downsample *before* we rechunk
+
         if as_ref:
             # Create an empty array with the updated shape
             darr = da.empty(new_shape, chunks=chunks, dtype=darr_base.dtype)
         else:
             darr = darr_base
-            if rechunk:
-                darr = darr.rechunk(chunks)
 
-        if rechunk:
-            darr = darr.rechunk(chunks)
+        znimg = cls(
+            darr,
+            affine=AffineTransform.from_array(affine),
+            axes_order="ZYX",
+            axes=axes,
+            coordinate_transformations=coordinate_transformations,
+            omero=omero,
+        )
 
         if do_downsample:
-            return cls(
-                darr,
-                affine=AffineTransform.from_array(affine),
-                axes_order="ZYX",
-                axes=axes,
-                coordinate_transformations=coordinate_transformations,
-                omero=omero,
-            ).downsample(**downsampling_kwargs)
-        else:
-            return cls(
-                darr,
-                affine=AffineTransform.from_array(affine),
-                axes_order="ZYX",
-                axes=axes,
-                coordinate_transformations=coordinate_transformations,
-                omero=omero,
-            )
+            znimg = znimg.downsample(**downsampling_kwargs)
+
+        if rechunk:
+            znimg.darr = znimg.darr.rechunk(chunks)
+
+        return znimg
 
     @staticmethod
     def align_affine_to_input_orientation(affine, orientation):
