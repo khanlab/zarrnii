@@ -292,6 +292,18 @@ class ZarrNii:
         if not as_ref and zooms is not None:
             raise ValueError("`zooms` can only be used when `as_ref=True`.")
 
+        # Determine the level and whether downsampling is required
+        if not as_ref:
+            (
+                level,
+                do_downsample,
+                downsampling_kwargs,
+            ) = cls.get_level_and_downsampling_kwargs(
+                path, level, z_level_offset, storage_options=storage_options
+            )
+        else:
+            do_downsample = False
+
         # Open the Zarr metadata
         store = zarr.open(path, mode="r")
         multiscales = store.attrs.get("multiscales", [{}])
@@ -304,18 +316,6 @@ class ZarrNii:
 
         # Read orientation metadata (default to `orientation` if not present)
         orientation = store.attrs.get("orientation", orientation)
-
-        # Determine the level and whether downsampling is required
-        if not as_ref:
-            (
-                level,
-                do_downsample,
-                downsampling_kwargs,
-            ) = cls.get_level_and_downsampling_kwargs(
-                path, level, z_level_offset, storage_options=storage_options
-            )
-        else:
-            do_downsample = False
 
         # Load data or metadata as needed
         darr_base = da.from_zarr(
