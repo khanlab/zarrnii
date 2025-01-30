@@ -815,7 +815,7 @@ class ZarrNii:
         #  voxdim = np.flip(voxdim)  # Adjust voxel dimensions to ZYX
         else:
             out_darr = self.darr
-            out_affine = self.affine
+            out_affine = self.affine.matrix
 
         # Extract offset and voxel dimensions from the affine matrix
         offset = out_affine[:3, 3]
