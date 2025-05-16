@@ -780,13 +780,13 @@ class ZarrNii:
 
         return np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Extract scales
 
-    def to_ome_zarr(self, filename, max_layer=4, scaling_method="local_mean", **kwargs):
+    def to_ome_zarr(self, store_or_path, max_layer=4, scaling_method="local_mean", **kwargs):
         """
-        Save the current ZarrNii instance to an OME-Zarr file, always writing
+        Save the current ZarrNii instance to an OME-Zarr dataset, always writing
         axes in ZYX order.
 
         Parameters:
-            filename (str): Output path for the OME-Zarr file.
+            store_or_path (str or zarr.storage.BaseStore): Output path or Zarr store.
             max_layer (int): Maximum number of downsampling layers (default: 4).
             scaling_method (str): Method for downsampling (default: "local_mean").
             **kwargs: Additional arguments for `write_image`.
@@ -838,8 +838,13 @@ class ZarrNii:
                 ]
             )
 
-        # Set up Zarr store
-        store = zarr.storage.FSStore(filename, dimension_separator="/", mode="w")
+        
+        # Handle either a path or an existing store
+        if isinstance(store_or_path, str):
+            store = zarr.storage.FSStore(store_or_path, dimension_separator="/", mode="w")
+        else:
+            store = store_or_path
+
         group = zarr.group(store, overwrite=True)
 
         # Add metadata for orientation
