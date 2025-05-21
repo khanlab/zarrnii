@@ -10,10 +10,9 @@ import numpy as np
 import zarr
 from attrs import define, field
 from dask.diagnostics import ProgressBar
-from ome_zarr.scale import Scaler
-from ome_zarr.writer import write_image
 from scipy.interpolate import interpn
 from scipy.ndimage import zoom
+import ngff_zarr as nz
 
 from .transform import AffineTransform, Transform
 
@@ -256,7 +255,7 @@ class ZarrNii:
     @classmethod
     def from_ome_zarr(
         cls,
-        path,
+        store_or_path,
         level=0,
         channels=[0],
         chunks="auto",
@@ -271,7 +270,7 @@ class ZarrNii:
         Reads in an OME-Zarr file as a ZarrNii image, optionally as a reference.
 
         Parameters:
-            path (str): Path to the OME-Zarr file.
+            store_or_path (str): Store or path to the OME-Zarr file.
             level (int): Pyramid level to load (default: 0).
             channels (list): Channels to load (default: [0]).
             chunks (str or tuple): Chunk size for dask array (default: "auto").
@@ -294,37 +293,43 @@ class ZarrNii:
 
         # Determine the level and whether downsampling is required
         if not as_ref:
-            (
-                level,
-                do_downsample,
-                downsampling_kwargs,
-            ) = cls.get_level_and_downsampling_kwargs(
-                path, level, z_level_offset, storage_options=storage_options
-            )
+#            (
+#                level,
+#                do_downsample,
+#                downsampling_kwargs,
+#            ) = cls.get_level_and_downsampling_kwargs(
+#                path, level, z_level_offset, storage_options=storage_options
+#            )
+            print('would get level and downsampling here')
+            do_downsample = False #fix this
         else:
             do_downsample = False
 
-        # Open the Zarr metadata
-        store = zarr.open(path, mode="r")
-        multiscales = store.attrs.get("multiscales", [{}])
-        datasets = multiscales[0].get("datasets", [{}])
-        coordinate_transformations = datasets[level].get(
-            "coordinateTransformations", []
-        )
-        axes = multiscales[0].get("axes", [])
-        omero = store.attrs.get("omero", {})
+       
+        multiscales = nz.from_ngff_zarr(store_or_path)
+
+        print(multiscales.images)
+        print(multiscales.metadata)
 
         # Read orientation metadata (default to `orientation` if not present)
-        orientation = store.attrs.get("orientation", orientation)
+        #orientation = store.attrs.get("orientation", orientation) # -- TODO update this
+
+        darr_base = multiscales.images[level].data[channels,:,:,:]
 
         # Load data or metadata as needed
-        darr_base = da.from_zarr(
-            path, component=f"/{level}", storage_options=storage_options
-        )[channels, :, :, :]
+        #darr_base = da.from_zarr(
+        #    path, component=f"/{level}", storage_options=storage_options
+        #)[channels, :, :, :]
+
         shape = darr_base.shape
 
-        affine = cls.construct_affine(coordinate_transformations, orientation)
+        #Metadata(axes=[Axis(name='c', type='channel', unit=None), Axis(name='z', type='space', unit=None), Axis(name='y', type='space', unit=None), Axis(name='x', type='space', unit=None)], datasets=[Dataset(path='scale0/image', coordinateTransformations=[Scale(scale=[1.0, 1.0, 1.0, 1.0], type='scale'), Translation(translation=[0.0, 0.0, 0.0, 0.0], type='translation')])], coordinateTransformations=None, omero=None, name='image', version='0.4')
 
+        coordinate_transformations = multiscales.metadata.datasets[level].coordinateTransformations
+
+        print(coordinate_transformations)
+        affine = cls.construct_affine(coordinate_transformations, orientation)
+        print(affine)
         if zooms is not None:
             # Handle zoom adjustments
             in_zooms = np.sqrt(
@@ -353,9 +358,9 @@ class ZarrNii:
             darr,
             affine=AffineTransform.from_array(affine),
             axes_order="ZYX",
-            axes=axes,
+            axes=multiscales.metadata.axes,
             coordinate_transformations=coordinate_transformations,
-            omero=omero,
+            omero=multiscales.metadata.omero, 
         )
 
         if do_downsample:
@@ -413,10 +418,10 @@ class ZarrNii:
         translations = [0.0, 0.0, 0.0]
 
         for transform in coordinate_transformations:
-            if transform["type"] == "scale":
-                scales = transform["scale"][1:]  # Ignore the channel/time dimension
-            elif transform["type"] == "translation":
-                translations = transform["translation"][
+            if transform.type == "scale":
+                scales = transform.scale[1:]  # Ignore the channel/time dimension
+            elif transform.type == "translation":
+                translations = transform.translation[
                     1:
                 ]  # Ignore the channel/time dimension
 
@@ -780,16 +785,18 @@ class ZarrNii:
 
         return np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Extract scales
 
-    def to_ome_zarr(self, store_or_path, max_layer=4, scaling_method="local_mean", **kwargs):
+    def to_ome_zarr(self, store_or_path, max_layer=4, scaling_method=None,
+                    #"itk_bin_shrink",
+                    **kwargs):
         """
         Save the current ZarrNii instance to an OME-Zarr dataset, always writing
         axes in ZYX order.
 
         Parameters:
             store_or_path (str or zarr.storage.BaseStore): Output path or Zarr store.
-            max_layer (int): Maximum number of downsampling layers (default: 4).
-            scaling_method (str): Method for downsampling (default: "local_mean").
-            **kwargs: Additional arguments for `write_image`.
+            max_layer (int): Maximum number of downsampling layers (default: 4). TODO: update this
+            scaling_method (str): Method for downsampling (default: "itk_bin_shrink").
+            **kwargs: Additional arguments for `ngff_zarr.to_ngff_zarr`.
         """
         # Always write OME-Zarr axes as ZYX
         axes = [
@@ -816,32 +823,11 @@ class ZarrNii:
         offset = out_affine[:3, 3]
         voxdim = np.sqrt((out_affine[:3, :3] ** 2).sum(axis=0))  # Extract scales
 
-        # Prepare coordinate transformations
-        coordinate_transformations = []
-        for layer in range(max_layer + 1):
-            scale = [
-                1,
-                voxdim[0],
-                (2**layer) * voxdim[1],  # Downsampling in Y
-                (2**layer) * voxdim[2],  # Downsampling in X
-            ]
-            translation = [
-                0,
-                offset[0],
-                offset[1] / (2**layer),
-                offset[2] / (2**layer),
-            ]
-            coordinate_transformations.append(
-                [
-                    {"type": "scale", "scale": scale},
-                    {"type": "translation", "translation": translation},
-                ]
-            )
-
-        
+        print(store_or_path)
         # Handle either a path or an existing store
         if isinstance(store_or_path, str):
-            store = zarr.storage.FSStore(store_or_path, dimension_separator="/", mode="w")
+#            store = zarr.storage.FsspecStore.from_url(store_or_path)
+            store = zarr.storage.LocalStore(store_or_path) #FsspecStore.from_url(store_or_path)
         else:
             store = store_or_path
 
@@ -852,22 +838,23 @@ class ZarrNii:
             out_affine
         )  # Write current orientation
 
-        # Set up scaler for multi-resolution pyramid
-        if max_layer == 0:
-            scaler = None
-        else:
-            scaler = Scaler(max_layer=max_layer, method=scaling_method)
 
-        # Write the data to OME-Zarr
-        with ProgressBar():
-            write_image(
-                image=out_darr,
-                group=group,
-                scaler=scaler,
-                coordinate_transformations=coordinate_transformations,
-                axes=axes,
-                **kwargs,
-            )
+        ngff_img = nz.to_ngff_image(out_darr,
+                                    dims=['c','z','y','x'],
+                                    scale={'z': voxdim[0],
+                                           'y': voxdim[1],
+                                           'x': voxdim[2]},
+                                    translation={'z': offset[0],
+                                                 'y': offset[1],
+                                                 'x': offset[2]})
+
+
+        multiscales= nz.to_multiscales(ngff_img, method=scaling_method)
+
+        nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)
+
+
+
 
     def crop_with_bounding_box(self, bbox_min, bbox_max, ras_coords=False):
         """
