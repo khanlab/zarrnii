@@ -308,28 +308,24 @@ class ZarrNii:
        
         multiscales = nz.from_ngff_zarr(store_or_path)
 
-        print(multiscales.images)
-        print(multiscales.metadata)
 
         # Read orientation metadata (default to `orientation` if not present)
-        #orientation = store.attrs.get("orientation", orientation) # -- TODO update this
+        group = zarr.open_group(store_or_path, mode='r')
+
+        orientation = group.attrs.get("orientation", orientation)
+
+
 
         darr_base = multiscales.images[level].data[channels,:,:,:]
 
-        # Load data or metadata as needed
-        #darr_base = da.from_zarr(
-        #    path, component=f"/{level}", storage_options=storage_options
-        #)[channels, :, :, :]
 
         shape = darr_base.shape
 
-        #Metadata(axes=[Axis(name='c', type='channel', unit=None), Axis(name='z', type='space', unit=None), Axis(name='y', type='space', unit=None), Axis(name='x', type='space', unit=None)], datasets=[Dataset(path='scale0/image', coordinateTransformations=[Scale(scale=[1.0, 1.0, 1.0, 1.0], type='scale'), Translation(translation=[0.0, 0.0, 0.0, 0.0], type='translation')])], coordinateTransformations=None, omero=None, name='image', version='0.4')
 
         coordinate_transformations = multiscales.metadata.datasets[level].coordinateTransformations
 
-        print(coordinate_transformations)
         affine = cls.construct_affine(coordinate_transformations, orientation)
-        print(affine)
+
         if zooms is not None:
             # Handle zoom adjustments
             in_zooms = np.sqrt(
@@ -810,11 +806,8 @@ class ZarrNii:
         if self.axes_order == "XYZ":
             out_darr = da.moveaxis(
                 self.darr, (0, 1, 2, 3), (0, 3, 2, 1)
-            )  # Reorder to ZYX
-            #   flip_xfm = np.diag((-1, -1, -1, 1))  # Apply flips for consistency
-            # out_affine = flip_xfm @ self.affine
+            )  
             out_affine = self.reorder_affine_xyz_zyx(self.affine.matrix)
-        #  voxdim = np.flip(voxdim)  # Adjust voxel dimensions to ZYX
         else:
             out_darr = self.darr
             out_affine = self.affine.matrix
@@ -831,13 +824,6 @@ class ZarrNii:
         else:
             store = store_or_path
 
-        group = zarr.group(store, overwrite=True)
-
-        # Add metadata for orientation
-        group.attrs["orientation"] = affine_to_orientation(
-            out_affine
-        )  # Write current orientation
-
 
         ngff_img = nz.to_ngff_image(out_darr,
                                     dims=['c','z','y','x'],
@@ -849,9 +835,21 @@ class ZarrNii:
                                                  'x': offset[2]})
 
 
-        multiscales= nz.to_multiscales(ngff_img, method=scaling_method)
+        scale_factors = [2**i for i in range(1,max_layer)]
+        multiscales= nz.to_multiscales(ngff_img, 
+                                       #method=scaling_method, 
+#                                       method=nz.Methods.ITK_BIN_SHRINK,
+                                       scale_factors=scale_factors)
 
         nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)
+
+        #now add orientation metadata
+        group = zarr.open_group(store, mode='r+')
+
+        # Add metadata for orientation
+        group.attrs["orientation"] = affine_to_orientation(
+            out_affine
+        )  # Write current orientation
 
 
 
