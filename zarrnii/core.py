@@ -259,7 +259,6 @@ class ZarrNii:
         level=0,
         channels=[0],
         chunks="auto",
-        z_level_offset=-2,
         rechunk=False,
         storage_options=None,
         orientation="IPL",
@@ -274,7 +273,6 @@ class ZarrNii:
             level (int): Pyramid level to load (default: 0).
             channels (list): Channels to load (default: [0]).
             chunks (str or tuple): Chunk size for dask array (default: "auto").
-            z_level_offset (int): Offset for Z downsampling level (default: -2).
             rechunk (bool): Whether to rechunk the data (default: False).
             storage_options (dict): Storage options for Zarr.
             orientation (str): Default input orientation if none is specified in metadata (default: 'IPL').
@@ -293,15 +291,13 @@ class ZarrNii:
 
         # Determine the level and whether downsampling is required
         if not as_ref:
-#            (
-#                level,
-#                do_downsample,
-#                downsampling_kwargs,
-#            ) = cls.get_level_and_downsampling_kwargs(
-#                path, level, z_level_offset, storage_options=storage_options
-#            )
-            print('would get level and downsampling here')
-            do_downsample = False #fix this
+            (
+                level,
+                do_downsample,
+                downsampling_kwargs,
+            ) = cls.get_level_and_downsampling_kwargs(
+                store_or_path, level
+            )
         else:
             do_downsample = False
 
@@ -967,7 +963,7 @@ class ZarrNii:
         return bbox_min, bbox_max
 
     def downsample(
-        self, along_x=1, along_y=1, along_z=1, level=None, z_level_offset=-2
+        self, along_x=1, along_y=1, along_z=1, level=None
     ):
         """
         Downsamples the ZarrNii instance by local mean reduction.
@@ -976,18 +972,14 @@ class ZarrNii:
             along_x (int, optional): Downsampling factor along the X-axis (default: 1).
             along_y (int, optional): Downsampling factor along the Y-axis (default: 1).
             along_z (int, optional): Downsampling factor along the Z-axis (default: 1).
-            level (int, optional): If specified, calculates downsampling factors based on the level,
-                                   with Z-axis adjusted by `z_level_offset`.
-            z_level_offset (int, optional): Offset for the Z-axis downsampling factor when using `level`
-                                            (default: -2).
+            level (int, optional): If specified, calculates x y and z downsampling factors based on the level.
 
         Returns:
             ZarrNii: A new ZarrNii instance with the downsampled data and updated affine.
 
         Notes:
             - If `level` is provided, downsampling factors are calculated as:
-                - `along_x = along_y = 2**level`
-                - `along_z = 2**max(level + z_level_offset, 0)`
+                - `along_x = along_y = along_z = 2**level`
             - Updates the affine matrix to reflect the new voxel size after downsampling.
             - Uses `dask.array.coarsen` for efficient reduction along specified axes.
 
@@ -1002,8 +994,7 @@ class ZarrNii:
         if level is not None:
             along_x = 2**level
             along_y = 2**level
-            level_z = max(level + z_level_offset, 0)
-            along_z = 2**level_z
+            along_z = 2**level
 
         # Determine axes mapping based on axes_order
         if self.axes_order == "XYZ":
@@ -1237,7 +1228,7 @@ class ZarrNii:
         )
 
     @staticmethod
-    def get_max_level(path, storage_options=None):
+    def get_max_level(path):
         """
         Retrieves the maximum level of multiscale downsampling in an OME-Zarr dataset.
 
@@ -1253,29 +1244,12 @@ class ZarrNii:
             - The function assumes that the Zarr dataset follows the OME-Zarr specification
               with multiscale metadata.
         """
-        # Determine the store type
-        if isinstance(path, MutableMapping):
-            store = path
-        else:
-            store = fsspec.get_mapper(path, storage_options=storage_options)
-
-        # Open the Zarr group
-        group = zarr.open(store, mode="r")
-
-        # Access the multiscale metadata
-        multiscales = group.attrs.get("multiscales", [])
-
-        # Determine the maximum level
-        if multiscales:
-            max_level = len(multiscales[0]["datasets"]) - 1
-            return max_level
-        else:
-            print("No multiscale levels found.")
-            return None
+        multiscales = nz.from_ngff_zarr(path)
+        return len(multiscales.images)-1
 
     @staticmethod
     def get_level_and_downsampling_kwargs(
-        ome_zarr_path, level, z_level_offset=-2, storage_options=None
+        ome_zarr_path, level
     ):
         """
         Determines the appropriate pyramid level and additional downsampling factors for an OME-Zarr dataset.
@@ -1283,8 +1257,6 @@ class ZarrNii:
         Parameters:
             ome_zarr_path (str or MutableMapping): Path to the OME-Zarr dataset or a `MutableMapping` store.
             level (int): Desired downsampling level.
-            z_level_offset (int, optional): Offset to adjust the Z-axis downsampling level (default: -2).
-            storage_options (dict, optional): Storage options for accessing remote or custom storage.
 
         Returns:
             tuple:
@@ -1294,36 +1266,30 @@ class ZarrNii:
 
         Notes:
             - If the requested level exceeds the available pyramid levels, the function calculates
-              additional downsampling factors (`level_xy`, `level_z`) for XY and Z axes.
+              additional downsampling factors
         """
         max_level = ZarrNii.get_max_level(
-            ome_zarr_path, storage_options=storage_options
-        )
+            ome_zarr_path        )
 
         # Determine the pyramid level and additional downsampling factors
         if level > max_level:  # Requested level exceeds pyramid levels
-            level_xy = level - max_level
-            level_z = max(level + z_level_offset, 0)
+            level_ds = level - max_level
             level = max_level
         else:
-            level_xy = 0
-            level_z = max(level + z_level_offset, 0)
+            level_ds = 0
 
-        # print(
-        #    f"level: {level}, level_xy: {level_xy}, level_z: {level_z}, max_level: {max_level}"
-        # )
 
         # Determine if additional downsampling is needed
-        do_downsample = level_xy > 0 or level_z > 0
+        do_downsample = level_ds > 0
 
         # Return the level, downsampling flag, and downsampling parameters
         return (
             level,
             do_downsample,
             {
-                "along_x": 2**level_xy,
-                "along_y": 2**level_xy,
-                "along_z": 2**level_z,
+                "along_x": 2**level_ds,
+                "along_y": 2**level_ds,
+                "along_z": 2**level_ds,
             },
         )
 

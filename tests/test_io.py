@@ -177,6 +177,12 @@ def test_transform_indices_ref_to_flo(nifti_nib):
 
     assert_array_almost_equal(ref_indices, ref_flo_to_ref_indices)
 
+@pytest.mark.usefixtures("cleandir")
+def test_write_ome_zarr(znimg_from_multiscales):
+    #TODO: finish this..
+    print(znimg_from_multiscales)
+
+
 
 class TestOMEZarr:
     @pytest.mark.usefixtures("cleandir")
