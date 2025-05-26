@@ -59,6 +59,7 @@ class ZarrNii:
         omero=None,
         spacing=(1, 1, 1),
         origin=(0, 0, 0),
+        unit='micrometer',
     ):
         """
         Creates a ZarrNii instance from an existing Dask array.
@@ -74,6 +75,7 @@ class ZarrNii:
             omero (dict, optional): Omero metadata for OME-Zarr.
             spacing (tuple, optional): Voxel spacing along each axis (default: (1, 1, 1)).
             origin (tuple, optional): Origin point in physical space (default: (0, 0, 0)).
+            unit (str, optional): Units for spatial dimensions (default: micrometer).
 
         Returns:
             ZarrNii: A populated ZarrNii instance.
@@ -86,7 +88,7 @@ class ZarrNii:
         # Generate default axes if none are provided
         if axes is None:
             axes = [{"name": "c", "type": "channel", "unit": None}] + [
-                {"name": ax, "type": "space", "unit": "micrometer"} for ax in axes_order
+                {"name": ax, "type": "space", "unit": unit} for ax in axes_order
             ]
 
         # Generate default coordinate transformations if none are provided
@@ -311,15 +313,36 @@ class ZarrNii:
         orientation = group.attrs.get("orientation", orientation)
 
 
+        print(multiscales.metadata)
 
-        darr_base = multiscales.images[level].data[channels,:,:,:]
+           
+
+        # Get axis names
+        axis_names = [axis.name for axis in multiscales.metadata.axes]
+
+        # Determine index of 'c' axis
+        c_index = axis_names.index('c')
+
+        # Build slices: 0 for 't' (drop it), channels for 'c', slice(None) for others
+        slices = []
+        for i, name in enumerate(axis_names):
+            if name == 't':
+                slices.append(0)  # Drop singleton time axis
+            elif name == 'c':
+                slices.append(channels)  # Select specific channel(s)
+            else:
+                slices.append(slice(None))  # Keep full range
+
+        # Apply the slices
+        darr_base = multiscales.images[level].data[tuple(slices)]
 
 
         shape = darr_base.shape
-
+        print(f'shape is {shape}')
 
         coordinate_transformations = multiscales.metadata.datasets[level].coordinateTransformations
 
+        print(coordinate_transformations)
         affine = cls.construct_affine(coordinate_transformations, orientation)
 
         if zooms is not None:
@@ -411,10 +434,10 @@ class ZarrNii:
 
         for transform in coordinate_transformations:
             if transform.type == "scale":
-                scales = transform.scale[1:]  # Ignore the channel/time dimension
+                scales = transform.scale[-3:]  # Ignore the channel/time dimension
             elif transform.type == "translation":
                 translations = transform.translation[
-                    1:
+                        -3:
                 ]  # Ignore the channel/time dimension
 
         # Populate the affine matrix
@@ -790,13 +813,6 @@ class ZarrNii:
             scaling_method (str): Method for downsampling (default: "itk_bin_shrink").
             **kwargs: Additional arguments for `ngff_zarr.to_ngff_zarr`.
         """
-        # Always write OME-Zarr axes as ZYX
-        axes = [
-            {"name": "c", "type": "channel", "unit": None},
-            {"name": "z", "type": "space", "unit": "micrometer"},
-            {"name": "y", "type": "space", "unit": "micrometer"},
-            {"name": "x", "type": "space", "unit": "micrometer"},
-        ]
 
         # Reorder data if the axes order is XYZ (NIfTI-like)
         if self.axes_order == "XYZ":
@@ -804,15 +820,17 @@ class ZarrNii:
                 self.darr, (0, 1, 2, 3), (0, 3, 2, 1)
             )  
             out_affine = self.reorder_affine_xyz_zyx(self.affine.matrix)
+            out_axes = self.axes.reverse()
         else:
             out_darr = self.darr
             out_affine = self.affine.matrix
+            out_axes = self.axes
 
         # Extract offset and voxel dimensions from the affine matrix
         offset = out_affine[:3, 3]
         voxdim = np.sqrt((out_affine[:3, :3] ** 2).sum(axis=0))  # Extract scales
 
-        print(store_or_path)
+        #TODO: deal with fsspec and zipstores too !
         # Handle either a path or an existing store
         if isinstance(store_or_path, str):
 #            store = zarr.storage.FsspecStore.from_url(store_or_path)
