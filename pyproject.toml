@@ -13,7 +13,7 @@ packages = [{include = "zarrnii"}]
 python = ">=3.11,<4.0"
 zarr = "^3.0.8"
 nibabel = "^5.2.0"
-dask = "^2024.10.1"
+dask = "^2025.5.1"
 numpy = "^1.26.4"
 scipy = "^1.12.0"
 pandas = "^2.2.0"
