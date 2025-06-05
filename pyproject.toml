@@ -17,7 +17,6 @@ dask = ">=2025.5.1"
 numpy = ">=1.26.4"
 scipy = ">=1.12.0"
 pandas = ">=2.2.0"
-ome-zarr = ">=0.9.0"
 ngff-zarr = {extras = ["all"], version = ">=0.13.1"}
 
 [tool.poetry.group.dev.dependencies]
