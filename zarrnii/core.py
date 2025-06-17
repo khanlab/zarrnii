@@ -17,6 +17,10 @@ from scipy.ndimage import zoom
 
 from .transform import AffineTransform, Transform
 
+import os 
+from zarr.storage import ZipStore
+import zipfile
+
 
 @define
 class ZarrNii:
@@ -259,6 +263,7 @@ class ZarrNii:
         path,
         level=0,
         channels=[0],
+        timepoint=0, # added to account for 5D datasets
         chunks="auto",
         z_level_offset=-2,
         rechunk=False,
@@ -313,6 +318,7 @@ class ZarrNii:
         )
         axes = multiscales[0].get("axes", [])
         omero = store.attrs.get("omero", {})
+        print("Available levels:", list(store.keys()))
 
         # Read orientation metadata (default to `orientation` if not present)
         orientation = store.attrs.get("orientation", orientation)
@@ -320,7 +326,7 @@ class ZarrNii:
         # Load data or metadata as needed
         darr_base = da.from_zarr(
             path, component=f"/{level}", storage_options=storage_options
-        )[channels, :, :, :]
+        )[timepoint, channels, :, :, :]
         shape = darr_base.shape
 
         affine = cls.construct_affine(coordinate_transformations, orientation)
@@ -366,6 +372,40 @@ class ZarrNii:
 
         return znimg
 
+    @classmethod
+    def from_ome_zarr_zip(cls, path, level, check=False, affine=None, chunks="auto", orientation="RAS",
+                   axes_order="XYZ", axes=None, coordinate_transformations=None,
+                   omero=None, spacing=(1, 1, 1), origin=(0, 0, 0)):
+        # sanity check 
+        if check:
+            with zipfile.ZipFile(path, "r") as zf:
+                top_dirs = {
+                    entry.split("/")[0]
+                    for entry in zf.namelist()
+                    if entry.endswith("/") and entry.lower().endswith(".ome.zarr/")
+                }
+            if not top_dirs:
+                raise FileNotFoundError("No '.ome.zarr/' folder found in zip archive.")
+            print("Found ome.zarr folders in zip:", top_dirs)
+        
+        # open zip store 
+        store = ZipStore(path, mode='r')
+        top = os.path.basename(path).removesuffix(".zip")
+        root = zarr.open_group(store, mode="r", path=top)
+        keys = [k for k in root.group_keys() if k.upper() != "OME"]
+        if keys == ["0"]:
+            root = root["0"]
+        
+        if check:
+            print(f"Available levels: {list(root.keys())}")
+
+        array = root[str(level)][:]
+        zarr_obj = cls.from_array(array = array, affine=affine, chunks=chunks, orientation=orientation, axes_order=axes_order,
+                                  axes=axes, coordinate_transformations=coordinate_transformations, omero=omero, spacing=spacing,
+                                  origin=origin)
+        return zarr_obj 
+ 
+    
     @staticmethod
     def align_affine_to_input_orientation(affine, orientation):
         """
@@ -414,11 +454,11 @@ class ZarrNii:
 
         for transform in coordinate_transformations:
             if transform["type"] == "scale":
-                scales = transform["scale"][1:]  # Ignore the channel/time dimension
+                scales = transform["scale"][2:]  # modified to ignore the channel and time dimension, take only yzx
             elif transform["type"] == "translation":
                 translations = transform["translation"][
-                    1:
-                ]  # Ignore the channel/time dimension
+                    2:
+                ]  # Ignore the channel and time dimension
 
         # Populate the affine matrix
         affine[:3, :3] = np.diag(scales)  # Set scaling
@@ -716,7 +756,7 @@ class ZarrNii:
             affine = self.affine.matrix  # No reordering needed
         # Create the NIfTI-1 image
         nii_img = nib.Nifti1Image(
-            data[0], affine
+            data[0,:,:,:], affine
         )  # Remove the channel dimension for NIfTI
 
         # Save the NIfTI file if a filename is provided
@@ -981,6 +1021,8 @@ class ZarrNii:
     ):
         """
         Downsamples the ZarrNii instance by local mean reduction.
+        2025/04/11: modified to support both 4D and 5D data. For 5D data with shape (t, c, spatial dims),
+        only the spatial dimensions (assumed at indices 2,3,4) are downsampled.
 
         Parameters:
             along_x (int, optional): Downsampling factor along the X-axis (default: 1).
@@ -1016,22 +1058,41 @@ class ZarrNii:
             along_z = 2**level_z
 
         # Determine axes mapping based on axes_order
-        if self.axes_order == "XYZ":
-            axes = {0: 1, 1: along_x, 2: along_y, 3: along_z}  # (C, X, Y, Z)
+        ndim = self.darr.ndim
+
+        if ndim == 5:
+            if self.axes_order == "XYZ":
+                axes = {0: 1, 1: 1, 2: along_x, 3: along_y, 4: along_z}
+            else:
+                axes = {0: 1, 1: 1, 2: along_z, 3: along_y, 4: along_x}
+        elif ndim == 4:
+            # Legacy support for 4D data, e.g., (C, X, Y, Z) or (C, Z, Y, X)
+            if self.axes_order == "XYZ":
+                axes = {0: 1, 1: along_x, 2: along_y, 3: along_z}
+            else:
+                axes = {0: 1, 1: along_z, 2: along_y, 3: along_x}
         else:
-            axes = {0: 1, 1: along_z, 2: along_y, 3: along_x}  # (C, Z, Y, X)
+            raise ValueError("Array dimensionality not supported.")
+        
+        axes = {axis: (factor if self.darr.shape[axis] >= factor else 1)
+            for axis, factor in axes.items()}
 
         # Perform local mean reduction using coarsen
         agg_func = np.mean
         darr_scaled = da.coarsen(agg_func, x=self.darr, axes=axes, trim_excess=True)
 
         # Update the affine matrix to reflect downsampling
-        scaling_matrix = np.diag((along_x, along_y, along_z, 1))
+        scaling_matrix = np.diag((along_x if self.darr.shape[-1] >= along_x else 1,
+                                    along_y if self.darr.shape[-2] >= along_y else 1,
+                                    along_z if (ndim == 4 and self.darr.shape[-3] >= along_z) or 
+                                    (ndim == 5 and self.darr.shape[2] >= along_z) else 1,
+                              1))
         new_affine = AffineTransform.from_array(scaling_matrix @ self.affine.matrix)
 
         # Create and return a new ZarrNii instance
         return ZarrNii.from_darr(
-            darr_scaled, affine=new_affine, axes_order=self.axes_order
+            darr_scaled, affine=new_affine, axes_order=self.axes_order,
+            axes=self.axes
         )
 
     def __get_upsampled_chunks(self, target_shape, return_scaling=True):
@@ -1263,25 +1324,27 @@ class ZarrNii:
             - The function assumes that the Zarr dataset follows the OME-Zarr specification
               with multiscale metadata.
         """
-        # Determine the store type
         if isinstance(path, MutableMapping):
             store = path
+            group = zarr.open_group(store, mode="r")
         else:
-            store = fsspec.get_mapper(path, storage_options=storage_options)
+            # string path: check for ZIP
+            if str(path).endswith(".zip"):
+                top = os.path.basename(path).removesuffix(".zip")
+                store = ZipStore(path, mode="r")
+                group = zarr.open_group(store, mode="r", path=top)
+            else:
+                mapper = fsspec.get_mapper(path, storage_options=storage_options)
+                group  = zarr.open_group(mapper, mode="r")
 
-        # Open the Zarr group
-        group = zarr.open(store, mode="r")
-
-        # Access the multiscale metadata
         multiscales = group.attrs.get("multiscales", [])
+        if not multiscales:
+            return 0
 
-        # Determine the maximum level
-        if multiscales:
-            max_level = len(multiscales[0]["datasets"]) - 1
-            return max_level
-        else:
-            print("No multiscale levels found.")
-            return None
+        datasets = multiscales[0].get("datasets", [])
+        # if they wrote N levels, datasets has length N
+        # so max_level = N − 1
+        return max(0, len(datasets) - 1)
 
     @staticmethod
     def get_level_and_downsampling_kwargs(
