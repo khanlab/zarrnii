@@ -18,8 +18,10 @@ from scipy.ndimage import zoom
 from .transform import AffineTransform, Transform
 
 import os 
+from pathlib import Path
 from zarr.storage import ZipStore
 import zipfile
+from .enums import ImageType
 
 
 @define
@@ -263,7 +265,6 @@ class ZarrNii:
         path,
         level=0,
         channels=[0],
-        timepoint=0, # added to account for 5D datasets
         chunks="auto",
         z_level_offset=-2,
         rechunk=False,
@@ -271,6 +272,7 @@ class ZarrNii:
         orientation="IPL",
         as_ref=False,
         zooms=None,
+        check=False,
     ):
         """
         Reads in an OME-Zarr file as a ZarrNii image, optionally as a reference.
@@ -286,6 +288,7 @@ class ZarrNii:
             orientation (str): Default input orientation if none is specified in metadata (default: 'IPL').
             as_ref (bool): If True, creates an empty dask array with the correct shape instead of loading data.
             zooms (list or np.ndarray): Target voxel spacing in xyz (only valid if as_ref=True).
+            check (bool): Whether to print available resolution level (default: False).
 
         Returns:
             ZarrNii: A populated ZarrNii instance.
@@ -318,17 +321,30 @@ class ZarrNii:
         )
         axes = multiscales[0].get("axes", [])
         omero = store.attrs.get("omero", {})
-        print("Available levels:", list(store.keys()))
+        if check: 
+            print("Available levels:", list(store.keys()))
 
         # Read orientation metadata (default to `orientation` if not present)
         orientation = store.attrs.get("orientation", orientation)
 
-        # Load data or metadata as needed
-        darr_base = da.from_zarr(
-            path, component=f"/{level}", storage_options=storage_options
-        )[timepoint, channels, :, :, :]
-        shape = darr_base.shape
-
+        # check shape
+        raw = da.from_zarr(path, component=f"/{level}", storage_options=storage_options)
+        if raw.ndim == 5:
+            darr_base = da.from_zarr(
+                path, component=f"/{level}", storage_options=storage_options
+                )[:, channels, :, :, :]
+            shape = darr_base.shape
+        elif raw.ndim == 4:
+            darr_base = da.from_zarr(
+                path, component=f"/{level}", storage_options=storage_options
+                )[channels, :, :, :]
+            shape = darr_base.shape
+        else:
+            raise ValueError(
+                f"Expected 4D (C,Z,Y,X) or 5D (T,C,Z,Y,X) array at level {level}. "
+                f"Got {raw.ndim}D with shape {raw.shape}"
+            )
+        
         affine = cls.construct_affine(coordinate_transformations, orientation)
 
         if zooms is not None:
@@ -405,6 +421,33 @@ class ZarrNii:
                                   origin=origin)
         return zarr_obj 
  
+    @classmethod
+    def from_path(cls, path, level=0, channels=[0], chunks="auto", rechunk=False):
+        """returns a dask array whether a nifti or ome_zarr is provided"""
+        from .transform import Transform
+
+        img_type = cls.check_img_type(path)
+        if img_type is ImageType.OME_ZARR:
+            darr = da.from_zarr(path, component=f"/{level}")[channels, :, :, :]
+            if rechunk:
+                darr = darr.rechunk(chunks)
+            zi = zarr
+            axes_nifti = False
+        elif img_type is ImageType.NIFTI:
+            darr = da.from_array(
+                np.expand_dims(nib.load(path).get_fdata(), axis=0),
+                chunks=chunks,
+            )
+            axes_nifti = True
+        else:
+            raise TypeError("Unsupported image type for ZarrNii")
+
+        return cls(
+            darr,
+            ras2vox=Transform.ras2vox_from_image(path,level=level),
+            vox2ras=Transform.vox2ras_from_image(path,level=level),
+            axes_nifti=axes_nifti,
+        )
     
     @staticmethod
     def align_affine_to_input_orientation(affine, orientation):
@@ -511,6 +554,26 @@ class ZarrNii:
             str: The orientation string corresponding to the dataset's affine transformation.
         """
         return affine_to_orientation(self.affine)
+
+    @staticmethod
+    def check_img_type(path) -> ImageType:
+        suffixes = Path(path).suffixes
+        if len(suffixes) > 2:
+            if suffixes[-3] == ".ome" and suffixes[-2] == ".zarr" and suffixes[-1] == ".zip":
+                return ImageType.OME_ZARR
+
+        if len(suffixes) > 1:
+            if suffixes[-2] == ".ome" and suffixes[-1] == ".zarr":
+                return ImageType.OME_ZARR
+            if suffixes[-2] == ".nii" and suffixes[-1] == ".gz":
+                return ImageType.NIFTI
+        if suffixes[-1] == ".zarr":
+            return ImageType.ZARR
+        elif suffixes[-1] == ".nii":
+            return ImageType.NIFTI
+        else:
+            return ImageType.UNKNOWN
+
 
     def apply_transform(self, *tfms, ref_znimg):
         """
@@ -742,6 +805,10 @@ class ZarrNii:
             - Reorders data to XYZ order if the current `axes_order` is ZYX.
             - Adjusts the affine matrix accordingly to match the reordered data.
         """
+        # handles 5D data
+        darr = self.darr
+        if darr.ndim == 5:
+            self = darr[0, 0, ...]
 
         # Reorder data to match NIfTI's expected XYZ order if necessary
         if self.axes_order == "ZYX":
