@@ -44,6 +44,7 @@ def test_from_nifti_to_zarr_to_nifti(nifti_nib):
     # now we have znimg with axes_order == 'XYZ'
 
     znimg.to_ome_zarr("test_fromznimg.ome.zarr")
+
     znimg2 = ZarrNii.from_ome_zarr("test_fromznimg.ome.zarr")
     znimg2
 
@@ -176,6 +177,13 @@ def test_transform_indices_ref_to_flo(nifti_nib):
 
     assert_array_almost_equal(ref_indices, ref_flo_to_ref_indices)
 
+@pytest.mark.usefixtures("cleandir_fake")
+def test_write_ome_zarr(znimg_from_multiscales):
+    print(znimg_from_multiscales)
+    
+    assert(True) #add a test here.. 
+
+
 
 class TestOMEZarr:
     @pytest.mark.usefixtures("cleandir")
@@ -183,7 +191,7 @@ class TestOMEZarr:
         # test reading and writing ome zarr
         OME_ZARR_PATH = "./test.ome.zarr"
         generate_synthetic_dataset(
-            OME_ZARR_PATH, arr_sz=(1, 16, 128, 128), MAX_LAYER=1  # layer 0 and 1
+            OME_ZARR_PATH, arr_sz=(1, 16, 128, 128), 
         )
         arr = ZarrNii.from_ome_zarr(OME_ZARR_PATH, level=0, channels=[0]).darr
         assert arr.compute().sum() > 0

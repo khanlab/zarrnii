@@ -10,10 +10,9 @@ import numpy as np
 import zarr
 from attrs import define, field
 from dask.diagnostics import ProgressBar
-from ome_zarr.scale import Scaler
-from ome_zarr.writer import write_image
 from scipy.interpolate import interpn
 from scipy.ndimage import zoom
+import ngff_zarr as nz
 
 from .transform import AffineTransform, Transform
 
@@ -60,6 +59,7 @@ class ZarrNii:
         omero=None,
         spacing=(1, 1, 1),
         origin=(0, 0, 0),
+        unit='micrometer',
     ):
         """
         Creates a ZarrNii instance from an existing Dask array.
@@ -75,6 +75,7 @@ class ZarrNii:
             omero (dict, optional): Omero metadata for OME-Zarr.
             spacing (tuple, optional): Voxel spacing along each axis (default: (1, 1, 1)).
             origin (tuple, optional): Origin point in physical space (default: (0, 0, 0)).
+            unit (str, optional): Units for spatial dimensions (default: micrometer).
 
         Returns:
             ZarrNii: A populated ZarrNii instance.
@@ -87,7 +88,7 @@ class ZarrNii:
         # Generate default axes if none are provided
         if axes is None:
             axes = [{"name": "c", "type": "channel", "unit": None}] + [
-                {"name": ax, "type": "space", "unit": "micrometer"} for ax in axes_order
+                {"name": ax, "type": "space", "unit": unit} for ax in axes_order
             ]
 
         # Generate default coordinate transformations if none are provided
@@ -256,11 +257,10 @@ class ZarrNii:
     @classmethod
     def from_ome_zarr(
         cls,
-        path,
+        store_or_path,
         level=0,
         channels=[0],
         chunks="auto",
-        z_level_offset=-2,
         rechunk=False,
         storage_options=None,
         orientation="IPL",
@@ -271,11 +271,10 @@ class ZarrNii:
         Reads in an OME-Zarr file as a ZarrNii image, optionally as a reference.
 
         Parameters:
-            path (str): Path to the OME-Zarr file.
+            store_or_path (str): Store or path to the OME-Zarr file.
             level (int): Pyramid level to load (default: 0).
             channels (list): Channels to load (default: [0]).
             chunks (str or tuple): Chunk size for dask array (default: "auto").
-            z_level_offset (int): Offset for Z downsampling level (default: -2).
             rechunk (bool): Whether to rechunk the data (default: False).
             storage_options (dict): Storage options for Zarr.
             orientation (str): Default input orientation if none is specified in metadata (default: 'IPL').
@@ -299,30 +298,51 @@ class ZarrNii:
                 do_downsample,
                 downsampling_kwargs,
             ) = cls.get_level_and_downsampling_kwargs(
-                path, level, z_level_offset, storage_options=storage_options
+                store_or_path, level
             )
         else:
             do_downsample = False
 
-        # Open the Zarr metadata
-        store = zarr.open(path, mode="r")
-        multiscales = store.attrs.get("multiscales", [{}])
-        datasets = multiscales[0].get("datasets", [{}])
-        coordinate_transformations = datasets[level].get(
-            "coordinateTransformations", []
-        )
-        axes = multiscales[0].get("axes", [])
-        omero = store.attrs.get("omero", {})
+       
+        multiscales = nz.from_ngff_zarr(store_or_path)
+
 
         # Read orientation metadata (default to `orientation` if not present)
-        orientation = store.attrs.get("orientation", orientation)
+        group = zarr.open_group(store_or_path, mode='r')
 
-        # Load data or metadata as needed
-        darr_base = da.from_zarr(
-            path, component=f"/{level}", storage_options=storage_options
-        )[channels, :, :, :]
+        orientation = group.attrs.get("orientation", orientation)
+
+
+        print(multiscales.metadata)
+
+           
+
+        # Get axis names
+        axis_names = [axis.name for axis in multiscales.metadata.axes]
+
+        # Determine index of 'c' axis
+        c_index = axis_names.index('c')
+
+        # Build slices: 0 for 't' (drop it), channels for 'c', slice(None) for others
+        slices = []
+        for i, name in enumerate(axis_names):
+            if name == 't':
+                slices.append(0)  # Drop singleton time axis
+            elif name == 'c':
+                slices.append(channels)  # Select specific channel(s)
+            else:
+                slices.append(slice(None))  # Keep full range
+
+        # Apply the slices
+        darr_base = multiscales.images[level].data[tuple(slices)]
+
+
         shape = darr_base.shape
+        print(f'shape is {shape}')
 
+        coordinate_transformations = multiscales.metadata.datasets[level].coordinateTransformations
+
+        print(coordinate_transformations)
         affine = cls.construct_affine(coordinate_transformations, orientation)
 
         if zooms is not None:
@@ -353,9 +373,9 @@ class ZarrNii:
             darr,
             affine=AffineTransform.from_array(affine),
             axes_order="ZYX",
-            axes=axes,
+            axes=multiscales.metadata.axes,
             coordinate_transformations=coordinate_transformations,
-            omero=omero,
+            omero=multiscales.metadata.omero, 
         )
 
         if do_downsample:
@@ -413,11 +433,11 @@ class ZarrNii:
         translations = [0.0, 0.0, 0.0]
 
         for transform in coordinate_transformations:
-            if transform["type"] == "scale":
-                scales = transform["scale"][1:]  # Ignore the channel/time dimension
-            elif transform["type"] == "translation":
-                translations = transform["translation"][
-                    1:
+            if transform.type == "scale":
+                scales = transform.scale[-3:]  # Ignore the channel/time dimension
+            elif transform.type == "translation":
+                translations = transform.translation[
+                        -3:
                 ]  # Ignore the channel/time dimension
 
         # Populate the affine matrix
@@ -780,89 +800,73 @@ class ZarrNii:
 
         return np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Extract scales
 
-    def to_ome_zarr(self, filename, max_layer=4, scaling_method="local_mean", **kwargs):
+    def to_ome_zarr(self, store_or_path, max_layer=4, scaling_method=None,
+                    #"itk_bin_shrink",
+                    **kwargs):
         """
-        Save the current ZarrNii instance to an OME-Zarr file, always writing
+        Save the current ZarrNii instance to an OME-Zarr dataset, always writing
         axes in ZYX order.
 
         Parameters:
-            filename (str): Output path for the OME-Zarr file.
-            max_layer (int): Maximum number of downsampling layers (default: 4).
-            scaling_method (str): Method for downsampling (default: "local_mean").
-            **kwargs: Additional arguments for `write_image`.
+            store_or_path (str or zarr.storage.BaseStore): Output path or Zarr store.
+            max_layer (int): Maximum number of downsampling layers (default: 4). TODO: update this
+            scaling_method (str): Method for downsampling (default: "itk_bin_shrink").
+            **kwargs: Additional arguments for `ngff_zarr.to_ngff_zarr`.
         """
-        # Always write OME-Zarr axes as ZYX
-        axes = [
-            {"name": "c", "type": "channel", "unit": None},
-            {"name": "z", "type": "space", "unit": "micrometer"},
-            {"name": "y", "type": "space", "unit": "micrometer"},
-            {"name": "x", "type": "space", "unit": "micrometer"},
-        ]
 
         # Reorder data if the axes order is XYZ (NIfTI-like)
         if self.axes_order == "XYZ":
             out_darr = da.moveaxis(
                 self.darr, (0, 1, 2, 3), (0, 3, 2, 1)
-            )  # Reorder to ZYX
-            #   flip_xfm = np.diag((-1, -1, -1, 1))  # Apply flips for consistency
-            # out_affine = flip_xfm @ self.affine
+            )  
             out_affine = self.reorder_affine_xyz_zyx(self.affine.matrix)
-        #  voxdim = np.flip(voxdim)  # Adjust voxel dimensions to ZYX
+            out_axes = self.axes.reverse()
         else:
             out_darr = self.darr
             out_affine = self.affine.matrix
+            out_axes = self.axes
 
         # Extract offset and voxel dimensions from the affine matrix
         offset = out_affine[:3, 3]
         voxdim = np.sqrt((out_affine[:3, :3] ** 2).sum(axis=0))  # Extract scales
 
-        # Prepare coordinate transformations
-        coordinate_transformations = []
-        for layer in range(max_layer + 1):
-            scale = [
-                1,
-                voxdim[0],
-                (2**layer) * voxdim[1],  # Downsampling in Y
-                (2**layer) * voxdim[2],  # Downsampling in X
-            ]
-            translation = [
-                0,
-                offset[0],
-                offset[1] / (2**layer),
-                offset[2] / (2**layer),
-            ]
-            coordinate_transformations.append(
-                [
-                    {"type": "scale", "scale": scale},
-                    {"type": "translation", "translation": translation},
-                ]
-            )
+        #TODO: deal with fsspec and zipstores too !
+        # Handle either a path or an existing store
+        if isinstance(store_or_path, str):
+#            store = zarr.storage.FsspecStore.from_url(store_or_path)
+            store = zarr.storage.LocalStore(store_or_path) #FsspecStore.from_url(store_or_path)
+        else:
+            store = store_or_path
 
-        # Set up Zarr store
-        store = zarr.storage.FSStore(filename, dimension_separator="/", mode="w")
-        group = zarr.group(store, overwrite=True)
+
+        ngff_img = nz.to_ngff_image(out_darr,
+                                    dims=['c','z','y','x'],
+                                    scale={'z': voxdim[0],
+                                           'y': voxdim[1],
+                                           'x': voxdim[2]},
+                                    translation={'z': offset[0],
+                                                 'y': offset[1],
+                                                 'x': offset[2]})
+
+
+        scale_factors = [2**i for i in range(1,max_layer)]
+        multiscales= nz.to_multiscales(ngff_img, 
+                                       #method=scaling_method, 
+#                                       method=nz.Methods.ITK_BIN_SHRINK,
+                                       scale_factors=scale_factors)
+
+        nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)
+
+        #now add orientation metadata
+        group = zarr.open_group(store, mode='r+')
 
         # Add metadata for orientation
         group.attrs["orientation"] = affine_to_orientation(
             out_affine
         )  # Write current orientation
 
-        # Set up scaler for multi-resolution pyramid
-        if max_layer == 0:
-            scaler = None
-        else:
-            scaler = Scaler(max_layer=max_layer, method=scaling_method)
 
-        # Write the data to OME-Zarr
-        with ProgressBar():
-            write_image(
-                image=out_darr,
-                group=group,
-                scaler=scaler,
-                coordinate_transformations=coordinate_transformations,
-                axes=axes,
-                **kwargs,
-            )
+
 
     def crop_with_bounding_box(self, bbox_min, bbox_max, ras_coords=False):
         """
@@ -977,7 +981,7 @@ class ZarrNii:
         return bbox_min, bbox_max
 
     def downsample(
-        self, along_x=1, along_y=1, along_z=1, level=None, z_level_offset=-2
+        self, along_x=1, along_y=1, along_z=1, level=None
     ):
         """
         Downsamples the ZarrNii instance by local mean reduction.
@@ -986,18 +990,14 @@ class ZarrNii:
             along_x (int, optional): Downsampling factor along the X-axis (default: 1).
             along_y (int, optional): Downsampling factor along the Y-axis (default: 1).
             along_z (int, optional): Downsampling factor along the Z-axis (default: 1).
-            level (int, optional): If specified, calculates downsampling factors based on the level,
-                                   with Z-axis adjusted by `z_level_offset`.
-            z_level_offset (int, optional): Offset for the Z-axis downsampling factor when using `level`
-                                            (default: -2).
+            level (int, optional): If specified, calculates x y and z downsampling factors based on the level.
 
         Returns:
             ZarrNii: A new ZarrNii instance with the downsampled data and updated affine.
 
         Notes:
             - If `level` is provided, downsampling factors are calculated as:
-                - `along_x = along_y = 2**level`
-                - `along_z = 2**max(level + z_level_offset, 0)`
+                - `along_x = along_y = along_z = 2**level`
             - Updates the affine matrix to reflect the new voxel size after downsampling.
             - Uses `dask.array.coarsen` for efficient reduction along specified axes.
 
@@ -1012,8 +1012,7 @@ class ZarrNii:
         if level is not None:
             along_x = 2**level
             along_y = 2**level
-            level_z = max(level + z_level_offset, 0)
-            along_z = 2**level_z
+            along_z = 2**level
 
         # Determine axes mapping based on axes_order
         if self.axes_order == "XYZ":
@@ -1247,7 +1246,7 @@ class ZarrNii:
         )
 
     @staticmethod
-    def get_max_level(path, storage_options=None):
+    def get_max_level(path):
         """
         Retrieves the maximum level of multiscale downsampling in an OME-Zarr dataset.
 
@@ -1263,29 +1262,12 @@ class ZarrNii:
             - The function assumes that the Zarr dataset follows the OME-Zarr specification
               with multiscale metadata.
         """
-        # Determine the store type
-        if isinstance(path, MutableMapping):
-            store = path
-        else:
-            store = fsspec.get_mapper(path, storage_options=storage_options)
-
-        # Open the Zarr group
-        group = zarr.open(store, mode="r")
-
-        # Access the multiscale metadata
-        multiscales = group.attrs.get("multiscales", [])
-
-        # Determine the maximum level
-        if multiscales:
-            max_level = len(multiscales[0]["datasets"]) - 1
-            return max_level
-        else:
-            print("No multiscale levels found.")
-            return None
+        multiscales = nz.from_ngff_zarr(path)
+        return len(multiscales.images)-1
 
     @staticmethod
     def get_level_and_downsampling_kwargs(
-        ome_zarr_path, level, z_level_offset=-2, storage_options=None
+        ome_zarr_path, level
     ):
         """
         Determines the appropriate pyramid level and additional downsampling factors for an OME-Zarr dataset.
@@ -1293,8 +1275,6 @@ class ZarrNii:
         Parameters:
             ome_zarr_path (str or MutableMapping): Path to the OME-Zarr dataset or a `MutableMapping` store.
             level (int): Desired downsampling level.
-            z_level_offset (int, optional): Offset to adjust the Z-axis downsampling level (default: -2).
-            storage_options (dict, optional): Storage options for accessing remote or custom storage.
 
         Returns:
             tuple:
@@ -1304,36 +1284,30 @@ class ZarrNii:
 
         Notes:
             - If the requested level exceeds the available pyramid levels, the function calculates
-              additional downsampling factors (`level_xy`, `level_z`) for XY and Z axes.
+              additional downsampling factors
         """
         max_level = ZarrNii.get_max_level(
-            ome_zarr_path, storage_options=storage_options
-        )
+            ome_zarr_path        )
 
         # Determine the pyramid level and additional downsampling factors
         if level > max_level:  # Requested level exceeds pyramid levels
-            level_xy = level - max_level
-            level_z = max(level + z_level_offset, 0)
+            level_ds = level - max_level
             level = max_level
         else:
-            level_xy = 0
-            level_z = max(level + z_level_offset, 0)
+            level_ds = 0
 
-        # print(
-        #    f"level: {level}, level_xy: {level_xy}, level_z: {level_z}, max_level: {max_level}"
-        # )
 
         # Determine if additional downsampling is needed
-        do_downsample = level_xy > 0 or level_z > 0
+        do_downsample = level_ds > 0
 
         # Return the level, downsampling flag, and downsampling parameters
         return (
             level,
             do_downsample,
             {
-                "along_x": 2**level_xy,
-                "along_y": 2**level_xy,
-                "along_z": 2**level_z,
+                "along_x": 2**level_ds,
+                "along_y": 2**level_ds,
+                "along_z": 2**level_ds,
             },
         )
 
