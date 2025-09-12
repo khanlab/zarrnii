@@ -1,60 +1,75 @@
-[tool.poetry]
+[project]
 name = "zarrnii"
-version = "0.3.0-alpha.1"
+dynamic = ["version"]
 description = "Package for working with OME-Zarr and NIFTI images in a unified manner, with a focus on spatial transformations"
-authors = ["Ali Khan <alik@robarts.ca>"]
-license = "MIT"
+authors = [{name = "Ali Khan", email = "alik@robarts.ca"}]
+license = {text = "MIT"}
 readme = "README.md"
-packages = [{include = "zarrnii"}]
+requires-python = ">=3.11"
+keywords = ["neuroimaging", "ome-zarr", "nifti", "biomedical", "imaging", "microscopy", "mri"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research", 
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
 
 
+dependencies = [
+    "zarr>=3.0.8",
+    "nibabel>=5.2.0",
+    "dask>=2025.5.1",
+    "numpy>=1.26.4",
+    "scipy>=1.12.0",
+    "pandas>=2.2.0",
+    "ngff-zarr[all]>=0.13.1",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.11,<4.0"
-zarr = ">=3.0.8"
-nibabel = ">=5.2.0"
-dask = ">=2025.5.1"
-numpy = ">=1.26.4"
-scipy = ">=1.12.0"
-pandas = ">=2.2.0"
-ngff-zarr = {extras = ["all"], version = ">=0.13.1"}
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.2.0"
-poethepoet = "^0.13.1"
-pre-commit = "^2.17.0"
-jupyterlab = "^4.2.1"
-matplotlib = "^3.9.0"
-bokeh = "^3.4.1"
-flake8 = "^7.1.1"
-flake8-docstrings = "^1.7.0"
-flake8-bugbear = "^24.12.12"
-flake8-import-order = "^0.18.2"
-black = "^24.10.0"
-isort = "^5.13.2"
-mkdocs = "^1.6.1"
-mkdocs-material = "^9.5.50"
-mkdocstrings = "^0.27.0"
-mkdocstrings-python = "^1.13.0"
-bump2version = "^1.0.1"
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pre-commit>=2.17.0",
+    "jupyterlab>=4.2.1",
+    "matplotlib>=3.9.0",
+    "bokeh>=3.4.1",
+    "flake8>=7.1.1",
+    "flake8-docstrings>=1.7.0",
+    "flake8-bugbear>=24.12.12",
+    "flake8-import-order>=0.18.2",
+    "black>=24.10.0",
+    "isort>=5.13.2",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.5.50",
+    "mkdocstrings>=0.27.0",
+    "mkdocstrings-python>=1.13.0",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
+[project.scripts]
+# No CLI scripts currently
 
-[tool.poe.tasks]
-setup = "pre-commit install"
-lint = "flake8 ."
-format = "black ."
-sort-imports = "isort ."
-check-format = "black --check ."
-check-imports = "isort --check ."
-pytest = "pytest -v"
-test = [ "pytest" ]
-serve-docs = "mkdocs serve"
-build-docs = "mkdocs build"
-deploy-docs = "mkdocs gh-deploy"
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "zarrnii/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["zarrnii"]
+
+[project.urls]
+Homepage = "https://github.com/khanlab/zarrnii"
+Documentation = "https://www.khanlab.ca/zarrnii"
+Repository = "https://github.com/khanlab/zarrnii"
+Issues = "https://github.com/khanlab/zarrnii/issues"
 
 
 [tool.flake8]

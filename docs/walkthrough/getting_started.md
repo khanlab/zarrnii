@@ -6,22 +6,22 @@ This guide helps you set up **ZarrNii** and get started with its basic functiona
 
 ## Installation
 
-ZarrNii requires Python 3.10 or later. Install it using [Poetry](https://python-poetry.org/), a modern dependency manager for Python.
+ZarrNii requires Python 3.11 or later. Install it using [uv](https://docs.astral.sh/uv/), a modern, fast Python package installer and project manager.
 
 ### **1. Clone the Repository**
 If you're using the source code, clone the ZarrNii repository:
 ```bash
-git clone https://github.com/yourusername/zarrnii.git
+git clone https://github.com/khanlab/zarrnii.git
 cd zarrnii
 ```
 
-### **2. Install with Poetry**
+### **2. Install with uv**
 Run the following command to install the library and its dependencies:
 ```bash
-poetry install
+uv sync --dev
 ```
 
-If you don't use Poetry, install ZarrNii and its dependencies using `pip`:
+If you don't use uv, install ZarrNii and its dependencies using `pip`:
 ```bash
 pip install zarrnii
 ```

@@ -21,32 +21,27 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         
-    - name: Install Poetry
-      run: |
-        curl -sSL https://install.python-poetry.org | python3 -
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
         
-    - name: Configure Poetry
-      run: |
-        poetry config virtualenvs.create true
-        poetry config virtualenvs.in-project false
-        
-    - name: Cache Poetry dependencies
+    - name: Cache uv dependencies  
       uses: actions/cache@v4
       with:
         path: |
-          ~/.cache/pypoetry
-          ~/.cache/pip
-        key: ${{ runner.os }}-poetry-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+          ~/.cache/uv
+          .venv
+        key: ${{ runner.os }}-uv-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml', '**/uv.lock') }}
         restore-keys: |
-          ${{ runner.os }}-poetry-${{ matrix.python-version }}-
-          ${{ runner.os }}-poetry-
+          ${{ runner.os }}-uv-${{ matrix.python-version }}-
+          ${{ runner.os }}-uv-
           
     - name: Install dependencies
-      run: poetry install
+      run: uv sync --dev
       
     - name: Run tests with pytest
-      run: poetry run poe test
+      run: uv run pytest -v
       
   quality-checks:
     runs-on: ubuntu-latest
@@ -58,47 +53,42 @@ jobs:
       with:
         python-version: "3.12"
         
-    - name: Install Poetry
-      run: |
-        curl -sSL https://install.python-poetry.org | python3 -
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
         
-    - name: Configure Poetry
-      run: |
-        poetry config virtualenvs.create true
-        poetry config virtualenvs.in-project false
-        
-    - name: Cache Poetry dependencies
+    - name: Cache uv dependencies
       uses: actions/cache@v4
       with:
         path: |
-          ~/.cache/pypoetry
-          ~/.cache/pip
-        key: ${{ runner.os }}-quality-poetry-${{ hashFiles('**/poetry.lock') }}
+          ~/.cache/uv
+          .venv
+        key: ${{ runner.os }}-quality-uv-${{ hashFiles('**/pyproject.toml', '**/uv.lock') }}
         restore-keys: |
-          ${{ runner.os }}-quality-poetry-
+          ${{ runner.os }}-quality-uv-
           
     - name: Install dependencies
-      run: poetry install
+      run: uv sync --dev
       
     - name: Check code formatting with black
-      run: poetry run poe check-format
+      run: uv run black --check .
       continue-on-error: true  # Allow formatting check to fail due to existing issues
       
     - name: Check import sorting with isort
-      run: poetry run poe check-imports
+      run: uv run isort --check .
       continue-on-error: true  # Allow import sorting check to fail due to existing issues
       
     - name: Run linting with flake8
-      run: poetry run poe lint
+      run: uv run flake8 .
       continue-on-error: true  # Allow linting to fail due to existing issues
       
     - name: Test basic import
-      run: poetry run python -c "from zarrnii import ZarrNii; print('Import successful')"
+      run: uv run python -c "from zarrnii import ZarrNii; print('Import successful')"
       
     - name: Build documentation
-      run: poetry run poe build-docs
+      run: uv run mkdocs build
       continue-on-error: true  # Allow docs to fail due to missing files
       
     - name: Check package build
-      run: poetry build
+      run: uv build
