@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/</loc>
+         <lastmod>2025-09-12</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/faq/</loc>
+         <lastmod>2025-09-12</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/reference/</loc>
+         <lastmod>2025-09-12</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/examples/zarr_nifti/</loc>
+         <lastmod>2025-09-12</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/walkthrough/advanced_use_cases/</loc>
+         <lastmod>2025-09-12</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/walkthrough/basic_tasks/</loc>
+         <lastmod>2025-09-12</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/walkthrough/getting_started/</loc>
+         <lastmod>2025-09-12</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/walkthrough/overview/</loc>
+         <lastmod>2025-09-12</lastmod>
+    </url>
+</urlset>
