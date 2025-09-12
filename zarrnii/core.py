@@ -259,7 +259,8 @@ class ZarrNii:
         cls,
         store_or_path,
         level=0,
-        channels=[0],
+        channels=None,
+        channel_labels=None,
         chunks="auto",
         rechunk=False,
         storage_options=None,
@@ -273,7 +274,8 @@ class ZarrNii:
         Parameters:
             store_or_path (str): Store or path to the OME-Zarr file.
             level (int): Pyramid level to load (default: 0).
-            channels (list): Channels to load (default: [0]).
+            channels (list): Channels to load by index (default: None, loads all channels).
+            channel_labels (list): Channels to load by label name (default: None).
             chunks (str or tuple): Chunk size for dask array (default: "auto").
             rechunk (bool): Whether to rechunk the data (default: False).
             storage_options (dict): Storage options for Zarr.
@@ -286,10 +288,16 @@ class ZarrNii:
 
         Raises:
             ValueError: If `zooms` is specified when `as_ref=False`.
+            ValueError: If both `channels` and `channel_labels` are specified.
+            ValueError: If `channel_labels` are specified but no omero metadata is found.
+            ValueError: If any specified channel label is not found in omero metadata.
         """
 
         if not as_ref and zooms is not None:
             raise ValueError("`zooms` can only be used when `as_ref=True`.")
+        
+        if channels is not None and channel_labels is not None:
+            raise ValueError("Cannot specify both 'channels' and 'channel_labels'. Use one or the other.")
 
         # Determine the level and whether downsampling is required
         if not as_ref:
@@ -312,16 +320,59 @@ class ZarrNii:
 
         orientation = group.attrs.get("orientation", orientation)
 
-
-        print(multiscales.metadata)
-
-           
-
+        # Handle channel selection - resolve labels to indices if needed
+        final_omero_metadata = multiscales.metadata.omero  # Default fallback
+        if channel_labels is not None:
+            # Try to get omero metadata from zarr group attributes directly
+            # since ngff-zarr sometimes doesn't load it properly
+            omero_metadata = None
+            if 'multiscales' in group.attrs:
+                multiscales_attrs = group.attrs['multiscales']
+                if isinstance(multiscales_attrs, list) and len(multiscales_attrs) > 0:
+                    omero_metadata = multiscales_attrs[0].get('omero')
+            
+            if omero_metadata is None:
+                raise ValueError("Channel labels were specified but no omero metadata found in the OME-Zarr file.")
+            
+            # Extract channel labels from omero metadata
+            if 'channels' not in omero_metadata:
+                raise ValueError("No channel information found in omero metadata.")
+            
+            channel_info = omero_metadata['channels']
+            available_labels = [ch.get('label', '') for ch in channel_info]
+            
+            # Resolve channel labels to indices
+            resolved_channels = []
+            for label in channel_labels:
+                try:
+                    idx = available_labels.index(label)
+                    resolved_channels.append(idx)
+                except ValueError:
+                    raise ValueError(f"Channel label '{label}' not found. Available labels: {available_labels}")
+            
+            channels = resolved_channels
+            final_omero_metadata = omero_metadata  # Use the properly loaded metadata
+        elif 'multiscales' in group.attrs:
+            # Even if channel_labels not specified, try to get proper omero metadata
+            multiscales_attrs = group.attrs['multiscales']
+            if isinstance(multiscales_attrs, list) and len(multiscales_attrs) > 0:
+                group_omero = multiscales_attrs[0].get('omero')
+                if group_omero is not None:
+                    final_omero_metadata = group_omero
+        
         # Get axis names
         axis_names = [axis.name for axis in multiscales.metadata.axes]
 
         # Determine index of 'c' axis
         c_index = axis_names.index('c')
+        
+        # If no channels specified, load all channels
+        if channels is None:
+            # Get total number of channels from the data shape
+            total_shape = multiscales.images[level].data.shape
+            num_channels = total_shape[c_index]
+            channels = list(range(num_channels))
+           
 
         # Build slices: 0 for 't' (drop it), channels for 'c', slice(None) for others
         slices = []
@@ -338,11 +389,9 @@ class ZarrNii:
 
 
         shape = darr_base.shape
-        print(f'shape is {shape}')
 
         coordinate_transformations = multiscales.metadata.datasets[level].coordinateTransformations
 
-        print(coordinate_transformations)
         affine = cls.construct_affine(coordinate_transformations, orientation)
 
         if zooms is not None:
@@ -375,7 +424,7 @@ class ZarrNii:
             axes_order="ZYX",
             axes=multiscales.metadata.axes,
             coordinate_transformations=coordinate_transformations,
-            omero=multiscales.metadata.omero, 
+            omero=final_omero_metadata, 
         )
 
         if do_downsample:

@@ -1,1 +1,3 @@
 */__pycache__/*
+*.ome.zarr/
+test*.zarr/
