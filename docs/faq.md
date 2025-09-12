@@ -26,11 +26,11 @@ Yes! ZarrNii uses Dask arrays to handle datasets that don't fit into memory. Mos
 ## Installation Issues
 
 ### **1. I installed ZarrNii, but I can't import it.**
-Ensure that ZarrNii is installed in the correct Python environment. Use `poetry show` or `pip show zarrnii` to verify the installation.
+Ensure that ZarrNii is installed in the correct Python environment. Use `uv tree` or `pip show zarrnii` to verify the installation.
 
 If you're still encountering issues, try reinstalling the library:
 ```bash
-poetry install
+uv sync --dev
 ```
 
 ---

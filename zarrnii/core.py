@@ -1366,9 +1366,9 @@ def interp_by_block(
     )
 
     # Reshape grids into vectors for matrix multiplication
-    xvf = xv.reshape((1, np.product(xv.shape)))
-    yvf = yv.reshape((1, np.product(yv.shape)))
-    zvf = zv.reshape((1, np.product(zv.shape)))
+    xvf = xv.reshape((1, np.prod(xv.shape)))
+    yvf = yv.reshape((1, np.prod(yv.shape)))
+    zvf = zv.reshape((1, np.prod(zv.shape)))
     homog = np.ones(xvf.shape)
 
     xfm_vecs = np.vstack((xvf, yvf, zvf, homog))
