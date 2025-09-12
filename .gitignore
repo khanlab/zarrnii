@@ -1,4 +1,6 @@
 */__pycache__/*
+*.ome.zarr/
+test*.zarr/
 
 # Test artifacts
 .pytest_cache/
