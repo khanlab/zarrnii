@@ -341,31 +341,25 @@ class ZarrNii:
         # Read orientation metadata (default to `orientation` if not present)
         group = zarr.open_group(store_or_path, mode="r")
 
+        omero_metadata = multiscales.metadata.omero
+
         orientation = group.attrs.get("orientation", orientation)
 
         # Handle channel selection - resolve labels to indices if needed
-        final_omero_metadata = multiscales.metadata.omero  # Default fallback
+        omero_metadata = multiscales.metadata.omero  # Default fallback
+
+        # channel_info = omero_metadata["channels"]
+        channel_info = omero_metadata.channels
+        available_labels = _extract_channel_labels_from_omero(channel_info)
+
+
+        # Get axis names
+        axis_names = [axis.name for axis in multiscales.metadata.axes]
+
+        # Determine index of 'c' axis
+        c_index = axis_names.index("c")
+
         if channel_labels is not None:
-            # Try to get omero metadata from zarr group attributes directly
-            # since ngff-zarr sometimes doesn't load it properly
-            omero_metadata = None
-            if "multiscales" in group.attrs:
-                multiscales_attrs = group.attrs["multiscales"]
-                if isinstance(multiscales_attrs, list) and len(multiscales_attrs) > 0:
-                    omero_metadata = multiscales_attrs[0].get("omero")
-
-            if omero_metadata is None:
-                raise ValueError(
-                    "Channel labels were specified but no omero metadata found in the OME-Zarr file."
-                )
-
-            # Extract channel labels from omero metadata
-            if "channels" not in omero_metadata:
-                raise ValueError("No channel information found in omero metadata.")
-
-            channel_info = omero_metadata["channels"]
-            available_labels = _extract_channel_labels_from_omero(channel_info)
-
             # Resolve channel labels to indices
             resolved_channels = []
             for label in channel_labels:
@@ -378,23 +372,9 @@ class ZarrNii:
                     )
 
             channels = resolved_channels
-            final_omero_metadata = omero_metadata  # Use the properly loaded metadata
-        elif "multiscales" in group.attrs:
-            # Even if channel_labels not specified, try to get proper omero metadata
-            multiscales_attrs = group.attrs["multiscales"]
-            if isinstance(multiscales_attrs, list) and len(multiscales_attrs) > 0:
-                group_omero = multiscales_attrs[0].get("omero")
-                if group_omero is not None:
-                    final_omero_metadata = group_omero
+        else:
+            # If no channels specified, load all channels
 
-        # Get axis names
-        axis_names = [axis.name for axis in multiscales.metadata.axes]
-
-        # Determine index of 'c' axis
-        c_index = axis_names.index("c")
-
-        # If no channels specified, load all channels
-        if channels is None:
             # Get total number of channels from the data shape
             total_shape = multiscales.images[level].data.shape
             num_channels = total_shape[c_index]
@@ -451,7 +431,7 @@ class ZarrNii:
             axes_order="ZYX",
             axes=multiscales.metadata.axes,
             coordinate_transformations=coordinate_transformations,
-            omero=final_omero_metadata,
+            omero=omero_metadata,
         )
 
         if do_downsample:
@@ -934,6 +914,9 @@ class ZarrNii:
             scale_factors=scale_factors,
         )
 
+        # set omero metadata
+        multiscales.metadata.omero = self.omero
+
         nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)
 
         # now add orientation metadata
@@ -1104,7 +1087,7 @@ class ZarrNii:
 
         # Create and return a new ZarrNii instance
         return ZarrNii.from_darr(
-            darr_scaled, affine=new_affine, axes_order=self.axes_order
+            darr_scaled, affine=new_affine, axes_order=self.axes_order, omero=self.omero
         )
 
     def __get_upsampled_chunks(self, target_shape, return_scaling=True):
