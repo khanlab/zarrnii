@@ -106,6 +106,7 @@ Available via `poetry run poe <task>`:
 - **Black Jupyter warning**: "Skipping .ipynb files as Jupyter dependencies are not installed" - normal, not an error
 - **Documentation warnings**: Missing files in nav (transformations.md, etc.) and griffe type annotations - normal
 - **Import order**: Some existing import order issues that isort can fix
+- **Pre-commit network issues**: Pre-commit may fail with network timeouts when installing hooks - use `git commit --no-verify` for documentation-only changes
 
 ### Timing Expectations (NEVER CANCEL)
 - **Poetry install**: ~45 seconds (set timeout 120+ seconds)
