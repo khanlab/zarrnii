@@ -3870,7 +3870,7 @@ wheels = [
 
 [[package]]
 name = "zarrnii"
-version = "0.3.0a2.dev20+g63950a598.d20250912"
+version = "0.3.0a2.dev29+gf3b3d63b9.d20250912"
 source = { editable = "." }
 dependencies = [
     { name = "dask" },
@@ -3901,6 +3901,13 @@ dev = [
     { name = "pytest" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "black" },
+    { name = "flake8" },
+    { name = "isort" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.10.0" },
@@ -3925,6 +3932,13 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2.0" },
     { name = "scipy", specifier = ">=1.12.0" },
     { name = "zarr", specifier = ">=3.0.8" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "black", specifier = ">=25.1.0" },
+    { name = "flake8", specifier = ">=7.3.0" },
+    { name = "isort", specifier = ">=6.0.1" },
 ]
 
 [[package]]
