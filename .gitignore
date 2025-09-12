@@ -1,5 +1,8 @@
 */__pycache__/*
 
+# Test artifacts
+.pytest_cache/
+
 # Documentation build artifacts
 site/
 
