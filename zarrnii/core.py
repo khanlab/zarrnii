@@ -347,18 +347,23 @@ class ZarrNii:
         omero_metadata = multiscales.metadata.omero  # Default fallback
 
         # channel_info = omero_metadata["channels"]
-
         channel_info = getattr(omero_metadata, 'channels', None)
-
-
         # Get axis names
         axis_names = [axis.name for axis in multiscales.metadata.axes]
 
         # Determine index of 'c' axis
         c_index = axis_names.index("c")
 
-        if channel_labels is not None and channel_info is not  None:
-            available_labels = _extract_channel_labels_from_omero(channel_info)
+        if channel_labels is not None:
+            if channel_info is None:
+                raise ValueError(
+                    "Channel labels were specified but no omero metadata "
+                    "found in the dataset."
+                )
+
+            available_labels = _extract_channel_labels_from_omero(
+                channel_info
+            )
             # Resolve channel labels to indices
             resolved_channels = []
             for label in channel_labels:
@@ -367,13 +372,13 @@ class ZarrNii:
                     resolved_channels.append(idx)
                 except ValueError:
                     raise ValueError(
-                        f"Channel label '{label}' not found. Available labels: {available_labels}"
+                        f"Channel label '{label}' not found. "
+                        f"Available labels: {available_labels}"
                     )
 
             channels = resolved_channels
-        else:
+        elif channels is None:
             # If no channels specified, load all channels
-
             # Get total number of channels from the data shape
             total_shape = multiscales.images[level].data.shape
             num_channels = total_shape[c_index]

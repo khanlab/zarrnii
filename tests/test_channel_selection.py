@@ -68,26 +68,39 @@ def create_test_dataset_with_omero_metadata(store_path, num_channels=3):
     ngff_image = nz.to_ngff_image(arr)
     multiscales = nz.to_multiscales(ngff_image)
 
-    # Store to zarr
-    nz.to_ngff_zarr(store_path, multiscales)
+    # Create omero metadata as dictionaries - this will be the format expected by ngff_zarr
+    channel_labels_and_colors = [
+        ("DAPI", "0000FF"),
+        ("Abeta", "00FF00"),
+        ("GFP", "FF0000"),
+    ][:num_channels]  # Only include as many as we have channels
 
-    # Add omero metadata with channel labels
+    # Create channel dictionaries with proper structure for ngff_zarr
+    omero_channels = []
+    for label, color in channel_labels_and_colors:
+        channel = {
+            "label": label,
+            "color": color,
+            "window": {
+                "min": 0.0,
+                "max": 65535.0,
+                "start": 0.0,
+                "end": 65535.0
+            }
+        }
+        omero_channels.append(channel)
+
     omero_metadata = {
-        "channels": [
-            {"label": "DAPI", "color": "0000FF"},
-            {"label": "Abeta", "color": "00FF00"},
-            {"label": "GFP", "color": "FF0000"},
-        ][
-            :num_channels
-        ],  # Only include as many as we have channels
-        "rdefs": {"model": "color"},
+        "channels": omero_channels
     }
 
-    # Add omero metadata to the zarr group
+    # Store to zarr first
+    nz.to_ngff_zarr(store_path, multiscales)
+
+    # Now add omero metadata to the zarr group attributes
+    # This follows the same pattern that ngff_zarr uses when reading
     group = zarr.open_group(store_path, mode="r+")
-    multiscales_attr = group.attrs["multiscales"][0]
-    multiscales_attr["omero"] = omero_metadata
-    group.attrs["multiscales"] = [multiscales_attr]
+    group.attrs["omero"] = omero_metadata
 
     return store_path
 
@@ -114,8 +127,8 @@ class TestChannelSelection:
 
         # Check that omero metadata is preserved
         assert znimg.omero is not None
-        assert "channels" in znimg.omero
-        assert len(znimg.omero["channels"]) == 3
+        assert hasattr(znimg.omero, 'channels')
+        assert len(znimg.omero.channels) == 3
 
     def test_load_by_channel_labels_single(self, test_dataset):
         """Test loading a single channel by label."""
@@ -195,8 +208,8 @@ class TestChannelSelection:
 
         # Check that omero metadata is preserved correctly
         assert znimg.omero is not None
-        assert "channels" in znimg.omero
-        assert znimg.omero["channels"][1]["label"] == "Abeta"  # Original full metadata
+        assert hasattr(znimg.omero, 'channels')
+        assert znimg.omero.channels[1].label == "Abeta"  # Original full metadata
 
     def test_mixed_label_order(self, test_dataset):
         """Test that channel labels can be specified in any order."""
