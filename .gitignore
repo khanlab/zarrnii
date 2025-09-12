@@ -1,1 +1,10 @@
 */__pycache__/*
+
+# Documentation build artifacts
+site/
+
+# Test data artifacts
+test_znimg.ome.zarr/
+*.ome.zarr/
+*.nii
+*.nii.gz
