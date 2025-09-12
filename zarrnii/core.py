@@ -421,6 +421,9 @@ class ZarrNii:
         else:
             new_shape = shape
 
+        # Filter omero metadata to only include selected channels
+        filtered_omero_metadata = cls._filter_omero_metadata(omero_metadata, channels)
+
         # we want to downsample *before* we rechunk
 
         if as_ref:
@@ -435,7 +438,7 @@ class ZarrNii:
             axes_order="ZYX",
             axes=multiscales.metadata.axes,
             coordinate_transformations=coordinate_transformations,
-            omero=omero_metadata,
+            omero=filtered_omero_metadata,
         )
 
         if do_downsample:
@@ -445,6 +448,114 @@ class ZarrNii:
             znimg.darr = znimg.darr.rechunk(chunks)
 
         return znimg
+
+    @staticmethod
+    def _filter_omero_metadata(omero_metadata, selected_channels):
+        """
+        Filter omero metadata to only include selected channels.
+        
+        Args:
+            omero_metadata: The original omero metadata object or None
+            selected_channels: List of channel indices to keep
+            
+        Returns:
+            Filtered omero metadata object or None
+        """
+        if omero_metadata is None or not hasattr(omero_metadata, 'channels'):
+            return omero_metadata
+            
+        # Create a new omero object with filtered channels
+        from copy import deepcopy
+        filtered_omero = deepcopy(omero_metadata)
+        
+        # Filter channels to only include selected ones
+        if hasattr(filtered_omero, 'channels') and filtered_omero.channels:
+            filtered_channels = [filtered_omero.channels[i] for i in selected_channels if i < len(filtered_omero.channels)]
+            filtered_omero.channels = filtered_channels
+            
+        return filtered_omero
+    
+    def list_channels(self):
+        """
+        List available channel labels from omero metadata.
+        
+        Returns:
+            List[str]: List of channel labels, or empty list if no omero metadata
+        """
+        if self.omero is None or not hasattr(self.omero, 'channels'):
+            return []
+            
+        return _extract_channel_labels_from_omero(self.omero.channels)
+    
+    def select_channels(self, channels=None, channel_labels=None):
+        """
+        Select specific channels from the current ZarrNii object.
+        
+        Args:
+            channels: List of channel indices to select (0-based)
+            channel_labels: List of channel labels to select
+            
+        Returns:
+            ZarrNii: New ZarrNii object with selected channels
+            
+        Raises:
+            ValueError: If both channels and channel_labels are specified
+            ValueError: If channel_labels are specified but no omero metadata exists
+            ValueError: If any specified channel label is not found
+        """
+        if channels is not None and channel_labels is not None:
+            raise ValueError(
+                "Cannot specify both 'channels' and 'channel_labels'. Use one or the other."
+            )
+        
+        # Handle channel selection by labels
+        if channel_labels is not None:
+            if self.omero is None or not hasattr(self.omero, 'channels'):
+                raise ValueError(
+                    "Channel labels were specified but no omero metadata found in the dataset."
+                )
+            
+            available_labels = _extract_channel_labels_from_omero(self.omero.channels)
+            resolved_channels = []
+            for label in channel_labels:
+                try:
+                    idx = available_labels.index(label)
+                    resolved_channels.append(idx)
+                except ValueError:
+                    raise ValueError(
+                        f"Channel label '{label}' not found. Available labels: {available_labels}"
+                    )
+            channels = resolved_channels
+        elif channels is None:
+            # If no channels specified, return copy of current object
+            channels = list(range(self.darr.shape[-1]))  # Assume channels are last dimension
+        
+        # Determine which axis is the channel axis
+        # For ZarrNii, we assume ZYXC format where channels are the last dimension
+        c_axis = -1  # Channel axis is last
+        
+        # Select channels from data array using dask array indexing
+        if c_axis == -1:
+            # Use advanced indexing for the last dimension
+            selected_data = self.darr[..., channels]
+        else:
+            # For other dimensions, create a more general solution
+            slices = [slice(None)] * self.darr.ndim
+            slices[c_axis] = channels
+            selected_data = self.darr[tuple(slices)]
+        
+        # Filter omero metadata
+        filtered_omero = self._filter_omero_metadata(self.omero, channels)
+        
+        # Create new ZarrNii object with selected channels
+        return ZarrNii(
+            selected_data,
+            affine=self.affine,
+            axes_order=self.axes_order,
+            axes=self.axes,
+            coordinate_transformations=self.coordinate_transformations,
+            omero=filtered_omero,
+        )
 
     @staticmethod
     def align_affine_to_input_orientation(affine, orientation):
