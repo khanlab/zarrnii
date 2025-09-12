@@ -341,16 +341,14 @@ class ZarrNii:
         # Read orientation metadata (default to `orientation` if not present)
         group = zarr.open_group(store_or_path, mode="r")
 
-        omero_metadata = multiscales.metadata.omero
-
         orientation = group.attrs.get("orientation", orientation)
 
         # Handle channel selection - resolve labels to indices if needed
         omero_metadata = multiscales.metadata.omero  # Default fallback
 
         # channel_info = omero_metadata["channels"]
-        channel_info = omero_metadata.channels
-        available_labels = _extract_channel_labels_from_omero(channel_info)
+
+        channel_info = getattr(omero_metadata, 'channels', None)
 
 
         # Get axis names
@@ -359,7 +357,8 @@ class ZarrNii:
         # Determine index of 'c' axis
         c_index = axis_names.index("c")
 
-        if channel_labels is not None:
+        if channel_labels is not None and channel_info is not  None:
+            available_labels = _extract_channel_labels_from_omero(channel_info)
             # Resolve channel labels to indices
             resolved_channels = []
             for label in channel_labels:
