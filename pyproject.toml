@@ -86,3 +86,10 @@ target-version = ['py39']  # Set to your target Python version
 profile = "black"  # Ensure compatibility with Black
 line_length = 88
 
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "flake8>=7.3.0",
+    "isort>=6.0.1",
+]
+

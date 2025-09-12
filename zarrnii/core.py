@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 
 import dask.array as da
 import fsspec
+import ngff_zarr as nz
 import nibabel as nib
 import numpy as np
 import zarr
@@ -12,9 +13,33 @@ from attrs import define, field
 from dask.diagnostics import ProgressBar
 from scipy.interpolate import interpn
 from scipy.ndimage import zoom
-import ngff_zarr as nz
 
 from .transform import AffineTransform, Transform
+
+
+def _extract_channel_labels_from_omero(channel_info):
+    """
+    Extract channel labels from omero metadata, handling both legacy and modern formats.
+
+    Args:
+        channel_info: List of channel information, either as dictionaries (legacy)
+                     or as structured objects (modern OME-Zarr format)
+
+    Returns:
+        List[str]: List of channel labels
+    """
+    labels = []
+    for ch in channel_info:
+        if hasattr(ch, "label"):
+            # Modern format: OmeroChannel object with .label attribute
+            labels.append(ch.label)
+        elif isinstance(ch, dict):
+            # Legacy format: dictionary with 'label' key
+            labels.append(ch.get("label", ""))
+        else:
+            # Fallback: try to get label as string or use empty string
+            labels.append(str(getattr(ch, "label", "")))
+    return labels
 
 
 @define
@@ -59,7 +84,7 @@ class ZarrNii:
         omero=None,
         spacing=(1, 1, 1),
         origin=(0, 0, 0),
-        unit='micrometer',
+        unit="micrometer",
     ):
         """
         Creates a ZarrNii instance from an existing Dask array.
@@ -295,9 +320,11 @@ class ZarrNii:
 
         if not as_ref and zooms is not None:
             raise ValueError("`zooms` can only be used when `as_ref=True`.")
-        
+
         if channels is not None and channel_labels is not None:
-            raise ValueError("Cannot specify both 'channels' and 'channel_labels'. Use one or the other.")
+            raise ValueError(
+                "Cannot specify both 'channels' and 'channel_labels'. Use one or the other."
+            )
 
         # Determine the level and whether downsampling is required
         if not as_ref:
@@ -305,18 +332,14 @@ class ZarrNii:
                 level,
                 do_downsample,
                 downsampling_kwargs,
-            ) = cls.get_level_and_downsampling_kwargs(
-                store_or_path, level
-            )
+            ) = cls.get_level_and_downsampling_kwargs(store_or_path, level)
         else:
             do_downsample = False
 
-       
         multiscales = nz.from_ngff_zarr(store_or_path)
 
-
         # Read orientation metadata (default to `orientation` if not present)
-        group = zarr.open_group(store_or_path, mode='r')
+        group = zarr.open_group(store_or_path, mode="r")
 
         orientation = group.attrs.get("orientation", orientation)
 
@@ -326,21 +349,23 @@ class ZarrNii:
             # Try to get omero metadata from zarr group attributes directly
             # since ngff-zarr sometimes doesn't load it properly
             omero_metadata = None
-            if 'multiscales' in group.attrs:
-                multiscales_attrs = group.attrs['multiscales']
+            if "multiscales" in group.attrs:
+                multiscales_attrs = group.attrs["multiscales"]
                 if isinstance(multiscales_attrs, list) and len(multiscales_attrs) > 0:
-                    omero_metadata = multiscales_attrs[0].get('omero')
-            
+                    omero_metadata = multiscales_attrs[0].get("omero")
+
             if omero_metadata is None:
-                raise ValueError("Channel labels were specified but no omero metadata found in the OME-Zarr file.")
-            
+                raise ValueError(
+                    "Channel labels were specified but no omero metadata found in the OME-Zarr file."
+                )
+
             # Extract channel labels from omero metadata
-            if 'channels' not in omero_metadata:
+            if "channels" not in omero_metadata:
                 raise ValueError("No channel information found in omero metadata.")
-            
-            channel_info = omero_metadata['channels']
-            available_labels = [ch.get('label', '') for ch in channel_info]
-            
+
+            channel_info = omero_metadata["channels"]
+            available_labels = _extract_channel_labels_from_omero(channel_info)
+
             # Resolve channel labels to indices
             resolved_channels = []
             for label in channel_labels:
@@ -348,38 +373,39 @@ class ZarrNii:
                     idx = available_labels.index(label)
                     resolved_channels.append(idx)
                 except ValueError:
-                    raise ValueError(f"Channel label '{label}' not found. Available labels: {available_labels}")
-            
+                    raise ValueError(
+                        f"Channel label '{label}' not found. Available labels: {available_labels}"
+                    )
+
             channels = resolved_channels
             final_omero_metadata = omero_metadata  # Use the properly loaded metadata
-        elif 'multiscales' in group.attrs:
+        elif "multiscales" in group.attrs:
             # Even if channel_labels not specified, try to get proper omero metadata
-            multiscales_attrs = group.attrs['multiscales']
+            multiscales_attrs = group.attrs["multiscales"]
             if isinstance(multiscales_attrs, list) and len(multiscales_attrs) > 0:
-                group_omero = multiscales_attrs[0].get('omero')
+                group_omero = multiscales_attrs[0].get("omero")
                 if group_omero is not None:
                     final_omero_metadata = group_omero
-        
+
         # Get axis names
         axis_names = [axis.name for axis in multiscales.metadata.axes]
 
         # Determine index of 'c' axis
-        c_index = axis_names.index('c')
-        
+        c_index = axis_names.index("c")
+
         # If no channels specified, load all channels
         if channels is None:
             # Get total number of channels from the data shape
             total_shape = multiscales.images[level].data.shape
             num_channels = total_shape[c_index]
             channels = list(range(num_channels))
-           
 
         # Build slices: 0 for 't' (drop it), channels for 'c', slice(None) for others
         slices = []
         for i, name in enumerate(axis_names):
-            if name == 't':
+            if name == "t":
                 slices.append(0)  # Drop singleton time axis
-            elif name == 'c':
+            elif name == "c":
                 slices.append(channels)  # Select specific channel(s)
             else:
                 slices.append(slice(None))  # Keep full range
@@ -387,10 +413,11 @@ class ZarrNii:
         # Apply the slices
         darr_base = multiscales.images[level].data[tuple(slices)]
 
-
         shape = darr_base.shape
 
-        coordinate_transformations = multiscales.metadata.datasets[level].coordinateTransformations
+        coordinate_transformations = multiscales.metadata.datasets[
+            level
+        ].coordinateTransformations
 
         affine = cls.construct_affine(coordinate_transformations, orientation)
 
@@ -424,7 +451,7 @@ class ZarrNii:
             axes_order="ZYX",
             axes=multiscales.metadata.axes,
             coordinate_transformations=coordinate_transformations,
-            omero=final_omero_metadata, 
+            omero=final_omero_metadata,
         )
 
         if do_downsample:
@@ -486,7 +513,7 @@ class ZarrNii:
                 scales = transform.scale[-3:]  # Ignore the channel/time dimension
             elif transform.type == "translation":
                 translations = transform.translation[
-                        -3:
+                    -3:
                 ]  # Ignore the channel/time dimension
 
         # Populate the affine matrix
@@ -849,9 +876,14 @@ class ZarrNii:
 
         return np.sqrt((affine[:3, :3] ** 2).sum(axis=0))  # Extract scales
 
-    def to_ome_zarr(self, store_or_path, max_layer=4, scaling_method=None,
-                    #"itk_bin_shrink",
-                    **kwargs):
+    def to_ome_zarr(
+        self,
+        store_or_path,
+        max_layer=4,
+        scaling_method=None,
+        # "itk_bin_shrink",
+        **kwargs,
+    ):
         """
         Save the current ZarrNii instance to an OME-Zarr dataset, always writing
         axes in ZYX order.
@@ -865,9 +897,7 @@ class ZarrNii:
 
         # Reorder data if the axes order is XYZ (NIfTI-like)
         if self.axes_order == "XYZ":
-            out_darr = da.moveaxis(
-                self.darr, (0, 1, 2, 3), (0, 3, 2, 1)
-            )  
+            out_darr = da.moveaxis(self.darr, (0, 1, 2, 3), (0, 3, 2, 1))
             out_affine = self.reorder_affine_xyz_zyx(self.affine.matrix)
             out_axes = self.axes.reverse()
         else:
@@ -879,43 +909,40 @@ class ZarrNii:
         offset = out_affine[:3, 3]
         voxdim = np.sqrt((out_affine[:3, :3] ** 2).sum(axis=0))  # Extract scales
 
-        #TODO: deal with fsspec and zipstores too !
+        # TODO: deal with fsspec and zipstores too !
         # Handle either a path or an existing store
         if isinstance(store_or_path, str):
-#            store = zarr.storage.FsspecStore.from_url(store_or_path)
-            store = zarr.storage.LocalStore(store_or_path) #FsspecStore.from_url(store_or_path)
+            #            store = zarr.storage.FsspecStore.from_url(store_or_path)
+            store = zarr.storage.LocalStore(
+                store_or_path
+            )  # FsspecStore.from_url(store_or_path)
         else:
             store = store_or_path
 
+        ngff_img = nz.to_ngff_image(
+            out_darr,
+            dims=["c", "z", "y", "x"],
+            scale={"z": voxdim[0], "y": voxdim[1], "x": voxdim[2]},
+            translation={"z": offset[0], "y": offset[1], "x": offset[2]},
+        )
 
-        ngff_img = nz.to_ngff_image(out_darr,
-                                    dims=['c','z','y','x'],
-                                    scale={'z': voxdim[0],
-                                           'y': voxdim[1],
-                                           'x': voxdim[2]},
-                                    translation={'z': offset[0],
-                                                 'y': offset[1],
-                                                 'x': offset[2]})
-
-
-        scale_factors = [2**i for i in range(1,max_layer)]
-        multiscales= nz.to_multiscales(ngff_img, 
-                                       #method=scaling_method, 
-#                                       method=nz.Methods.ITK_BIN_SHRINK,
-                                       scale_factors=scale_factors)
+        scale_factors = [2**i for i in range(1, max_layer)]
+        multiscales = nz.to_multiscales(
+            ngff_img,
+            # method=scaling_method,
+            #                                       method=nz.Methods.ITK_BIN_SHRINK,
+            scale_factors=scale_factors,
+        )
 
         nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)
 
-        #now add orientation metadata
-        group = zarr.open_group(store, mode='r+')
+        # now add orientation metadata
+        group = zarr.open_group(store, mode="r+")
 
         # Add metadata for orientation
         group.attrs["orientation"] = affine_to_orientation(
             out_affine
         )  # Write current orientation
-
-
-
 
     def crop_with_bounding_box(self, bbox_min, bbox_max, ras_coords=False):
         """
@@ -1029,9 +1056,7 @@ class ZarrNii:
 
         return bbox_min, bbox_max
 
-    def downsample(
-        self, along_x=1, along_y=1, along_z=1, level=None
-    ):
+    def downsample(self, along_x=1, along_y=1, along_z=1, level=None):
         """
         Downsamples the ZarrNii instance by local mean reduction.
 
@@ -1312,12 +1337,10 @@ class ZarrNii:
               with multiscale metadata.
         """
         multiscales = nz.from_ngff_zarr(path)
-        return len(multiscales.images)-1
+        return len(multiscales.images) - 1
 
     @staticmethod
-    def get_level_and_downsampling_kwargs(
-        ome_zarr_path, level
-    ):
+    def get_level_and_downsampling_kwargs(ome_zarr_path, level):
         """
         Determines the appropriate pyramid level and additional downsampling factors for an OME-Zarr dataset.
 
@@ -1335,8 +1358,7 @@ class ZarrNii:
             - If the requested level exceeds the available pyramid levels, the function calculates
               additional downsampling factors
         """
-        max_level = ZarrNii.get_max_level(
-            ome_zarr_path        )
+        max_level = ZarrNii.get_max_level(ome_zarr_path)
 
         # Determine the pyramid level and additional downsampling factors
         if level > max_level:  # Requested level exceeds pyramid levels
@@ -1344,7 +1366,6 @@ class ZarrNii:
             level = max_level
         else:
             level_ds = 0
-
 
         # Determine if additional downsampling is needed
         do_downsample = level_ds > 0
