@@ -3,6 +3,10 @@
 # Test artifacts
 .pytest_cache/
 
+# Build artifacts
+dist/
+build/
+
 # Documentation build artifacts
 site/
 
