@@ -17,3 +17,6 @@ test_znimg.ome.zarr/
 *.ome.zarr/
 *.nii
 *.nii.gz
+
+# Generated files that should not be tracked
+zarrnii/_version.py
