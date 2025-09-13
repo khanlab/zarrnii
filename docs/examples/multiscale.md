@@ -4,37 +4,38 @@ This section covers working with multi-resolution OME-Zarr datasets, including c
 
 ## Overview
 
-OME-Zarr supports multi-resolution image pyramids that enable efficient visualization and analysis at different scales. ZarrNii provides comprehensive support for creating, reading, and manipulating these multiscale datasets.
+OME-Zarr supports multi-resolution image pyramids that enable efficient visualization and analysis at different scales. ZarrNii provides support for creating and reading multiscale datasets.
 
 ## Understanding OME-Zarr Multiscale
 
-### Pyramid Structure
+### Loading Multiscale Data
 
 ```python
 from zarrnii import ZarrNii
 import zarr
 
-# Load a multiscale OME-Zarr dataset
-znimg = ZarrNii.from_ome_zarr("path/to/multiscale.zarr")
+# Load different resolution levels of a multiscale OME-Zarr dataset
+znimg_level0 = ZarrNii.from_ome_zarr("path/to/multiscale.zarr", level=0)  # Full resolution
+znimg_level1 = ZarrNii.from_ome_zarr("path/to/multiscale.zarr", level=1)  # Half resolution
+znimg_level2 = ZarrNii.from_ome_zarr("path/to/multiscale.zarr", level=2)  # Quarter resolution
 
-# Inspect pyramid structure
-print("Available levels:", znimg.get_available_levels())
-print("Shapes per level:", [znimg.get_level(i).darr.shape for i in range(znimg.num_levels)])
+print("Level 0 shape:", znimg_level0.darr.shape)
+print("Level 1 shape:", znimg_level1.darr.shape)
+print("Level 2 shape:", znimg_level2.darr.shape)
 ```
 
-### Metadata Inspection
+### Inspecting Available Levels
 
 ```python
-# Access OME-Zarr metadata
-metadata = znimg.get_ome_zarr_metadata()
-print("Multiscale metadata:", metadata.get('multiscales', []))
+# Use zarr directly to inspect the structure
+store = zarr.open_group("path/to/multiscale.zarr", mode='r')
+print("Available arrays:", list(store.keys()))
 
-# Check scaling factors between levels
-for i in range(znimg.num_levels - 1):
-    current = znimg.get_level(i)
-    next_level = znimg.get_level(i + 1)
-    factor = [c/n for c, n in zip(current.darr.shape, next_level.darr.shape)]
-    print(f"Level {i} to {i+1} scaling factor: {factor}")
+# Check shapes at each level
+for key in sorted(store.keys()):
+    if key.isdigit():
+        array = store[key]
+        print(f"Level {key}: shape {array.shape}, chunks {array.chunks}")
 ```
 
 ## Creating Multiscale OME-Zarr
@@ -48,144 +49,61 @@ znimg = ZarrNii.from_nifti("path/to/highres.nii")
 # Create multiscale OME-Zarr with default parameters
 znimg.to_ome_zarr(
     "output_multiscale.zarr",
-    max_layer=4,  # Create 5 levels (0-4)
-    scaling_method="local_mean"
+    max_layer=4  # Creates 4 downsampling levels
 )
 ```
 
-### Custom Scaling Parameters
+### Custom Multiscale Parameters
 
 ```python
-# Create multiscale with custom downsampling factors
+# Create multiscale with custom settings
 znimg.to_ome_zarr(
     "custom_multiscale.zarr",
-    max_layer=3,
-    scaling_method="local_mean",
-    downsample_factors=(2, 2, 1),  # Preserve Z resolution
-    chunks=(128, 128, 64)  # Optimize chunk size
+    max_layer=6,  # More downsampling levels
+    scaling_method=None  # Use default downsampling
 )
 ```
 
-### Advanced Multiscale Options
+## Working with Different Resolution Levels
+
+### Processing at Different Scales
 
 ```python
-# Fine-tune multiscale creation
-znimg.to_ome_zarr(
-    "advanced_multiscale.zarr",
-    max_layer=5,
-    scaling_method="local_mean",
-    storage_options={
-        'compressor': zarr.Blosc(cname='zstd', clevel=3),
-        'chunks': (256, 256, 128)
-    },
-    omero_metadata={
-        'name': 'Brain Dataset',
-        'channels': [{'label': 'DAPI', 'color': 'blue'}]
-    }
-)
+# Load and process at different resolutions for different tasks
+
+# Use low resolution for quick overview
+thumbnail = ZarrNii.from_ome_zarr("data.zarr", level=3)
+overview_stats = compute_statistics(thumbnail)
+
+# Use medium resolution for analysis  
+analysis_res = ZarrNii.from_ome_zarr("data.zarr", level=1)
+feature_map = extract_features(analysis_res)
+
+# Use full resolution for final processing
+full_res = ZarrNii.from_ome_zarr("data.zarr", level=0)
+final_result = apply_detailed_processing(full_res)
 ```
 
-## Working with Existing Multiscale Data
-
-### Level Selection and Navigation
+### Multi-Resolution Workflow
 
 ```python
-# Load multiscale dataset
-multiscale_img = ZarrNii.from_ome_zarr("path/to/multiscale.zarr")
+# Progressive processing workflow
+def progressive_analysis(zarr_path):
+    # Start with thumbnail for parameter estimation
+    low_res = ZarrNii.from_ome_zarr(zarr_path, level=3)
+    parameters = estimate_parameters(low_res)
+    
+    # Refine on medium resolution
+    med_res = ZarrNii.from_ome_zarr(zarr_path, level=1) 
+    refined_params = refine_parameters(med_res, parameters)
+    
+    # Apply to full resolution
+    full_res = ZarrNii.from_ome_zarr(zarr_path, level=0)
+    final_result = process_with_params(full_res, refined_params)
+    
+    return final_result
 
-# Access specific levels
-full_res = multiscale_img.get_level(0)  # Highest resolution
-thumbnail = multiscale_img.get_level(-1)  # Lowest resolution
-mid_res = multiscale_img.get_level(2)  # Intermediate level
-
-print("Full resolution shape:", full_res.darr.shape)
-print("Thumbnail shape:", thumbnail.darr.shape)
-```
-
-### Selective Level Loading
-
-```python
-# Load only specific levels for memory efficiency
-low_res_only = ZarrNii.from_ome_zarr(
-    "path/to/multiscale.zarr", 
-    level=3  # Load only level 3
-)
-
-# Load range of levels
-mid_levels = ZarrNii.from_ome_zarr(
-    "path/to/multiscale.zarr",
-    level_range=(1, 3)  # Load levels 1-3
-)
-```
-
-## Multi-Resolution Processing
-
-### Progressive Analysis
-
-```python
-# Process data at multiple resolutions
-multiscale_img = ZarrNii.from_ome_zarr("path/to/large_brain.zarr")
-
-# Quick overview at low resolution
-thumbnail = multiscale_img.get_level(-1)
-rough_mask = thumbnail.create_tissue_mask(threshold=0.1)
-
-# Refine analysis at medium resolution
-med_res = multiscale_img.get_level(2)
-refined_mask = med_res.refine_mask(rough_mask.upsample_to_level(2))
-
-# Final processing at full resolution
-full_res = multiscale_img.get_level(0)
-final_result = full_res.apply_refined_mask(refined_mask.upsample_to_level(0))
-```
-
-### Region of Interest (ROI) Processing
-
-```python
-# Define ROI at low resolution for efficiency
-low_res = multiscale_img.get_level(3)
-roi_bounds = low_res.find_tissue_bounds()
-
-# Scale ROI to full resolution
-scale_factor = 2 ** 3  # Level 3 to level 0
-full_res_bounds = [(b[0] * scale_factor, b[1] * scale_factor) for b in roi_bounds]
-
-# Process only the ROI at full resolution
-full_res = multiscale_img.get_level(0)
-roi_data = full_res.crop_with_bounding_box(*full_res_bounds)
-```
-
-## Optimization Strategies
-
-### Chunk Size Optimization
-
-```python
-# Analyze current chunk structure
-multiscale_img = ZarrNii.from_ome_zarr("path/to/multiscale.zarr")
-for level in range(multiscale_img.num_levels):
-    level_data = multiscale_img.get_level(level)
-    print(f"Level {level} chunks: {level_data.darr.chunks}")
-```
-
-### Memory-Efficient Access Patterns
-
-```python
-import dask.array as da
-
-# Load with Dask for lazy evaluation
-multiscale_img = ZarrNii.from_ome_zarr("path/to/large.zarr", use_dask=True)
-
-# Process in blocks to manage memory
-def process_blocks(img_level):
-    """Process image in memory-efficient blocks"""
-    chunks = img_level.darr.chunks
-    for block in img_level.darr.blocks:
-        # Process each block independently
-        result = process_single_block(block)
-        yield result
-
-# Apply to specific level
-results = list(process_blocks(multiscale_img.get_level(1)))
+result = progressive_analysis("multiscale_data.zarr")
 ```
 
 ## Channel and Time Series Support
@@ -193,156 +111,86 @@ results = list(process_blocks(multiscale_img.get_level(1)))
 ### Multi-Channel Multiscale
 
 ```python
-# Create multiscale from multi-channel data
-multi_channel = ZarrNii.from_nifti("path/to/multichannel.nii")  # Shape: (C, Z, Y, X)
+# Load specific channels from multiscale data
+# Channel selection works with any resolution level
+dapi_full = ZarrNii.from_ome_zarr("multi_channel.zarr", level=0, channels=[0])
+gfp_thumbnail = ZarrNii.from_ome_zarr("multi_channel.zarr", level=3, channels=[1])
 
-# Create multiscale preserving channel dimension
-multi_channel.to_ome_zarr(
-    "multichannel_multiscale.zarr",
-    max_layer=3,
-    omero_metadata={
-        'channels': [
-            {'label': 'DAPI', 'color': 'blue'},
-            {'label': 'GFP', 'color': 'green'},
-            {'label': 'RFP', 'color': 'red'}
-        ]
-    }
-)
-
-# Access specific channels at different resolutions
-dapi_full = multi_channel.get_level(0).get_channel(0)
-gfp_thumbnail = multi_channel.get_level(-1).get_channel(1)
+print("DAPI full resolution:", dapi_full.darr.shape)
+print("GFP thumbnail:", gfp_thumbnail.darr.shape)
 ```
 
-### Time Series Multiscale
+## Memory Management
+
+### Efficient Loading
 
 ```python
-# Work with time-series multiscale data
-time_series = ZarrNii.from_ome_zarr("path/to/timeseries_multiscale.zarr")
+# Load only what you need
+# Zarr and Dask handle lazy loading automatically
 
-# Access specific timepoints and levels
-t0_full = time_series.get_level(0).get_timepoint(0)
-t10_mid = time_series.get_level(2).get_timepoint(10)
+# Load with appropriate chunking
+znimg = ZarrNii.from_ome_zarr("large_dataset.zarr", level=1, chunks='auto')
 
-# Process across time at consistent resolution
-level_2_timeseries = [time_series.get_level(2).get_timepoint(t) 
-                      for t in range(time_series.num_timepoints)]
-```
+# Process in blocks to manage memory
+def process_large_dataset(znimg):
+    # Process data block by block
+    result = znimg.darr.map_blocks(
+        process_block,
+        dtype=np.float32,
+        drop_axis=None
+    )
+    return result
 
-## Visualization and Interaction
-
-### Level-Appropriate Visualization
-
-```python
-import matplotlib.pyplot as plt
-
-multiscale_img = ZarrNii.from_ome_zarr("path/to/brain.zarr")
-
-# Quick visualization with thumbnail
-thumbnail = multiscale_img.get_level(-1)
-plt.figure(figsize=(8, 6))
-plt.imshow(thumbnail.darr[thumbnail.darr.shape[0]//2], cmap='gray')
-plt.title(f'Overview (Level {multiscale_img.num_levels-1})')
-plt.show()
-
-# Detailed view with full resolution
-full_res = multiscale_img.get_level(0)
-roi = full_res.crop_with_bounding_box((100, 100, 50), (200, 200, 60))
-plt.figure(figsize=(10, 8))
-plt.imshow(roi.darr[5], cmap='gray')
-plt.title('Detailed View (Full Resolution)')
-plt.show()
-```
-
-### Interactive Exploration
-
-```python
-# Create interactive viewer data
-def create_viewer_pyramid(zarr_path, output_dir):
-    """Prepare multiscale data for web viewers"""
-    img = ZarrNii.from_ome_zarr(zarr_path)
-    
-    viewer_metadata = {
-        'levels': [],
-        'pixel_size': img.voxel_size,
-        'shape': img.darr.shape
-    }
-    
-    for level in range(img.num_levels):
-        level_img = img.get_level(level)
-        viewer_metadata['levels'].append({
-            'level': level,
-            'shape': level_img.darr.shape,
-            'scaling_factor': 2 ** level
-        })
-    
-    return viewer_metadata
+processed = process_large_dataset(znimg)
 ```
 
 ## Best Practices
 
-### Creation Guidelines
-
-1. **Choose appropriate level count**: Balance between storage and access efficiency
-2. **Optimize chunk sizes**: Match your typical access patterns
-3. **Select proper compression**: Balance compression ratio with decompression speed
-4. **Include metadata**: Add comprehensive OME metadata for interoperability
-
-### Access Patterns
-
-1. **Start with overview**: Use low-resolution levels for initial analysis
-2. **Progressive refinement**: Move to higher resolution only when needed
-3. **Memory awareness**: Monitor memory usage with large datasets
-4. **Parallel processing**: Leverage Dask for distributed processing
-
-### Storage Considerations
+### Choosing Resolution Levels
 
 ```python
-# Monitor storage efficiency
-import os
+# Guidelines for choosing appropriate resolution levels
 
-def analyze_multiscale_storage(zarr_path):
-    """Analyze storage usage per level"""
-    total_size = 0
-    level_sizes = []
-    
-    for level in range(len(os.listdir(zarr_path))):
-        level_path = os.path.join(zarr_path, str(level))
-        if os.path.exists(level_path):
-            size = sum(os.path.getsize(os.path.join(level_path, f)) 
-                      for f in os.listdir(level_path) if os.path.isfile(os.path.join(level_path, f)))
-            level_sizes.append(size)
-            total_size += size
-            print(f"Level {level}: {size / (1024**3):.2f} GB")
-    
-    print(f"Total storage: {total_size / (1024**3):.2f} GB")
-    return level_sizes
+def choose_resolution_level(task_type, data_size):
+    """Choose optimal resolution level based on task and data size"""
+    if task_type == "thumbnail":
+        return 4  # Very low resolution for quick preview
+    elif task_type == "segmentation":
+        return 1  # Medium resolution for segmentation
+    elif task_type == "measurement":
+        return 0  # Full resolution for accurate measurements
+    else:
+        # Default to medium resolution
+        return 2
+
+# Use the function
+level = choose_resolution_level("segmentation", data.shape)
+znimg = ZarrNii.from_ome_zarr("data.zarr", level=level)
 ```
 
-## Integration with Other Tools
-
-### Napari Integration
+### Chunk Size Optimization
 
 ```python
-# Load multiscale data in napari
-import napari
+# Optimize chunk sizes for your workflow
+import dask.array as da
 
-multiscale_img = ZarrNii.from_ome_zarr("path/to/multiscale.zarr")
-pyramid_data = [multiscale_img.get_level(i).darr for i in range(multiscale_img.num_levels)]
+# Load with custom chunks
+znimg = ZarrNii.from_ome_zarr("data.zarr", level=0, chunks=(64, 64, 64))
 
-viewer = napari.Viewer()
-viewer.add_image(pyramid_data, multiscale=True, name="Multiscale Brain")
+# Rechunk if needed for your analysis
+optimal_chunks = da.optimize.optimize_blockwise(znimg.darr)
+znimg.darr = znimg.darr.rechunk(optimal_chunks)
 ```
 
-### BigDataViewer/ImageJ Integration
+## Performance Tips
 
-```python
-# Export for BigDataViewer
-multiscale_img.to_bdv_format("output.xml", "output.h5")
-```
+1. **Choose appropriate levels**: Use lower resolution levels for exploratory analysis
+2. **Minimize data loading**: Only load the resolution level you actually need
+3. **Leverage lazy evaluation**: Let Dask handle memory management automatically
+4. **Optimize chunking**: Use chunk sizes appropriate for your analysis patterns
 
 ## See Also
 
 - [Downsampling and Upsampling](downsampling.md) for resolution change operations
-- [Working with Zarr and NIfTI](zarr_nifti.md) for basic format operations
+- [Working with Zarr and NIfTI](zarr_nifti.md) for basic format operations  
 - [API Reference](../reference.md) for detailed method documentation

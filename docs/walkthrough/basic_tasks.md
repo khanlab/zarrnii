@@ -110,13 +110,20 @@ print("Upsampled shape:", upsampled_target.darr.shape)
 Apply a custom affine transformation to the dataset.
 
 ```python
-from zarrnii.transforms import AffineTransform
+from zarrnii.transform import AffineTransform
+import numpy as np
 
-# Define a scaling transformation
-scaling_transform = AffineTransform.from_scaling((2.0, 2.0, 1.0))
+# Define a scaling transformation using a matrix
+scaling_matrix = np.array([
+    [2.0, 0.0, 0.0, 0.0],
+    [0.0, 2.0, 0.0, 0.0], 
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+])
+scaling_transform = AffineTransform.from_array(scaling_matrix)
 
-# Apply the transformation
-transformed = znimg.apply_transform(scaling_transform, znimg)
+# Apply the transformation  
+transformed = znimg.apply_transform(scaling_transform, ref_znimg=znimg)
 print("Transformed affine matrix:\n", transformed.affine.matrix)
 ```
 
