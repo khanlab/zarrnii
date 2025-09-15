@@ -120,6 +120,14 @@ print("DAPI full resolution:", dapi_full.darr.shape)
 print("GFP thumbnail:", gfp_thumbnail.darr.shape)
 ```
 
+### Channel labels
+
+```python
+# If channel labels are present from OME metadata (e.g. for data from SPIMprep)
+# You can select channels based on label
+abeta_full = ZarrNii.from_ome_zarr("multi_channel.zarr", level=3, channel_labels=["Abeta"])
+```
+
 ## Memory Management
 
 ### Efficient Loading
@@ -129,7 +137,7 @@ print("GFP thumbnail:", gfp_thumbnail.darr.shape)
 # Zarr and Dask handle lazy loading automatically
 
 # Load with appropriate chunking
-znimg = ZarrNii.from_ome_zarr("large_dataset.zarr", level=1, chunks='auto')
+znimg = ZarrNii.from_ome_zarr("large_dataset.zarr", level=1)
 
 # Process in blocks to manage memory
 def process_large_dataset(znimg):
@@ -168,26 +176,12 @@ level = choose_resolution_level("segmentation", data.shape)
 znimg = ZarrNii.from_ome_zarr("data.zarr", level=level)
 ```
 
-### Chunk Size Optimization
-
-```python
-# Optimize chunk sizes for your workflow
-import dask.array as da
-
-# Load with custom chunks
-znimg = ZarrNii.from_ome_zarr("data.zarr", level=0, chunks=(64, 64, 64))
-
-# Rechunk if needed for your analysis
-optimal_chunks = da.optimize.optimize_blockwise(znimg.darr)
-znimg.darr = znimg.darr.rechunk(optimal_chunks)
-```
 
 ## Performance Tips
 
 1. **Choose appropriate levels**: Use lower resolution levels for exploratory analysis
 2. **Minimize data loading**: Only load the resolution level you actually need
 3. **Leverage lazy evaluation**: Let Dask handle memory management automatically
-4. **Optimize chunking**: Use chunk sizes appropriate for your analysis patterns
 
 ## See Also
 
