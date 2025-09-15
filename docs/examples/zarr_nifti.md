@@ -87,11 +87,25 @@ print("Cropped shape:", cropped_ras.darr.shape)
 Apply multiple transformations to the dataset in sequence:
 
 ```python
-from zarrnii.transforms import AffineTransform
+from zarrnii.transform import AffineTransform
+import numpy as np
 
-# Define transformations
-scale = AffineTransform.from_scaling((2.0, 2.0, 1.0))
-translate = AffineTransform.from_translation((10.0, -5.0, 0.0))
+# Define transformations using matrices
+scale_matrix = np.array([
+    [2.0, 0.0, 0.0, 0.0],
+    [0.0, 2.0, 0.0, 0.0], 
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+])
+scale = AffineTransform.from_array(scale_matrix)
+
+translate_matrix = np.array([
+    [1.0, 0.0, 0.0, 10.0],
+    [0.0, 1.0, 0.0, -5.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+])
+translate = AffineTransform.from_array(translate_matrix)
 
 # Apply transformations
 transformed = znimg.apply_transform(scale, translate, ref_znimg=znimg)
@@ -126,7 +140,8 @@ Combine multiple operations in a single workflow:
 
 ```python
 from zarrnii import ZarrNii
-from zarrnii.transforms import AffineTransform
+from zarrnii.transform import AffineTransform
+import numpy as np
 
 # Load an OME-Zarr dataset
 znimg = ZarrNii.from_ome_zarr("path/to/dataset.zarr")
@@ -138,7 +153,13 @@ cropped = znimg.crop_with_bounding_box((10, 10, 10), (100, 100, 100))
 downsampled = cropped.downsample(level=2)
 
 # Apply an affine transformation
-scale = AffineTransform.from_scaling((1.5, 1.5, 1.0))
+scale_matrix = np.array([
+    [1.5, 0.0, 0.0, 0.0],
+    [0.0, 1.5, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+])
+scale = AffineTransform.from_array(scale_matrix)
 transformed = downsampled.apply_transform(scale, ref_znimg=downsampled)
 
 # Save the result as a NIfTI file
