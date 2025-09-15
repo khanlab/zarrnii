@@ -529,7 +529,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/transformations.md" class="md-nav__link">
+      <a href="../../examples/transformations/" class="md-nav__link">
         
   
   
@@ -552,7 +552,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/downsampling.md" class="md-nav__link">
+      <a href="../../examples/downsampling/" class="md-nav__link">
         
   
   
@@ -575,7 +575,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/multiscale.md" class="md-nav__link">
+      <a href="../../examples/multiscale/" class="md-nav__link">
         
   
   
@@ -627,7 +627,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../changelog.md" class="md-nav__link">
+      <a href="../../changelog/" class="md-nav__link">
         
   
   
@@ -649,7 +649,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing.md" class="md-nav__link">
+      <a href="../../contributing/" class="md-nav__link">
         
   
   
@@ -755,17 +755,17 @@
 <p>This guide helps you set up <strong>ZarrNii</strong> and get started with its basic functionality. By the end of this guide, you'll be able to read OME-Zarr and NIfTI datasets, perform basic transformations, and save your results.</p>
 <hr />
 <h2 id="installation">Installation</h2>
-<p>ZarrNii requires Python 3.10 or later. Install it using <a href="https://python-poetry.org/">Poetry</a>, a modern dependency manager for Python.</p>
+<p>ZarrNii requires Python 3.11 or later. Install it using <a href="https://docs.astral.sh/uv/">uv</a>, a modern, fast Python package installer and project manager.</p>
 <h3 id="1-clone-the-repository"><strong>1. Clone the Repository</strong></h3>
 <p>If you're using the source code, clone the ZarrNii repository:</p>
-<pre><code class="language-bash">git clone https://github.com/yourusername/zarrnii.git
+<pre><code class="language-bash">git clone https://github.com/khanlab/zarrnii.git
 cd zarrnii
 </code></pre>
-<h3 id="2-install-with-poetry"><strong>2. Install with Poetry</strong></h3>
+<h3 id="2-install-with-uv"><strong>2. Install with uv</strong></h3>
 <p>Run the following command to install the library and its dependencies:</p>
-<pre><code class="language-bash">poetry install
+<pre><code class="language-bash">uv sync --dev
 </code></pre>
-<p>If you don't use Poetry, install ZarrNii and its dependencies using <code>pip</code>:</p>
+<p>If you don't use uv, install ZarrNii and its dependencies using <code>pip</code>:</p>
 <pre><code class="language-bash">pip install zarrnii
 </code></pre>
 <hr />

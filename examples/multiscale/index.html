@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/walkthrough/advanced_use_cases/">
+        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/examples/multiscale/">
       
       
-        <link rel="prev" href="../basic_tasks/">
+        <link rel="prev" href="../downsampling/">
       
       
-        <link rel="next" href="../../reference/">
+        <link rel="next" href="../../faq/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>Advanced Use Cases - ZarrNii Documentation</title>
+        <title>Multiscale OME-Zarr - ZarrNii Documentation</title>
       
     
     
@@ -66,7 +66,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#walkthrough-advanced-use-cases" class="md-skip">
+        <a href="#multiscale-ome-zarr" class="md-skip">
           Skip to content
         </a>
       
@@ -102,7 +102,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Advanced Use Cases
+              Multiscale OME-Zarr
             
           </span>
         </div>
@@ -217,20 +217,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
@@ -246,7 +244,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             Walkthrough
@@ -260,7 +258,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../overview/" class="md-nav__link">
+      <a href="../../walkthrough/overview/" class="md-nav__link">
         
   
   
@@ -283,7 +281,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../getting_started/" class="md-nav__link">
+      <a href="../../walkthrough/getting_started/" class="md-nav__link">
         
   
   
@@ -306,7 +304,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../basic_tasks/" class="md-nav__link">
+      <a href="../../walkthrough/basic_tasks/" class="md-nav__link">
         
   
   
@@ -326,32 +324,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Advanced Use Cases
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../walkthrough/advanced_use_cases/" class="md-nav__link">
         
   
   
@@ -362,80 +338,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
-    <span class="md-ellipsis">
-      Table of Contents
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#preserving-metadata" class="md-nav__link">
-    <span class="md-ellipsis">
-      Preserving Metadata
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#working-with-multiscale-pyramids" class="md-nav__link">
-    <span class="md-ellipsis">
-      Working with Multiscale Pyramids
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#combining-transformations" class="md-nav__link">
-    <span class="md-ellipsis">
-      Combining Transformations
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#handling-large-datasets" class="md-nav__link">
-    <span class="md-ellipsis">
-      Handling Large Datasets
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      Summary
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -474,18 +376,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
@@ -501,7 +405,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             Examples
@@ -515,7 +419,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/zarr_nifti/" class="md-nav__link">
+      <a href="../zarr_nifti/" class="md-nav__link">
         
   
   
@@ -538,7 +442,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/transformations/" class="md-nav__link">
+      <a href="../transformations/" class="md-nav__link">
         
   
   
@@ -561,7 +465,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/downsampling/" class="md-nav__link">
+      <a href="../downsampling/" class="md-nav__link">
         
   
   
@@ -581,10 +485,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../examples/multiscale/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Multiscale OME-Zarr
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -595,6 +521,107 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#understanding-ome-zarr-multiscale" class="md-nav__link">
+    <span class="md-ellipsis">
+      Understanding OME-Zarr Multiscale
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-multiscale-ome-zarr" class="md-nav__link">
+    <span class="md-ellipsis">
+      Creating Multiscale OME-Zarr
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#working-with-different-resolution-levels" class="md-nav__link">
+    <span class="md-ellipsis">
+      Working with Different Resolution Levels
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel-and-time-series-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      Channel and Time Series Support
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory Management
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      Best Practices
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance Tips
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      See Also
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -700,54 +727,81 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
+  <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
-      Table of Contents
+      Overview
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#preserving-metadata" class="md-nav__link">
+  <a href="#understanding-ome-zarr-multiscale" class="md-nav__link">
     <span class="md-ellipsis">
-      Preserving Metadata
+      Understanding OME-Zarr Multiscale
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#working-with-multiscale-pyramids" class="md-nav__link">
+  <a href="#creating-multiscale-ome-zarr" class="md-nav__link">
     <span class="md-ellipsis">
-      Working with Multiscale Pyramids
+      Creating Multiscale OME-Zarr
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#combining-transformations" class="md-nav__link">
+  <a href="#working-with-different-resolution-levels" class="md-nav__link">
     <span class="md-ellipsis">
-      Combining Transformations
+      Working with Different Resolution Levels
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#handling-large-datasets" class="md-nav__link">
+  <a href="#channel-and-time-series-support" class="md-nav__link">
     <span class="md-ellipsis">
-      Handling Large Datasets
+      Channel and Time Series Support
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#summary" class="md-nav__link">
+  <a href="#memory-management" class="md-nav__link">
     <span class="md-ellipsis">
-      Summary
+      Memory Management
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      Best Practices
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance Tips
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      See Also
     </span>
   </a>
   
@@ -769,107 +823,156 @@
 
 
 
-<h1 id="walkthrough-advanced-use-cases">Walkthrough: Advanced Use Cases</h1>
-<p>This guide explores advanced workflows with <strong>ZarrNii</strong>, including metadata preservation, handling multiscale OME-Zarr pyramids, and combining multiple transformations.</p>
-<hr />
-<h2 id="table-of-contents">Table of Contents</h2>
-<ol>
-<li><a href="#preserving-metadata">Preserving Metadata</a></li>
-<li><a href="#working-with-multiscale-pyramids">Working with Multiscale Pyramids</a></li>
-<li><a href="#combining-transformations">Combining Transformations</a></li>
-<li><a href="#handling-large-datasets">Handling Large Datasets</a></li>
-</ol>
-<hr />
-<h2 id="preserving-metadata">Preserving Metadata</h2>
-<p>ZarrNii is designed to handle and preserve metadata when converting between formats or applying transformations.</p>
-<h3 id="accessing-metadata"><strong>Accessing Metadata</strong></h3>
-<p>OME-Zarr metadata is automatically extracted and stored in the <code>axes</code>, <code>coordinate_transformations</code>, and <code>omero</code> attributes of a <code>ZarrNii</code> instance.</p>
-<pre><code class="language-python">znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.zarr&quot;)
+<h1 id="multiscale-ome-zarr">Multiscale OME-Zarr</h1>
+<p>This section covers working with multi-resolution OME-Zarr datasets, including creation, manipulation, and optimization strategies.</p>
+<h2 id="overview">Overview</h2>
+<p>OME-Zarr supports multi-resolution image pyramids that enable efficient visualization and analysis at different scales. ZarrNii provides support for creating and reading multiscale datasets.</p>
+<h2 id="understanding-ome-zarr-multiscale">Understanding OME-Zarr Multiscale</h2>
+<h3 id="loading-multiscale-data">Loading Multiscale Data</h3>
+<pre><code class="language-python">from zarrnii import ZarrNii
+import zarr
 
-# Access axes metadata
-print(&quot;Axes metadata:&quot;, znimg.axes)
+# Load different resolution levels of a multiscale OME-Zarr dataset
+znimg_level0 = ZarrNii.from_ome_zarr(&quot;path/to/multiscale.zarr&quot;, level=0)  # Full resolution
+znimg_level1 = ZarrNii.from_ome_zarr(&quot;path/to/multiscale.zarr&quot;, level=1)  # Half resolution
+znimg_level2 = ZarrNii.from_ome_zarr(&quot;path/to/multiscale.zarr&quot;, level=2)  # Quarter resolution
 
-# Access coordinate transformations
-print(&quot;Coordinate transformations:&quot;, znimg.coordinate_transformations)
+print(&quot;Level 0 shape:&quot;, znimg_level0.darr.shape)
+print(&quot;Level 1 shape:&quot;, znimg_level1.darr.shape)
+print(&quot;Level 2 shape:&quot;, znimg_level2.darr.shape)
+</code></pre>
+<h3 id="inspecting-available-levels">Inspecting Available Levels</h3>
+<pre><code class="language-python"># Use zarr directly to inspect the structure
+store = zarr.open_group(&quot;path/to/multiscale.zarr&quot;, mode='r')
+print(&quot;Available arrays:&quot;, list(store.keys()))
 
-# Access Omero metadata
-print(&quot;Omero metadata:&quot;, znimg.omero)
+# Check shapes at each level
+for key in sorted(store.keys()):
+    if key.isdigit():
+        array = store[key]
+        print(f&quot;Level {key}: shape {array.shape}, chunks {array.chunks}&quot;)
 </code></pre>
-<hr />
-<h3 id="preserving-metadata-during-transformations"><strong>Preserving Metadata During Transformations</strong></h3>
-<p>When you perform transformations like cropping or downsampling, ZarrNii ensures metadata remains consistent.</p>
-<pre><code class="language-python">cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
-print(&quot;Updated metadata:&quot;, cropped.coordinate_transformations)
-</code></pre>
-<hr />
-<h2 id="working-with-multiscale-pyramids">Working with Multiscale Pyramids</h2>
-<p>OME-Zarr datasets often include multiscale pyramids, where each level represents a progressively downsampled version of the data.</p>
-<h3 id="loading-a-specific-level"><strong>Loading a Specific Level</strong></h3>
-<p>You can load a specific pyramid level using the <code>level</code> argument in <code>from_ome_zarr</code>:</p>
-<pre><code class="language-python">znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.zarr&quot;, level=2)
-print(&quot;Loaded shape:&quot;, znimg.darr.shape)
-</code></pre>
-<h3 id="handling-custom-downsampling"><strong>Handling Custom Downsampling</strong></h3>
-<p>If the desired level isn't available in the pyramid, ZarrNii computes additional downsampling lazily:</p>
-<pre><code class="language-python">level, do_downsample, ds_kwargs = ZarrNii.get_level_and_downsampling_kwargs(
-    &quot;path/to/dataset.zarr&quot;, level=5
+<h2 id="creating-multiscale-ome-zarr">Creating Multiscale OME-Zarr</h2>
+<h3 id="basic-multiscale-creation">Basic Multiscale Creation</h3>
+<pre><code class="language-python"># Load a single-resolution image
+znimg = ZarrNii.from_nifti(&quot;path/to/highres.nii&quot;)
+
+# Create multiscale OME-Zarr with default parameters
+znimg.to_ome_zarr(
+    &quot;output_multiscale.zarr&quot;,
+    max_layer=4  # Creates 4 downsampling levels
 )
-if do_downsample:
-    znimg = znimg.downsample(**ds_kwargs)
 </code></pre>
-<hr />
-<h2 id="combining-transformations">Combining Transformations</h2>
-<p>ZarrNii allows you to chain multiple transformations into a single workflow. This is useful when applying affine transformations, interpolations, or warping.</p>
-<h3 id="chaining-affine-transformations"><strong>Chaining Affine Transformations</strong></h3>
-<pre><code class="language-python">from zarrnii.transform import AffineTransform
-import numpy as np
+<h3 id="custom-multiscale-parameters">Custom Multiscale Parameters</h3>
+<pre><code class="language-python"># Create multiscale with custom settings
+znimg.to_ome_zarr(
+    &quot;custom_multiscale.zarr&quot;,
+    max_layer=6,  # More downsampling levels
+    scaling_method=None  # Use default downsampling
+)
+</code></pre>
+<h2 id="working-with-different-resolution-levels">Working with Different Resolution Levels</h2>
+<h3 id="processing-at-different-scales">Processing at Different Scales</h3>
+<pre><code class="language-python"># Load and process at different resolutions for different tasks
 
-# Create transformations using matrices
-scaling_matrix = np.array([
-    [2.0, 0.0, 0.0, 0.0],
-    [0.0, 2.0, 0.0, 0.0], 
-    [0.0, 0.0, 1.0, 0.0],
-    [0.0, 0.0, 0.0, 1.0]
-])
-scaling = AffineTransform.from_array(scaling_matrix)
+# Use low resolution for quick overview
+thumbnail = ZarrNii.from_ome_zarr(&quot;data.zarr&quot;, level=3)
+overview_stats = compute_statistics(thumbnail)
 
-translation_matrix = np.array([
-    [1.0, 0.0, 0.0, 10.0],
-    [0.0, 1.0, 0.0, -5.0],
-    [0.0, 0.0, 1.0, 0.0],
-    [0.0, 0.0, 0.0, 1.0]
-])
-translation = AffineTransform.from_array(translation_matrix)
+# Use medium resolution for analysis  
+analysis_res = ZarrNii.from_ome_zarr(&quot;data.zarr&quot;, level=1)
+feature_map = extract_features(analysis_res)
 
-# Apply multiple transformations sequentially
-combined = znimg.apply_transform(scaling, translation, ref_znimg=znimg)
-print(&quot;New affine matrix:\n&quot;, combined.affine.matrix)
+# Use full resolution for final processing
+full_res = ZarrNii.from_ome_zarr(&quot;data.zarr&quot;, level=0)
+final_result = apply_detailed_processing(full_res)
 </code></pre>
-<hr />
-<h2 id="handling-large-datasets">Handling Large Datasets</h2>
-<p>ZarrNii leverages Dask to handle datasets that don't fit into memory.</p>
-<h3 id="optimizing-chunking"><strong>Optimizing Chunking</strong></h3>
-<p>Ensure the dataset is chunked appropriately for operations like downsampling or interpolation:</p>
-<pre><code class="language-python"># Rechunk for efficient processing
-rechunked = znimg.darr.rechunk((1, 64, 64, 64))
-print(&quot;Rechunked shape:&quot;, rechunked.shape)
+<h3 id="multi-resolution-workflow">Multi-Resolution Workflow</h3>
+<pre><code class="language-python"># Progressive processing workflow
+def progressive_analysis(zarr_path):
+    # Start with thumbnail for parameter estimation
+    low_res = ZarrNii.from_ome_zarr(zarr_path, level=3)
+    parameters = estimate_parameters(low_res)
+
+    # Refine on medium resolution
+    med_res = ZarrNii.from_ome_zarr(zarr_path, level=1) 
+    refined_params = refine_parameters(med_res, parameters)
+
+    # Apply to full resolution
+    full_res = ZarrNii.from_ome_zarr(zarr_path, level=0)
+    final_result = process_with_params(full_res, refined_params)
+
+    return final_result
+
+result = progressive_analysis(&quot;multiscale_data.zarr&quot;)
 </code></pre>
-<h3 id="lazy-evaluation"><strong>Lazy Evaluation</strong></h3>
-<p>Most transformations in ZarrNii are lazy, meaning computations are only triggered when necessary. Use <code>.compute()</code> to materialize results.</p>
-<pre><code class="language-python"># Trigger computation
-cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
-cropped.darr.compute()
+<h2 id="channel-and-time-series-support">Channel and Time Series Support</h2>
+<h3 id="multi-channel-multiscale">Multi-Channel Multiscale</h3>
+<pre><code class="language-python"># Load specific channels from multiscale data
+# Channel selection works with any resolution level
+dapi_full = ZarrNii.from_ome_zarr(&quot;multi_channel.zarr&quot;, level=0, channels=[0])
+gfp_thumbnail = ZarrNii.from_ome_zarr(&quot;multi_channel.zarr&quot;, level=3, channels=[1])
+
+print(&quot;DAPI full resolution:&quot;, dapi_full.darr.shape)
+print(&quot;GFP thumbnail:&quot;, gfp_thumbnail.darr.shape)
 </code></pre>
-<hr />
-<h2 id="summary">Summary</h2>
-<p>This guide covered:
-- Preserving metadata across transformations and format conversions.
-- Working with multiscale pyramids in OME-Zarr.
-- Combining transformations for complex workflows.
-- Handling large datasets efficiently with Dask.</p>
-<p>Next, explore:
-- <a href="../../examples/zarr_nifti/">Examples</a>: Detailed workflows and practical use cases.
-- <a href="../../reference/">API Reference</a>: Technical details for ZarrNii classes and methods.</p>
+<h3 id="channel-labels">Channel labels</h3>
+<pre><code class="language-python"># If channel labels are present from OME metadata (e.g. for data from SPIMprep)
+# You can select channels based on label
+abeta_full = ZarrNii.from_ome_zarr(&quot;multi_channel.zarr&quot;, level=3, channel_labels=[&quot;Abeta&quot;])
+</code></pre>
+<h2 id="memory-management">Memory Management</h2>
+<h3 id="efficient-loading">Efficient Loading</h3>
+<pre><code class="language-python"># Load only what you need
+# Zarr and Dask handle lazy loading automatically
+
+# Load with appropriate chunking
+znimg = ZarrNii.from_ome_zarr(&quot;large_dataset.zarr&quot;, level=1)
+
+# Process in blocks to manage memory
+def process_large_dataset(znimg):
+    # Process data block by block
+    result = znimg.darr.map_blocks(
+        process_block,
+        dtype=np.float32,
+        drop_axis=None
+    )
+    return result
+
+processed = process_large_dataset(znimg)
+</code></pre>
+<h2 id="best-practices">Best Practices</h2>
+<h3 id="choosing-resolution-levels">Choosing Resolution Levels</h3>
+<pre><code class="language-python"># Guidelines for choosing appropriate resolution levels
+
+def choose_resolution_level(task_type, data_size):
+    &quot;&quot;&quot;Choose optimal resolution level based on task and data size&quot;&quot;&quot;
+    if task_type == &quot;thumbnail&quot;:
+        return 4  # Very low resolution for quick preview
+    elif task_type == &quot;segmentation&quot;:
+        return 1  # Medium resolution for segmentation
+    elif task_type == &quot;measurement&quot;:
+        return 0  # Full resolution for accurate measurements
+    else:
+        # Default to medium resolution
+        return 2
+
+# Use the function
+level = choose_resolution_level(&quot;segmentation&quot;, data.shape)
+znimg = ZarrNii.from_ome_zarr(&quot;data.zarr&quot;, level=level)
+</code></pre>
+<h2 id="performance-tips">Performance Tips</h2>
+<ol>
+<li><strong>Choose appropriate levels</strong>: Use lower resolution levels for exploratory analysis</li>
+<li><strong>Minimize data loading</strong>: Only load the resolution level you actually need</li>
+<li><strong>Leverage lazy evaluation</strong>: Let Dask handle memory management automatically</li>
+</ol>
+<h2 id="see-also">See Also</h2>
+<ul>
+<li><a href="../downsampling/">Downsampling and Upsampling</a> for resolution change operations</li>
+<li><a href="../zarr_nifti/">Working with Zarr and NIfTI</a> for basic format operations  </li>
+<li><a href="../../reference/">API Reference</a> for detailed method documentation</li>
+</ul>
 
 
 

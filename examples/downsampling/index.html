@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/walkthrough/advanced_use_cases/">
+        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/examples/downsampling/">
       
       
-        <link rel="prev" href="../basic_tasks/">
+        <link rel="prev" href="../transformations/">
       
       
-        <link rel="next" href="../../reference/">
+        <link rel="next" href="../multiscale/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>Advanced Use Cases - ZarrNii Documentation</title>
+        <title>Downsampling and Upsampling - ZarrNii Documentation</title>
       
     
     
@@ -66,7 +66,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#walkthrough-advanced-use-cases" class="md-skip">
+        <a href="#downsampling-and-upsampling" class="md-skip">
           Skip to content
         </a>
       
@@ -102,7 +102,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Advanced Use Cases
+              Downsampling and Upsampling
             
           </span>
         </div>
@@ -217,20 +217,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
@@ -246,7 +244,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             Walkthrough
@@ -260,7 +258,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../overview/" class="md-nav__link">
+      <a href="../../walkthrough/overview/" class="md-nav__link">
         
   
   
@@ -283,7 +281,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../getting_started/" class="md-nav__link">
+      <a href="../../walkthrough/getting_started/" class="md-nav__link">
         
   
   
@@ -306,7 +304,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../basic_tasks/" class="md-nav__link">
+      <a href="../../walkthrough/basic_tasks/" class="md-nav__link">
         
   
   
@@ -326,32 +324,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Advanced Use Cases
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../walkthrough/advanced_use_cases/" class="md-nav__link">
         
   
   
@@ -362,80 +338,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
-    <span class="md-ellipsis">
-      Table of Contents
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#preserving-metadata" class="md-nav__link">
-    <span class="md-ellipsis">
-      Preserving Metadata
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#working-with-multiscale-pyramids" class="md-nav__link">
-    <span class="md-ellipsis">
-      Working with Multiscale Pyramids
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#combining-transformations" class="md-nav__link">
-    <span class="md-ellipsis">
-      Combining Transformations
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#handling-large-datasets" class="md-nav__link">
-    <span class="md-ellipsis">
-      Handling Large Datasets
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      Summary
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -474,18 +376,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
@@ -501,7 +405,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             Examples
@@ -515,7 +419,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/zarr_nifti/" class="md-nav__link">
+      <a href="../zarr_nifti/" class="md-nav__link">
         
   
   
@@ -538,7 +442,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/transformations/" class="md-nav__link">
+      <a href="../transformations/" class="md-nav__link">
         
   
   
@@ -558,10 +462,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../examples/downsampling/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Downsampling and Upsampling
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -572,6 +498,89 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#downsampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Downsampling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upsampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Upsampling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-resolution-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Multi-Resolution Workflows
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-efficient-processing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory-Efficient Processing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance Tips
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      See Also
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -584,7 +593,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/multiscale/" class="md-nav__link">
+      <a href="../multiscale/" class="md-nav__link">
         
   
   
@@ -700,54 +709,63 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
+  <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
-      Table of Contents
+      Overview
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#preserving-metadata" class="md-nav__link">
+  <a href="#downsampling" class="md-nav__link">
     <span class="md-ellipsis">
-      Preserving Metadata
+      Downsampling
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#working-with-multiscale-pyramids" class="md-nav__link">
+  <a href="#upsampling" class="md-nav__link">
     <span class="md-ellipsis">
-      Working with Multiscale Pyramids
+      Upsampling
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#combining-transformations" class="md-nav__link">
+  <a href="#multi-resolution-workflows" class="md-nav__link">
     <span class="md-ellipsis">
-      Combining Transformations
+      Multi-Resolution Workflows
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#handling-large-datasets" class="md-nav__link">
+  <a href="#memory-efficient-processing" class="md-nav__link">
     <span class="md-ellipsis">
-      Handling Large Datasets
+      Memory-Efficient Processing
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#summary" class="md-nav__link">
+  <a href="#performance-tips" class="md-nav__link">
     <span class="md-ellipsis">
-      Summary
+      Performance Tips
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      See Also
     </span>
   </a>
   
@@ -769,107 +787,86 @@
 
 
 
-<h1 id="walkthrough-advanced-use-cases">Walkthrough: Advanced Use Cases</h1>
-<p>This guide explores advanced workflows with <strong>ZarrNii</strong>, including metadata preservation, handling multiscale OME-Zarr pyramids, and combining multiple transformations.</p>
-<hr />
-<h2 id="table-of-contents">Table of Contents</h2>
-<ol>
-<li><a href="#preserving-metadata">Preserving Metadata</a></li>
-<li><a href="#working-with-multiscale-pyramids">Working with Multiscale Pyramids</a></li>
-<li><a href="#combining-transformations">Combining Transformations</a></li>
-<li><a href="#handling-large-datasets">Handling Large Datasets</a></li>
-</ol>
-<hr />
-<h2 id="preserving-metadata">Preserving Metadata</h2>
-<p>ZarrNii is designed to handle and preserve metadata when converting between formats or applying transformations.</p>
-<h3 id="accessing-metadata"><strong>Accessing Metadata</strong></h3>
-<p>OME-Zarr metadata is automatically extracted and stored in the <code>axes</code>, <code>coordinate_transformations</code>, and <code>omero</code> attributes of a <code>ZarrNii</code> instance.</p>
-<pre><code class="language-python">znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.zarr&quot;)
+<h1 id="downsampling-and-upsampling">Downsampling and Upsampling</h1>
+<p>This section covers resolution changes in ZarrNii, including downsampling for efficient processing and upsampling for analysis.</p>
+<h2 id="overview">Overview</h2>
+<p>ZarrNii provides methods for changing image resolution through downsampling and upsampling operations. These are essential for creating multi-resolution datasets and efficient processing workflows.</p>
+<h2 id="downsampling">Downsampling</h2>
+<h3 id="basic-downsampling">Basic Downsampling</h3>
+<pre><code class="language-python">from zarrnii import ZarrNii
 
-# Access axes metadata
-print(&quot;Axes metadata:&quot;, znimg.axes)
+# Load a high-resolution dataset
+znimg = ZarrNii.from_nifti(&quot;path/to/highres.nii&quot;)
+print(&quot;Original shape:&quot;, znimg.darr.shape)
 
-# Access coordinate transformations
-print(&quot;Coordinate transformations:&quot;, znimg.coordinate_transformations)
-
-# Access Omero metadata
-print(&quot;Omero metadata:&quot;, znimg.omero)
+# Downsample by level (2^level reduction)
+downsampled = znimg.downsample(level=2)
+print(&quot;Downsampled shape:&quot;, downsampled.darr.shape)
 </code></pre>
-<hr />
-<h3 id="preserving-metadata-during-transformations"><strong>Preserving Metadata During Transformations</strong></h3>
-<p>When you perform transformations like cropping or downsampling, ZarrNii ensures metadata remains consistent.</p>
-<pre><code class="language-python">cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
-print(&quot;Updated metadata:&quot;, cropped.coordinate_transformations)
-</code></pre>
-<hr />
-<h2 id="working-with-multiscale-pyramids">Working with Multiscale Pyramids</h2>
-<p>OME-Zarr datasets often include multiscale pyramids, where each level represents a progressively downsampled version of the data.</p>
-<h3 id="loading-a-specific-level"><strong>Loading a Specific Level</strong></h3>
-<p>You can load a specific pyramid level using the <code>level</code> argument in <code>from_ome_zarr</code>:</p>
-<pre><code class="language-python">znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.zarr&quot;, level=2)
-print(&quot;Loaded shape:&quot;, znimg.darr.shape)
-</code></pre>
-<h3 id="handling-custom-downsampling"><strong>Handling Custom Downsampling</strong></h3>
-<p>If the desired level isn't available in the pyramid, ZarrNii computes additional downsampling lazily:</p>
-<pre><code class="language-python">level, do_downsample, ds_kwargs = ZarrNii.get_level_and_downsampling_kwargs(
-    &quot;path/to/dataset.zarr&quot;, level=5
+<h3 id="custom-downsampling-factors">Custom Downsampling Factors</h3>
+<pre><code class="language-python"># Downsample with specific factors for each axis
+downsampled_custom = znimg.downsample(
+    along_x=2, 
+    along_y=2, 
+    along_z=1  # 2x in X,Y; no change in Z
 )
-if do_downsample:
-    znimg = znimg.downsample(**ds_kwargs)
 </code></pre>
-<hr />
-<h2 id="combining-transformations">Combining Transformations</h2>
-<p>ZarrNii allows you to chain multiple transformations into a single workflow. This is useful when applying affine transformations, interpolations, or warping.</p>
-<h3 id="chaining-affine-transformations"><strong>Chaining Affine Transformations</strong></h3>
-<pre><code class="language-python">from zarrnii.transform import AffineTransform
-import numpy as np
+<h2 id="upsampling">Upsampling</h2>
+<h3 id="basic-upsampling">Basic Upsampling</h3>
+<pre><code class="language-python"># Upsample by factors
+upsampled = znimg.upsample(
+    along_x=2, 
+    along_y=2, 
+    along_z=1  # 2x in X,Y; no change in Z
+)
 
-# Create transformations using matrices
-scaling_matrix = np.array([
-    [2.0, 0.0, 0.0, 0.0],
-    [0.0, 2.0, 0.0, 0.0], 
-    [0.0, 0.0, 1.0, 0.0],
-    [0.0, 0.0, 0.0, 1.0]
-])
-scaling = AffineTransform.from_array(scaling_matrix)
+# Upsample to specific target shape
+target_shape = (100, 200, 300)
+upsampled_to_shape = znimg.upsample(to_shape=target_shape)
+</code></pre>
+<h2 id="multi-resolution-workflows">Multi-Resolution Workflows</h2>
+<h3 id="creating-image-pyramids">Creating Image Pyramids</h3>
+<pre><code class="language-python"># Create multiple resolution levels
+pyramid_levels = []
+current = znimg
 
-translation_matrix = np.array([
-    [1.0, 0.0, 0.0, 10.0],
-    [0.0, 1.0, 0.0, -5.0],
-    [0.0, 0.0, 1.0, 0.0],
-    [0.0, 0.0, 0.0, 1.0]
-])
-translation = AffineTransform.from_array(translation_matrix)
+for level in range(4):
+    pyramid_levels.append(current)
+    current = current.downsample(level=1)
+    print(f&quot;Level {level}: {current.darr.shape}&quot;)
+</code></pre>
+<h3 id="working-with-ome-zarr-multi-resolution">Working with OME-Zarr Multi-Resolution</h3>
+<pre><code class="language-python"># Load multi-resolution OME-Zarr at specific level
+znimg_level0 = ZarrNii.from_ome_zarr(&quot;path/to/multires.zarr&quot;, level=0)
+znimg_level2 = ZarrNii.from_ome_zarr(&quot;path/to/multires.zarr&quot;, level=2)
 
-# Apply multiple transformations sequentially
-combined = znimg.apply_transform(scaling, translation, ref_znimg=znimg)
-print(&quot;New affine matrix:\n&quot;, combined.affine.matrix)
+# Create new multi-resolution OME-Zarr
+znimg.to_ome_zarr(
+    &quot;output_multires.zarr&quot;,
+    max_layer=4
+)
 </code></pre>
-<hr />
-<h2 id="handling-large-datasets">Handling Large Datasets</h2>
-<p>ZarrNii leverages Dask to handle datasets that don't fit into memory.</p>
-<h3 id="optimizing-chunking"><strong>Optimizing Chunking</strong></h3>
-<p>Ensure the dataset is chunked appropriately for operations like downsampling or interpolation:</p>
-<pre><code class="language-python"># Rechunk for efficient processing
-rechunked = znimg.darr.rechunk((1, 64, 64, 64))
-print(&quot;Rechunked shape:&quot;, rechunked.shape)
+<h2 id="memory-efficient-processing">Memory-Efficient Processing</h2>
+<pre><code class="language-python"># Work with large images efficiently using Dask
+# Downsampling is lazy and computed only when needed
+downsampled = znimg.downsample(level=2)
+
+# Compute result when needed
+result = downsampled.darr.compute()
 </code></pre>
-<h3 id="lazy-evaluation"><strong>Lazy Evaluation</strong></h3>
-<p>Most transformations in ZarrNii are lazy, meaning computations are only triggered when necessary. Use <code>.compute()</code> to materialize results.</p>
-<pre><code class="language-python"># Trigger computation
-cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
-cropped.darr.compute()
-</code></pre>
-<hr />
-<h2 id="summary">Summary</h2>
-<p>This guide covered:
-- Preserving metadata across transformations and format conversions.
-- Working with multiscale pyramids in OME-Zarr.
-- Combining transformations for complex workflows.
-- Handling large datasets efficiently with Dask.</p>
-<p>Next, explore:
-- <a href="../../examples/zarr_nifti/">Examples</a>: Detailed workflows and practical use cases.
-- <a href="../../reference/">API Reference</a>: Technical details for ZarrNii classes and methods.</p>
+<h2 id="performance-tips">Performance Tips</h2>
+<ol>
+<li><strong>Use appropriate chunk sizes</strong>: For Dask arrays, ensure chunks are well-sized for your operations</li>
+<li><strong>Lazy evaluation</strong>: Downsampling operations are lazy and computed only when <code>.compute()</code> is called</li>
+<li><strong>Memory management</strong>: Use <code>.rechunk()</code> if needed to optimize chunk sizes for your workflow</li>
+<li><strong>Level-based downsampling</strong>: Use <code>level</code> parameter for consistent 2^level reductions</li>
+</ol>
+<h2 id="see-also">See Also</h2>
+<ul>
+<li><a href="../multiscale/">Multiscale Processing</a> for advanced multi-resolution workflows  </li>
+<li><a href="../zarr_nifti/">Working with Zarr and NIfTI</a> for basic format operations</li>
+<li><a href="../../reference/">API Reference</a> for detailed method documentation</li>
+</ul>
 
 
 

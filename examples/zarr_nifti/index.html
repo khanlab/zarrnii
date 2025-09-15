@@ -14,7 +14,7 @@
         <link rel="prev" href="../../reference/">
       
       
-        <link rel="next" href="../../faq/">
+        <link rel="next" href="../transformations/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -538,7 +538,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transformations.md" class="md-nav__link">
+      <a href="../transformations/" class="md-nav__link">
         
   
   
@@ -561,7 +561,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../downsampling.md" class="md-nav__link">
+      <a href="../downsampling/" class="md-nav__link">
         
   
   
@@ -584,7 +584,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../multiscale.md" class="md-nav__link">
+      <a href="../multiscale/" class="md-nav__link">
         
   
   
@@ -636,7 +636,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../changelog.md" class="md-nav__link">
+      <a href="../../changelog/" class="md-nav__link">
         
   
   
@@ -658,7 +658,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing.md" class="md-nav__link">
+      <a href="../../contributing/" class="md-nav__link">
         
   
   
@@ -839,11 +839,25 @@ print(&quot;Cropped shape:&quot;, cropped_ras.darr.shape)
 <hr />
 <h3 id="combining-affine-transformations"><strong>Combining Affine Transformations</strong></h3>
 <p>Apply multiple transformations to the dataset in sequence:</p>
-<pre><code class="language-python">from zarrnii.transforms import AffineTransform
+<pre><code class="language-python">from zarrnii.transform import AffineTransform
+import numpy as np
 
-# Define transformations
-scale = AffineTransform.from_scaling((2.0, 2.0, 1.0))
-translate = AffineTransform.from_translation((10.0, -5.0, 0.0))
+# Define transformations using matrices
+scale_matrix = np.array([
+    [2.0, 0.0, 0.0, 0.0],
+    [0.0, 2.0, 0.0, 0.0], 
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+])
+scale = AffineTransform.from_array(scale_matrix)
+
+translate_matrix = np.array([
+    [1.0, 0.0, 0.0, 10.0],
+    [0.0, 1.0, 0.0, -5.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+])
+translate = AffineTransform.from_array(translate_matrix)
 
 # Apply transformations
 transformed = znimg.apply_transform(scale, translate, ref_znimg=znimg)
@@ -864,7 +878,8 @@ print(&quot;Transformed affine matrix:\n&quot;, transformed.affine.matrix)
 <h2 id="advanced-example-full-workflow">Advanced Example: Full Workflow</h2>
 <p>Combine multiple operations in a single workflow:</p>
 <pre><code class="language-python">from zarrnii import ZarrNii
-from zarrnii.transforms import AffineTransform
+from zarrnii.transform import AffineTransform
+import numpy as np
 
 # Load an OME-Zarr dataset
 znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.zarr&quot;)
@@ -876,7 +891,13 @@ cropped = znimg.crop_with_bounding_box((10, 10, 10), (100, 100, 100))
 downsampled = cropped.downsample(level=2)
 
 # Apply an affine transformation
-scale = AffineTransform.from_scaling((1.5, 1.5, 1.0))
+scale_matrix = np.array([
+    [1.5, 0.0, 0.0, 0.0],
+    [0.0, 1.5, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+])
+scale = AffineTransform.from_array(scale_matrix)
 transformed = downsampled.apply_transform(scale, ref_znimg=downsampled)
 
 # Save the result as a NIfTI file
