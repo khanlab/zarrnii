@@ -4,7 +4,10 @@ This section covers spatial transformations in ZarrNii, including affine transfo
 
 ## Overview
 
-ZarrNii provides support for spatial transformations through the `AffineTransform` and `DisplacementTransform` classes. These can be applied to register and align images.
+ZarrNii provides support for spatial transformations through the `AffineTransform` and `DisplacementTransform` classes. These can be used to apply transformations
+derived from performing ANTS registration on downsampled (e.g. level > 3)  images, then applied to higher resolution (e.g. level < 3) images. ZarrNii performs
+these computations in a block-wise manner using Dask, upsampling the displacement field for a block before applying it. You can also provide a sequence of transforms
+to perform composition of transformations to resample in a single step.
 
 ## Affine Transformations
 
