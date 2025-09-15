@@ -51,18 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 This project is under active development. The API may change between versions as we refine the interface based on user feedback and use cases.
 
-### Upcoming Features
-- Enhanced visualization tools integration
-- Advanced registration algorithms
-- Cloud storage optimization
-- Performance benchmarking tools
-- Extended metadata support
-
-### Known Issues
-- Large dataset memory usage could be optimized further
-- Some edge cases in coordinate system transformations
-- Documentation examples need validation with real datasets
-
 ## Contributing
 
 See [Contributing](contributing.md) for information about contributing to ZarrNii development.
