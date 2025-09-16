@@ -75,13 +75,27 @@ ZarrNii allows you to chain multiple transformations into a single workflow. Thi
 
 ### **Chaining Affine Transformations**
 ```python
-from zarrnii.transforms import AffineTransform
+from zarrnii.transform import AffineTransform
+import numpy as np
 
-# Create multiple transformations
-scaling = AffineTransform.from_scaling((2.0, 2.0, 1.0))
-translation = AffineTransform.from_translation((10.0, -5.0, 0.0))
+# Create transformations using matrices
+scaling_matrix = np.array([
+    [2.0, 0.0, 0.0, 0.0],
+    [0.0, 2.0, 0.0, 0.0], 
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+])
+scaling = AffineTransform.from_array(scaling_matrix)
 
-# Combine and apply transformations
+translation_matrix = np.array([
+    [1.0, 0.0, 0.0, 10.0],
+    [0.0, 1.0, 0.0, -5.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+])
+translation = AffineTransform.from_array(translation_matrix)
+
+# Apply multiple transformations sequentially
 combined = znimg.apply_transform(scaling, translation, ref_znimg=znimg)
 print("New affine matrix:\n", combined.affine.matrix)
 ```
