@@ -10,11 +10,12 @@ import dask.array as da
 import ngff_zarr as nz
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-from zarrnii import ZarrNii, NgffZarrNii, AffineTransform
+from zarrnii import ZarrNii, AffineTransform
+from zarrnii.ngff_core import crop_ngff_image
 
 
 class TestCompatibilityMethods:
-    """Test compatibility methods between ZarrNii and NgffZarrNii."""
+    """Test compatibility methods between ZarrNii and NgffImage API."""
     
     @pytest.fixture
     def sample_zarrnii(self):
@@ -72,26 +73,6 @@ class TestCompatibilityMethods:
         
         # Check name
         assert ngff_image.name == "converted_image"
-    
-    def test_zarrnii_to_ngff_zarrnii(self, sample_zarrnii):
-        """Test converting ZarrNii to NgffZarrNii."""
-        ngff_zarrnii = sample_zarrnii.to_ngff_zarrnii("converted_image")
-        
-        # Check it's the right type
-        assert isinstance(ngff_zarrnii, NgffZarrNii)
-        
-        # Check data properties
-        assert ngff_zarrnii.shape == sample_zarrnii.darr.shape
-        assert_array_equal(ngff_zarrnii.data.compute(), sample_zarrnii.darr.compute())
-        
-        # Check scale and translation
-        assert ngff_zarrnii.scale["z"] == 2.0
-        assert ngff_zarrnii.scale["y"] == 1.0
-        assert ngff_zarrnii.scale["x"] == 1.0
-        
-        assert ngff_zarrnii.translation["z"] == 10.0
-        assert ngff_zarrnii.translation["y"] == 20.0
-        assert ngff_zarrnii.translation["x"] == 30.0
     
     def test_ngff_image_to_zarrnii(self, sample_ngff_image):
         """Test converting NgffImage to ZarrNii."""
@@ -206,17 +187,16 @@ class TestMigrationWorkflow:
         legacy_znimg = ZarrNii(darr=data, affine=affine, axes_order="ZYX")
         
         # Migrate to new API
-        new_znimg = legacy_znimg.to_ngff_zarrnii("migrated")
+        ngff_image = legacy_znimg.to_ngff_image("migrated")
         
         # Verify the migration preserved essential properties
-        assert new_znimg.shape == legacy_znimg.darr.shape
-        assert new_znimg.scale["z"] == 2.0
-        assert new_znimg.scale["y"] == 1.0
-        assert new_znimg.scale["x"] == 1.0
+        assert ngff_image.data.shape == legacy_znimg.darr.shape
+        assert ngff_image.scale["z"] == 2.0
+        assert ngff_image.scale["y"] == 1.0
+        assert ngff_image.scale["x"] == 1.0
         
         # Use new API methods
-        cropped = new_znimg.ngff_image
-        assert cropped.name == "migrated"
+        assert ngff_image.name == "migrated"
     
     def test_interoperability(self):
         """Test that both APIs can work together."""
@@ -225,12 +205,11 @@ class TestMigrationWorkflow:
         legacy_znimg = ZarrNii(darr=data, axes_order="ZYX")
         
         # Convert to new API for processing
-        new_znimg = legacy_znimg.to_ngff_zarrnii()
+        ngff_image = legacy_znimg.to_ngff_image()
         
         # Process with new API
-        from zarrnii import crop_ngff_image
         cropped_ngff = crop_ngff_image(
-            new_znimg.ngff_image,
+            ngff_image,
             bbox_min=(2, 4, 6),
             bbox_max=(10, 20, 26)
         )

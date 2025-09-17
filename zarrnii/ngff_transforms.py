@@ -288,3 +288,53 @@ def resample_ngff_image(
         spatial_dims=spatial_dims,
         interpolation_method=method
     )
+
+
+def load_ngff_image(
+    store_or_path,
+    level: int = 0,
+    storage_options: dict = None,
+) -> nz.NgffImage:
+    """
+    Load an NgffImage from an OME-Zarr store at a specific pyramid level.
+    
+    Args:
+        store_or_path: Store or path to the OME-Zarr file
+        level: Pyramid level to load (default: 0)
+        storage_options: Storage options for Zarr
+        
+    Returns:
+        NgffImage: The loaded image at the specified level
+    """
+    multiscales = nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
+    return multiscales.images[level]
+
+
+def save_ngff_image(
+    ngff_image: nz.NgffImage,
+    store_or_path,
+    max_layer: int = 4,
+    scale_factors: list = None,
+    **kwargs
+):
+    """
+    Save an NgffImage to an OME-Zarr store with multiscale pyramid.
+    
+    Args:
+        ngff_image: NgffImage to save
+        store_or_path: Target store or path
+        max_layer: Maximum number of pyramid levels
+        scale_factors: Custom scale factors for pyramid levels
+        **kwargs: Additional arguments for to_ngff_zarr
+    """
+    if scale_factors is None:
+        scale_factors = [2**i for i in range(1, max_layer)]
+    
+    # Create multiscales from the image
+    multiscales = nz.to_multiscales(
+        ngff_image,
+        scale_factors=scale_factors
+    )
+    
+    # Write to zarr store
+    nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)

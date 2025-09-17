@@ -1530,23 +1530,6 @@ class ZarrNii:
             name=name,
         )
     
-    def to_ngff_zarrnii(self, name: str = "zarrnii_image") -> "NgffZarrNii":
-        """
-        Convert this ZarrNii instance to an NgffZarrNii object.
-        
-        This provides a direct migration path from legacy ZarrNii to the new API.
-        
-        Args:
-            name: Name for the resulting NgffImage
-            
-        Returns:
-            NgffZarrNii object wrapping this data
-        """
-        from .ngff_core import NgffZarrNii
-        
-        ngff_image = self.to_ngff_image(name)
-        return NgffZarrNii(ngff_image=ngff_image)
-    
     @classmethod
     def from_ngff_image(
         cls,

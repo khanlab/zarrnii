@@ -1,5 +1,5 @@
 """
-Tests for the new NgffZarrNii class and function-based API.
+Tests for the new NgffImage-based function API.
 """
 
 import os
@@ -10,11 +10,15 @@ import dask.array as da
 import ngff_zarr as nz
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-from zarrnii.ngff_core import NgffZarrNii, crop_ngff_image, downsample_ngff_image, apply_transform_to_ngff_image
+from zarrnii.ngff_core import (
+    load_ngff_image, save_ngff_image, get_multiscales,
+    crop_ngff_image, downsample_ngff_image, apply_transform_to_ngff_image,
+    get_affine_matrix, get_affine_transform
+)
 
 
-class TestNgffZarrNii:
-    """Test the new NgffZarrNii class."""
+class TestNgffImageFunctions:
+    """Test the NgffImage-based function API."""
     
     @pytest.fixture
     def simple_ngff_image(self):
@@ -45,44 +49,60 @@ class TestNgffZarrNii:
             
             yield zarr_path
     
-    def test_create_from_ngff_image(self, simple_ngff_image):
-        """Test creating NgffZarrNii from an NgffImage."""
-        znimg = NgffZarrNii(ngff_image=simple_ngff_image)
+    def test_load_ngff_image(self, temp_zarr_store):
+        """Test loading NgffImage from OME-Zarr store."""
+        ngff_image = load_ngff_image(temp_zarr_store, level=0)
         
-        assert znimg.ngff_image is simple_ngff_image
-        assert znimg.multiscales is None
-        assert znimg.shape == (1, 32, 64, 64)
-        assert znimg.dims == ["c", "z", "y", "x"]
-        assert znimg.scale == {"z": 2.0, "y": 1.0, "x": 1.0}
-        assert znimg.translation == {"z": 0.0, "y": 0.0, "x": 0.0}
+        assert ngff_image is not None
+        assert ngff_image.data.shape == (1, 32, 64, 64)
+        assert ngff_image.dims == ["c", "z", "y", "x"]
+        assert ngff_image.scale["z"] == 2.0
+        assert ngff_image.scale["y"] == 1.0
+        assert ngff_image.scale["x"] == 1.0
     
-    def test_from_ome_zarr(self, temp_zarr_store):
-        """Test loading NgffZarrNii from OME-Zarr store."""
-        znimg = NgffZarrNii.from_ome_zarr(temp_zarr_store, level=0)
-        
-        assert znimg.ngff_image is not None
-        assert znimg.multiscales is not None
-        assert znimg.shape == (1, 32, 64, 64)
-        assert znimg.dims == ["c", "z", "y", "x"]
-        # The scale includes all dimensions from the NgffImage
-        expected_scale = {"z": 2.0, "y": 1.0, "x": 1.0}
-        for key, value in expected_scale.items():
-            assert znimg.scale[key] == value
-    
-    def test_from_ome_zarr_different_level(self, temp_zarr_store):
+    def test_load_ngff_image_different_level(self, temp_zarr_store):
         """Test loading different pyramid levels."""
-        znimg_level0 = NgffZarrNii.from_ome_zarr(temp_zarr_store, level=0)
-        znimg_level1 = NgffZarrNii.from_ome_zarr(temp_zarr_store, level=1)
+        ngff_level0 = load_ngff_image(temp_zarr_store, level=0)
+        ngff_level1 = load_ngff_image(temp_zarr_store, level=1)
         
         # Level 1 should be smaller due to downsampling
-        assert znimg_level1.shape[1] < znimg_level0.shape[1]  # Z dimension
-        assert znimg_level1.shape[2] < znimg_level0.shape[2]  # Y dimension
-        assert znimg_level1.shape[3] < znimg_level0.shape[3]  # X dimension
+        assert ngff_level1.data.shape[1] < ngff_level0.data.shape[1]  # Z dimension
+        assert ngff_level1.data.shape[2] < ngff_level0.data.shape[2]  # Y dimension
+        assert ngff_level1.data.shape[3] < ngff_level0.data.shape[3]  # X dimension
+    
+    def test_save_ngff_image(self, simple_ngff_image):
+        """Test saving NgffImage to OME-Zarr."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "output.zarr")
+            save_ngff_image(simple_ngff_image, output_path, max_layer=3)
+            
+            # Verify the output exists and can be loaded
+            assert os.path.exists(output_path)
+            
+            # Load back and verify
+            reloaded = load_ngff_image(output_path, level=0)
+            assert reloaded.data.shape == simple_ngff_image.data.shape
+            assert reloaded.dims == simple_ngff_image.dims
+    
+    def test_get_multiscales(self, temp_zarr_store):
+        """Test getting full multiscales object."""
+        multiscales = get_multiscales(temp_zarr_store)
+        
+        assert multiscales is not None
+        assert len(multiscales.images) == 3  # Original + 2 downsampled levels
+        
+        # Check that each level has appropriate shape
+        for i, image in enumerate(multiscales.images):
+            expected_scale_factor = 2**i
+            if i == 0:
+                assert image.data.shape == (1, 32, 64, 64)
+            else:
+                # Each level should be smaller
+                assert image.data.shape[1] <= multiscales.images[i-1].data.shape[1]
     
     def test_get_affine_matrix(self, simple_ngff_image):
-        """Test affine matrix construction."""
-        znimg = NgffZarrNii(ngff_image=simple_ngff_image)
-        affine = znimg.get_affine_matrix()
+        """Test affine matrix construction from NgffImage."""
+        affine = get_affine_matrix(simple_ngff_image)
         
         expected = np.eye(4)
         expected[0, 0] = 2.0  # Z scale
@@ -92,9 +112,8 @@ class TestNgffZarrNii:
         assert_array_equal(affine, expected)
     
     def test_get_affine_transform(self, simple_ngff_image):
-        """Test AffineTransform object creation."""
-        znimg = NgffZarrNii(ngff_image=simple_ngff_image)
-        transform = znimg.get_affine_transform()
+        """Test AffineTransform object creation from NgffImage."""
+        transform = get_affine_transform(simple_ngff_image)
         
         from zarrnii.transform import AffineTransform
         assert isinstance(transform, AffineTransform)
@@ -106,46 +125,23 @@ class TestNgffZarrNii:
         
         assert_array_equal(transform.matrix, expected_matrix)
     
-    def test_to_ome_zarr(self, simple_ngff_image):
-        """Test writing NgffZarrNii to OME-Zarr."""
-        znimg = NgffZarrNii(ngff_image=simple_ngff_image)
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "output.zarr")
-            znimg.to_ome_zarr(output_path, max_layer=3)
-            
-            # Verify the output exists and can be loaded
-            assert os.path.exists(output_path)
-            
-            # Load back and verify
-            reloaded = NgffZarrNii.from_ome_zarr(output_path, level=0)
-            assert reloaded.shape == znimg.shape
-            assert reloaded.dims == znimg.dims
-
-
-class TestNgffImageFunctions:
-    """Test the function-based API for NgffImage operations."""
-    
-    @pytest.fixture
-    def test_ngff_image(self):
-        """Create a test NgffImage."""
+    def test_crop_ngff_image(self):
+        """Test cropping an NgffImage."""
+        # Create test image
         data = da.ones((1, 32, 64, 64), chunks=(1, 16, 32, 32))
-        
-        return nz.NgffImage(
+        ngff_image = nz.NgffImage(
             data=data,
             dims=["c", "z", "y", "x"],
             scale={"z": 2.0, "y": 1.0, "x": 1.0},
             translation={"z": 10.0, "y": 20.0, "x": 30.0},
             name="test_image"
         )
-    
-    def test_crop_ngff_image(self, test_ngff_image):
-        """Test cropping an NgffImage."""
+        
         # Crop to a smaller region
         bbox_min = (5, 10, 15)  # Z, Y, X
         bbox_max = (15, 30, 35)  # Z, Y, X
         
-        cropped = crop_ngff_image(test_ngff_image, bbox_min, bbox_max)
+        cropped = crop_ngff_image(ngff_image, bbox_min, bbox_max)
         
         # Check new shape
         expected_shape = (1, 10, 20, 20)  # C unchanged, Z, Y, X cropped
@@ -157,11 +153,21 @@ class TestNgffImageFunctions:
         assert cropped.translation["x"] == 30.0 + (15 * 1.0)
         
         # Scale should be unchanged
-        assert cropped.scale == test_ngff_image.scale
+        assert cropped.scale == ngff_image.scale
     
-    def test_downsample_ngff_image_isotropic(self, test_ngff_image):
+    def test_downsample_ngff_image_isotropic(self):
         """Test isotropic downsampling of an NgffImage."""
-        downsampled = downsample_ngff_image(test_ngff_image, factors=2)
+        # Create test image
+        data = da.ones((1, 32, 64, 64), chunks=(1, 16, 32, 32))
+        ngff_image = nz.NgffImage(
+            data=data,
+            dims=["c", "z", "y", "x"],
+            scale={"z": 2.0, "y": 1.0, "x": 1.0},
+            translation={"z": 10.0, "y": 20.0, "x": 30.0},
+            name="test_image"
+        )
+        
+        downsampled = downsample_ngff_image(ngff_image, factors=2)
         
         # Check new shape (every spatial dimension should be halved)
         expected_shape = (1, 16, 32, 32)  # C unchanged, Z, Y, X downsampled by 2
@@ -173,12 +179,22 @@ class TestNgffImageFunctions:
         assert downsampled.scale["x"] == 2.0  # 1.0 * 2
         
         # Translation should be unchanged
-        assert downsampled.translation == test_ngff_image.translation
+        assert downsampled.translation == ngff_image.translation
     
-    def test_downsample_ngff_image_anisotropic(self, test_ngff_image):
+    def test_downsample_ngff_image_anisotropic(self):
         """Test anisotropic downsampling of an NgffImage."""
+        # Create test image
+        data = da.ones((1, 32, 64, 64), chunks=(1, 16, 32, 32))
+        ngff_image = nz.NgffImage(
+            data=data,
+            dims=["c", "z", "y", "x"],
+            scale={"z": 2.0, "y": 1.0, "x": 1.0},
+            translation={"z": 10.0, "y": 20.0, "x": 30.0},
+            name="test_image"
+        )
+        
         factors = [1, 2, 4]  # Different factors for Z, Y, X
-        downsampled = downsample_ngff_image(test_ngff_image, factors=factors)
+        downsampled = downsample_ngff_image(ngff_image, factors=factors)
         
         # Check new shape
         expected_shape = (1, 32, 32, 16)  # C unchanged, Z same, Y/2, X/4
@@ -189,9 +205,19 @@ class TestNgffImageFunctions:
         assert downsampled.scale["y"] == 2.0  # 1.0 * 2
         assert downsampled.scale["x"] == 4.0  # 1.0 * 4
     
-    def test_apply_transform_to_ngff_image_placeholder(self, test_ngff_image):
+    def test_apply_transform_to_ngff_image_placeholder(self):
         """Test the transform function placeholder."""
         from zarrnii.transform import AffineTransform
+        
+        # Create test images
+        data = da.ones((1, 32, 64, 64), chunks=(1, 16, 32, 32))
+        test_ngff_image = nz.NgffImage(
+            data=data,
+            dims=["c", "z", "y", "x"],
+            scale={"z": 2.0, "y": 1.0, "x": 1.0},
+            translation={"z": 10.0, "y": 20.0, "x": 30.0},
+            name="test_image"
+        )
         
         # Create a simple identity transform
         identity_transform = AffineTransform.identity()

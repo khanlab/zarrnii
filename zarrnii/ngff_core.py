@@ -1,9 +1,9 @@
 """
-New NgffImage-based core classes for ZarrNii.
+NgffImage-based function library for ZarrNii.
 
-This module contains the new architecture that works directly with 
-ngff_zarr.NgffImage and ngff_zarr.Multiscales objects instead of 
-wrapping single-scale dask arrays.
+This module provides functions that operate directly on ngff_zarr.NgffImage 
+objects instead of wrapping them in additional classes. This approach is 
+cleaner and more aligned with the ngff_zarr ecosystem.
 """
 
 from __future__ import annotations
@@ -12,236 +12,209 @@ from typing import Dict, List, Optional, Union
 import numpy as np
 import dask.array as da
 import ngff_zarr as nz
-from attrs import define, field
 
 from .transform import AffineTransform, Transform
 
 
-@define
-class NgffZarrNii:
+def load_ngff_image(
+    store_or_path,
+    level: int = 0,
+    channels: Optional[List[int]] = None,
+    channel_labels: Optional[List[str]] = None,
+    storage_options: Optional[Dict] = None,
+) -> nz.NgffImage:
     """
-    ZarrNii implementation that works directly with NgffImage objects.
+    Load an NgffImage from an OME-Zarr store.
     
-    This class represents a more direct wrapper around ngff_zarr objects,
-    providing spatial transformation and processing capabilities while
-    maintaining the multiscale structure.
-    
-    Attributes:
-        ngff_image (nz.NgffImage): The primary NgffImage object
-        multiscales (nz.Multiscales, optional): The multiscales container if available
+    Args:
+        store_or_path: Store or path to the OME-Zarr file
+        level: Pyramid level to load (default: 0)
+        channels: Channels to load by index (default: None, loads all channels)
+        channel_labels: Channels to load by label name (default: None)
+        storage_options: Storage options for Zarr
+        
+    Returns:
+        NgffImage: The loaded image at the specified level
     """
+    # Load the multiscales object
+    multiscales = nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
     
-    ngff_image: nz.NgffImage
-    multiscales: Optional[nz.Multiscales] = None
+    # Get the specified level
+    ngff_image = multiscales.images[level]
     
-    @classmethod
-    def from_ome_zarr(
-        cls,
-        store_or_path,
-        level: int = 0,
-        channels: Optional[List[int]] = None,
-        channel_labels: Optional[List[str]] = None,
-        storage_options: Optional[Dict] = None,
-    ):
-        """
-        Load an NgffZarrNii from an OME-Zarr store.
-        
-        Args:
-            store_or_path: Store or path to the OME-Zarr file
-            level: Pyramid level to primary load (default: 0)
-            channels: Channels to load by index (default: None, loads all channels)
-            channel_labels: Channels to load by label name (default: None)
-            storage_options: Storage options for Zarr
-            
-        Returns:
-            NgffZarrNii: A new instance wrapping the NgffImage
-        """
-        # Load the multiscales object
-        multiscales = nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
-        
-        # For now, we'll use the specified level as the primary image
-        # In the future, we might want to maintain the full multiscale structure
-        primary_image = multiscales.images[level]
-        
-        # Handle channel selection if specified
-        if channels is not None or channel_labels is not None:
-            primary_image = cls._select_channels_from_image(
-                primary_image, multiscales, channels, channel_labels
-            )
-        
-        return cls(ngff_image=primary_image, multiscales=multiscales)
-    
-    @classmethod
-    def _select_channels_from_image(
-        cls,
-        image: nz.NgffImage,
-        multiscales: nz.Multiscales,
-        channels: Optional[List[int]] = None,
-        channel_labels: Optional[List[str]] = None,
-    ) -> nz.NgffImage:
-        """
-        Create a new NgffImage with selected channels.
-        
-        This is a helper method to handle channel selection.
-        """
-        # Get axis names
-        axis_names = [axis.name for axis in multiscales.metadata.axes]
-        
-        # Handle channel label resolution
-        if channel_labels is not None:
-            if multiscales.metadata.omero is None or not hasattr(multiscales.metadata.omero, 'channels'):
-                raise ValueError("Channel labels specified but no omero metadata found")
-            
-            # Extract available labels
-            omero_channels = multiscales.metadata.omero.channels
-            available_labels = []
-            for ch in omero_channels:
-                if hasattr(ch, 'label'):
-                    available_labels.append(ch.label)
-                elif isinstance(ch, dict):
-                    available_labels.append(ch.get('label', ''))
-                else:
-                    available_labels.append(str(getattr(ch, 'label', '')))
-            
-            # Resolve labels to indices
-            resolved_channels = []
-            for label in channel_labels:
-                try:
-                    idx = available_labels.index(label)
-                    resolved_channels.append(idx)
-                except ValueError:
-                    raise ValueError(f"Channel label '{label}' not found. Available: {available_labels}")
-            
-            channels = resolved_channels
-        
-        # If no channels specified, load all
-        if channels is None:
-            c_index = axis_names.index("c") if "c" in axis_names else None
-            if c_index is not None:
-                num_channels = image.data.shape[c_index]
-                channels = list(range(num_channels))
-            else:
-                # No channel axis, return original image
-                return image
-        
-        # Build slices for channel selection
-        slices = []
-        for i, name in enumerate(axis_names):
-            if name == "t":
-                slices.append(0)  # Drop singleton time axis
-            elif name == "c":
-                slices.append(channels)  # Select specific channels
-            else:
-                slices.append(slice(None))  # Keep full range
-        
-        # Apply slices to get new data
-        new_data = image.data[tuple(slices)]
-        
-        # Create new NgffImage with selected data
-        # We need to preserve the coordinate transformations and other metadata
-        new_image = nz.NgffImage(
-            data=new_data,
-            dims=image.dims,
-            scale=image.scale,
-            translation=image.translation,
-            name=image.name,
+    # Handle channel selection if specified
+    if channels is not None or channel_labels is not None:
+        ngff_image = _select_channels_from_image(
+            ngff_image, multiscales, channels, channel_labels
         )
-        
-        return new_image
     
-    @property
-    def data(self) -> da.Array:
-        """Access the primary image data as a dask array."""
-        return self.ngff_image.data
+    return ngff_image
+
+
+def save_ngff_image(
+    ngff_image: nz.NgffImage,
+    store_or_path,
+    max_layer: int = 4,
+    scale_factors: Optional[List[int]] = None,
+    **kwargs
+):
+    """
+    Save an NgffImage to an OME-Zarr store with multiscale pyramid.
     
-    @property
-    def shape(self) -> tuple:
-        """Shape of the primary image data."""
-        return self.ngff_image.data.shape
+    Args:
+        ngff_image: NgffImage to save
+        store_or_path: Target store or path
+        max_layer: Maximum number of pyramid levels
+        scale_factors: Custom scale factors for pyramid levels
+        **kwargs: Additional arguments for to_ngff_zarr
+    """
+    if scale_factors is None:
+        scale_factors = [2**i for i in range(1, max_layer)]
     
-    @property
-    def dims(self) -> List[str]:
-        """Dimension names of the primary image."""
-        return self.ngff_image.dims
+    # Create multiscales from the image
+    multiscales = nz.to_multiscales(
+        ngff_image,
+        scale_factors=scale_factors
+    )
     
-    @property
-    def scale(self) -> Dict[str, float]:
-        """Scale information from the primary image."""
-        return self.ngff_image.scale
+    # Write to zarr store
+    nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)
+
+
+def get_multiscales(
+    store_or_path,
+    storage_options: Optional[Dict] = None,
+) -> nz.Multiscales:
+    """
+    Load the full multiscales object from an OME-Zarr store.
     
-    @property
-    def translation(self) -> Dict[str, float]:
-        """Translation information from the primary image.""" 
-        return self.ngff_image.translation
+    This provides access to all pyramid levels and metadata.
     
-    def get_affine_matrix(self, axes_order: str = "ZYX") -> np.ndarray:
-        """
-        Construct an affine transformation matrix from the NgffImage metadata.
+    Args:
+        store_or_path: Store or path to the OME-Zarr file
+        storage_options: Storage options for Zarr
         
-        Args:
-            axes_order: Order of spatial axes (default: "ZYX")
-            
-        Returns:
-            4x4 affine transformation matrix
-        """
-        # Extract scale and translation for spatial dimensions
-        spatial_dims = list(axes_order.lower())
-        
-        # Build 4x4 affine matrix
-        affine = np.eye(4)
-        
-        for i, dim in enumerate(spatial_dims):
-            if dim in self.scale:
-                affine[i, i] = self.scale[dim]
-            if dim in self.translation:
-                affine[i, 3] = self.translation[dim]
-        
-        return affine
+    Returns:
+        Multiscales: The full multiscales object with all pyramid levels
+    """
+    return nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
+
+
+def _select_channels_from_image(
+    image: nz.NgffImage,
+    multiscales: nz.Multiscales,
+    channels: Optional[List[int]] = None,
+    channel_labels: Optional[List[str]] = None,
+) -> nz.NgffImage:
+    """
+    Create a new NgffImage with selected channels.
     
-    def get_affine_transform(self, axes_order: str = "ZYX") -> AffineTransform:
-        """
-        Get an AffineTransform object from the NgffImage metadata.
-        
-        Args:
-            axes_order: Order of spatial axes (default: "ZYX")
-            
-        Returns:
-            AffineTransform object
-        """
-        matrix = self.get_affine_matrix(axes_order)
-        return AffineTransform.from_array(matrix)
+    This is a helper function to handle channel selection.
+    """
+    # Get axis names
+    axis_names = [axis.name for axis in multiscales.metadata.axes]
     
-    def to_ome_zarr(
-        self, 
-        store_or_path,
-        max_layer: int = 4,
-        scale_factors: Optional[List[int]] = None,
-        **kwargs
-    ):
-        """
-        Write the NgffZarrNii to an OME-Zarr store.
+    # Handle channel label resolution
+    if channel_labels is not None:
+        if multiscales.metadata.omero is None or not hasattr(multiscales.metadata.omero, 'channels'):
+            raise ValueError("Channel labels specified but no omero metadata found")
         
-        Args:
-            store_or_path: Target store or path
-            max_layer: Maximum number of pyramid levels
-            scale_factors: Custom scale factors for pyramid levels
-            **kwargs: Additional arguments for to_ngff_zarr
-        """
-        if scale_factors is None:
-            scale_factors = [2**i for i in range(1, max_layer)]
+        # Extract available labels
+        omero_channels = multiscales.metadata.omero.channels
+        available_labels = []
+        for ch in omero_channels:
+            if hasattr(ch, 'label'):
+                available_labels.append(ch.label)
+            elif isinstance(ch, dict):
+                available_labels.append(ch.get('label', ''))
+            else:
+                available_labels.append(str(getattr(ch, 'label', '')))
         
-        # Create multiscales from the primary image
-        multiscales = nz.to_multiscales(
-            self.ngff_image,
-            scale_factors=scale_factors
-        )
+        # Resolve labels to indices
+        resolved_channels = []
+        for label in channel_labels:
+            try:
+                idx = available_labels.index(label)
+                resolved_channels.append(idx)
+            except ValueError:
+                raise ValueError(f"Channel label '{label}' not found. Available: {available_labels}")
         
-        # Preserve original omero metadata if available
-        if self.multiscales and self.multiscales.metadata.omero:
-            multiscales.metadata.omero = self.multiscales.metadata.omero
+        channels = resolved_channels
+    
+    # If no channels specified, load all
+    if channels is None:
+        c_index = axis_names.index("c") if "c" in axis_names else None
+        if c_index is not None:
+            num_channels = image.data.shape[c_index]
+            channels = list(range(num_channels))
+        else:
+            # No channel axis, return original image
+            return image
+    
+    # Build slices for channel selection
+    slices = []
+    for i, name in enumerate(axis_names):
+        if name == "t":
+            slices.append(0)  # Drop singleton time axis
+        elif name == "c":
+            slices.append(channels)  # Select specific channels
+        else:
+            slices.append(slice(None))  # Keep full range
+    
+    # Apply slices to get new data
+    new_data = image.data[tuple(slices)]
+    
+    # Create new NgffImage with selected data
+    new_image = nz.NgffImage(
+        data=new_data,
+        dims=image.dims,
+        scale=image.scale,
+        translation=image.translation,
+        name=image.name,
+    )
+    
+    return new_image
+
+
+def get_affine_matrix(ngff_image: nz.NgffImage, axes_order: str = "ZYX") -> np.ndarray:
+    """
+    Construct an affine transformation matrix from NgffImage metadata.
+    
+    Args:
+        ngff_image: Input NgffImage
+        axes_order: Order of spatial axes (default: "ZYX")
         
-        # Write to zarr store
-        nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)
+    Returns:
+        4x4 affine transformation matrix
+    """
+    # Extract scale and translation for spatial dimensions
+    spatial_dims = list(axes_order.lower())
+    
+    # Build 4x4 affine matrix
+    affine = np.eye(4)
+    
+    for i, dim in enumerate(spatial_dims):
+        if dim in ngff_image.scale:
+            affine[i, i] = ngff_image.scale[dim]
+        if dim in ngff_image.translation:
+            affine[i, 3] = ngff_image.translation[dim]
+    
+    return affine
+
+
+def get_affine_transform(ngff_image: nz.NgffImage, axes_order: str = "ZYX") -> AffineTransform:
+    """
+    Get an AffineTransform object from NgffImage metadata.
+    
+    Args:
+        ngff_image: Input NgffImage
+        axes_order: Order of spatial axes (default: "ZYX")
+        
+    Returns:
+        AffineTransform object
+    """
+    matrix = get_affine_matrix(ngff_image, axes_order)
+    return AffineTransform.from_array(matrix)
 
 
 # Function-based API for operating on NgffImage objects

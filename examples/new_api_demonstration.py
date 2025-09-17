@@ -20,11 +20,12 @@ from zarrnii import (
     # Legacy API
     ZarrNii, AffineTransform,
     
-    # New NgffImage-based API  
-    NgffZarrNii, crop_ngff_image, downsample_ngff_image,
+    # New NgffImage-based function API  
+    crop_ngff_image, downsample_ngff_image,
     create_reference_ngff_image, resample_ngff_image,
-    compose_transforms
+    compose_transforms, load_ngff_image, save_ngff_image
 )
+from zarrnii.ngff_core import get_affine_matrix, get_affine_transform, get_multiscales
 
 
 def demonstrate_basic_usage():
@@ -34,7 +35,7 @@ def demonstrate_basic_usage():
     # Create test data
     data = da.random.random((1, 64, 128, 128), chunks=(1, 32, 64, 64))
     
-    # Create NgffImage directly
+    # Create NgffImage directly - no wrapper needed!
     ngff_image = nz.NgffImage(
         data=data,
         dims=["c", "z", "y", "x"],
@@ -43,40 +44,38 @@ def demonstrate_basic_usage():
         name="demo_image"
     )
     
-    # Wrap in NgffZarrNii
-    znimg = NgffZarrNii(ngff_image=ngff_image)
+    print(f"Shape: {ngff_image.data.shape}")
+    print(f"Dimensions: {ngff_image.dims}")
+    print(f"Scale: {ngff_image.scale}")
+    print(f"Translation: {ngff_image.translation}")
     
-    print(f"Shape: {znimg.shape}")
-    print(f"Dimensions: {znimg.dims}")
-    print(f"Scale: {znimg.scale}")
-    print(f"Translation: {znimg.translation}")
-    
-    # Get affine transformation
-    affine = znimg.get_affine_transform()
-    print(f"Affine matrix:\n{affine.matrix}")
+    # Get affine transformation using helper functions
+    affine_matrix = get_affine_matrix(ngff_image)
+    affine_transform = get_affine_transform(ngff_image)
+    print(f"Affine matrix:\n{affine_matrix}")
     print()
     
-    return znimg
+    return ngff_image
 
 
-def demonstrate_function_api(znimg):
+def demonstrate_function_api(ngff_image):
     """Demonstrate the function-based API."""
     print("=== Function-based API Demo ===")
     
     # Crop the image
     cropped = crop_ngff_image(
-        znimg.ngff_image,
+        ngff_image,
         bbox_min=(10, 20, 30),  # Z, Y, X
         bbox_max=(40, 80, 90),
         spatial_dims=["z", "y", "x"]
     )
-    print(f"Original shape: {znimg.shape}")
+    print(f"Original shape: {ngff_image.data.shape}")
     print(f"Cropped shape: {cropped.data.shape}")
     print(f"Cropped translation: {cropped.translation}")
     
     # Downsample the image
     downsampled = downsample_ngff_image(
-        znimg.ngff_image,
+        ngff_image,
         factors=2,  # Isotropic downsampling
         spatial_dims=["z", "y", "x"]
     )
@@ -85,7 +84,7 @@ def demonstrate_function_api(znimg):
     
     # Resample to different resolution
     resampled = resample_ngff_image(
-        znimg.ngff_image,
+        ngff_image,
         target_scale={"z": 1.0, "y": 0.5, "x": 0.5},
         spatial_dims=["z", "y", "x"]
     )
@@ -141,14 +140,13 @@ def demonstrate_compatibility():
     print(f"Legacy ZarrNii shape: {legacy_znimg.darr.shape}")
     print(f"Legacy affine:\n{legacy_znimg.affine.matrix}")
     
-    # Convert to new API
-    new_znimg = legacy_znimg.to_ngff_zarrnii("converted")
-    print(f"New NgffZarrNii shape: {new_znimg.shape}")
-    print(f"New scale: {new_znimg.scale}")
-    print(f"New translation: {new_znimg.translation}")
+    # Convert to new API - now just NgffImage directly
+    ngff_image = legacy_znimg.to_ngff_image("converted")
+    print(f"New NgffImage shape: {ngff_image.data.shape}")
+    print(f"New scale: {ngff_image.scale}")
+    print(f"New translation: {ngff_image.translation}")
     
     # Convert NgffImage back to legacy API
-    ngff_image = new_znimg.ngff_image
     back_to_legacy = ZarrNii.from_ngff_image(ngff_image, axes_order="ZYX")
     print(f"Back to legacy shape: {back_to_legacy.darr.shape}")
     print(f"Preserved affine:\n{back_to_legacy.affine.matrix}")
@@ -170,29 +168,27 @@ def demonstrate_zarr_io():
             name="io_test"
         )
         
-        znimg = NgffZarrNii(ngff_image=ngff_image)
-        
-        # Save to OME-Zarr
+        # Save to OME-Zarr using function API
         zarr_path = os.path.join(tmpdir, "test.zarr")
-        znimg.to_ome_zarr(zarr_path, max_layer=3)
+        save_ngff_image(ngff_image, zarr_path, max_layer=3)
         print(f"Saved to: {zarr_path}")
         
-        # Load back
-        loaded = NgffZarrNii.from_ome_zarr(zarr_path, level=0)
-        print(f"Loaded shape: {loaded.shape}")
+        # Load back using function API
+        loaded = load_ngff_image(zarr_path, level=0)
+        print(f"Loaded shape: {loaded.data.shape}")
         print(f"Loaded scale: {loaded.scale}")
         print(f"Loaded translation: {loaded.translation}")
         
         # Load different pyramid level
-        level1 = NgffZarrNii.from_ome_zarr(zarr_path, level=1)
-        print(f"Level 1 shape: {level1.shape}")
+        level1 = load_ngff_image(zarr_path, level=1)
+        print(f"Level 1 shape: {level1.data.shape}")
         print(f"Level 1 scale: {level1.scale}")
         
         # Access full multiscale structure
-        if loaded.multiscales:
-            print(f"Available pyramid levels: {len(loaded.multiscales.images)}")
-            for i, img in enumerate(loaded.multiscales.images):
-                print(f"  Level {i}: shape={img.data.shape}, scale={img.scale}")
+        multiscales = get_multiscales(zarr_path)
+        print(f"Available pyramid levels: {len(multiscales.images)}")
+        for i, img in enumerate(multiscales.images):
+            print(f"  Level {i}: shape={img.data.shape}, scale={img.scale}")
     
     print()
 
@@ -204,10 +200,10 @@ def main():
     print()
     
     # Basic usage
-    znimg = demonstrate_basic_usage()
+    ngff_image = demonstrate_basic_usage()
     
     # Function-based API
-    cropped, downsampled, resampled = demonstrate_function_api(znimg)
+    cropped, downsampled, resampled = demonstrate_function_api(ngff_image)
     
     # Transformations
     demonstrate_transformations()
@@ -219,12 +215,13 @@ def main():
     demonstrate_zarr_io()
     
     print("Demo completed successfully!")
-    print("\nKey Benefits of New Architecture:")
-    print("- Direct NgffImage support with better multiscale handling")
+    print("\nKey Benefits of New Function-based Architecture:")
+    print("- Direct NgffImage support without unnecessary wrapper classes")
     print("- Function-based API for cleaner, more modular operations")
     print("- Better metadata preservation throughout workflows")
     print("- Seamless compatibility with legacy ZarrNii class")
     print("- More efficient operations without unnecessary conversions")
+    print("- Simpler and more aligned with ngff_zarr ecosystem")
 
 
 if __name__ == "__main__":
