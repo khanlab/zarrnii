@@ -659,7 +659,7 @@ class ZarrNii:
         self, 
         bbox_min: tuple, 
         bbox_max: tuple,
-        spatial_dims: List[str] = ["z", "y", "x"]
+        spatial_dims: List[str] = None
     ) -> "ZarrNii":
         """
         Crop the image and return a new ZarrNii instance.
@@ -667,11 +667,13 @@ class ZarrNii:
         Args:
             bbox_min: Minimum corner of bounding box
             bbox_max: Maximum corner of bounding box
-            spatial_dims: Names of spatial dimensions
+            spatial_dims: Names of spatial dimensions (derived from axes_order if None)
             
         Returns:
             New ZarrNii with cropped data
         """
+        if spatial_dims is None:
+            spatial_dims = ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
         cropped_image = crop_ngff_image(self.ngff_image, bbox_min, bbox_max, spatial_dims)
         return ZarrNii(ngff_image=cropped_image, axes_order=self.axes_order)
 
@@ -686,7 +688,7 @@ class ZarrNii:
         along_y: int = 1, 
         along_z: int = 1,
         level: int = None,
-        spatial_dims: List[str] = ["z", "y", "x"]
+        spatial_dims: List[str] = None
     ) -> "ZarrNii":
         """
         Downsample the image and return a new ZarrNii instance.
@@ -697,7 +699,7 @@ class ZarrNii:
             along_y: Legacy parameter for Y downsampling
             along_z: Legacy parameter for Z downsampling
             level: Legacy parameter for level-based downsampling (2^level)
-            spatial_dims: Names of spatial dimensions  
+            spatial_dims: Names of spatial dimensions (derived from axes_order if None)
             
         Returns:
             New ZarrNii with downsampled data
@@ -709,6 +711,9 @@ class ZarrNii:
             else:
                 factors = [along_z, along_y, along_x]
         
+        if spatial_dims is None:
+            spatial_dims = ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
+            
         downsampled_image = downsample_ngff_image(self.ngff_image, factors, spatial_dims)
         return ZarrNii(ngff_image=downsampled_image, axes_order=self.axes_order)
 
@@ -716,7 +721,7 @@ class ZarrNii:
         self,
         *transforms: Transform,
         ref_znimg: "ZarrNii",
-        spatial_dims: List[str] = ["z", "y", "x"]
+        spatial_dims: List[str] = None
     ) -> "ZarrNii":
         """
         Apply spatial transformation and return a new ZarrNii instance.
@@ -724,11 +729,14 @@ class ZarrNii:
         Args:
             transforms: Transformations to apply
             ref_znimg: Reference ZarrNii defining output space
-            spatial_dims: Names of spatial dimensions
+            spatial_dims: Names of spatial dimensions (derived from axes_order if None)
             
         Returns:
             New ZarrNii with transformed data
         """
+        if spatial_dims is None:
+            spatial_dims = ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
+            
         # For now, just apply the first transform (placeholder)
         if transforms:
             transformed_image = apply_transform_to_ngff_image(
