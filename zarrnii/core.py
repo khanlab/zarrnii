@@ -766,19 +766,32 @@ class ZarrNii:
         """
         Convert to NIfTI format.
         
+        NIfTI files are always written in XYZ order. The affine matrix is adjusted
+        based on the current axes_order to ensure the physical space is correctly
+        represented.
+        
         Args:
             filename: Output filename, if None return nibabel image
             
         Returns:
             nibabel.Nifti1Image or path if filename provided
         """
-        # Get data and affine
+        # Get data - no reordering, we adjust the affine instead
         data = self.data.compute()
-        affine_matrix = self.get_affine_matrix()
         
         # Remove channel dimension for NIfTI if it's size 1
         if data.shape[0] == 1:
             data = data[0]
+        
+        # Get the appropriate affine matrix
+        # If axes_order is ZYX, we need to get the XYZ-oriented affine
+        # If axes_order is XYZ, the affine is already XYZ-oriented
+        if self.axes_order == "ZYX":
+            # Get the affine that represents the ZYX->XYZ transformation
+            affine_matrix = self._get_nifti_affine_from_zyx()
+        else:
+            # Data is already in XYZ order
+            affine_matrix = self.get_affine_matrix(axes_order="XYZ")
         
         # Create NIfTI image
         nifti_img = nib.Nifti1Image(data, affine_matrix)
@@ -788,6 +801,40 @@ class ZarrNii:
             return filename
         else:
             return nifti_img
+    
+    def _get_nifti_affine_from_zyx(self):
+        """
+        Get an affine matrix for NIfTI output when current axes_order is ZYX.
+        
+        When axes_order is ZYX, the data array indices [z,y,x] map to physical 
+        coordinates. For NIfTI output, we need an affine that maps array indices
+        [x,y,z] to the same physical coordinates.
+        
+        Returns:
+            4x4 affine matrix for NIfTI
+        """
+        # Get the current ZYX affine
+        zyx_affine = self.get_affine_matrix(axes_order="ZYX")
+        
+        # The ZYX affine maps [z,y,x] array indices to physical space
+        # We need an XYZ affine that maps [x,y,z] array indices to the same physical space
+        # This means we need to permute the rows and columns of the ZYX affine
+        
+        xyz_affine = np.copy(zyx_affine)
+        
+        # Permute rows: [Z,Y,X] -> [X,Y,Z] means row 0->2, row 1->1, row 2->0  
+        xyz_affine[0, :] = zyx_affine[2, :]  # X row (was Z)
+        xyz_affine[1, :] = zyx_affine[1, :]  # Y row (unchanged)
+        xyz_affine[2, :] = zyx_affine[0, :]  # Z row (was X)
+        
+        # Permute columns of the 3x3 part: [z,y,x] -> [x,y,z] 
+        temp = np.copy(xyz_affine[:3, :3])
+        xyz_affine[:3, 0] = temp[:, 2]  # X column (was Z)
+        xyz_affine[:3, 1] = temp[:, 1]  # Y column (unchanged)
+        xyz_affine[:3, 2] = temp[:, 0]  # Z column (was X)
+        
+        return xyz_affine
+
 
     def copy(self) -> "ZarrNii":
         """
