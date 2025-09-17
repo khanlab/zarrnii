@@ -228,7 +228,7 @@ def crop_ngff_image(
     ngff_image: nz.NgffImage,
     bbox_min: tuple,
     bbox_max: tuple,
-    spatial_dims: List[str] = ["z", "y", "x"]
+    spatial_dims: List[str] = None
 ) -> nz.NgffImage:
     """
     Crop an NgffImage using a bounding box.
@@ -237,11 +237,13 @@ def crop_ngff_image(
         ngff_image: Input NgffImage to crop
         bbox_min: Minimum corner of bounding box
         bbox_max: Maximum corner of bounding box  
-        spatial_dims: Names of spatial dimensions
+        spatial_dims: Names of spatial dimensions (defaults to ["z", "y", "x"])
         
     Returns:
         New cropped NgffImage
     """
+    if spatial_dims is None:
+        spatial_dims = ["z", "y", "x"]
     # Build slices for cropping
     slices = []
     spatial_idx = 0
