@@ -603,7 +603,7 @@ class ZarrNii:
         return cls(ngff_image=ngff_image, axes_order=axes_order)
 
     @classmethod
-    def from_nifti(cls, path, chunks="auto", axes_order="ZYX", name=None):
+    def from_nifti(cls, path, chunks="auto", axes_order="XYZ", name=None):
         """
         Load from NIfTI file.
         
