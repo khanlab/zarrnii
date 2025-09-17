@@ -709,7 +709,7 @@ class ZarrNii:
             if level is not None:
                 factors = 2 ** level
             else:
-                factors = [along_z, along_y, along_x]
+                factors = [along_z, along_y, along_x] if self.axes_order == "ZYX" else [along_x, along_y, along_z]
         
         if spatial_dims is None:
             spatial_dims = ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
