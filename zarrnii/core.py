@@ -1479,6 +1479,122 @@ class ZarrNii:
             },
         )
 
+    def to_ngff_image(self, name: str = "zarrnii_image") -> "nz.NgffImage":
+        """
+        Convert this ZarrNii instance to an NgffImage object.
+        
+        This method provides a bridge between the legacy ZarrNii class
+        and the new NgffImage-based API.
+        
+        Args:
+            name: Name for the resulting NgffImage
+            
+        Returns:
+            NgffImage object representing this ZarrNii data
+        """
+        import ngff_zarr as nz
+        
+        # Extract spatial dimensions and their info
+        spatial_dims = list(self.axes_order.lower())
+        
+        # Build scale and translation dictionaries
+        scale = {}
+        translation = {}
+        
+        # Extract from affine matrix if available
+        if self.affine is not None:
+            affine_matrix = self.affine.matrix
+            
+            for i, dim in enumerate(spatial_dims):
+                # Extract scale (diagonal elements)
+                scale[dim] = abs(affine_matrix[i, i])
+                # Extract translation (last column)
+                translation[dim] = affine_matrix[i, 3]
+        else:
+            # Default scale and translation
+            for dim in spatial_dims:
+                scale[dim] = 1.0
+                translation[dim] = 0.0
+        
+        # Build dimension names (add channel dimension if present)
+        dims = []
+        if len(self.darr.shape) == 4:  # Assume CZYX
+            dims.append("c")
+        dims.extend(spatial_dims)
+        
+        return nz.NgffImage(
+            data=self.darr,
+            dims=dims,
+            scale=scale,
+            translation=translation,
+            name=name,
+        )
+    
+    def to_ngff_zarrnii(self, name: str = "zarrnii_image") -> "NgffZarrNii":
+        """
+        Convert this ZarrNii instance to an NgffZarrNii object.
+        
+        This provides a direct migration path from legacy ZarrNii to the new API.
+        
+        Args:
+            name: Name for the resulting NgffImage
+            
+        Returns:
+            NgffZarrNii object wrapping this data
+        """
+        from .ngff_core import NgffZarrNii
+        
+        ngff_image = self.to_ngff_image(name)
+        return NgffZarrNii(ngff_image=ngff_image)
+    
+    @classmethod
+    def from_ngff_image(
+        cls,
+        ngff_image: "nz.NgffImage", 
+        axes_order: str = "ZYX"
+    ) -> "ZarrNii":
+        """
+        Create a ZarrNii instance from an NgffImage object.
+        
+        This provides a bridge from the new NgffImage-based API back to 
+        the legacy ZarrNii class when needed.
+        
+        Args:
+            ngff_image: Input NgffImage object
+            axes_order: Spatial axes order for ZarrNii (default: "ZYX")
+            
+        Returns:
+            ZarrNii instance wrapping the NgffImage data
+        """
+        import ngff_zarr as nz
+        
+        # Build affine matrix from scale and translation
+        spatial_dims = list(axes_order.lower())
+        affine_matrix = np.eye(4)
+        
+        for i, dim in enumerate(spatial_dims):
+            if dim in ngff_image.scale:
+                affine_matrix[i, i] = ngff_image.scale[dim] 
+            if dim in ngff_image.translation:
+                affine_matrix[i, 3] = ngff_image.translation[dim]
+        
+        affine_transform = AffineTransform.from_array(affine_matrix)
+        
+        # Extract metadata if available
+        axes = None
+        coordinate_transformations = None
+        omero = None
+        
+        # Create ZarrNii instance
+        return cls(
+            darr=ngff_image.data,
+            affine=affine_transform,
+            axes_order=axes_order,
+            axes=axes,
+            coordinate_transformations=coordinate_transformations,
+            omero=omero,
+        )
+
 
 # -- inline functions
 def interp_by_block(

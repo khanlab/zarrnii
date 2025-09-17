@@ -277,7 +277,7 @@ def resample_ngff_image(
         dims=ngff_image.dims,
         scale=target_scale,
         translation=ngff_image.translation,
-        chunks=ngff_image.data.chunks,
+        chunks="auto",  # Let dask figure out appropriate chunks
         name=f"resampled_{ngff_image.name}"
     )
     
