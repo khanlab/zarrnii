@@ -394,10 +394,73 @@ def _extract_channel_labels_from_omero(channel_info):
     return labels
 
 
+def _select_channels_from_image_with_omero(ngff_image, multiscales, channels, channel_labels, omero_metadata):
+    """
+    Select specific channels from an NgffImage and filter omero metadata accordingly.
+    
+    Returns:
+        Tuple of (selected_ngff_image, filtered_omero_metadata)
+    """
+    # Handle channel selection by labels
+    if channel_labels is not None:
+        if omero_metadata is None:
+            raise ValueError("Channel labels were specified but no omero metadata found")
+        
+        available_labels = _extract_channel_labels_from_omero(omero_metadata.channels)
+        channel_indices = []
+        for label in channel_labels:
+            if label not in available_labels:
+                raise ValueError(f"Channel label '{label}' not found")
+            channel_indices.append(available_labels.index(label))
+        channels = channel_indices
+    
+    if channels is None:
+        # Return original image and metadata
+        return ngff_image, omero_metadata
+    
+    # Select channels from data (assumes channel is the first dimension after spatial ones)
+    # Data is typically shaped as (c, z, y, x) or (z, y, x, c)
+    data = ngff_image.data
+    
+    # Find channel dimension by checking dims
+    if 'c' in ngff_image.dims:
+        c_idx = ngff_image.dims.index('c')
+        # Create slice objects
+        slices = [slice(None)] * len(data.shape)
+        slices[c_idx] = channels
+        selected_data = data[tuple(slices)]
+    else:
+        # Assume channel is last dimension if no 'c' dim specified
+        selected_data = data[..., channels]
+    
+    # Create new NgffImage with selected data
+    selected_ngff_image = nz.NgffImage(
+        data=selected_data,
+        dims=ngff_image.dims,
+        scale=ngff_image.scale,
+        translation=ngff_image.translation,
+        name=ngff_image.name
+    )
+    
+    # Filter omero metadata to match selected channels
+    filtered_omero = None
+    if omero_metadata is not None and hasattr(omero_metadata, 'channels'):
+        class FilteredOmero:
+            def __init__(self, channels):
+                self.channels = channels
+        
+        filtered_channels = [omero_metadata.channels[i] for i in channels]
+        filtered_omero = FilteredOmero(filtered_channels)
+    
+    return selected_ngff_image, filtered_omero
+
+
 def _select_channels_from_image(ngff_image, multiscales, channels, channel_labels):
-    """Select specific channels from an NgffImage."""
-    # Implementation would go here - for now, return the image as-is
-    return ngff_image
+    """Select specific channels from an NgffImage (legacy function for compatibility)."""
+    selected_image, _ = _select_channels_from_image_with_omero(
+        ngff_image, multiscales, channels, channel_labels, None
+    )
+    return selected_image
 
 
 @define
@@ -416,6 +479,7 @@ class ZarrNii:
 
     ngff_image: nz.NgffImage
     axes_order: str = "ZYX"
+    _omero: Optional[object] = None
 
     # Properties that delegate to the internal NgffImage
     @property
@@ -535,25 +599,103 @@ class ZarrNii:
         
         return transforms if transforms else None
     
-    @property
-    def omero(self) -> Optional[Dict]:
-        """Omero metadata - currently not supported in NgffImage directly."""
-        return None
+    @property  
+    def omero(self) -> Optional[object]:
+        """Omero metadata object."""
+        return self._omero
 
     # Constructor methods
     @classmethod
-    def from_ngff_image(cls, ngff_image: nz.NgffImage, axes_order: str = "ZYX") -> "ZarrNii":
+    def from_ngff_image(cls, ngff_image: nz.NgffImage, axes_order: str = "ZYX", omero: Optional[object] = None) -> "ZarrNii":
         """
         Create ZarrNii from an existing NgffImage.
         
         Args:
             ngff_image: NgffImage to wrap
             axes_order: Spatial axes order for NIfTI compatibility
+            omero: Optional omero metadata object
             
         Returns:
             ZarrNii instance
         """
-        return cls(ngff_image=ngff_image, axes_order=axes_order)
+        return cls(ngff_image=ngff_image, axes_order=axes_order, _omero=omero)
+
+    @classmethod 
+    def from_darr(
+        cls,
+        darr: da.Array,
+        affine: Optional[AffineTransform] = None,
+        axes_order: str = "ZYX",
+        spacing: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        origin: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        name: str = "image",
+        omero: Optional[object] = None,
+        **kwargs
+    ) -> "ZarrNii":
+        """
+        Create ZarrNii from dask array (legacy compatibility constructor).
+        
+        Args:
+            darr: Dask array containing image data
+            affine: Optional affine transformation
+            axes_order: Spatial axes order
+            spacing: Voxel spacing (used if no affine provided)
+            origin: Origin offset (used if no affine provided) 
+            name: Image name
+            omero: Optional omero metadata
+            
+        Returns:
+            ZarrNii instance
+        """
+        # Create scale and translation from affine if provided
+        if affine is not None:
+            # Extract scale and translation from affine matrix
+            affine_matrix = affine.matrix
+            if axes_order == "ZYX":
+                scale = {"z": affine_matrix[0, 0], "y": affine_matrix[1, 1], "x": affine_matrix[2, 2]}
+                translation = {"z": affine_matrix[0, 3], "y": affine_matrix[1, 3], "x": affine_matrix[2, 3]}
+            else:  # XYZ
+                scale = {"x": affine_matrix[0, 0], "y": affine_matrix[1, 1], "z": affine_matrix[2, 2]}
+                translation = {"x": affine_matrix[0, 3], "y": affine_matrix[1, 3], "z": affine_matrix[2, 3]}
+        else:
+            # Use spacing and origin
+            if axes_order == "ZYX":
+                scale = {"z": spacing[0], "y": spacing[1], "x": spacing[2]}
+                translation = {"z": origin[0], "y": origin[1], "x": origin[2]}
+            else:  # XYZ
+                scale = {"x": spacing[0], "y": spacing[1], "z": spacing[2]}
+                translation = {"x": origin[0], "y": origin[1], "z": origin[2]}
+        
+        # Create NgffImage
+        dims = ["c", "z", "y", "x"] if axes_order == "ZYX" else ["c", "x", "y", "z"]
+        ngff_image = nz.NgffImage(
+            data=darr,
+            dims=dims,
+            scale=scale,
+            translation=translation,
+            name=name
+        )
+        
+        return cls(ngff_image=ngff_image, axes_order=axes_order, _omero=omero)
+
+    # Legacy compatibility method names  
+    def __init__(self, darr=None, affine=None, axes_order="ZYX", ngff_image=None, _omero=None, **kwargs):
+        """
+        Constructor with backward compatibility for old signature.
+        """
+        if ngff_image is not None:
+            # New signature 
+            object.__setattr__(self, 'ngff_image', ngff_image)
+            object.__setattr__(self, 'axes_order', axes_order)
+            object.__setattr__(self, '_omero', _omero)
+        elif darr is not None:
+            # Legacy signature - delegate to from_darr
+            instance = self.from_darr(darr=darr, affine=affine, axes_order=axes_order, **kwargs)
+            object.__setattr__(self, 'ngff_image', instance.ngff_image)
+            object.__setattr__(self, 'axes_order', instance.axes_order)
+            object.__setattr__(self, '_omero', instance._omero)
+        else:
+            raise ValueError("Must provide either ngff_image or darr")
 
     @classmethod
     def from_ome_zarr(
@@ -579,6 +721,10 @@ class ZarrNii:
         Returns:
             ZarrNii instance
         """
+        # Validate channel selection arguments
+        if channels is not None and channel_labels is not None:
+            raise ValueError("Cannot specify both 'channels' and 'channel_labels'")
+        
         # Load the multiscales object
         try:
             if isinstance(store_or_path, str):
@@ -593,6 +739,46 @@ class ZarrNii:
                 store = store_or_path
             multiscales = nz.from_ngff_zarr(store)
         
+        # Extract omero metadata if available
+        omero_metadata = None
+        try:
+            import zarr
+            if isinstance(store_or_path, str):
+                group = zarr.open_group(store_or_path, mode='r')
+            else:
+                group = zarr.open_group(store_or_path, mode='r')
+            
+            if 'omero' in group.attrs:
+                omero_dict = group.attrs['omero']
+                # Create a simple object to hold omero metadata
+                class OmeroMetadata:
+                    def __init__(self, omero_dict):
+                        self.channels = []
+                        if 'channels' in omero_dict:
+                            for ch_dict in omero_dict['channels']:
+                                # Create channel objects
+                                class ChannelMetadata:
+                                    def __init__(self, ch_dict):
+                                        self.label = ch_dict.get('label', '')
+                                        self.color = ch_dict.get('color', '')
+                                        if 'window' in ch_dict:
+                                            class WindowMetadata:
+                                                def __init__(self, win_dict):
+                                                    self.min = win_dict.get('min', 0.0)
+                                                    self.max = win_dict.get('max', 65535.0)
+                                                    self.start = win_dict.get('start', 0.0)
+                                                    self.end = win_dict.get('end', 65535.0)
+                                            self.window = WindowMetadata(ch_dict['window'])
+                                        else:
+                                            self.window = None
+                                
+                                self.channels.append(ChannelMetadata(ch_dict))
+                
+                omero_metadata = OmeroMetadata(omero_dict)
+        except Exception:
+            # If we can't load omero metadata, that's okay
+            pass
+        
         # Determine the available pyramid levels and handle lazy downsampling
         max_level = len(multiscales.images) - 1
         actual_level = min(level, max_level)
@@ -601,14 +787,15 @@ class ZarrNii:
         # Get the highest available level
         ngff_image = multiscales.images[actual_level]
         
-        # Handle channel selection if specified
+        # Handle channel selection and filter omero metadata accordingly
+        filtered_omero = omero_metadata
         if channels is not None or channel_labels is not None:
-            ngff_image = _select_channels_from_image(
-                ngff_image, multiscales, channels, channel_labels
+            ngff_image, filtered_omero = _select_channels_from_image_with_omero(
+                ngff_image, multiscales, channels, channel_labels, omero_metadata
             )
         
         # Create ZarrNii instance
-        znimg = cls(ngff_image=ngff_image, axes_order=axes_order)
+        znimg = cls(ngff_image=ngff_image, axes_order=axes_order, _omero=filtered_omero)
         
         # Apply lazy downsampling if needed
         if do_downsample:
@@ -936,7 +1123,7 @@ class ZarrNii:
             translation=self.ngff_image.translation.copy(),
             name=self.ngff_image.name,
         )
-        return ZarrNii(ngff_image=copied_image, axes_order=self.axes_order)
+        return ZarrNii(ngff_image=copied_image, axes_order=self.axes_order, _omero=self._omero)
     
     def compute(self) -> nz.NgffImage:
         """
@@ -1021,6 +1208,101 @@ class ZarrNii:
         """Transform indices from floating to reference space."""  
         # Placeholder implementation - would need full transform logic
         return indices
+
+    def list_channels(self) -> List[str]:
+        """
+        List available channel labels from omero metadata.
+        
+        Returns:
+            List of channel labels, or empty list if no omero metadata
+        """
+        if self.omero is None or not hasattr(self.omero, 'channels'):
+            return []
+            
+        return [ch.label if hasattr(ch, 'label') else ch.get('label', '') for ch in self.omero.channels]
+    
+    def select_channels(
+        self, 
+        channels: Optional[List[int]] = None,
+        channel_labels: Optional[List[str]] = None
+    ) -> "ZarrNii":
+        """
+        Select channels from the image data and return a new ZarrNii instance.
+        
+        Args:
+            channels: Channel indices to select
+            channel_labels: Channel labels to select 
+            
+        Returns:
+            New ZarrNii instance with selected channels
+        """
+        if channels is not None and channel_labels is not None:
+            raise ValueError("Cannot specify both 'channels' and 'channel_labels'")
+        
+        if channel_labels is not None:
+            if self.omero is None:
+                raise ValueError("Channel labels were specified but no omero metadata found")
+            
+            available_labels = self.list_channels()
+            channel_indices = []
+            for label in channel_labels:
+                if label not in available_labels:
+                    raise ValueError(f"Channel label '{label}' not found")
+                channel_indices.append(available_labels.index(label))
+            channels = channel_indices
+        
+        if channels is None:
+            # Return a copy with all channels
+            return self.copy()
+        
+        # Select channels from data (assumes channel is last dimension)
+        selected_data = self.data[..., channels]
+        
+        # Create new NgffImage with selected data
+        new_ngff_image = nz.NgffImage(
+            data=selected_data,
+            dims=self.dims,
+            scale=self.scale,
+            translation=self.translation,
+            name=self.name
+        )
+        
+        # Filter omero metadata to match selected channels
+        filtered_omero = None
+        if self.omero is not None and hasattr(self.omero, 'channels'):
+            class FilteredOmero:
+                def __init__(self, channels):
+                    self.channels = channels
+            
+            filtered_channels = [self.omero.channels[i] for i in channels]
+            filtered_omero = FilteredOmero(filtered_channels)
+        
+        return ZarrNii(
+            ngff_image=new_ngff_image,
+            axes_order=self.axes_order,
+            _omero=filtered_omero
+        )
+    
+    def to_ngff_image(self, name: str = None) -> nz.NgffImage:
+        """
+        Convert to NgffImage object.
+        
+        Args:
+            name: Optional name for the image
+            
+        Returns:
+            NgffImage representation
+        """
+        if name is None:
+            name = self.name
+            
+        return nz.NgffImage(
+            data=self.data,
+            dims=self.dims,
+            scale=self.scale,
+            translation=self.translation,
+            name=name
+        )
 
     def __repr__(self) -> str:
         """String representation."""
