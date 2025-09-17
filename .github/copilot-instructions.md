@@ -15,7 +15,7 @@
 - **Run linting**: `uv run flake8 .` (takes ~10-30 seconds, expect existing style issues)
 - **Format code**: `uv run black .` (takes ~1 second)  
 - **Sort imports**: `uv run isort .` (takes ~1 second)
-- **Run tests**: `uv run pytest -v` (takes ~14 seconds, NEVER CANCEL - set timeout to 60+ seconds)
+- **Run tests**: `uv run pytest -v` (takes ~6-14 seconds, NEVER CANCEL - set timeout to 60+ seconds)
   - **Expected**: 37 tests pass, 1 skipped, 1 expected failure (existing issue with synthetic data generation)
   - **NEVER** try to fix unrelated test failures - they are pre-existing
 - **Build documentation**: `uv run mkdocs build` (takes ~2 seconds)
@@ -124,7 +124,7 @@ Available via justfile (if just is installed):
 
 ### Timing Expectations (NEVER CANCEL)
 - **uv install**: ~30 seconds (set timeout 120+ seconds)
-- **Test suite**: ~14 seconds (set timeout 60+ seconds)  
+- **Test suite**: ~6-14 seconds (set timeout 60+ seconds)  
 - **Linting**: ~10-30 seconds (set timeout 60+ seconds)
 - **Formatting**: ~1 second (set timeout 30+ seconds)
 - **Documentation build**: ~2 seconds (set timeout 30+ seconds)
