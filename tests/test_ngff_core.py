@@ -1,5 +1,5 @@
 """
-Tests for the new NgffImage-based function API.
+Tests for the NgffImage-based function API (now integrated in core).
 """
 
 import os
@@ -10,7 +10,7 @@ import dask.array as da
 import ngff_zarr as nz
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-from zarrnii.ngff_core import (
+from zarrnii.core import (
     load_ngff_image, save_ngff_image, get_multiscales,
     crop_ngff_image, downsample_ngff_image, apply_transform_to_ngff_image,
     get_affine_matrix, get_affine_transform

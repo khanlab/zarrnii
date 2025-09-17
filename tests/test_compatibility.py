@@ -11,7 +11,7 @@ import ngff_zarr as nz
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 from zarrnii import ZarrNii, AffineTransform
-from zarrnii.ngff_core import crop_ngff_image
+from zarrnii.core import crop_ngff_image
 
 
 class TestCompatibilityMethods:
