@@ -750,6 +750,9 @@ class ZarrNii:
         """
         Save to OME-Zarr store and return self for continued chaining.
         
+        OME-Zarr files are always written in ZYX order. If the current axes_order is XYZ,
+        the data will be reordered to ZYX before writing.
+        
         Args:
             store_or_path: Target store or path
             max_layer: Maximum number of pyramid levels
@@ -759,16 +762,23 @@ class ZarrNii:
         Returns:
             Self for continued chaining
         """
-        save_ngff_image(self.ngff_image, store_or_path, max_layer, scale_factors, **kwargs)
+        # Determine the image to save
+        if self.axes_order == "XYZ":
+            # Need to reorder data from XYZ to ZYX for OME-Zarr
+            ngff_image_to_save = self._create_zyx_ngff_image()
+        else:
+            # Already in ZYX order
+            ngff_image_to_save = self.ngff_image
+            
+        save_ngff_image(ngff_image_to_save, store_or_path, max_layer, scale_factors, **kwargs)
         return self
 
     def to_nifti(self, filename=None):
         """
         Convert to NIfTI format.
         
-        NIfTI files are always written in XYZ order. The affine matrix is adjusted
-        based on the current axes_order to ensure the physical space is correctly
-        represented.
+        NIfTI files are always written in XYZ order. If the current axes_order is ZYX,
+        the data will be reordered to XYZ and the affine matrix adjusted accordingly.
         
         Args:
             filename: Output filename, if None return nibabel image
@@ -776,19 +786,18 @@ class ZarrNii:
         Returns:
             nibabel.Nifti1Image or path if filename provided
         """
-        # Get data - no reordering, we adjust the affine instead
+        # Get data and reorder if necessary
         data = self.data.compute()
         
         # Remove channel dimension for NIfTI if it's size 1
         if data.shape[0] == 1:
             data = data[0]
         
-        # Get the appropriate affine matrix
-        # If axes_order is ZYX, we need to get the XYZ-oriented affine
-        # If axes_order is XYZ, the affine is already XYZ-oriented
+        # Reorder data and affine if axes_order is ZYX
         if self.axes_order == "ZYX":
-            # Get the affine that represents the ZYX->XYZ transformation
-            affine_matrix = self._get_nifti_affine_from_zyx()
+            # Data is currently [Z, Y, X], need to transpose to [X, Y, Z]
+            data = data.transpose(2, 1, 0)  # ZYX -> XYZ
+            affine_matrix = self.get_affine_matrix(axes_order="XYZ")  # Get XYZ affine directly
         else:
             # Data is already in XYZ order
             affine_matrix = self.get_affine_matrix(axes_order="XYZ")
@@ -801,39 +810,83 @@ class ZarrNii:
             return filename
         else:
             return nifti_img
-    
-    def _get_nifti_affine_from_zyx(self):
+
+    def _create_zyx_ngff_image(self) -> nz.NgffImage:
         """
-        Get an affine matrix for NIfTI output when current axes_order is ZYX.
+        Create a new NgffImage with data reordered from XYZ to ZYX.
         
-        When axes_order is ZYX, the data array indices [z,y,x] map to physical 
-        coordinates. For NIfTI output, we need an affine that maps array indices
-        [x,y,z] to the same physical coordinates.
+        This is used when saving to OME-Zarr format which expects ZYX ordering.
+        The data array is transposed and scale/translation are reordered accordingly.
         
         Returns:
-            4x4 affine matrix for NIfTI
+            NgffImage: New image with ZYX-ordered data and metadata
         """
-        # Get the current ZYX affine
-        zyx_affine = self.get_affine_matrix(axes_order="ZYX")
+        if self.axes_order != "XYZ":
+            raise ValueError("This method should only be called when axes_order is XYZ")
         
-        # The ZYX affine maps [z,y,x] array indices to physical space
-        # We need an XYZ affine that maps [x,y,z] array indices to the same physical space
-        # This means we need to permute the rows and columns of the ZYX affine
+        # Transpose data from XYZ to ZYX (reverse the spatial dimensions)
+        # Assuming data shape is [C, X, Y, Z] -> [C, Z, Y, X]
+        data = self.ngff_image.data
         
-        xyz_affine = np.copy(zyx_affine)
+        # Find spatial dimension indices
+        spatial_axes = []
+        channel_axes = []
+        for i, dim_name in enumerate(self.ngff_image.dims):
+            if dim_name.lower() in ['x', 'y', 'z']:
+                spatial_axes.append(i)
+            else:
+                channel_axes.append(i)
         
-        # Permute rows: [Z,Y,X] -> [X,Y,Z] means row 0->2, row 1->1, row 2->0  
-        xyz_affine[0, :] = zyx_affine[2, :]  # X row (was Z)
-        xyz_affine[1, :] = zyx_affine[1, :]  # Y row (unchanged)
-        xyz_affine[2, :] = zyx_affine[0, :]  # Z row (was X)
+        # Create transpose indices: reverse the spatial axes order
+        transpose_indices = channel_axes + spatial_axes[::-1]
+        transposed_data = data.transpose(transpose_indices)
         
-        # Permute columns of the 3x3 part: [z,y,x] -> [x,y,z] 
-        temp = np.copy(xyz_affine[:3, :3])
-        xyz_affine[:3, 0] = temp[:, 2]  # X column (was Z)
-        xyz_affine[:3, 1] = temp[:, 1]  # Y column (unchanged)
-        xyz_affine[:3, 2] = temp[:, 0]  # Z column (was X)
+        # Create new dims list with ZYX ordering
+        new_dims = []
+        for i, dim_name in enumerate(self.ngff_image.dims):
+            if dim_name.lower() not in ['x', 'y', 'z']:
+                new_dims.append(dim_name)
+        # Add spatial dims in ZYX order
+        spatial_dim_names = [self.ngff_image.dims[i] for i in spatial_axes]
+        new_dims.extend(spatial_dim_names[::-1])
         
-        return xyz_affine
+        # Reorder scale and translation from XYZ to ZYX
+        current_scale = self.ngff_image.scale
+        current_translation = self.ngff_image.translation
+        
+        new_scale = {}
+        new_translation = {}
+        
+        # Copy non-spatial dimensions
+        for key, value in current_scale.items():
+            if key.lower() not in ['x', 'y', 'z']:
+                new_scale[key] = value
+                
+        for key, value in current_translation.items():
+            if key.lower() not in ['x', 'y', 'z']:
+                new_translation[key] = value
+        
+        # Reorder spatial dimensions from XYZ to ZYX
+        if 'x' in current_scale and 'y' in current_scale and 'z' in current_scale:
+            new_scale['z'] = current_scale['z']
+            new_scale['y'] = current_scale['y'] 
+            new_scale['x'] = current_scale['x']
+            
+        if 'x' in current_translation and 'y' in current_translation and 'z' in current_translation:
+            new_translation['z'] = current_translation['z']
+            new_translation['y'] = current_translation['y']
+            new_translation['x'] = current_translation['x']
+        
+        # Create new NgffImage with ZYX ordering
+        zyx_image = nz.NgffImage(
+            data=transposed_data,
+            dims=new_dims,
+            scale=new_scale,
+            translation=new_translation,
+            name=self.ngff_image.name
+        )
+        
+        return zyx_image
 
 
     def copy(self) -> "ZarrNii":
