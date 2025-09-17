@@ -9,6 +9,7 @@ from .ngff_transforms import (
     load_ngff_image,
     save_ngff_image
 )
+from .ngff_chainable import ChainableNgffImage, chainable_from_zarrnii
 
 __all__ = [
     "ZarrNii",
@@ -27,4 +28,7 @@ __all__ = [
     "resample_ngff_image",
     "load_ngff_image",
     "save_ngff_image",
+    # Chainable API
+    "ChainableNgffImage",
+    "chainable_from_zarrnii",
 ]

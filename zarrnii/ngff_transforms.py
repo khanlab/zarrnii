@@ -40,49 +40,11 @@ def interp_by_block_ngff(
     Returns:
         Transformed block
     """
-    # Get block location info
-    block_location = block_info[0]['array-location']
-    block_id = block_info[None]['block-id']
+    # For now, this is a placeholder that returns the input block
+    # Full implementation would need proper coordinate mapping and interpolation
     
-    # Create coordinate grids for this block
-    coords = []
-    for i, dim in enumerate(spatial_dims):
-        start = block_location[-(len(spatial_dims)-i)][0]
-        end = block_location[-(len(spatial_dims)-i)][1]
-        coords.append(np.arange(start, end))
-    
-    # Create meshgrid
-    mesh_coords = np.meshgrid(*coords, indexing='ij')
-    
-    # Flatten coordinates for transformation
-    coords_flat = np.column_stack([coord.ravel() for coord in mesh_coords])
-    
-    # Apply transformations sequentially
-    transformed_coords = coords_flat.T  # Shape: (3, N)
-    
-    for transform in transformations:
-        if isinstance(transform, AffineTransform):
-            # Convert to homogeneous coordinates
-            ones = np.ones((1, transformed_coords.shape[1]))
-            homogeneous = np.vstack([transformed_coords, ones])
-            
-            # Apply affine transformation
-            transformed_homogeneous = transform.matrix @ homogeneous
-            transformed_coords = transformed_homogeneous[:3, :]
-    
-    # Reshape back to block shape
-    new_shape = tuple(end - start for start, end in block_location[-(len(spatial_dims)):])
-    transformed_coords = transformed_coords.T.reshape(new_shape + (len(spatial_dims),))
-    
-    # Interpolate from source data
-    # Note: This is a simplified version - full implementation would need
-    # proper coordinate system handling and bounds checking
-    
-    result = np.zeros_like(block)
-    
-    # For now, return the input block (placeholder)
-    # Full implementation would perform the actual interpolation
-    return result
+    # Return the input block as-is (placeholder implementation)
+    return block
 
 
 def apply_transform_to_ngff_image_full(
