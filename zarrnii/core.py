@@ -570,7 +570,7 @@ class ZarrNii:
         
         Args:
             store_or_path: Store or path to OME-Zarr file
-            level: Pyramid level to load
+            level: Pyramid level to load (if beyond available levels, lazy downsampling is applied)
             channels: Channel indices to load
             channel_labels: Channel labels to load
             storage_options: Storage options for Zarr
@@ -593,8 +593,13 @@ class ZarrNii:
                 store = store_or_path
             multiscales = nz.from_ngff_zarr(store)
         
-        # Get the specified level
-        ngff_image = multiscales.images[level]
+        # Determine the available pyramid levels and handle lazy downsampling
+        max_level = len(multiscales.images) - 1
+        actual_level = min(level, max_level)
+        do_downsample = level > max_level
+        
+        # Get the highest available level
+        ngff_image = multiscales.images[actual_level]
         
         # Handle channel selection if specified
         if channels is not None or channel_labels is not None:
@@ -602,7 +607,24 @@ class ZarrNii:
                 ngff_image, multiscales, channels, channel_labels
             )
         
-        return cls(ngff_image=ngff_image, axes_order=axes_order)
+        # Create ZarrNii instance
+        znimg = cls(ngff_image=ngff_image, axes_order=axes_order)
+        
+        # Apply lazy downsampling if needed
+        if do_downsample:
+            level_ds = level - max_level
+            downsample_factor = 2 ** level_ds
+            
+            # Get spatial dims based on axes order
+            spatial_dims = ["z", "y", "x"] if axes_order == "ZYX" else ["x", "y", "z"]
+            
+            # Apply downsampling using the existing method
+            znimg = znimg.downsample(
+                factors=downsample_factor,
+                spatial_dims=spatial_dims
+            )
+        
+        return znimg
 
     @classmethod
     def from_nifti(cls, path, chunks="auto", axes_order="XYZ", name=None):
