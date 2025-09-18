@@ -476,10 +476,12 @@ class ZarrNii:
     Attributes:
         ngff_image (nz.NgffImage): The internal NgffImage object containing data and metadata.
         axes_order (str): The order of the axes for NIfTI compatibility ('ZYX' or 'XYZ').
+        orientation (str): The anatomical orientation string (e.g., 'RAS', 'LPI').
     """
 
     ngff_image: nz.NgffImage
     axes_order: str = "ZYX"
+    orientation: str = "RAS"
     _omero: Optional[object] = None
 
     # Properties that delegate to the internal NgffImage
@@ -567,6 +569,10 @@ class ZarrNii:
         for i, dim in enumerate(spatial_dims):
             if dim in self.ngff_image.translation:
                 affine[i, 3] = self.ngff_image.translation[dim]
+        
+        # Apply orientation alignment if orientation is available
+        if hasattr(self, 'orientation') and self.orientation:
+            affine = align_affine_to_input_orientation(affine, self.orientation)
                 
         return affine
     
@@ -618,26 +624,28 @@ class ZarrNii:
 
     # Constructor methods
     @classmethod
-    def from_ngff_image(cls, ngff_image: nz.NgffImage, axes_order: str = "ZYX", omero: Optional[object] = None) -> "ZarrNii":
+    def from_ngff_image(cls, ngff_image: nz.NgffImage, axes_order: str = "ZYX", orientation: str = "RAS", omero: Optional[object] = None) -> "ZarrNii":
         """
         Create ZarrNii from an existing NgffImage.
         
         Args:
             ngff_image: NgffImage to wrap
             axes_order: Spatial axes order for NIfTI compatibility
+            orientation: Anatomical orientation string
             omero: Optional omero metadata object
             
         Returns:
             ZarrNii instance
         """
-        return cls(ngff_image=ngff_image, axes_order=axes_order, _omero=omero)
+        return cls(ngff_image=ngff_image, axes_order=axes_order, orientation=orientation, _omero=omero)
 
-    @classmethod 
+    @classmethod
     def from_darr(
         cls,
         darr: da.Array,
         affine: Optional[AffineTransform] = None,
         axes_order: str = "ZYX",
+        orientation: str = "RAS",
         spacing: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         origin: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         name: str = "image",
@@ -651,6 +659,7 @@ class ZarrNii:
             darr: Dask array containing image data
             affine: Optional affine transformation
             axes_order: Spatial axes order
+            orientation: Anatomical orientation string
             spacing: Voxel spacing (used if no affine provided)
             origin: Origin offset (used if no affine provided) 
             name: Image name
@@ -688,10 +697,10 @@ class ZarrNii:
             name=name
         )
         
-        return cls(ngff_image=ngff_image, axes_order=axes_order, _omero=omero)
+        return cls(ngff_image=ngff_image, axes_order=axes_order, orientation=orientation, _omero=omero)
 
     # Legacy compatibility method names  
-    def __init__(self, darr=None, affine=None, axes_order="ZYX", ngff_image=None, _omero=None, **kwargs):
+    def __init__(self, darr=None, affine=None, axes_order="ZYX", orientation="RAS", ngff_image=None, _omero=None, **kwargs):
         """
         Constructor with backward compatibility for old signature.
         """
@@ -699,12 +708,14 @@ class ZarrNii:
             # New signature 
             object.__setattr__(self, 'ngff_image', ngff_image)
             object.__setattr__(self, 'axes_order', axes_order)
+            object.__setattr__(self, 'orientation', orientation)
             object.__setattr__(self, '_omero', _omero)
         elif darr is not None:
             # Legacy signature - delegate to from_darr
-            instance = self.from_darr(darr=darr, affine=affine, axes_order=axes_order, **kwargs)
+            instance = self.from_darr(darr=darr, affine=affine, axes_order=axes_order, orientation=orientation, **kwargs)
             object.__setattr__(self, 'ngff_image', instance.ngff_image)
             object.__setattr__(self, 'axes_order', instance.axes_order)
+            object.__setattr__(self, 'orientation', instance.orientation)
             object.__setattr__(self, '_omero', instance._omero)
         else:
             raise ValueError("Must provide either ngff_image or darr")
@@ -718,6 +729,7 @@ class ZarrNii:
         channel_labels: Optional[List[str]] = None,
         storage_options: Optional[Dict] = None,
         axes_order: str = "ZYX",
+        orientation: str = "RAS",
     ) -> "ZarrNii":
         """
         Load from OME-Zarr store.
@@ -729,6 +741,7 @@ class ZarrNii:
             channel_labels: Channel labels to load
             storage_options: Storage options for Zarr
             axes_order: Spatial axes order for NIfTI compatibility
+            orientation: Default input orientation if none is specified in metadata (default: 'RAS')
             
         Returns:
             ZarrNii instance
@@ -791,6 +804,20 @@ class ZarrNii:
             # If we can't load omero metadata, that's okay
             pass
         
+        # Read orientation metadata (default to the provided orientation if not present)
+        try:
+            import zarr
+            if isinstance(store_or_path, str):
+                group = zarr.open_group(store_or_path, mode='r')
+            else:
+                group = zarr.open_group(store_or_path, mode='r')
+            
+            # Get orientation from zarr metadata, fallback to provided orientation
+            orientation = group.attrs.get("orientation", orientation)
+        except Exception:
+            # If we can't read orientation metadata, use the provided default
+            pass
+        
         # Determine the available pyramid levels and handle lazy downsampling
         max_level = len(multiscales.images) - 1
         actual_level = min(level, max_level)
@@ -806,8 +833,8 @@ class ZarrNii:
                 ngff_image, multiscales, channels, channel_labels, omero_metadata
             )
         
-        # Create ZarrNii instance
-        znimg = cls(ngff_image=ngff_image, axes_order=axes_order, _omero=filtered_omero)
+        # Create ZarrNii instance with orientation
+        znimg = cls(ngff_image=ngff_image, axes_order=axes_order, orientation=orientation, _omero=filtered_omero)
         
         # Apply lazy downsampling if needed
         if do_downsample:
@@ -921,7 +948,7 @@ class ZarrNii:
         if spatial_dims is None:
             spatial_dims = ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
         cropped_image = crop_ngff_image(self.ngff_image, bbox_min, bbox_max, spatial_dims)
-        return ZarrNii(ngff_image=cropped_image, axes_order=self.axes_order)
+        return ZarrNii(ngff_image=cropped_image, axes_order=self.axes_order, orientation=self.orientation, _omero=self._omero)
 
     def crop_with_bounding_box(self, bbox_min, bbox_max, ras_coords=False):
         """Legacy method name for crop."""
@@ -961,7 +988,7 @@ class ZarrNii:
             spatial_dims = ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
             
         downsampled_image = downsample_ngff_image(self.ngff_image, factors, spatial_dims)
-        return ZarrNii(ngff_image=downsampled_image, axes_order=self.axes_order)
+        return ZarrNii(ngff_image=downsampled_image, axes_order=self.axes_order, orientation=self.orientation, _omero=self._omero)
 
     def upsample(self, along_x=1, along_y=1, along_z=1, to_shape=None):
         """
@@ -1063,7 +1090,7 @@ class ZarrNii:
         )
 
         # Return a new ZarrNii instance with the upsampled data
-        return ZarrNii.from_ngff_image(upsampled_ngff, axes_order=self.axes_order, omero=self.omero)
+        return ZarrNii.from_ngff_image(upsampled_ngff, axes_order=self.axes_order, orientation=self.orientation, omero=self.omero)
 
     def __get_upsampled_chunks(self, target_shape, return_scaling=True):
         """
@@ -1164,7 +1191,7 @@ class ZarrNii:
         else:
             transformed_image = self.ngff_image
             
-        return ZarrNii(ngff_image=transformed_image, axes_order=self.axes_order)
+        return ZarrNii(ngff_image=transformed_image, axes_order=self.axes_order, orientation=self.orientation, _omero=self._omero)
 
     # I/O operations
     def to_ome_zarr(
@@ -1198,6 +1225,22 @@ class ZarrNii:
             ngff_image_to_save = self.ngff_image
             
         save_ngff_image(ngff_image_to_save, store_or_path, max_layer, scale_factors, **kwargs)
+        
+        # Add orientation metadata to the zarr store
+        try:
+            import zarr
+            if isinstance(store_or_path, str):
+                group = zarr.open_group(store_or_path, mode="r+")
+            else:
+                group = zarr.open_group(store_or_path, mode="r+")
+            
+            # Add metadata for orientation
+            if hasattr(self, 'orientation') and self.orientation:
+                group.attrs["orientation"] = self.orientation
+        except Exception:
+            # If we can't write orientation metadata, that's not critical
+            pass
+        
         return self
 
     def to_nifti(self, filename=None):
@@ -1331,7 +1374,7 @@ class ZarrNii:
             translation=self.ngff_image.translation.copy(),
             name=self.ngff_image.name,
         )
-        return ZarrNii(ngff_image=copied_image, axes_order=self.axes_order, _omero=self._omero)
+        return ZarrNii(ngff_image=copied_image, axes_order=self.axes_order, orientation=self.orientation, _omero=self._omero)
     
     def compute(self) -> nz.NgffImage:
         """
@@ -1355,6 +1398,17 @@ class ZarrNii:
         )
         return computed_image
 
+    def get_orientation(self) -> str:
+        """
+        Get the anatomical orientation of the dataset.
+
+        This function returns the orientation string (e.g., 'RAS', 'LPI') of the dataset.
+
+        Returns:
+            str: The orientation string corresponding to the dataset's anatomical orientation.
+        """
+        return self.orientation
+    
     def get_zooms(self, axes_order: str = None) -> np.ndarray:
         """
         Get voxel spacing (zooms) from NgffImage scale.
@@ -1488,6 +1542,7 @@ class ZarrNii:
         return ZarrNii(
             ngff_image=new_ngff_image,
             axes_order=self.axes_order,
+            orientation=self.orientation,
             _omero=filtered_omero
         )
     
@@ -1522,18 +1577,125 @@ class ZarrNii:
 
 # Helper functions for backward compatibility
 def affine_to_orientation(affine):
-    """Convert affine matrix to orientation string."""
-    # Simplified implementation - could be more robust
-    return "RAS"
+    """
+    Convert an affine matrix to an anatomical orientation string (e.g., 'RAS').
+
+    Parameters:
+        affine (numpy.ndarray): Affine matrix from voxel to world coordinates.
+
+    Returns:
+        str: Anatomical orientation (e.g., 'RAS', 'LPI').
+    """
+    from nibabel.orientations import io_orientation
+
+    # Get voxel-to-world mapping
+    orient = io_orientation(affine)
+
+    # Maps for axis labels
+    axis_labels = ["R", "A", "S"]
+    flipped_labels = ["L", "P", "I"]
+
+    orientation = []
+    for axis, direction in orient:
+        axis = int(axis)
+        if direction == 1:
+            orientation.append(axis_labels[axis])
+        else:
+            orientation.append(flipped_labels[axis])
+
+    return "".join(orientation)
 
 
 def orientation_to_affine(orientation, spacing=(1, 1, 1), origin=(0, 0, 0)):
-    """Convert orientation string to affine matrix."""
-    affine = np.eye(4)
-    affine[0, 0] = spacing[0]
-    affine[1, 1] = spacing[1] 
-    affine[2, 2] = spacing[2]
-    affine[0, 3] = origin[0]
-    affine[1, 3] = origin[1]
-    affine[2, 3] = origin[2]
+    """
+    Creates an affine matrix based on an orientation string (e.g., 'RAS').
+
+    Parameters:
+        orientation (str): Orientation string (e.g., 'RAS', 'LPS').
+        spacing (tuple): Voxel spacing along each axis (default: (1, 1, 1)).
+        origin (tuple): Origin point in physical space (default: (0, 0, 0)).
+
+    Returns:
+        affine (numpy.ndarray): Affine matrix from voxel to world coordinates.
+    """
+    # Validate orientation length
+    if len(orientation) != 3:
+        raise ValueError("Orientation must be a 3-character string (e.g., 'RAS').")
+
+    # Axis mapping and flipping
+    axis_map = {"R": 0, "L": 0, "A": 1, "P": 1, "S": 2, "I": 2}
+    sign_map = {"R": 1, "L": -1, "A": 1, "P": -1, "S": 1, "I": -1}
+
+    axes = [axis_map[ax] for ax in orientation]
+    signs = [sign_map[ax] for ax in orientation]
+
+    # Construct the affine matrix
+    affine = np.zeros((4, 4))
+    for i, (axis, sign) in enumerate(zip(axes, signs)):
+        affine[i, axis] = sign * spacing[axis]
+    
+    # Add origin
+    affine[:3, 3] = origin
+    affine[3, 3] = 1
+    
     return affine
+
+
+def align_affine_to_input_orientation(affine, orientation):
+    """
+    Reorders and flips the affine matrix to align with the specified input orientation.
+
+    Parameters:
+        affine (np.ndarray): Initial affine matrix.
+        orientation (str): Input orientation (e.g., 'RAS').
+
+    Returns:
+        np.ndarray: Reordered and flipped affine matrix.
+    """
+    axis_map = {"R": 0, "L": 0, "A": 1, "P": 1, "S": 2, "I": 2}
+    sign_map = {"R": 1, "L": -1, "A": 1, "P": -1, "S": 1, "I": -1}
+
+    input_axes = [axis_map[ax] for ax in orientation]
+    input_signs = [sign_map[ax] for ax in orientation]
+
+    reordered_affine = np.zeros_like(affine)
+    for i, (axis, sign) in enumerate(zip(input_axes, input_signs)):
+        reordered_affine[i, :3] = sign * affine[axis, :3]
+        reordered_affine[i, 3] = sign * affine[i, 3]
+    
+    # Copy the homogeneous row
+    reordered_affine[3, :] = affine[3, :]
+    
+    return reordered_affine
+
+
+def construct_affine_with_orientation(coordinate_transformations, orientation):
+    """
+    Build affine matrix from coordinate transformations and align to orientation.
+    
+    Parameters:
+        coordinate_transformations (list): Coordinate transformations from OME-Zarr metadata.
+        orientation (str): Input orientation (e.g., 'RAS').
+
+    Returns:
+        np.ndarray: A 4x4 affine matrix.
+    """
+    # Initialize affine as an identity matrix
+    affine = np.eye(4)
+
+    # Extract scales and translations from coordinate transformations
+    scales = [1.0, 1.0, 1.0]  # Default scales
+    translations = [0.0, 0.0, 0.0]  # Default translations
+
+    for transform in coordinate_transformations:
+        if transform["type"] == "scale":
+            scales = transform["scale"][-3:]  # Take the last 3 (spatial)
+        elif transform["type"] == "translation":
+            translations = transform["translation"][-3:]  # Take the last 3 (spatial)
+
+    # Populate the affine matrix
+    affine[:3, :3] = np.diag(scales)  # Set scaling
+    affine[:3, 3] = translations  # Set translation
+
+    # Reorder the affine matrix for the input orientation
+    return align_affine_to_input_orientation(affine, orientation)

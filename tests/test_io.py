@@ -1,6 +1,7 @@
 import os
 import tempfile
 
+import dask.array as da
 import nibabel as nib
 import numpy as np
 import pytest
@@ -307,3 +308,52 @@ class TestOMEZarr:
         arr = ZarrNii.from_ome_zarr(OME_ZARR_PATH, level=1, channels=[0]).darr
         assert arr.compute().sum() > 0
 """
+
+
+def test_orientation_functionality(tmp_path):
+    """Test orientation reading/writing functionality."""
+    # Create a simple test image
+    data = np.random.rand(1, 64, 64, 64).astype(np.float32)
+    znimg = ZarrNii.from_darr(
+        da.from_array(data, chunks=(1, 32, 32, 32)),
+        orientation="LPI",
+        axes_order="ZYX"
+    )
+    
+    # Check that orientation is set correctly
+    assert znimg.orientation == "LPI"
+    assert znimg.get_orientation() == "LPI"
+    
+    # Save to OME-Zarr
+    zarr_path = tmp_path / "test_orientation.zarr"
+    znimg.to_ome_zarr(str(zarr_path))
+    
+    # Load back and check orientation is preserved
+    loaded_znimg = ZarrNii.from_ome_zarr(str(zarr_path))
+    assert loaded_znimg.orientation == "LPI"
+    assert loaded_znimg.get_orientation() == "LPI"
+
+
+def test_orientation_in_from_ome_zarr(tmp_path):
+    """Test orientation parameter in from_ome_zarr."""
+    # Create a simple test image
+    data = np.random.rand(1, 64, 64, 64).astype(np.float32)
+    znimg = ZarrNii.from_darr(
+        da.from_array(data, chunks=(1, 32, 32, 32)),
+        orientation="RAS",
+        axes_order="ZYX"
+    )
+    
+    # Save to OME-Zarr
+    zarr_path = tmp_path / "test_from_ome_zarr_orientation.zarr"
+    znimg.to_ome_zarr(str(zarr_path))
+    
+    # Load with different default orientation (should use stored orientation)
+    loaded_znimg = ZarrNii.from_ome_zarr(str(zarr_path), orientation="LPI")
+    assert loaded_znimg.orientation == "RAS"  # Should use the stored orientation
+    
+    # Test fallback to provided orientation when none is stored
+    # (This would require a zarr file without orientation metadata)
+    # For now, just test that the parameter is accepted
+    loaded_znimg2 = ZarrNii.from_ome_zarr(str(zarr_path), orientation="IPL")
+    assert loaded_znimg2.orientation == "RAS"  # Should still use stored orientation
