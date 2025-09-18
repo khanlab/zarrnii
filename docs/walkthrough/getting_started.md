@@ -26,6 +26,13 @@ If you don't use uv, install ZarrNii and its dependencies using `pip`:
 pip install zarrnii
 ```
 
+### **3. Optional Dependencies**
+For additional format support, install optional dependencies:
+```bash
+# For Imaris (.ims) file support
+pip install zarrnii[imaris]
+```
+
 ---
 
 ## Prerequisites
@@ -33,6 +40,7 @@ pip install zarrnii
 Before using ZarrNii, ensure you have:
 - **OME-Zarr datasets**: Multidimensional images in Zarr format.
 - **NIfTI datasets**: Neuroimaging data in `.nii` or `.nii.gz` format.
+- **Imaris datasets** (optional): Microscopy data in `.ims` format (requires `zarrnii[imaris]`).
 
 ---
 
@@ -57,6 +65,15 @@ print("Affine matrix:\n", znimg.affine.matrix)
 ```python
 # Load NIfTI
 znimg = ZarrNii.from_nifti("path/to/dataset.nii")
+
+print("Data shape:", znimg.darr.shape)
+print("Affine matrix:\n", znimg.affine.matrix)
+```
+
+#### **From Imaris** (requires `zarrnii[imaris]`):
+```python
+# Load Imaris
+znimg = ZarrNii.from_imaris("path/to/dataset.ims")
 
 print("Data shape:", znimg.darr.shape)
 print("Affine matrix:\n", znimg.affine.matrix)

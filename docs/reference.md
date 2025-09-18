@@ -12,8 +12,10 @@ The `ZarrNii` class provides tools for reading, writing, and transforming datase
 #### Key Methods
 - [`from_ome_zarr`](#from_ome_zarr): Load data from OME-Zarr.
 - [`from_nifti`](#from_nifti): Load data from a NIfTI file.
+- [`from_imaris`](#from_imaris): Load data from an Imaris (.ims) file.
 - [`to_ome_zarr`](#to_ome_zarr): Save data as OME-Zarr.
 - [`to_nifti`](#to_nifti): Save data as a NIfTI file.
+- [`to_imaris`](#to_imaris): Save data as an Imaris (.ims) file.
 - [`crop`](#crop): Extract a region from the dataset.
 - [`downsample`](#downsample): Reduce resolution of datasets.
 - [`upsample`](#upsample): Increase resolution of datasets.
@@ -33,11 +35,17 @@ The `ZarrNii` class provides tools for reading, writing, and transforming datase
 ### `from_nifti`
 ::: zarrnii.ZarrNii.from_nifti
 
+### `from_imaris`
+::: zarrnii.ZarrNii.from_imaris
+
 ### `to_ome_zarr`
 ::: zarrnii.ZarrNii.to_ome_zarr
 
 ### `to_nifti`
 ::: zarrnii.ZarrNii.to_nifti
+
+### `to_imaris`
+::: zarrnii.ZarrNii.to_imaris
 
 ### `crop`
 ::: zarrnii.ZarrNii.crop
