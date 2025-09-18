@@ -35,6 +35,51 @@ uv sync --dev
  - **Multiscale Support**: Work with multiscale OME-Zarr pyramids.
  - **Metadata Handling**: Access and modify OME-Zarr metadata like axes and transformations.
  - **Lazy Loading**: Leverage Dask arrays for efficient processing of large datasets.
+ - **Segmentation Plugins**: Extensible plugin architecture for image segmentation algorithms.
+
+---
+
+## Segmentation Plugin System
+
+ZarrNii includes a plugin architecture for image segmentation algorithms, starting with Otsu thresholding:
+
+```python
+from zarrnii import ZarrNii, OtsuSegmentation
+
+# Load your image
+znimg = ZarrNii.from_ome_zarr("image.ome.zarr")
+
+# Apply Otsu thresholding segmentation
+segmented = znimg.segment_otsu(nbins=256)
+
+# Or use the generic plugin interface
+plugin = OtsuSegmentation(nbins=128)
+segmented = znimg.segment(plugin)
+
+# Save segmented results
+segmented.to_ome_zarr("segmented_image.ome.zarr")
+```
+
+### Custom Plugins
+
+Create your own segmentation algorithms by extending the `SegmentationPlugin` base class:
+
+```python
+from zarrnii.plugins.segmentation import SegmentationPlugin
+
+class CustomSegmentation(SegmentationPlugin):
+    def segment(self, image, metadata=None):
+        # Your segmentation logic here
+        return binary_mask.astype(np.uint8)
+    
+    @property
+    def name(self):
+        return "Custom Algorithm"
+    
+    @property 
+    def description(self):
+        return "Description of your algorithm"
+```
 
 ---
 
