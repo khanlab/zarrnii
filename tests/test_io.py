@@ -31,6 +31,61 @@ def test_from_nifti_to_nifti(nifti_nib):
 
 
 @pytest.mark.usefixtures("cleandir")
+def test_from_nifti_as_ref(nifti_nib):
+    """Test loading NIfTI as reference space without loading data."""
+    nifti_nib.to_filename("test.nii")
+    nib_orig = nib.load("test.nii")
+    
+    # Load as reference (empty array)
+    znimg_ref = ZarrNii.from_nifti("test.nii", as_ref=True)
+    
+    # Should have same shape and affine but different (empty) data
+    assert znimg_ref.shape == (1,) + nib_orig.shape
+    assert_array_equal(znimg_ref.get_affine_matrix(axes_order="XYZ"), nib_orig.affine)
+    
+    # Data should be empty float32 array
+    assert znimg_ref.data.dtype == np.float32
+    computed_data = znimg_ref.data.compute()
+    assert np.all(computed_data == 0)  # Should be all zeros (empty)
+
+
+@pytest.mark.usefixtures("cleandir") 
+def test_from_nifti_as_ref_with_zooms(nifti_nib):
+    """Test loading NIfTI as reference space with custom zooms."""
+    nifti_nib.to_filename("test.nii")
+    nib_orig = nib.load("test.nii")
+    
+    # Define target zooms (different from original)
+    target_zooms = np.array([2.0, 2.0, 2.0])
+    
+    # Load as reference with custom zooms
+    znimg_ref = ZarrNii.from_nifti("test.nii", as_ref=True, zooms=target_zooms)
+    
+    # Check that zooms are updated in affine matrix
+    expected_affine = nib_orig.affine.copy()
+    np.fill_diagonal(expected_affine[:3, :3], target_zooms)
+    
+    assert_array_almost_equal(znimg_ref.get_affine_matrix(axes_order="XYZ"), expected_affine)
+    assert_array_almost_equal(znimg_ref.get_zooms(axes_order="XYZ"), target_zooms)
+    
+    # Shape should be adjusted based on scaling factor
+    orig_zooms = np.sqrt((nib_orig.affine[:3, :3] ** 2).sum(axis=0))
+    scaling_factor = orig_zooms / target_zooms
+    expected_shape = [int(np.floor(nib_orig.shape[i] * scaling_factor[2-i])) for i in range(3)]
+    
+    assert znimg_ref.shape == (1,) + tuple(expected_shape)
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_from_nifti_zooms_without_as_ref_error(nifti_nib):
+    """Test that providing zooms without as_ref=True raises an error."""
+    nifti_nib.to_filename("test.nii")
+    
+    with pytest.raises(ValueError, match="`zooms` can only be used when `as_ref=True`"):
+        ZarrNii.from_nifti("test.nii", as_ref=False, zooms=[1.0, 1.0, 1.0])
+
+
+@pytest.mark.usefixtures("cleandir")
 def test_from_nifti_to_zarr_to_nifti(nifti_nib):
     """create a nifti with nibabel, read it with ZarrNii, write it back as zarr,
     then read it again with ZarrNii,

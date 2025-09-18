@@ -15,6 +15,7 @@ import ngff_zarr as nz
 import nibabel as nib
 import fsspec
 from attrs import define
+from scipy.ndimage import zoom
 
 from .transform import AffineTransform, Transform
 
@@ -950,6 +951,179 @@ class ZarrNii:
             
         downsampled_image = downsample_ngff_image(self.ngff_image, factors, spatial_dims)
         return ZarrNii(ngff_image=downsampled_image, axes_order=self.axes_order)
+
+    def upsample(self, along_x=1, along_y=1, along_z=1, to_shape=None):
+        """
+        Upsamples the ZarrNii instance using `scipy.ndimage.zoom`.
+
+        Parameters:
+            along_x (int, optional): Upsampling factor along the X-axis (default: 1).
+            along_y (int, optional): Upsampling factor along the Y-axis (default: 1).
+            along_z (int, optional): Upsampling factor along the Z-axis (default: 1).
+            to_shape (tuple, optional): Target shape for upsampling. Should include all dimensions
+                                         (e.g., `(c, z, y, x)` for ZYX or `(c, x, y, z)` for XYZ).
+                                         If provided, `along_x`, `along_y`, and `along_z` are ignored.
+
+        Returns:
+            ZarrNii: A new ZarrNii instance with the upsampled data and updated affine.
+
+        Notes:
+            - This method supports both direct scaling via `along_*` factors or target shape via `to_shape`.
+            - If `to_shape` is provided, chunk sizes and scaling factors are dynamically calculated.
+            - The affine matrix is updated to reflect the new voxel size after upsampling.
+
+        Example:
+            # Upsample with scaling factors
+            upsampled_znimg = znimg.upsample(along_x=2, along_y=2, along_z=2)
+
+            # Upsample to a specific shape
+            upsampled_znimg = znimg.upsample(to_shape=(1, 256, 256, 256))
+        """
+        # Determine scaling and chunks based on input parameters
+        if to_shape is None:
+            if self.axes_order == "XYZ":
+                scaling = (1, along_x, along_y, along_z)
+            else:
+                scaling = (1, along_z, along_y, along_x)
+
+            chunks_out = tuple(
+                tuple(c * scale for c in chunks_i)
+                for chunks_i, scale in zip(self.data.chunks, scaling)
+            )
+        else:
+            chunks_out, scaling = self.__get_upsampled_chunks(to_shape)
+
+        # Define block-wise upsampling function
+        def zoom_blocks(x, block_info=None):
+            """
+            Scales blocks to the desired size using `scipy.ndimage.zoom`.
+
+            Parameters:
+                x (np.ndarray): Input block data.
+                block_info (dict, optional): Metadata about the current block.
+
+            Returns:
+                np.ndarray: The upscaled block.
+            """
+            # Calculate scaling factors based on input and output chunk shapes
+            scaling = tuple(
+                out_n / in_n
+                for out_n, in_n in zip(block_info[None]["chunk-shape"], x.shape)
+            )
+            return zoom(x, scaling, order=1, prefilter=False)
+
+        # Perform block-wise upsampling
+        darr_scaled = da.map_blocks(
+            zoom_blocks, self.data, dtype=self.data.dtype, chunks=chunks_out
+        )
+
+        # Update the affine matrix to reflect the new voxel size
+        if self.axes_order == "XYZ":
+            scaling_matrix = np.diag(
+                (1 / scaling[1], 1 / scaling[2], 1 / scaling[3], 1)
+            )
+        else:
+            scaling_matrix = np.diag(
+                (1 / scaling[-1], 1 / scaling[-2], 1 / scaling[-3], 1)
+            )
+        new_affine = AffineTransform.from_array(scaling_matrix @ self.affine.matrix)
+
+        # Create new NgffImage with upsampled data
+        dims = self.dims
+        if self.axes_order == "XYZ":
+            new_scale = {
+                dims[1]: self.scale[dims[1]] / scaling[1],
+                dims[2]: self.scale[dims[2]] / scaling[2], 
+                dims[3]: self.scale[dims[3]] / scaling[3]
+            }
+        else:
+            new_scale = {
+                dims[1]: self.scale[dims[1]] / scaling[1],
+                dims[2]: self.scale[dims[2]] / scaling[2],
+                dims[3]: self.scale[dims[3]] / scaling[3]
+            }
+
+        upsampled_ngff = nz.to_ngff_image(
+            darr_scaled,
+            dims=dims,
+            scale=new_scale,
+            translation=self.translation.copy(),
+            name=self.name
+        )
+
+        # Return a new ZarrNii instance with the upsampled data
+        return ZarrNii.from_ngff_image(upsampled_ngff, axes_order=self.axes_order, omero=self.omero)
+
+    def __get_upsampled_chunks(self, target_shape, return_scaling=True):
+        """
+        Calculates new chunk sizes for a dask array to match a target shape,
+        while ensuring the chunks sum precisely to the target shape. Optionally,
+        returns the scaling factors for each dimension.
+
+        This method is useful for upsampling data or ensuring 1:1 correspondence
+        between downsampled and upsampled arrays.
+
+        Parameters:
+            target_shape (tuple): The desired shape of the array after upsampling.
+            return_scaling (bool, optional): Whether to return the scaling factors
+                                             for each dimension (default: True).
+
+        Returns:
+            tuple:
+                new_chunks (tuple): A tuple of tuples specifying the new chunk sizes
+                                    for each dimension.
+                scaling (list): A list of scaling factors for each dimension
+                                (only if `return_scaling=True`).
+
+            OR
+
+            tuple:
+                new_chunks (tuple): A tuple of tuples specifying the new chunk sizes
+                                    for each dimension (if `return_scaling=False`).
+
+        Notes:
+            - The scaling factor for each dimension is calculated as:
+              `scaling_factor = target_shape[dim] / original_shape[dim]`
+            - The last chunk in each dimension is adjusted to account for rounding
+              errors, ensuring the sum of chunks matches the target shape.
+
+        Example:
+            # Calculate upsampled chunks and scaling factors
+            new_chunks, scaling = znimg.__get_upsampled_chunks((256, 256, 256))
+            print("New chunks:", new_chunks)
+            print("Scaling factors:", scaling)
+
+            # Calculate only the new chunks
+            new_chunks = znimg.__get_upsampled_chunks((256, 256, 256), return_scaling=False)
+        """
+        new_chunks = []
+        scaling = []
+
+        for dim, (orig_shape, orig_chunks, new_shape) in enumerate(
+            zip(self.data.shape, self.data.chunks, target_shape)
+        ):
+            # Calculate the scaling factor for this dimension
+            scaling_factor = new_shape / orig_shape
+
+            # Scale each chunk size and round to get an initial estimate
+            scaled_chunks = [
+                int(round(chunk * scaling_factor)) for chunk in orig_chunks
+            ]
+            total = sum(scaled_chunks)
+
+            # Adjust the chunks to ensure they sum up to the target shape exactly
+            diff = new_shape - total
+            if diff != 0:
+                # Correct rounding errors by adjusting the last chunk size in the dimension
+                scaled_chunks[-1] += diff
+
+            new_chunks.append(tuple(scaled_chunks))
+            scaling.append(scaling_factor)
+
+        if return_scaling:
+            return tuple(new_chunks), scaling
+        else:
+            return tuple(new_chunks)
 
     def apply_transform(
         self,
