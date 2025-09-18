@@ -4,7 +4,7 @@ from .transform import AffineTransform, DisplacementTransform, Transform
 __all__ = [
     "ZarrNii",
     "Transform",
-    "AffineTransform", 
+    "AffineTransform",
     "DisplacementTransform",
     "affine_to_orientation",
 ]
