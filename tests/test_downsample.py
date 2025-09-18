@@ -228,3 +228,76 @@ def test_near_isotropic_downsampling(nifti_nib):
 
     # The isotropic version should have a smaller ratio (more isotropic)
     assert isotropic_ratio < normal_ratio
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_near_isotropic_downsampling_no_effect(nifti_nib):
+    """Test that near-isotropic downsampling has no effect when voxels are already isotropic."""
+    nifti_nib.to_filename("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
+
+    # Create an OME-Zarr and manually set isotropic scales
+    znimg.to_ome_zarr("test_isotropic.ome.zarr", max_layer=0)
+
+    # Manually modify the scale to ensure isotropy
+    import zarr
+
+    store = zarr.open("test_isotropic.ome.zarr", mode="r+")
+    multiscales = store.attrs["multiscales"]
+
+    original_transforms = multiscales[0]["datasets"][0]["coordinateTransformations"]
+    for transform in original_transforms:
+        if transform["type"] == "scale":
+            # Set all spatial dimensions to the same scale
+            if len(transform["scale"]) >= 4:  # [c, z, y, x] for ZYX
+                transform["scale"][-3] = 1.0  # z dimension
+                transform["scale"][-2] = 1.0  # y dimension
+                transform["scale"][-1] = 1.0  # x dimension
+
+    # Update the multiscales metadata
+    store.attrs["multiscales"] = multiscales
+
+    # Load without downsampling
+    znimg_normal = ZarrNii.from_ome_zarr(
+        "test_isotropic.ome.zarr", downsample_near_isotropic=False
+    )
+
+    # Load with near-isotropic downsampling (should have no effect)
+    znimg_isotropic = ZarrNii.from_ome_zarr(
+        "test_isotropic.ome.zarr", downsample_near_isotropic=True
+    )
+
+    # Shapes should be identical since no downsampling is needed
+    assert znimg_normal.shape == znimg_isotropic.shape
+
+    # Scales should be identical
+    for dim in ["x", "y", "z"]:
+        if dim in znimg_normal.scale and dim in znimg_isotropic.scale:
+            assert abs(znimg_normal.scale[dim] - znimg_isotropic.scale[dim]) < 1e-6
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_near_isotropic_downsampling_parameter_validation(nifti_nib):
+    """Test that the downsample_near_isotropic parameter is properly handled."""
+    nifti_nib.to_filename("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
+    znimg.to_ome_zarr("test_param.ome.zarr", max_layer=0)
+
+    # Test with explicit False
+    znimg1 = ZarrNii.from_ome_zarr(
+        "test_param.ome.zarr", downsample_near_isotropic=False
+    )
+
+    # Test with explicit True
+    znimg2 = ZarrNii.from_ome_zarr(
+        "test_param.ome.zarr", downsample_near_isotropic=True
+    )
+
+    # Test default behavior (should be same as False)
+    znimg3 = ZarrNii.from_ome_zarr("test_param.ome.zarr")
+
+    # Default and explicit False should be identical
+    assert znimg1.shape == znimg3.shape
+    for dim in ["x", "y", "z"]:
+        if dim in znimg1.scale and dim in znimg3.scale:
+            assert abs(znimg1.scale[dim] - znimg3.scale[dim]) < 1e-6
