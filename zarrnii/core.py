@@ -86,9 +86,7 @@ def save_ngff_image(
         orientation: Orientation metadata to save
         **kwargs: Additional arguments for to_ngff_zarr
     """
-    import os
-    import shutil
-    import tempfile
+    import zarr
 
     if scale_factors is None:
         scale_factors = [2**i for i in range(1, max_layer)]
@@ -98,7 +96,11 @@ def save_ngff_image(
 
     # Check if the target is a ZIP file (based on extension)
     if isinstance(store_or_path, str) and store_or_path.endswith(".zip"):
-        # Handle ZIP file creation
+        # For ZIP files, use temp directory approach due to zarr v3.x ZipStore compatibility issues
+        import tempfile
+        import shutil
+        import os
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # Save to temporary directory first
             temp_zarr_path = os.path.join(tmpdir, "temp.zarr")
@@ -107,8 +109,6 @@ def save_ngff_image(
             # Add orientation metadata to the temporary zarr store if provided
             if orientation:
                 try:
-                    import zarr
-
                     group = zarr.open_group(temp_zarr_path, mode="r+")
                     group.attrs["orientation"] = orientation
                 except Exception:
@@ -125,8 +125,6 @@ def save_ngff_image(
         # Add orientation metadata if provided
         if orientation:
             try:
-                import zarr
-
                 if isinstance(store_or_path, str):
                     group = zarr.open_group(store_or_path, mode="r+")
                 else:
