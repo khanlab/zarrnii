@@ -450,6 +450,67 @@ def downsample_ngff_image(
     )
 
 
+def _apply_near_isotropic_downsampling(znimg: "ZarrNii", axes_order: str) -> "ZarrNii":
+    """
+    Apply near-isotropic downsampling to a ZarrNii instance.
+
+    This function calculates downsampling factors for dimensions where the pixel sizes
+    are smaller than others by at least an integer factor, making the image more isotropic.
+
+    Args:
+        znimg: Input ZarrNii instance
+        axes_order: Spatial axes order ("ZYX" or "XYZ")
+
+    Returns:
+        New ZarrNii instance with downsampling applied if needed
+    """
+    # Get scale information
+    scale = znimg.scale
+
+    # Define spatial dimensions based on axes order
+    if axes_order == "ZYX":
+        spatial_dims = ["z", "y", "x"]
+    else:  # XYZ
+        spatial_dims = ["x", "y", "z"]
+
+    # Extract scales for spatial dimensions only
+    scales = []
+    available_dims = []
+    for dim in spatial_dims:
+        if dim in scale:
+            scales.append(scale[dim])
+            available_dims.append(dim)
+
+    if len(scales) < 2:
+        # Need at least 2 spatial dimensions to compare
+        return znimg
+
+    # Find the largest scale (coarsest resolution) to use as reference
+    max_scale = max(scales)
+
+    # Calculate downsampling factors for each dimension
+    downsample_factors = []
+    for i, current_scale in enumerate(scales):
+        if current_scale < max_scale:
+            # Calculate ratio and find the nearest power of 2
+            ratio = max_scale / current_scale
+            level = int(np.log2(round(ratio)))
+            if level > 0:
+                downsample_factors.append(2**level)
+            else:
+                downsample_factors.append(1)
+        else:
+            downsample_factors.append(1)
+
+    # Only apply downsampling if at least one factor is > 1
+    if any(factor > 1 for factor in downsample_factors):
+        znimg = znimg.downsample(
+            factors=downsample_factors, spatial_dims=available_dims
+        )
+
+    return znimg
+
+
 def apply_transform_to_ngff_image(
     ngff_image: nz.NgffImage,
     transform: Transform,
@@ -573,80 +634,6 @@ def _select_dimensions_from_image_with_omero(
         filtered_omero = FilteredOmero(filtered_channels)
 
     return selected_ngff_image, filtered_omero
-
-
-def _select_channels_from_image_with_omero(
-    ngff_image, multiscales, channels, channel_labels, omero_metadata
-):
-    """
-    Select specific channels from an NgffImage and filter omero metadata accordingly.
-
-    Returns:
-        Tuple of (selected_ngff_image, filtered_omero_metadata)
-    """
-    # Handle channel selection by labels
-    if channel_labels is not None:
-        if omero_metadata is None:
-            raise ValueError(
-                "Channel labels were specified but no omero metadata found"
-            )
-
-        available_labels = _extract_channel_labels_from_omero(omero_metadata.channels)
-        channel_indices = []
-        for label in channel_labels:
-            if label not in available_labels:
-                raise ValueError(f"Channel label '{label}' not found")
-            channel_indices.append(available_labels.index(label))
-        channels = channel_indices
-
-    if channels is None:
-        # Return original image and metadata
-        return ngff_image, omero_metadata
-
-    # Select channels from data (assumes channel is the first dimension after spatial ones)
-    # Data is typically shaped as (c, z, y, x) or (z, y, x, c)
-    data = ngff_image.data
-
-    # Find channel dimension by checking dims
-    if "c" in ngff_image.dims:
-        c_idx = ngff_image.dims.index("c")
-        # Create slice objects
-        slices = [slice(None)] * len(data.shape)
-        slices[c_idx] = channels
-        selected_data = data[tuple(slices)]
-    else:
-        # Assume channel is last dimension if no 'c' dim specified
-        selected_data = data[..., channels]
-
-    # Create new NgffImage with selected data
-    selected_ngff_image = nz.NgffImage(
-        data=selected_data,
-        dims=ngff_image.dims,
-        scale=ngff_image.scale,
-        translation=ngff_image.translation,
-        name=ngff_image.name,
-    )
-
-    # Filter omero metadata to match selected channels
-    filtered_omero = None
-    if omero_metadata is not None and hasattr(omero_metadata, "channels"):
-
-        class FilteredOmero:
-            def __init__(self, channels):
-                self.channels = channels
-
-        filtered_channels = [omero_metadata.channels[i] for i in channels]
-        filtered_omero = FilteredOmero(filtered_channels)
-
-    return selected_ngff_image, filtered_omero
-
-
-def _select_channels_from_image(ngff_image, multiscales, channels, channel_labels):
-    """Select specific channels from an NgffImage (legacy function for compatibility)."""
-    selected_image, _ = _select_dimensions_from_image_with_omero(
-        ngff_image, multiscales, channels, channel_labels, None, None
-    )
-    return selected_image
 
 
 @define
@@ -962,6 +949,7 @@ class ZarrNii:
         storage_options: Optional[Dict] = None,
         axes_order: str = "ZYX",
         orientation: str = "RAS",
+        downsample_near_isotropic: bool = False,
     ) -> "ZarrNii":
         """
         Load from OME-Zarr store.
@@ -975,6 +963,8 @@ class ZarrNii:
             storage_options: Storage options for Zarr
             axes_order: Spatial axes order for NIfTI compatibility
             orientation: Default input orientation if none is specified in metadata (default: 'RAS')
+            downsample_near_isotropic: If True, downsample dimensions with smaller pixel sizes
+                                      to make the resulting image nearly isotropic (default: False)
 
         Returns:
             ZarrNii instance
@@ -1106,6 +1096,10 @@ class ZarrNii:
             znimg = znimg.downsample(
                 factors=downsample_factor, spatial_dims=spatial_dims
             )
+
+        # Apply near-isotropic downsampling if requested
+        if downsample_near_isotropic:
+            znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
 
         return znimg
 
@@ -1562,9 +1556,10 @@ class ZarrNii:
 
         NIfTI files are always written in XYZ order. If the current axes_order is ZYX,
         the data will be reordered to XYZ and the affine matrix adjusted accordingly.
-        
+
+
         For 5D data (T,C,Z,Y,X), singleton dimensions are removed automatically.
-        Non-singleton time and channel dimensions will raise an error as NIfTI doesn't 
+        Non-singleton time and channel dimensions will raise an error as NIfTI doesn't
         support more than 4D data.
 
         Args:
@@ -1575,33 +1570,38 @@ class ZarrNii:
         """
         # Get data and dimensions
         data = self.data.compute()
+
         dims = self.dims
-        
+
         # Handle dimensional reduction for NIfTI compatibility
         # NIfTI supports up to 4D, so we need to remove singleton dimensions
         squeeze_axes = []
         remaining_dims = []
-        
+
         for i, dim in enumerate(dims):
-            if dim in ['t', 'c'] and data.shape[i] == 1:
+            if dim in ["t", "c"] and data.shape[i] == 1:
                 # Remove singleton time or channel dimensions
                 squeeze_axes.append(i)
-            elif dim in ['t', 'c'] and data.shape[i] > 1:
+            elif dim in ["t", "c"] and data.shape[i] > 1:
                 # Non-singleton time or channel dimensions - NIfTI can't handle this
-                raise ValueError(f"NIfTI format doesn't support non-singleton {dim} dimension. "
-                               f"Dimension '{dim}' has size {data.shape[i]}. "
-                               f"Consider selecting specific timepoints/channels first.")
+                raise ValueError(
+                    f"NIfTI format doesn't support non-singleton {dim} dimension. "
+                    f"Dimension '{dim}' has size {data.shape[i]}. "
+                    f"Consider selecting specific timepoints/channels first."
+                )
             else:
                 remaining_dims.append(dim)
-        
+
         # Squeeze out singleton dimensions
         if squeeze_axes:
             data = np.squeeze(data, axis=tuple(squeeze_axes))
-        
+
         # Check final dimensionality
         if data.ndim > 4:
-            raise ValueError(f"Resulting data has {data.ndim} dimensions, but NIfTI supports maximum 4D")
-        
+            raise ValueError(
+                f"Resulting data has {data.ndim} dimensions, but NIfTI supports maximum 4D"
+            )
+
         # Now handle spatial reordering based on axes_order
         if self.axes_order == "ZYX":
             # Data spatial dimensions are in ZYX order, need to transpose to XYZ
@@ -1613,11 +1613,11 @@ class ZarrNii:
                 # Could be (T,Z,Y,X) or (C,Z,Y,X) - spatial part needs ZYX->XYZ
                 # The non-spatial dimension stays first
                 data = data.transpose(0, 3, 2, 1)
-            
+
             # Get affine matrix in XYZ order
             affine_matrix = self.get_affine_matrix(axes_order="XYZ")
         else:
-            # Data is already in XYZ order  
+            # Data is already in XYZ order
             affine_matrix = self.get_affine_matrix(axes_order="XYZ")
 
         # Create NIfTI image

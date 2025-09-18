@@ -5,14 +5,14 @@ sole purpose of this file to generate synthetic ome zarr files for testing
 """
 
 import dask.array as da
+import ngff_zarr as nz
 import numpy as np
 import zarr
-import ngff_zarr as nz
 
 
 def generate_synthetic_dataset(
-    ome_zarr_path: str,
-    arr_sz: tuple = (2, 224, 1600, 2048)) -> None:
+    ome_zarr_path: str, arr_sz: tuple = (2, 224, 1600, 2048)
+) -> None:
     """Generate a 4d synthetic test ome zarr image physically stored in ome_zarr_path.
 
     Args:
@@ -20,7 +20,6 @@ def generate_synthetic_dataset(
         arr_sz: The size of the synthetic image
 
     """
-
 
     arr: da.Array = da.zeros(arr_sz, dtype=np.uint16)
 
@@ -51,7 +50,4 @@ def generate_synthetic_dataset(
 
     ngff_image = nz.to_ngff_image(arr)
     multiscales = nz.to_multiscales(ngff_image)
-    nz.to_ngff_zarr(ome_zarr_path,multiscales)
-    
-
-
+    nz.to_ngff_zarr(ome_zarr_path, multiscales)
