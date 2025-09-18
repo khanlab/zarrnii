@@ -43,6 +43,10 @@ jobs:
     - name: Run tests with pytest
       run: uv run pytest -v
       
+    - name: Run tests with coverage (Python 3.12 only)
+      if: matrix.python-version == '3.12'
+      run: uv run pytest --cov=zarrnii --cov-report=term-missing --cov-fail-under=80
+      
   quality-checks:
     runs-on: ubuntu-latest
     steps:

@@ -29,6 +29,15 @@ check-imports:
 test:
     uv run pytest -v
 
+# Run tests with coverage reporting
+test-cov:
+    uv run pytest --cov=zarrnii --cov-report=term-missing
+
+# Run tests with HTML coverage report
+test-cov-html:
+    uv run pytest --cov=zarrnii --cov-report=html
+    @echo "Coverage report generated in htmlcov/index.html"
+
 # Alias for test
 pytest: test
 
