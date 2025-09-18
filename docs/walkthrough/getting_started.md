@@ -69,9 +69,9 @@ print("Affine matrix:\n", znimg.affine.matrix)
 ZarrNii supports various transformations, such as cropping, downsampling, and upsampling.
 
 #### **Cropping**:
-Crop a region from the dataset using voxel or RAS (real-world) coordinates:
+Crop a region from the dataset using voxel coordinates:
 ```python
-cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
+cropped = znimg.crop((10, 10, 10), (50, 50, 50))
 print("Cropped shape:", cropped.darr.shape)
 ```
 
@@ -120,7 +120,7 @@ from zarrnii import ZarrNii
 znimg = ZarrNii.from_ome_zarr("path/to/dataset.ome.zarr")
 
 # Perform transformations
-cropped = znimg.crop_with_bounding_box((10, 10, 10), (100, 100, 100))
+cropped = znimg.crop((10, 10, 10), (100, 100, 100))
 downsampled = cropped.downsample(level=2)
 
 # Save the result as a NIfTI file

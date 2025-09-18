@@ -65,7 +65,7 @@ Here’s a high-level example workflow using ZarrNii:
 2. **Apply Transformations**:
    ```python
    znimg_downsampled = znimg.downsample(level=2)
-   znimg_cropped = znimg_downsampled.crop_with_bounding_box((0, 0, 0), (100, 100, 100))
+   znimg_cropped = znimg_downsampled.crop((0, 0, 0), (100, 100, 100))
    ```
 
 3. **Convert Formats**:
