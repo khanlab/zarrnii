@@ -46,13 +46,17 @@ ZarrNii follows Python best practices and uses several tools to maintain code qu
 Run quality checks:
 ```bash
 # Format code
-uv run black zarrnii tests
+uv run black .
 
 # Sort imports
-uv run isort zarrnii tests
+uv run isort .
 
 # Lint code
-uv run flake8 zarrnii tests
+uv run flake8 .
+
+# Or use justfile for convenience (if just is installed)
+just format
+just lint
 ```
 
 ### Testing
@@ -61,7 +65,7 @@ ZarrNii uses pytest for testing. Tests are located in the `tests/` directory.
 
 ```bash
 # Run all tests
-uv run pytest
+uv run pytest -v
 
 # Run with coverage
 uv run pytest --cov=zarrnii
@@ -74,6 +78,9 @@ uv run pytest --cov=zarrnii --cov-report=html
 
 # Run specific test file
 uv run pytest tests/test_io.py
+
+# Or use justfile
+just test
 ```
 
 #### Coverage Requirements
@@ -98,6 +105,10 @@ uv run mkdocs build
 
 # Deploy to GitHub Pages (maintainers only)
 uv run mkdocs gh-deploy
+
+# Or use justfile
+just serve-docs
+just build-docs
 ```
 
 ## Contribution Types
@@ -256,13 +267,18 @@ ZarrNii uses [Semantic Versioning](https://semver.org/):
 
 ### Release Checklist
 
-1. Update version number
-2. Update changelog
-3. Run full test suite
-4. Build and test documentation
-5. Create release tag
-6. Deploy to PyPI
-7. Update GitHub release notes
+1. Ensure all tests pass and CI is green
+2. Update changelog with new features and fixes
+3. Build and test documentation
+4. Create and push a git tag:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+5. GitHub Actions will automatically:
+   - Build the package using uv
+   - Deploy to PyPI using trusted publishing
+   - Update GitHub release notes
 
 ## Community Guidelines
 

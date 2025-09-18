@@ -58,12 +58,14 @@ Crop the dataset to a specific bounding box. You can define the bounding box in 
 
 #### **Voxel Space Cropping**:
 ```python
-cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
+# Preferred method using crop()
+cropped = znimg.crop((10, 10, 10), (50, 50, 50))
 print("Cropped shape:", cropped.darr.shape)
 ```
 
 #### **RAS Space Cropping**:
 ```python
+# Use legacy method for RAS coordinates
 cropped_ras = znimg.crop_with_bounding_box(
     (-20, -20, -20), (20, 20, 20), ras_coords=True
 )

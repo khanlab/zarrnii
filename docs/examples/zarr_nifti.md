@@ -69,12 +69,13 @@ Extract a specific region from the dataset using bounding boxes:
 
 #### **Voxel Space**:
 ```python
-cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
+cropped = znimg.crop((10, 10, 10), (50, 50, 50))
 print("Cropped shape:", cropped.darr.shape)
 ```
 
-#### **RAS Space**:
+#### **With RAS Coordinates**:
 ```python
+# Note: crop_with_bounding_box is a legacy method that still supports RAS coords
 cropped_ras = znimg.crop_with_bounding_box(
     (-20, -20, -20), (20, 20, 20), ras_coords=True
 )
@@ -147,7 +148,7 @@ import numpy as np
 znimg = ZarrNii.from_ome_zarr("path/to/dataset.zarr")
 
 # Crop the dataset
-cropped = znimg.crop_with_bounding_box((10, 10, 10), (100, 100, 100))
+cropped = znimg.crop((10, 10, 10), (100, 100, 100))
 
 # Downsample the dataset
 downsampled = cropped.downsample(level=2)
