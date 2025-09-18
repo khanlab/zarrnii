@@ -1562,6 +1562,10 @@ class ZarrNii:
 
         NIfTI files are always written in XYZ order. If the current axes_order is ZYX,
         the data will be reordered to XYZ and the affine matrix adjusted accordingly.
+        
+        For 5D data (T,C,Z,Y,X), singleton dimensions are removed automatically.
+        Non-singleton time and channel dimensions will raise an error as NIfTI doesn't 
+        support more than 4D data.
 
         Args:
             filename: Output filename, if None return nibabel image
@@ -1569,22 +1573,51 @@ class ZarrNii:
         Returns:
             nibabel.Nifti1Image or path if filename provided
         """
-        # Get data and reorder if necessary
+        # Get data and dimensions
         data = self.data.compute()
-
-        # Remove channel dimension for NIfTI if it's size 1
-        if data.shape[0] == 1:
-            data = data[0]
-
-        # Reorder data and affine if axes_order is ZYX
+        dims = self.dims
+        
+        # Handle dimensional reduction for NIfTI compatibility
+        # NIfTI supports up to 4D, so we need to remove singleton dimensions
+        squeeze_axes = []
+        remaining_dims = []
+        
+        for i, dim in enumerate(dims):
+            if dim in ['t', 'c'] and data.shape[i] == 1:
+                # Remove singleton time or channel dimensions
+                squeeze_axes.append(i)
+            elif dim in ['t', 'c'] and data.shape[i] > 1:
+                # Non-singleton time or channel dimensions - NIfTI can't handle this
+                raise ValueError(f"NIfTI format doesn't support non-singleton {dim} dimension. "
+                               f"Dimension '{dim}' has size {data.shape[i]}. "
+                               f"Consider selecting specific timepoints/channels first.")
+            else:
+                remaining_dims.append(dim)
+        
+        # Squeeze out singleton dimensions
+        if squeeze_axes:
+            data = np.squeeze(data, axis=tuple(squeeze_axes))
+        
+        # Check final dimensionality
+        if data.ndim > 4:
+            raise ValueError(f"Resulting data has {data.ndim} dimensions, but NIfTI supports maximum 4D")
+        
+        # Now handle spatial reordering based on axes_order
         if self.axes_order == "ZYX":
-            # Data is currently [Z, Y, X], need to transpose to [X, Y, Z]
-            data = data.transpose(2, 1, 0)  # ZYX -> XYZ
-            affine_matrix = self.get_affine_matrix(
-                axes_order="XYZ"
-            )  # Get XYZ affine directly
+            # Data spatial dimensions are in ZYX order, need to transpose to XYZ
+            if data.ndim == 3:
+                # Pure spatial data: ZYX -> XYZ
+                data = data.transpose(2, 1, 0)
+            elif data.ndim == 4:
+                # 4D data with one non-spatial dimension remaining
+                # Could be (T,Z,Y,X) or (C,Z,Y,X) - spatial part needs ZYX->XYZ
+                # The non-spatial dimension stays first
+                data = data.transpose(0, 3, 2, 1)
+            
+            # Get affine matrix in XYZ order
+            affine_matrix = self.get_affine_matrix(axes_order="XYZ")
         else:
-            # Data is already in XYZ order
+            # Data is already in XYZ order  
             affine_matrix = self.get_affine_matrix(axes_order="XYZ")
 
         # Create NIfTI image
