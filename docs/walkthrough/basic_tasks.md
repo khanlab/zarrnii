@@ -8,6 +8,7 @@ This guide covers the most common tasks you'll perform with ZarrNii, including r
 1. [Reading Data](#reading-data)
     - From OME-Zarr
     - From NIfTI
+    - Working with 5D Data
 2. [Transforming Data](#transforming-data)
     - Cropping
     - Downsampling
@@ -65,10 +66,46 @@ print("Affine matrix:\n", znimg.affine.matrix)
 
 ---
 
+### **Working with 5D Data**
+ZarrNii supports 5D images with time and channel dimensions (T,C,Z,Y,X). You can select specific timepoints and channels during loading or after loading.
+
+#### **Loading with Timepoint Selection**:
+```python
+# Load specific timepoints
+znimg_time = ZarrNii.from_ome_zarr("timeseries.zarr", timepoints=[0, 2, 4])
+print("Timepoint subset shape:", znimg_time.darr.shape)
+
+# Load specific channels by index
+znimg_channels = ZarrNii.from_ome_zarr("multichannel.zarr", channels=[0, 2])
+
+# Load specific channels by label
+znimg_labels = ZarrNii.from_ome_zarr("labeled.zarr", channel_labels=["DAPI", "GFP"])
+
+# Combine timepoint and channel selection
+znimg_subset = ZarrNii.from_ome_zarr("data.zarr", timepoints=[1, 3], channels=[0])
+```
+
+#### **Post-loading Selection**:
+```python
+# Load full dataset first
+znimg = ZarrNii.from_ome_zarr("timeseries.zarr")
+
+# Select timepoints after loading
+selected_time = znimg.select_timepoints([0, 2])
+
+# Select channels after loading
+selected_channels = znimg.select_channels([1, 2])
+
+# Chain selections
+subset = znimg.select_timepoints([0, 1]).select_channels([0])
+```
+
+---
+
 ## Transforming Data
 
 ### **Cropping**
-Crop the dataset to a specific bounding box. You can define the bounding box in either voxel space or RAS (real-world) coordinates.
+Crop the dataset to a specific bounding box. You can define the bounding box in either voxel space or RAS (real-world) coordinates. For 5D data, cropping operates only on spatial dimensions, preserving time and channel dimensions.
 
 #### **Voxel Space Cropping**:
 ```python
@@ -89,7 +126,7 @@ print("Cropped shape:", cropped_ras.darr.shape)
 ---
 
 ### **Downsampling**
-Downsample the dataset to reduce its resolution. You can specify either a downsampling level or individual scaling factors for each axis.
+Downsample the dataset to reduce its resolution. You can specify either a downsampling level or individual scaling factors for each axis. For 5D data, downsampling operates only on spatial dimensions, preserving time and channel dimensions.
 
 #### **By Level**:
 ```python
