@@ -31,6 +31,7 @@ uv sync --dev
 ## Key Features
 
  - **Seamless Format Conversion**: Easily convert between OME-Zarr and NIfTI while preserving spatial metadata.
+ - **ZipStore Support**: Read and write OME-Zarr files in compressed ZIP format (.ome.zarr.zip) for efficient storage and sharing.
  - **Transformations**: Apply common operations like affine transformations, downsampling, and upsampling.
  - **Multiscale Support**: Work with multiscale OME-Zarr pyramids.
  - **Metadata Handling**: Access and modify OME-Zarr metadata like axes and transformations.
@@ -46,11 +47,17 @@ from zarrnii import ZarrNii
 # Load an OME-Zarr dataset
 znimg = ZarrNii.from_ome_zarr("path/to/zarr_dataset.ome.zarr")
 
+# Load from compressed ZIP format
+znimg_zip = ZarrNii.from_ome_zarr("path/to/dataset.ome.zarr.zip")
+
 # Perform a transformation (e.g., downsample)
 downsampled_znimg = znimg.downsample(level=2)
 
 # Save as NIfTI
 downsampled_znimg.to_nifti("output_dataset.nii")
+
+# Save as compressed OME-Zarr ZIP file
+downsampled_znimg.to_ome_zarr("compressed_output.ome.zarr.zip")
 ```
 
 ---
