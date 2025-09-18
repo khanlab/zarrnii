@@ -1577,7 +1577,11 @@ class ZarrNii:
         """
         Save to Imaris (.ims) file format.
 
-        This method requires the 'imaris' extra dependency (h5py).
+        This method attempts to use PyImarisWriter for better compatibility with Imaris software.
+        If PyImarisWriter is not available or fails, it falls back to a custom HDF5 implementation.
+        
+        For best compatibility with Imaris software, install the full Imaris SDK and PyImarisWriter:
+        pip install zarrnii[imaris]
 
         Args:
             path: Output path for Imaris (.ims) file
@@ -1590,6 +1594,135 @@ class ZarrNii:
         Raises:
             ImportError: If h5py is not available
         """
+        # Ensure path has .ims extension
+        if not path.endswith(".ims"):
+            path = path + ".ims"
+
+        # Try PyImarisWriter first for better compatibility
+        try:
+            return self._to_imaris_pyimaris(path, compression, compression_opts)
+        except ImportError:
+            # PyImarisWriter not available, use fallback
+            pass
+        except Exception as e:
+            # PyImarisWriter failed (e.g., missing native libraries), use fallback
+            print(f"Warning: PyImarisWriter failed ({e}), using fallback HDF5 implementation")
+            pass
+
+        # Fallback to custom HDF5 implementation
+        return self._to_imaris_h5py(path, compression, compression_opts)
+
+    def _to_imaris_pyimaris(
+        self, path: str, compression: str = "gzip", compression_opts: int = 6
+    ) -> str:
+        """
+        Save to Imaris using PyImarisWriter for better compatibility.
+        
+        This method creates Imaris files that should be fully compatible with Imaris software.
+        """
+        try:
+            import PyImarisWriter.PyImarisWriter as PIW
+        except ImportError:
+            raise ImportError(
+                "PyImarisWriter is required for best Imaris compatibility. "
+                "Install with: pip install zarrnii[imaris] "
+                "Note: PyImarisWriter also requires Imaris SDK libraries."
+            )
+
+        # Get data and convert to proper format
+        data = self.darr.compute()
+
+        # Remove channel dimension if it's singleton
+        if data.shape[0] == 1:
+            data = data[0]
+
+        # Add channel and time dimensions to make it 5D: (T, C, Z, Y, X)
+        data_5d = data[np.newaxis, np.newaxis, ...]  # Add T=1, C=1 dimensions
+        
+        # Get dimensions: our data is (T=1, C=1, Z, Y, X)
+        t, c, z, y, x = data_5d.shape
+        
+        # Get spacing
+        spacing = self.get_zooms(axes_order=self.axes_order)
+        if self.axes_order == "ZYX":
+            spacing_z, spacing_y, spacing_x = spacing
+        else:  # XYZ
+            spacing_x, spacing_y, spacing_z = spacing
+
+        # Setup PyImarisWriter parameters
+        image_size = PIW.ImageSize(x=x, y=y, z=z, c=c, t=t)
+        
+        # Physical extents (min=0, max=size*spacing)
+        max_x = x * float(spacing_x)
+        max_y = y * float(spacing_y)
+        max_z = z * float(spacing_z)
+        sample_size = PIW.ImageExtents(0, 0, 0, max_x, max_y, max_z)
+        
+        # Dimension sequence
+        dimension_sequence = PIW.DimensionSequence('X', 'Y', 'Z', 'C', 'T')
+        
+        # Block size (same as image size for simplicity)
+        block_size = PIW.ImageSize(x=x, y=y, z=z, c=c, t=t)
+        
+        # Data type
+        datatype = PIW.bpConverterTypesC_FloatType  # Assuming float32
+        
+        # Options
+        options = PIW.Options()
+        # Map compression string to PyImarisWriter compression
+        if compression == "gzip":
+            if compression_opts <= 1:
+                options.mCompressionAlgorithmType = PIW.eCompressionAlgorithmGzipLevel1
+            elif compression_opts <= 2:
+                options.mCompressionAlgorithmType = PIW.eCompressionAlgorithmGzipLevel2
+            elif compression_opts <= 3:
+                options.mCompressionAlgorithmType = PIW.eCompressionAlgorithmGzipLevel3
+            elif compression_opts <= 4:
+                options.mCompressionAlgorithmType = PIW.eCompressionAlgorithmGzipLevel4
+            elif compression_opts <= 5:
+                options.mCompressionAlgorithmType = PIW.eCompressionAlgorithmGzipLevel5
+            elif compression_opts <= 6:
+                options.mCompressionAlgorithmType = PIW.eCompressionAlgorithmGzipLevel6
+            elif compression_opts <= 7:
+                options.mCompressionAlgorithmType = PIW.eCompressionAlgorithmGzipLevel7
+            elif compression_opts <= 8:
+                options.mCompressionAlgorithmType = PIW.eCompressionAlgorithmGzipLevel8
+            else:
+                options.mCompressionAlgorithmType = PIW.eCompressionAlgorithmGzipLevel9
+        elif compression == "lz4":
+            options.mCompressionAlgorithmType = PIW.eCompressionAlgorithmLZ4
+        else:
+            options.mCompressionAlgorithmType = PIW.eCompressionAlgorithmNone
+
+        # Create ImageConverter
+        converter = PIW.ImageConverter(
+            datatype, image_size, sample_size, dimension_sequence,
+            block_size, path, options,
+            'ZarrNii', '1.0', None  # application name, version, callback
+        )
+
+        # Transpose data from TCZYX to XYZCT (PyImarisWriter expects XYZCT)
+        data_xyzct = np.transpose(data_5d, (4, 3, 2, 1, 0))
+
+        # Write the data
+        start_pos = PIW.ImageSize(x=0, y=0, z=0, c=0, t=0)
+        converter.CopyBlock(data_xyzct, start_pos)
+
+        # Finish and cleanup
+        converter.Finish()
+        converter.Destroy()
+
+        return path
+
+    def _to_imaris_h5py(
+        self, path: str, compression: str = "gzip", compression_opts: int = 6
+    ) -> str:
+        """
+        Save to Imaris using custom HDF5 implementation.
+        
+        This is a fallback method that creates HDF5 files with Imaris structure.
+        These files may not be fully compatible with Imaris software.
+        """
         try:
             import h5py
         except ImportError:
@@ -1597,10 +1730,6 @@ class ZarrNii:
                 "h5py is required for Imaris support. "
                 "Install with: pip install zarrnii[imaris] or pip install h5py"
             )
-
-        # Ensure path has .ims extension
-        if not path.endswith(".ims"):
-            path = path + ".ims"
 
         # Get data and metadata
         data = self.darr.compute()  # Convert to numpy array
@@ -1652,9 +1781,7 @@ class ZarrNii:
 
             # Add histograms (basic ones)
             hist_group = channel_group.create_group("Histogram")
-            hist_group.create_dataset(
-                "Data", data=np.histogram(data.flatten(), bins=256)[0]
-            )
+            hist_group.create_dataset("Data", data=np.histogram(data.flatten(), bins=256)[0])
 
             # Create DataSetInfo group
             info_group = f.create_group("DataSetInfo")

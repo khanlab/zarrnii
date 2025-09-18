@@ -8,6 +8,15 @@
     pip install zarrnii[imaris]
     ```
 
+!!! info "PyImarisWriter Integration"
+    ZarrNii automatically uses **PyImarisWriter** when available for better Imaris compatibility. This creates files that are fully compatible with Imaris software. If PyImarisWriter libraries are not available, ZarrNii falls back to a custom HDF5 implementation.
+    
+    For best results with Imaris software:
+    1. Install PyImarisWriter: `pip install PyImarisWriter`
+    2. Install Imaris SDK libraries (requires Imaris installation)
+    
+    Without these, ZarrNii will still work but the created files may have limited Imaris compatibility.
+
 ## Loading Imaris Files
 
 ### Basic Loading
@@ -139,6 +148,44 @@ MyData.ims
 ```
 
 **ZarrNii** handles this structure automatically, extracting spatial metadata and presenting a unified interface consistent with other supported formats.
+
+## Imaris Compatibility Options
+
+ZarrNii provides two approaches for writing Imaris files:
+
+### PyImarisWriter (Recommended)
+When PyImarisWriter and Imaris SDK libraries are available, ZarrNii automatically uses PyImarisWriter for maximum compatibility:
+
+```python
+# Automatically uses PyImarisWriter when available
+znimg.to_imaris("output.ims", compression="gzip")
+```
+
+**Advantages:**
+- Maximum compatibility with Imaris software
+- Proper handling of all Imaris metadata
+- Support for advanced compression options
+
+**Requirements:**
+- PyImarisWriter package: `pip install PyImarisWriter`
+- Imaris SDK libraries (requires Imaris installation)
+
+### HDF5 Fallback
+When PyImarisWriter is not available, ZarrNii falls back to a custom HDF5 implementation:
+
+```python
+# Uses HDF5 fallback when PyImarisWriter unavailable
+znimg.to_imaris("output.ims", compression="gzip")
+```
+
+**Advantages:**
+- Works without additional dependencies
+- Basic Imaris file structure
+- Good for data exchange and storage
+
+**Limitations:**
+- May have limited compatibility with Imaris software
+- Simpler metadata handling
 
 ## Best Practices
 

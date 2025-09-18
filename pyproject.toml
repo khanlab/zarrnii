@@ -28,6 +28,8 @@ dependencies = [
     "scipy>=1.12.0",
     "pandas>=2.2.0",
     "ngff-zarr[all]>=0.13.1",
+    "pyimariswriter>=0.7.0",
+    "h5py>=3.14.0",
 ]
 
 [project.optional-dependencies]
@@ -52,6 +54,7 @@ dev = [
 
 imaris = [
     "h5py>=3.8.0",
+    "PyImarisWriter>=0.7.0",
 ]
 
 [build-system]

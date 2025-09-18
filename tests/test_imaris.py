@@ -205,6 +205,37 @@ class TestImarisIO:
             znimg.to_imaris("dummy_path.ims")
 
     @pytest.mark.usefixtures("cleandir")
+    def test_to_imaris_pyimaris_fallback(self, sample_3d_data, monkeypatch):
+        """Test that to_imaris falls back to h5py when PyImarisWriter fails."""
+        # Create ZarrNii instance
+        darr = da.from_array(sample_3d_data[np.newaxis, ...], chunks="auto")
+        znimg = ZarrNii.from_darr(darr, spacing=[2.0, 1.5, 1.0])
+
+        # Mock PyImarisWriter to raise an exception (simulating missing native libraries)
+        import builtins
+        original_import = builtins.__import__
+        
+        def mock_import_pyimaris(name, *args, **kwargs):
+            if name == "PyImarisWriter.PyImarisWriter":
+                # Simulate the native library missing error
+                raise Exception("Could not load library libbpImarisWriter96.so")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr("builtins.__import__", mock_import_pyimaris)
+
+        # This should work using the h5py fallback
+        output_path = "test_fallback.ims"
+        result_path = znimg.to_imaris(output_path)
+
+        # Should create a file successfully using h5py fallback
+        assert result_path == output_path
+        assert os.path.exists(output_path)
+
+        # Should be able to load it back
+        znimg_loaded = ZarrNii.from_imaris(output_path)
+        assert znimg_loaded is not None
+
+    @pytest.mark.usefixtures("cleandir")
     def test_round_trip_imaris(self, sample_3d_data):
         """Test round-trip: create -> save -> load -> compare."""
         # Create original ZarrNii

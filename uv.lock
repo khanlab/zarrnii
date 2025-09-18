@@ -2830,6 +2830,14 @@ wheels = [
 ]
 
 [[package]]
+name = "pyimariswriter"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/70/a5/bafa825568ad0fbafdc3dc90898200dbc48a31259c8d1148450834182143/PyImarisWriter-0.7.0-py3-none-any.whl", hash = "sha256:4ce951176b33007ab441478794e9ce2c2dcc61a0197887fb85b00cdafa6fe191", size = 1502496, upload-time = "2021-08-13T12:56:37.124Z" },
+]
+
+[[package]]
 name = "pymdown-extensions"
 version = "10.16.1"
 source = { registry = "https://pypi.org/simple" }
@@ -4033,10 +4041,12 @@ name = "zarrnii"
 source = { editable = "." }
 dependencies = [
     { name = "dask" },
+    { name = "h5py" },
     { name = "ngff-zarr", extra = ["all"] },
     { name = "nibabel" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "pyimariswriter" },
     { name = "scipy" },
     { name = "zarr" },
 ]
@@ -4062,6 +4072,7 @@ dev = [
 ]
 imaris = [
     { name = "h5py" },
+    { name = "pyimariswriter" },
 ]
 
 [package.dev-dependencies]
@@ -4085,6 +4096,7 @@ requires-dist = [
     { name = "flake8-bugbear", marker = "extra == 'dev'", specifier = ">=24.12.12" },
     { name = "flake8-docstrings", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "flake8-import-order", marker = "extra == 'dev'", specifier = ">=0.18.2" },
+    { name = "h5py", specifier = ">=3.14.0" },
     { name = "h5py", marker = "extra == 'imaris'", specifier = ">=3.8.0" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.13.2" },
     { name = "jupyterlab", marker = "extra == 'dev'", specifier = ">=4.2.1" },
@@ -4098,6 +4110,8 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "pandas", specifier = ">=2.2.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=2.17.0" },
+    { name = "pyimariswriter", specifier = ">=0.7.0" },
+    { name = "pyimariswriter", marker = "extra == 'imaris'", specifier = ">=0.7.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "scipy", specifier = ">=1.12.0" },
