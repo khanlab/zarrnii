@@ -91,7 +91,36 @@ print("Upsampled shape:", upsampled.darr.shape)
 
 ---
 
-### **3. Saving Data**
+### **3. Image Segmentation**
+
+ZarrNii includes a plugin architecture for image segmentation algorithms. You can apply segmentation to identify regions of interest in your data.
+
+#### **Otsu Thresholding**:
+Apply automatic Otsu thresholding for binary segmentation:
+```python
+segmented = znimg.segment_otsu(nbins=256)
+print("Segmented shape:", segmented.darr.shape)
+print("Unique values:", segmented.darr.compute().unique())  # Should show [0, 1]
+```
+
+#### **Using Plugin Interface**:
+You can also use the generic plugin interface:
+```python
+from zarrnii import OtsuSegmentation
+
+plugin = OtsuSegmentation(nbins=128)
+segmented = znimg.segment(plugin)
+```
+
+#### **Custom Chunk Processing**:
+For large datasets, you can control memory usage with custom chunk sizes:
+```python
+segmented = znimg.segment_otsu(chunk_size=(1, 10, 50, 50))
+```
+
+---
+
+### **4. Saving Data**
 
 ZarrNii makes it easy to save your datasets in both OME-Zarr and NIfTI formats.
 
@@ -125,6 +154,10 @@ downsampled = cropped.downsample(level=2)
 
 # Save the result as a NIfTI file
 downsampled.to_nifti("downsampled_output.nii")
+
+# Apply segmentation to the original image
+segmented = znimg.segment_otsu(nbins=256)
+segmented.to_nifti("segmented_output.nii")
 ```
 
 ---
@@ -132,5 +165,6 @@ downsampled.to_nifti("downsampled_output.nii")
 ## What’s Next?
 
 - [Walkthrough: Basic Tasks](basic_tasks.md): Learn more about common workflows like cropping, interpolation, and combining transformations.
+- [Segmentation Plugin Examples](../examples/segmentation_example.md): Learn how to use and create segmentation plugins.
 - [API Reference](../reference.md): Explore the detailed API for ZarrNii.
 
