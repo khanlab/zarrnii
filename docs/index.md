@@ -1,4 +1,4 @@
-Welcome to the documentation for **ZarrNii**, a Python library for working with OME-Zarr and NIfTI formats. ZarrNii bridges the gap between these two popular formats, enabling seamless data transformation, metadata preservation, and efficient processing of large biomedical images.
+Welcome to the documentation for **ZarrNii**, a Python library for working with OME-Zarr, NIfTI, and Imaris formats. ZarrNii bridges the gap between these popular formats, enabling seamless data transformation, metadata preservation, and efficient processing of large biomedical images.
 
 ---
 
@@ -8,10 +8,11 @@ ZarrNii is designed for researchers and engineers working with:
 
  - **OME-Zarr**: A format for storing multidimensional image data, commonly used in microscopy.
  - **NIfTI**: A standard format for neuroimaging data.
+ - **Imaris**: A microscopy file format (.ims) using HDF5 structure for 3D/4D image analysis.
 
 ZarrNii allows you to:
 
- - Read and write OME-Zarr and NIfTI datasets.
+ - Read and write OME-Zarr, NIfTI, and Imaris datasets.
  - Perform transformations like cropping, downsampling, and interpolation.
  - Preserve and manipulate metadata from OME-Zarr (e.g., axes, coordinate transformations, OME annotations).
 
@@ -19,7 +20,7 @@ ZarrNii allows you to:
 
 ## Key Features
 
- - **Seamless Format Conversion**: Easily convert between OME-Zarr and NIfTI while preserving spatial metadata.
+ - **Seamless Format Conversion**: Easily convert between OME-Zarr, NIfTI, and Imaris while preserving spatial metadata.
  - **Transformations**: Apply common operations like affine transformations, downsampling, and upsampling.
  - **Multiscale Support**: Work with multiscale OME-Zarr pyramids.
  - **Metadata Handling**: Access and modify OME-Zarr metadata like axes and transformations.
@@ -34,6 +35,9 @@ from zarrnii import ZarrNii
 
 # Load an OME-Zarr dataset
 znimg = ZarrNii.from_ome_zarr("path/to/zarr_dataset.ome.zarr")
+
+# Or load from Imaris (requires optional dependency)
+# znimg = ZarrNii.from_imaris("path/to/microscopy_data.ims")
 
 # Perform a transformation (e.g., downsample)
 downsampled_znimg = znimg.downsample(level=2)
