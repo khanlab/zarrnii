@@ -15,11 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for multi-channel and time-series data
 
 ### Changed
+- **Migration from Poetry to uv**: Faster dependency management and builds with modern Python packaging
+- **Automated versioning**: Version now derived from git tags using setuptools-scm
+- **Enhanced CI/CD**: Updated workflows with trusted publishing to PyPI
 - Improved performance for large dataset operations
 - Enhanced metadata preservation across format conversions
 - Optimized chunk sizing for better I/O performance
 
 ### Fixed
+- **NumPy 2.0 Compatibility**: Fixed deprecated np.product usage
 - Documentation build issues with missing files
 - Improved error handling for malformed input files
 - Better memory management for large transformations

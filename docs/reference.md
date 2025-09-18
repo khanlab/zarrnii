@@ -14,8 +14,10 @@ The `ZarrNii` class provides tools for reading, writing, and transforming datase
 - [`from_nifti`](#from_nifti): Load data from a NIfTI file.
 - [`to_ome_zarr`](#to_ome_zarr): Save data as OME-Zarr.
 - [`to_nifti`](#to_nifti): Save data as a NIfTI file.
+- [`crop`](#crop): Extract a region from the dataset.
 - [`downsample`](#downsample): Reduce resolution of datasets.
 - [`upsample`](#upsample): Increase resolution of datasets.
+- [`apply_transform`](#apply_transform): Apply spatial transformations.
 
 ::: zarrnii.ZarrNii
     options:
@@ -37,11 +39,17 @@ The `ZarrNii` class provides tools for reading, writing, and transforming datase
 ### `to_nifti`
 ::: zarrnii.ZarrNii.to_nifti
 
+### `crop`
+::: zarrnii.ZarrNii.crop
+
 ### `downsample`
 ::: zarrnii.ZarrNii.downsample
 
 ### `upsample`
 ::: zarrnii.ZarrNii.upsample
+
+### `apply_transform`
+::: zarrnii.ZarrNii.apply_transform
 
 ---
 
@@ -55,6 +63,11 @@ The `ZarrNii` class provides tools for reading, writing, and transforming datase
         show_source: true
 
 ::: zarrnii.transform.AffineTransform
+    options:
+        members: true
+        show_source: true
+
+::: zarrnii.transform.DisplacementTransform
     options:
         members: true
         show_source: true
