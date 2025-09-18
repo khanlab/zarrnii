@@ -38,7 +38,7 @@ print("Omero metadata:", znimg.omero)
 When you perform transformations like cropping or downsampling, ZarrNii ensures metadata remains consistent.
 
 ```python
-cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
+cropped = znimg.crop((10, 10, 10), (50, 50, 50))
 print("Updated metadata:", cropped.coordinate_transformations)
 ```
 
@@ -120,7 +120,7 @@ Most transformations in ZarrNii are lazy, meaning computations are only triggere
 
 ```python
 # Trigger computation
-cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
+cropped = znimg.crop((10, 10, 10), (50, 50, 50))
 cropped.darr.compute()
 ```
 
