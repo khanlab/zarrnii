@@ -896,9 +896,22 @@ uv run pytest
 # Run with coverage
 uv run pytest --cov=zarrnii
 
+# Run with detailed coverage report
+uv run pytest --cov=zarrnii --cov-report=term-missing
+
+# Generate HTML coverage report
+uv run pytest --cov=zarrnii --cov-report=html
+
 # Run specific test file
 uv run pytest tests/test_io.py
 </code></pre>
+<h4 id="coverage-requirements">Coverage Requirements</h4>
+<p>ZarrNii maintains high code coverage standards:
+- <strong>Target coverage</strong>: 85%+
+- <strong>Current coverage</strong>: 84%+
+- Coverage reports exclude <code>_version.py</code> and test files
+- New features must include comprehensive tests
+- Pull requests should not decrease overall coverage</p>
 <h3 id="documentation">Documentation</h3>
 <p>Documentation is built with MkDocs and hosted on GitHub Pages.</p>
 <pre><code class="language-bash"># Serve documentation locally
