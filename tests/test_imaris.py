@@ -258,6 +258,125 @@ class TestImarisIO:
         expected_zooms = [128.0 / 64, 192.0 / 128, 192.0 / 96]  # [Z, Y, X]
         assert_array_almost_equal(zooms, expected_zooms, decimal=3)
 
+    def test_malformed_imaris_files(self, tmp_path):
+        """Test error handling for various malformed Imaris files."""
+        
+        # Test file with no resolution levels
+        imaris_path_1 = tmp_path / "no_reslevels.ims"
+        with h5py.File(str(imaris_path_1), 'w') as f:
+            f.attrs['ImarisVersion'] = '9.0.0'
+            dataset_group = f.create_group('DataSet')
+            # Don't add any ResolutionLevel groups
+        
+        with pytest.raises(ValueError, match="No resolution levels found"):
+            ZarrNii.from_imaris(str(imaris_path_1))
+        
+        # Test file with no timepoints
+        imaris_path_2 = tmp_path / "no_timepoints.ims"
+        with h5py.File(str(imaris_path_2), 'w') as f:
+            f.attrs['ImarisVersion'] = '9.0.0'
+            dataset_group = f.create_group('DataSet')
+            res_group = dataset_group.create_group('ResolutionLevel 0')
+            # Don't add any TimePoint groups
+        
+        with pytest.raises(ValueError, match="No timepoints found"):
+            ZarrNii.from_imaris(str(imaris_path_2))
+        
+        # Test file with no channels
+        imaris_path_3 = tmp_path / "no_channels.ims"
+        with h5py.File(str(imaris_path_3), 'w') as f:
+            f.attrs['ImarisVersion'] = '9.0.0'
+            dataset_group = f.create_group('DataSet')
+            res_group = dataset_group.create_group('ResolutionLevel 0')
+            time_group = res_group.create_group('TimePoint 0')
+            # Don't add any Channel groups
+        
+        with pytest.raises(ValueError, match="No channels found"):
+            ZarrNii.from_imaris(str(imaris_path_3))
+        
+        # Test file with missing Data dataset
+        imaris_path_4 = tmp_path / "no_data.ims"
+        with h5py.File(str(imaris_path_4), 'w') as f:
+            f.attrs['ImarisVersion'] = '9.0.0'
+            dataset_group = f.create_group('DataSet')
+            res_group = dataset_group.create_group('ResolutionLevel 0')
+            time_group = res_group.create_group('TimePoint 0')
+            channel_group = time_group.create_group('Channel 0')
+            # Don't add Data dataset
+        
+        with pytest.raises(ValueError, match="No Data dataset found"):
+            ZarrNii.from_imaris(str(imaris_path_4))
+        
+        # Test inconsistent structure (ResolutionLevel exists but key doesn't match)
+        imaris_path_5 = tmp_path / "inconsistent.ims"
+        with h5py.File(str(imaris_path_5), 'w') as f:
+            f.attrs['ImarisVersion'] = '9.0.0'
+            dataset_group = f.create_group('DataSet')
+            # Create a group that would be detected by startswith but doesn't match exact key
+            res_group = dataset_group.create_group('ResolutionLevel 1')  # But we'll try to access level 0
+            time_group = res_group.create_group('TimePoint 0')
+            channel_group = time_group.create_group('Channel 0')
+            channel_group.create_dataset('Data', data=np.ones((10, 10, 10)))
+        
+        with pytest.raises(ValueError, match="Resolution level 0 not found"):
+            ZarrNii.from_imaris(str(imaris_path_5), level=0)
+        
+        # Test inconsistent timepoint structure
+        imaris_path_6 = tmp_path / "inconsistent_time.ims"
+        with h5py.File(str(imaris_path_6), 'w') as f:
+            f.attrs['ImarisVersion'] = '9.0.0'
+            dataset_group = f.create_group('DataSet')
+            res_group = dataset_group.create_group('ResolutionLevel 0')
+            time_group = res_group.create_group('TimePoint 1')  # But we'll try to access timepoint 0
+            channel_group = time_group.create_group('Channel 0')
+            channel_group.create_dataset('Data', data=np.ones((10, 10, 10)))
+        
+        with pytest.raises(ValueError, match="Timepoint 0 not found"):
+            ZarrNii.from_imaris(str(imaris_path_6), timepoint=0)
+        
+        # Test inconsistent channel structure
+        imaris_path_7 = tmp_path / "inconsistent_channel.ims"
+        with h5py.File(str(imaris_path_7), 'w') as f:
+            f.attrs['ImarisVersion'] = '9.0.0'
+            dataset_group = f.create_group('DataSet')
+            res_group = dataset_group.create_group('ResolutionLevel 0')
+            time_group = res_group.create_group('TimePoint 0')
+            channel_group = time_group.create_group('Channel 1')  # But we'll try to access channel 0
+            channel_group.create_dataset('Data', data=np.ones((10, 10, 10)))
+        
+        with pytest.raises(ValueError, match="Channel 0 not found"):
+            ZarrNii.from_imaris(str(imaris_path_7), channel=0)
+
+    def test_imaris_without_metadata(self, tmp_path):
+        """Test loading Imaris file without spatial metadata attributes."""
+        imaris_path = tmp_path / "no_metadata.ims"
+        sample_data = np.random.rand(32, 64, 48).astype(np.float32)
+        
+        # Create Imaris file without ImageSizeX/Y/Z attributes
+        with h5py.File(str(imaris_path), 'w') as f:
+            f.attrs['ImarisVersion'] = '9.0.0'
+            # Don't set ImageSizeX, ImageSizeY, ImageSizeZ attributes
+            
+            dataset_group = f.create_group('DataSet')
+            res_group = dataset_group.create_group('ResolutionLevel 0')
+            time_group = res_group.create_group('TimePoint 0')
+            channel_group = time_group.create_group('Channel 0')
+            channel_group.create_dataset('Data', data=sample_data)
+            
+            # Add basic info groups
+            info_group = f.create_group('DataSetInfo')
+            info_group.create_group('Image')
+            time_info_group = f.create_group('DataSetTimes')
+            time_info_group.create_dataset('Time', data=[0.0])
+        
+        # This should work and use default spacing
+        znimg = ZarrNii.from_imaris(str(imaris_path))
+        
+        # Should have default spacing of [1.0, 1.0, 1.0]
+        zooms = znimg.get_zooms()
+        expected_zooms = [1.0, 1.0, 1.0]
+        assert_array_almost_equal(zooms, expected_zooms)
+
 
 class TestImarisIntegration:
     """Test integration with other ZarrNii functionality."""
