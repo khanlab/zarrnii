@@ -51,6 +51,12 @@ znimg = ZarrNii.from_ome_zarr("path/to/dataset.ome.zarr")
 
 print("Data shape:", znimg.darr.shape)
 print("Affine matrix:\n", znimg.affine.matrix)
+
+# For anisotropic data, automatically create more isotropic voxels
+znimg_isotropic = ZarrNii.from_ome_zarr(
+    "path/to/dataset.ome.zarr", 
+    downsample_near_isotropic=True
+)
 ```
 
 #### **From NIfTI**:
