@@ -28,6 +28,7 @@ def load_ngff_image(
     level: int = 0,
     channels: Optional[List[int]] = None,
     channel_labels: Optional[List[str]] = None,
+    timepoints: Optional[List[int]] = None,
     storage_options: Optional[Dict] = None,
 ) -> nz.NgffImage:
     """
@@ -38,6 +39,7 @@ def load_ngff_image(
         level: Pyramid level to load (default: 0)
         channels: Channels to load by index (default: None, loads all channels)
         channel_labels: Channels to load by label name (default: None)
+        timepoints: Timepoints to load by index (default: None, loads all timepoints)
         storage_options: Storage options for Zarr
         
     Returns:
@@ -49,10 +51,10 @@ def load_ngff_image(
     # Get the specified level
     ngff_image = multiscales.images[level]
     
-    # Handle channel selection if specified
-    if channels is not None or channel_labels is not None:
-        ngff_image = _select_channels_from_image(
-            ngff_image, multiscales, channels, channel_labels
+    # Handle channel and timepoint selection if specified
+    if channels is not None or channel_labels is not None or timepoints is not None:
+        ngff_image = _select_dimensions_from_image(
+            ngff_image, multiscales, channels, channel_labels, timepoints
         )
     
     return ngff_image
@@ -105,6 +107,102 @@ def get_multiscales(
         Multiscales: The full multiscales object with all pyramid levels
     """
     return nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
+
+
+def _select_dimensions_from_image(
+    image: nz.NgffImage,
+    multiscales: nz.Multiscales,
+    channels: Optional[List[int]] = None,
+    channel_labels: Optional[List[str]] = None,
+    timepoints: Optional[List[int]] = None,
+) -> nz.NgffImage:
+    """
+    Create a new NgffImage with selected channels and timepoints.
+    
+    This is a unified function to handle both channel and timepoint selection.
+    """
+    # Get axis names
+    axis_names = [axis.name for axis in multiscales.metadata.axes]
+    
+    # Handle channel label resolution
+    if channel_labels is not None:
+        if multiscales.metadata.omero is None or not hasattr(multiscales.metadata.omero, 'channels'):
+            raise ValueError("Channel labels specified but no omero metadata found")
+        
+        # Extract available labels
+        omero_channels = multiscales.metadata.omero.channels
+        available_labels = []
+        for ch in omero_channels:
+            if hasattr(ch, 'label'):
+                available_labels.append(ch.label)
+            elif isinstance(ch, dict):
+                available_labels.append(ch.get('label', ''))
+            else:
+                available_labels.append(str(getattr(ch, 'label', '')))
+        
+        # Resolve labels to indices
+        resolved_channels = []
+        for label in channel_labels:
+            try:
+                idx = available_labels.index(label)
+                resolved_channels.append(idx)
+            except ValueError:
+                raise ValueError(f"Channel label '{label}' not found. Available: {available_labels}")
+        
+        channels = resolved_channels
+    
+    # Set defaults if not specified
+    if channels is None:
+        c_index = axis_names.index("c") if "c" in axis_names else None
+        if c_index is not None:
+            num_channels = image.data.shape[c_index]
+            channels = list(range(num_channels))
+    
+    if timepoints is None:
+        t_index = axis_names.index("t") if "t" in axis_names else None
+        if t_index is not None:
+            num_timepoints = image.data.shape[t_index]
+            timepoints = list(range(num_timepoints))
+    
+    # Build slices for dimension selection
+    slices = []
+    new_dims = []
+    
+    for i, name in enumerate(axis_names):
+        if name == "t":
+            if timepoints is not None:
+                slices.append(timepoints)
+                new_dims.append(name)
+            else:
+                # No time axis selection, keep full range
+                slices.append(slice(None))
+                new_dims.append(name)
+        elif name == "c":
+            if channels is not None:
+                slices.append(channels)
+                new_dims.append(name)
+            else:
+                # No channel axis selection, keep full range
+                slices.append(slice(None))
+                new_dims.append(name)
+        else:
+            # Keep other dimensions unchanged
+            slices.append(slice(None))
+            new_dims.append(name)
+    
+    # Apply slices to get new data
+    new_data = image.data[tuple(slices)]
+    
+    # Create new NgffImage with selected data
+    new_image = nz.NgffImage(
+        data=new_data,
+        dims=new_dims,
+        scale=image.scale,
+        translation=image.translation,
+        name=image.name,
+    )
+    
+    return new_image
 
 
 def _select_channels_from_image(
@@ -395,6 +493,70 @@ def _extract_channel_labels_from_omero(channel_info):
     return labels
 
 
+def _select_dimensions_from_image_with_omero(ngff_image, multiscales, channels, channel_labels, timepoints, omero_metadata):
+    """
+    Select specific channels and timepoints from an NgffImage and filter omero metadata accordingly.
+    
+    Returns:
+        Tuple of (selected_ngff_image, filtered_omero_metadata)
+    """
+    # Handle channel selection by labels
+    if channel_labels is not None:
+        if omero_metadata is None:
+            raise ValueError("Channel labels were specified but no omero metadata found")
+        
+        available_labels = _extract_channel_labels_from_omero(omero_metadata.channels)
+        channel_indices = []
+        for label in channel_labels:
+            if label not in available_labels:
+                raise ValueError(f"Channel label '{label}' not found")
+            channel_indices.append(available_labels.index(label))
+        channels = channel_indices
+    
+    # If no selection is specified, return original
+    if channels is None and timepoints is None:
+        return ngff_image, omero_metadata
+    
+    # Select dimensions from data - do this sequentially to avoid fancy indexing conflicts
+    data = ngff_image.data
+    dims = ngff_image.dims
+    
+    # First, select timepoints if specified
+    if timepoints is not None and 't' in dims:
+        t_idx = dims.index('t')
+        slices = [slice(None)] * len(data.shape)
+        slices[t_idx] = timepoints
+        data = data[tuple(slices)]
+    
+    # Then, select channels if specified  
+    if channels is not None and 'c' in dims:
+        c_idx = dims.index('c')
+        slices = [slice(None)] * len(data.shape)
+        slices[c_idx] = channels
+        data = data[tuple(slices)]
+    
+    # Create new NgffImage with selected data
+    selected_ngff_image = nz.NgffImage(
+        data=data,
+        dims=dims,
+        scale=ngff_image.scale,
+        translation=ngff_image.translation,
+        name=ngff_image.name
+    )
+    
+    # Filter omero metadata to match selected channels (timepoints don't affect omero metadata)
+    filtered_omero = omero_metadata
+    if channels is not None and omero_metadata is not None and hasattr(omero_metadata, 'channels'):
+        class FilteredOmero:
+            def __init__(self, channels):
+                self.channels = channels
+        
+        filtered_channels = [omero_metadata.channels[i] for i in channels]
+        filtered_omero = FilteredOmero(filtered_channels)
+    
+    return selected_ngff_image, filtered_omero
+
+
 def _select_channels_from_image_with_omero(ngff_image, multiscales, channels, channel_labels, omero_metadata):
     """
     Select specific channels from an NgffImage and filter omero metadata accordingly.
@@ -458,8 +620,8 @@ def _select_channels_from_image_with_omero(ngff_image, multiscales, channels, ch
 
 def _select_channels_from_image(ngff_image, multiscales, channels, channel_labels):
     """Select specific channels from an NgffImage (legacy function for compatibility)."""
-    selected_image, _ = _select_channels_from_image_with_omero(
-        ngff_image, multiscales, channels, channel_labels, None
+    selected_image, _ = _select_dimensions_from_image_with_omero(
+        ngff_image, multiscales, channels, channel_labels, None, None
     )
     return selected_image
 
@@ -727,6 +889,7 @@ class ZarrNii:
         level: int = 0,
         channels: Optional[List[int]] = None,
         channel_labels: Optional[List[str]] = None,
+        timepoints: Optional[List[int]] = None,
         storage_options: Optional[Dict] = None,
         axes_order: str = "ZYX",
         orientation: str = "RAS",
@@ -739,6 +902,7 @@ class ZarrNii:
             level: Pyramid level to load (if beyond available levels, lazy downsampling is applied)
             channels: Channel indices to load
             channel_labels: Channel labels to load
+            timepoints: Timepoint indices to load
             storage_options: Storage options for Zarr
             axes_order: Spatial axes order for NIfTI compatibility
             orientation: Default input orientation if none is specified in metadata (default: 'RAS')
@@ -746,7 +910,7 @@ class ZarrNii:
         Returns:
             ZarrNii instance
         """
-        # Validate channel selection arguments
+        # Validate channel and timepoint selection arguments
         if channels is not None and channel_labels is not None:
             raise ValueError("Cannot specify both 'channels' and 'channel_labels'")
         
@@ -826,11 +990,11 @@ class ZarrNii:
         # Get the highest available level
         ngff_image = multiscales.images[actual_level]
         
-        # Handle channel selection and filter omero metadata accordingly
+        # Handle channel and timepoint selection and filter omero metadata accordingly
         filtered_omero = omero_metadata
-        if channels is not None or channel_labels is not None:
-            ngff_image, filtered_omero = _select_channels_from_image_with_omero(
-                ngff_image, multiscales, channels, channel_labels, omero_metadata
+        if channels is not None or channel_labels is not None or timepoints is not None:
+            ngff_image, filtered_omero = _select_dimensions_from_image_with_omero(
+                ngff_image, multiscales, channels, channel_labels, timepoints, omero_metadata
             )
         
         # Create ZarrNii instance with orientation
@@ -1544,6 +1708,50 @@ class ZarrNii:
             axes_order=self.axes_order,
             orientation=self.orientation,
             _omero=filtered_omero
+        )
+    
+    def select_timepoints(self, timepoints: Optional[List[int]] = None) -> "ZarrNii":
+        """
+        Select timepoints from the image data and return a new ZarrNii instance.
+        
+        Args:
+            timepoints: Timepoint indices to select
+            
+        Returns:
+            New ZarrNii instance with selected timepoints
+        """
+        if timepoints is None:
+            # Return a copy with all timepoints
+            return self.copy()
+        
+        # Check if time dimension exists
+        if 't' not in self.dims:
+            raise ValueError("No time dimension found in the data")
+        
+        # Get time dimension index
+        t_idx = self.dims.index('t')
+        
+        # Create slice objects
+        slices = [slice(None)] * len(self.data.shape)
+        slices[t_idx] = timepoints
+        
+        # Select timepoints from data
+        selected_data = self.data[tuple(slices)]
+        
+        # Create new NgffImage with selected data
+        new_ngff_image = nz.NgffImage(
+            data=selected_data,
+            dims=self.dims,
+            scale=self.scale,
+            translation=self.translation,
+            name=self.name
+        )
+        
+        return ZarrNii(
+            ngff_image=new_ngff_image,
+            axes_order=self.axes_order,
+            orientation=self.orientation,
+            _omero=self._omero  # Timepoint selection doesn't affect omero metadata
         )
     
     def to_ngff_image(self, name: str = None) -> nz.NgffImage:
