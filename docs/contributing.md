@@ -85,12 +85,13 @@ just test
 
 #### Coverage Requirements
 
-ZarrNii maintains high code coverage standards:
+ZarrNii maintains code coverage standards:
+- **Minimum coverage**: 70% (CI requirement)
 - **Target coverage**: 85%+
-- **Current coverage**: 84%+
+- **Current coverage**: 86%+
 - Coverage reports exclude `_version.py` and test files
 - New features must include comprehensive tests
-- Pull requests should not decrease overall coverage
+- Pull requests should not decrease overall coverage significantly
 
 ### Documentation
 
