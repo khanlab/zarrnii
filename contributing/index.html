@@ -880,18 +880,22 @@
 </ul>
 <p>Run quality checks:</p>
 <pre><code class="language-bash"># Format code
-uv run black zarrnii tests
+uv run black .
 
 # Sort imports
-uv run isort zarrnii tests
+uv run isort .
 
 # Lint code
-uv run flake8 zarrnii tests
+uv run flake8 .
+
+# Or use justfile for convenience (if just is installed)
+just format
+just lint
 </code></pre>
 <h3 id="testing">Testing</h3>
 <p>ZarrNii uses pytest for testing. Tests are located in the <code>tests/</code> directory.</p>
 <pre><code class="language-bash"># Run all tests
-uv run pytest
+uv run pytest -v
 
 # Run with coverage
 uv run pytest --cov=zarrnii
@@ -904,6 +908,9 @@ uv run pytest --cov=zarrnii --cov-report=html
 
 # Run specific test file
 uv run pytest tests/test_io.py
+
+# Or use justfile
+just test
 </code></pre>
 <h4 id="coverage-requirements">Coverage Requirements</h4>
 <p>ZarrNii maintains high code coverage standards:
@@ -922,6 +929,10 @@ uv run mkdocs build
 
 # Deploy to GitHub Pages (maintainers only)
 uv run mkdocs gh-deploy
+
+# Or use justfile
+just serve-docs
+just build-docs
 </code></pre>
 <h2 id="contribution-types">Contribution Types</h2>
 <h3 id="bug-reports">Bug Reports</h3>
@@ -1069,12 +1080,16 @@ uv run mkdocs gh-deploy
 - <strong>PATCH</strong>: Bug fixes, backwards compatible</p>
 <h3 id="release-checklist">Release Checklist</h3>
 <ol>
-<li>Update version number</li>
-<li>Update changelog</li>
-<li>Run full test suite</li>
+<li>Ensure all tests pass and CI is green</li>
+<li>Update changelog with new features and fixes</li>
 <li>Build and test documentation</li>
-<li>Create release tag</li>
-<li>Deploy to PyPI</li>
+<li>Create and push a git tag:
+   <code>bash
+   git tag v1.0.0
+   git push origin v1.0.0</code></li>
+<li>GitHub Actions will automatically:</li>
+<li>Build the package using uv</li>
+<li>Deploy to PyPI using trusted publishing</li>
 <li>Update GitHub release notes</li>
 </ol>
 <h2 id="community-guidelines">Community Guidelines</h2>

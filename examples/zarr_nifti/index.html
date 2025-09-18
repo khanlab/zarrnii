@@ -827,11 +827,12 @@ print(&quot;Downsampled shape:&quot;, downsampled.darr.shape)
 <h3 id="cropping"><strong>Cropping</strong></h3>
 <p>Extract a specific region from the dataset using bounding boxes:</p>
 <h4 id="voxel-space"><strong>Voxel Space</strong>:</h4>
-<pre><code class="language-python">cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
+<pre><code class="language-python">cropped = znimg.crop((10, 10, 10), (50, 50, 50))
 print(&quot;Cropped shape:&quot;, cropped.darr.shape)
 </code></pre>
-<h4 id="ras-space"><strong>RAS Space</strong>:</h4>
-<pre><code class="language-python">cropped_ras = znimg.crop_with_bounding_box(
+<h4 id="with-ras-coordinates"><strong>With RAS Coordinates</strong>:</h4>
+<pre><code class="language-python"># Note: crop_with_bounding_box is a legacy method that still supports RAS coords
+cropped_ras = znimg.crop_with_bounding_box(
     (-20, -20, -20), (20, 20, 20), ras_coords=True
 )
 print(&quot;Cropped shape:&quot;, cropped_ras.darr.shape)
@@ -885,7 +886,7 @@ import numpy as np
 znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.zarr&quot;)
 
 # Crop the dataset
-cropped = znimg.crop_with_bounding_box((10, 10, 10), (100, 100, 100))
+cropped = znimg.crop((10, 10, 10), (100, 100, 100))
 
 # Downsample the dataset
 downsampled = cropped.downsample(level=2)

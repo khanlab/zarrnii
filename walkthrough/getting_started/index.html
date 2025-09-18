@@ -797,8 +797,8 @@ print(&quot;Affine matrix:\n&quot;, znimg.affine.matrix)
 <h3 id="2-performing-transformations"><strong>2. Performing Transformations</strong></h3>
 <p>ZarrNii supports various transformations, such as cropping, downsampling, and upsampling.</p>
 <h4 id="cropping"><strong>Cropping</strong>:</h4>
-<p>Crop a region from the dataset using voxel or RAS (real-world) coordinates:</p>
-<pre><code class="language-python">cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
+<p>Crop a region from the dataset using voxel coordinates:</p>
+<pre><code class="language-python">cropped = znimg.crop((10, 10, 10), (50, 50, 50))
 print(&quot;Cropped shape:&quot;, cropped.darr.shape)
 </code></pre>
 <h4 id="downsampling"><strong>Downsampling</strong>:</h4>
@@ -831,7 +831,7 @@ print(&quot;Upsampled shape:&quot;, upsampled.darr.shape)
 znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.ome.zarr&quot;)
 
 # Perform transformations
-cropped = znimg.crop_with_bounding_box((10, 10, 10), (100, 100, 100))
+cropped = znimg.crop((10, 10, 10), (100, 100, 100))
 downsampled = cropped.downsample(level=2)
 
 # Save the result as a NIfTI file

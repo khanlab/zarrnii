@@ -798,7 +798,7 @@ print(&quot;Omero metadata:&quot;, znimg.omero)
 <hr />
 <h3 id="preserving-metadata-during-transformations"><strong>Preserving Metadata During Transformations</strong></h3>
 <p>When you perform transformations like cropping or downsampling, ZarrNii ensures metadata remains consistent.</p>
-<pre><code class="language-python">cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
+<pre><code class="language-python">cropped = znimg.crop((10, 10, 10), (50, 50, 50))
 print(&quot;Updated metadata:&quot;, cropped.coordinate_transformations)
 </code></pre>
 <hr />
@@ -857,7 +857,7 @@ print(&quot;Rechunked shape:&quot;, rechunked.shape)
 <h3 id="lazy-evaluation"><strong>Lazy Evaluation</strong></h3>
 <p>Most transformations in ZarrNii are lazy, meaning computations are only triggered when necessary. Use <code>.compute()</code> to materialize results.</p>
 <pre><code class="language-python"># Trigger computation
-cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
+cropped = znimg.crop((10, 10, 10), (50, 50, 50))
 cropped.darr.compute()
 </code></pre>
 <hr />

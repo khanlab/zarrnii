@@ -802,11 +802,13 @@ print(&quot;Affine matrix:\n&quot;, znimg.affine.matrix)
 <h3 id="cropping"><strong>Cropping</strong></h3>
 <p>Crop the dataset to a specific bounding box. You can define the bounding box in either voxel space or RAS (real-world) coordinates.</p>
 <h4 id="voxel-space-cropping"><strong>Voxel Space Cropping</strong>:</h4>
-<pre><code class="language-python">cropped = znimg.crop_with_bounding_box((10, 10, 10), (50, 50, 50))
+<pre><code class="language-python"># Preferred method using crop()
+cropped = znimg.crop((10, 10, 10), (50, 50, 50))
 print(&quot;Cropped shape:&quot;, cropped.darr.shape)
 </code></pre>
 <h4 id="ras-space-cropping"><strong>RAS Space Cropping</strong>:</h4>
-<pre><code class="language-python">cropped_ras = znimg.crop_with_bounding_box(
+<pre><code class="language-python"># Use legacy method for RAS coordinates
+cropped_ras = znimg.crop_with_bounding_box(
     (-20, -20, -20), (20, 20, 20), ras_coords=True
 )
 print(&quot;Cropped shape:&quot;, cropped_ras.darr.shape)
