@@ -5,6 +5,11 @@ test*.zarr/
 # Test artifacts
 .pytest_cache/
 
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
 # Build artifacts
 dist/
 build/
