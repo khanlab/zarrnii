@@ -814,7 +814,7 @@ class ZarrNii:
         return znimg
 
     @classmethod
-    def from_nifti(cls, path, chunks="auto", axes_order="XYZ", name=None):
+    def from_nifti(cls, path, chunks="auto", axes_order="XYZ", name=None, as_ref=False, zooms=None):
         """
         Load from NIfTI file.
         
@@ -823,17 +823,40 @@ class ZarrNii:
             chunks: Chunking strategy for dask array
             axes_order: Spatial axes order
             name: Name for the NgffImage
+            as_ref: If True, creates an empty dask array with the correct shape instead of loading data
+            zooms: Target voxel spacing in xyz (only valid if as_ref=True)
             
         Returns:
             ZarrNii instance
         """
+        if not as_ref and zooms is not None:
+            raise ValueError("`zooms` can only be used when `as_ref=True`.")
+
         # Load NIfTI file
         nifti_img = nib.load(path)
-        array = nifti_img.get_fdata()
-        affine_matrix = nifti_img.affine
+        shape = nifti_img.header.get_data_shape()
+        affine_matrix = nifti_img.affine.copy()
 
-        # Convert to dask array
-        darr = da.from_array(array, chunks=chunks)
+        # Adjust shape and affine if zooms are provided
+        if zooms is not None:
+            in_zooms = np.sqrt((affine_matrix[:3, :3] ** 2).sum(axis=0))  # Current voxel spacing
+            scaling_factor = in_zooms / zooms
+            new_shape = [
+                int(np.floor(shape[0] * scaling_factor[2])),  # Z
+                int(np.floor(shape[1] * scaling_factor[1])),  # Y
+                int(np.floor(shape[2] * scaling_factor[0])),  # X
+            ]
+            np.fill_diagonal(affine_matrix[:3, :3], zooms)
+        else:
+            new_shape = shape
+
+        if as_ref:
+            # Create an empty dask array with the adjusted shape
+            darr = da.empty((1, *new_shape), chunks=chunks, dtype="float32")
+        else:
+            # Load the NIfTI data and convert to a dask array
+            array = nifti_img.get_fdata()
+            darr = da.from_array(array, chunks=chunks)
         
         # Add channel dimension if not present
         if len(darr.shape) == 3:
