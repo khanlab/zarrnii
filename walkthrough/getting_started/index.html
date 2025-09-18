@@ -785,17 +785,50 @@ znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.ome.zarr&quot;)
 
 print(&quot;Data shape:&quot;, znimg.darr.shape)
 print(&quot;Affine matrix:\n&quot;, znimg.affine.matrix)
+
+# Load specific timepoints and channels from 5D data
+znimg_5d = ZarrNii.from_ome_zarr(&quot;timeseries.zarr&quot;, timepoints=[0, 2], channels=[1])
+print(&quot;5D subset shape:&quot;, znimg_5d.darr.shape)
 </code></pre>
 <h4 id="from-nifti"><strong>From NIfTI</strong>:</h4>
-<pre><code class="language-python"># Load NIfTI
+<pre><code class="language-python"># Load NIfTI (supports 3D, 4D, and 5D data)
 znimg = ZarrNii.from_nifti(&quot;path/to/dataset.nii&quot;)
 
 print(&quot;Data shape:&quot;, znimg.darr.shape)
 print(&quot;Affine matrix:\n&quot;, znimg.affine.matrix)
 </code></pre>
 <hr />
-<h3 id="2-performing-transformations"><strong>2. Performing Transformations</strong></h3>
-<p>ZarrNii supports various transformations, such as cropping, downsampling, and upsampling.</p>
+<h3 id="2-working-with-5d-data"><strong>2. Working with 5D Data</strong></h3>
+<p>ZarrNii supports 5D images with time and channel dimensions (T,C,Z,Y,X format). You can select specific timepoints and channels either during loading or after loading.</p>
+<h4 id="loading-with-selection"><strong>Loading with Selection</strong>:</h4>
+<pre><code class="language-python"># Load specific timepoints
+znimg_time = ZarrNii.from_ome_zarr(&quot;timeseries.zarr&quot;, timepoints=[0, 2, 4])
+
+# Load specific channels  
+znimg_channels = ZarrNii.from_ome_zarr(&quot;multichannel.zarr&quot;, channels=[0, 2])
+
+# Load specific channels by label
+znimg_labels = ZarrNii.from_ome_zarr(&quot;labeled.zarr&quot;, channel_labels=[&quot;DAPI&quot;, &quot;GFP&quot;])
+
+# Combine timepoint and channel selection
+znimg_subset = ZarrNii.from_ome_zarr(&quot;data.zarr&quot;, timepoints=[1, 3], channels=[0])
+</code></pre>
+<h4 id="post-loading-selection"><strong>Post-loading Selection</strong>:</h4>
+<pre><code class="language-python"># Load full dataset first
+znimg = ZarrNii.from_ome_zarr(&quot;timeseries.zarr&quot;)
+
+# Select timepoints after loading
+selected_time = znimg.select_timepoints([0, 2])
+
+# Select channels after loading
+selected_channels = znimg.select_channels([1, 2])
+
+# Chain selections
+subset = znimg.select_timepoints([0, 1]).select_channels([0])
+</code></pre>
+<hr />
+<h3 id="3-performing-transformations"><strong>3. Performing Transformations</strong></h3>
+<p>ZarrNii supports various transformations, such as cropping, downsampling, and upsampling. When working with 5D data, spatial transformations preserve the time and channel dimensions.</p>
 <h4 id="cropping"><strong>Cropping</strong>:</h4>
 <p>Crop a region from the dataset using voxel coordinates:</p>
 <pre><code class="language-python">cropped = znimg.crop((10, 10, 10), (50, 50, 50))
@@ -805,6 +838,9 @@ print(&quot;Cropped shape:&quot;, cropped.darr.shape)
 <p>Reduce the resolution of your dataset:</p>
 <pre><code class="language-python">downsampled = znimg.downsample(level=2)
 print(&quot;Downsampled shape:&quot;, downsampled.darr.shape)
+
+# For 5D data: (3, 2, 16, 32, 32) -&gt; (3, 2, 8, 16, 16)
+# Time and channel dimensions are preserved
 </code></pre>
 <h4 id="upsampling"><strong>Upsampling</strong>:</h4>
 <p>Increase the resolution of your dataset:</p>
@@ -812,7 +848,7 @@ print(&quot;Downsampled shape:&quot;, downsampled.darr.shape)
 print(&quot;Upsampled shape:&quot;, upsampled.darr.shape)
 </code></pre>
 <hr />
-<h3 id="3-saving-data"><strong>3. Saving Data</strong></h3>
+<h3 id="4-saving-data"><strong>4. Saving Data</strong></h3>
 <p>ZarrNii makes it easy to save your datasets in both OME-Zarr and NIfTI formats.</p>
 <h4 id="to-nifti"><strong>To NIfTI</strong>:</h4>
 <p>Save the dataset as a <code>.nii</code> file:</p>
@@ -827,15 +863,20 @@ print(&quot;Upsampled shape:&quot;, upsampled.darr.shape)
 <p>Here’s a full workflow from loading an OME-Zarr dataset to saving a downsampled version as NIfTI:</p>
 <pre><code class="language-python">from zarrnii import ZarrNii
 
-# Load an OME-Zarr dataset
-znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.ome.zarr&quot;)
+# Load a 5D OME-Zarr dataset with specific timepoints and channels
+znimg = ZarrNii.from_ome_zarr(&quot;path/to/timeseries.zarr&quot;, 
+                              timepoints=[0, 2, 4], 
+                              channels=[0, 1])
 
 # Perform transformations
 cropped = znimg.crop((10, 10, 10), (100, 100, 100))
 downsampled = cropped.downsample(level=2)
 
 # Save the result as a NIfTI file
-downsampled.to_nifti(&quot;downsampled_output.nii&quot;)
+downsampled.to_nifti(&quot;processed_timeseries.nii&quot;)
+
+# Or save as OME-Zarr with metadata preservation
+downsampled.to_ome_zarr(&quot;processed_timeseries.ome.zarr&quot;)
 </code></pre>
 <hr />
 <h2 id="whats-next">What’s Next?</h2>

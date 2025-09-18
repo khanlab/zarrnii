@@ -736,13 +736,16 @@
 <p>ZarrNii allows you to:</p>
 <ul>
 <li>Read and write OME-Zarr and NIfTI datasets.</li>
+<li>Work with 4D and 5D images, including time-series data (T,C,Z,Y,X).</li>
 <li>Perform transformations like cropping, downsampling, and interpolation.</li>
+<li>Select specific channels and timepoints from multidimensional datasets.</li>
 <li>Preserve and manipulate metadata from OME-Zarr (e.g., axes, coordinate transformations, OME annotations).</li>
 </ul>
 <hr />
 <h2 id="key-features">Key Features</h2>
 <ul>
 <li><strong>Seamless Format Conversion</strong>: Easily convert between OME-Zarr and NIfTI while preserving spatial metadata.</li>
+<li><strong>5D Image Support</strong>: Work with time-series data in (T,C,Z,Y,X) format with timepoint and channel selection.</li>
 <li><strong>Transformations</strong>: Apply common operations like affine transformations, downsampling, and upsampling.</li>
 <li><strong>Multiscale Support</strong>: Work with multiscale OME-Zarr pyramids.</li>
 <li><strong>Metadata Handling</strong>: Access and modify OME-Zarr metadata like axes and transformations.</li>
@@ -754,6 +757,9 @@
 
 # Load an OME-Zarr dataset
 znimg = ZarrNii.from_ome_zarr(&quot;path/to/zarr_dataset.ome.zarr&quot;)
+
+# Load with specific timepoints and channels (5D support)
+znimg_subset = ZarrNii.from_ome_zarr(&quot;timeseries.zarr&quot;, timepoints=[0, 2], channels=[1])
 
 # Perform a transformation (e.g., downsample)
 downsampled_znimg = znimg.downsample(level=2)

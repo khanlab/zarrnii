@@ -759,6 +759,7 @@
 <li><a href="#reading-data">Reading Data</a><ul>
 <li>From OME-Zarr</li>
 <li>From NIfTI</li>
+<li>Working with 5D Data</li>
 </ul>
 </li>
 <li><a href="#transforming-data">Transforming Data</a><ul>
@@ -798,9 +799,39 @@ print(&quot;Data shape:&quot;, znimg.darr.shape)
 print(&quot;Affine matrix:\n&quot;, znimg.affine.matrix)
 </code></pre>
 <hr />
+<h3 id="working-with-5d-data"><strong>Working with 5D Data</strong></h3>
+<p>ZarrNii supports 5D images with time and channel dimensions (T,C,Z,Y,X). You can select specific timepoints and channels during loading or after loading.</p>
+<h4 id="loading-with-timepoint-selection"><strong>Loading with Timepoint Selection</strong>:</h4>
+<pre><code class="language-python"># Load specific timepoints
+znimg_time = ZarrNii.from_ome_zarr(&quot;timeseries.zarr&quot;, timepoints=[0, 2, 4])
+print(&quot;Timepoint subset shape:&quot;, znimg_time.darr.shape)
+
+# Load specific channels by index
+znimg_channels = ZarrNii.from_ome_zarr(&quot;multichannel.zarr&quot;, channels=[0, 2])
+
+# Load specific channels by label
+znimg_labels = ZarrNii.from_ome_zarr(&quot;labeled.zarr&quot;, channel_labels=[&quot;DAPI&quot;, &quot;GFP&quot;])
+
+# Combine timepoint and channel selection
+znimg_subset = ZarrNii.from_ome_zarr(&quot;data.zarr&quot;, timepoints=[1, 3], channels=[0])
+</code></pre>
+<h4 id="post-loading-selection"><strong>Post-loading Selection</strong>:</h4>
+<pre><code class="language-python"># Load full dataset first
+znimg = ZarrNii.from_ome_zarr(&quot;timeseries.zarr&quot;)
+
+# Select timepoints after loading
+selected_time = znimg.select_timepoints([0, 2])
+
+# Select channels after loading
+selected_channels = znimg.select_channels([1, 2])
+
+# Chain selections
+subset = znimg.select_timepoints([0, 1]).select_channels([0])
+</code></pre>
+<hr />
 <h2 id="transforming-data">Transforming Data</h2>
 <h3 id="cropping"><strong>Cropping</strong></h3>
-<p>Crop the dataset to a specific bounding box. You can define the bounding box in either voxel space or RAS (real-world) coordinates.</p>
+<p>Crop the dataset to a specific bounding box. You can define the bounding box in either voxel space or RAS (real-world) coordinates. For 5D data, cropping operates only on spatial dimensions, preserving time and channel dimensions.</p>
 <h4 id="voxel-space-cropping"><strong>Voxel Space Cropping</strong>:</h4>
 <pre><code class="language-python"># Preferred method using crop()
 cropped = znimg.crop((10, 10, 10), (50, 50, 50))
@@ -815,7 +846,7 @@ print(&quot;Cropped shape:&quot;, cropped_ras.darr.shape)
 </code></pre>
 <hr />
 <h3 id="downsampling"><strong>Downsampling</strong></h3>
-<p>Downsample the dataset to reduce its resolution. You can specify either a downsampling level or individual scaling factors for each axis.</p>
+<p>Downsample the dataset to reduce its resolution. You can specify either a downsampling level or individual scaling factors for each axis. For 5D data, downsampling operates only on spatial dimensions, preserving time and channel dimensions.</p>
 <h4 id="by-level"><strong>By Level</strong>:</h4>
 <pre><code class="language-python">downsampled = znimg.downsample(level=2)
 print(&quot;Downsampled shape:&quot;, downsampled.darr.shape)
