@@ -14,7 +14,7 @@
         <link rel="prev" href="../transformations/">
       
       
-        <link rel="next" href="../multiscale/">
+        <link rel="next" href="../near_isotropic/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -593,6 +593,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../near_isotropic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Near-Isotropic Downsampling
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../multiscale/" class="md-nav__link">
         
   
@@ -846,6 +869,25 @@ znimg.to_ome_zarr(
     max_layer=4
 )
 </code></pre>
+<h3 id="automatic-near-isotropic-downsampling">Automatic Near-Isotropic Downsampling</h3>
+<p>For datasets with anisotropic voxels (e.g., lightsheet microscopy with fine Z resolution), you can automatically downsample to create more isotropic voxels:</p>
+<pre><code class="language-python"># Load with automatic near-isotropic downsampling
+znimg_isotropic = ZarrNii.from_ome_zarr(
+    &quot;path/to/anisotropic_data.ome.zarr&quot;, 
+    downsample_near_isotropic=True
+)
+
+# Example: if original scales are z=0.25μm, y=1.0μm, x=1.0μm
+# Z dimension gets downsampled by 4x to make scales isotropic:
+# Result: z=1.0μm, y=1.0μm, x=1.0μm (isotropic voxels)
+print(&quot;Original anisotropic scales:&quot;, znimg_normal.scale)
+print(&quot;Near-isotropic scales:&quot;, znimg_isotropic.scale)
+</code></pre>
+<p><strong>How it works:</strong>
+- Identifies dimensions with finer resolution (smaller scale values)
+- Downsamples by powers of 2 to match the coarsest resolution
+- Works for any spatial dimension (X, Y, or Z)
+- Only applies when significant anisotropy is detected</p>
 <h2 id="memory-efficient-processing">Memory-Efficient Processing</h2>
 <pre><code class="language-python"># Work with large images efficiently using Dask
 # Downsampling is lazy and computed only when needed

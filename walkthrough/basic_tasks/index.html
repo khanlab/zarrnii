@@ -575,6 +575,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../../examples/near_isotropic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Near-Isotropic Downsampling
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../examples/multiscale/" class="md-nav__link">
         
   
@@ -787,6 +810,17 @@ znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.ome.zarr&quot;)
 # Inspect the data
 print(&quot;Data shape:&quot;, znimg.darr.shape)
 print(&quot;Affine matrix:\n&quot;, znimg.affine.matrix)
+</code></pre>
+<h4 id="automatic-anisotropy-correction"><strong>Automatic Anisotropy Correction</strong></h4>
+<p>For datasets with anisotropic voxels (common in lightsheet microscopy), you can automatically downsample to create more isotropic voxels:</p>
+<pre><code class="language-python"># Load with near-isotropic downsampling
+znimg_isotropic = ZarrNii.from_ome_zarr(
+    &quot;path/to/anisotropic_data.ome.zarr&quot;, 
+    downsample_near_isotropic=True
+)
+
+print(&quot;Isotropic data shape:&quot;, znimg_isotropic.darr.shape)
+print(&quot;Isotropic scales:&quot;, znimg_isotropic.scale)
 </code></pre>
 <hr />
 <h3 id="from-nifti"><strong>From NIfTI</strong></h3>

@@ -575,6 +575,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../../examples/near_isotropic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Near-Isotropic Downsampling
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../examples/multiscale/" class="md-nav__link">
         
   
@@ -786,6 +809,11 @@ znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.ome.zarr&quot;)
 print(&quot;Data shape:&quot;, znimg.darr.shape)
 print(&quot;Affine matrix:\n&quot;, znimg.affine.matrix)
 
+# For anisotropic data, automatically create more isotropic voxels
+znimg_isotropic = ZarrNii.from_ome_zarr(
+    &quot;path/to/dataset.ome.zarr&quot;, 
+    downsample_near_isotropic=True
+)
 # Load specific timepoints and channels from 5D data
 znimg_5d = ZarrNii.from_ome_zarr(&quot;timeseries.zarr&quot;, timepoints=[0, 2], channels=[1])
 print(&quot;5D subset shape:&quot;, znimg_5d.darr.shape)

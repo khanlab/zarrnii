@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/examples/zarr_nifti/">
+        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/examples/near_isotropic/">
       
       
-        <link rel="prev" href="../../reference/">
+        <link rel="prev" href="../downsampling/">
       
       
-        <link rel="next" href="../transformations/">
+        <link rel="next" href="../multiscale/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>Working with Zarr and NIfTI - ZarrNii Documentation</title>
+        <title>Near-Isotropic Downsampling - ZarrNii Documentation</title>
       
     
     
@@ -66,7 +66,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#examples-working-with-zarr-and-nifti" class="md-skip">
+        <a href="#near-isotropic-downsampling" class="md-skip">
           Skip to content
         </a>
       
@@ -102,7 +102,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Working with Zarr and NIfTI
+              Near-Isotropic Downsampling
             
           </span>
         </div>
@@ -416,32 +416,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Working with Zarr and NIfTI
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../zarr_nifti/" class="md-nav__link">
         
   
   
@@ -452,80 +430,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
-    <span class="md-ellipsis">
-      Table of Contents
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#loading-datasets" class="md-nav__link">
-    <span class="md-ellipsis">
-      Loading Datasets
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#performing-transformations" class="md-nav__link">
-    <span class="md-ellipsis">
-      Performing Transformations
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#saving-results" class="md-nav__link">
-    <span class="md-ellipsis">
-      Saving Results
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#advanced-example-full-workflow" class="md-nav__link">
-    <span class="md-ellipsis">
-      Advanced Example: Full Workflow
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      Summary
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -581,10 +485,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../near_isotropic/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Near-Isotropic Downsampling
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -595,6 +521,98 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#problem-anisotropic-voxels" class="md-nav__link">
+    <span class="md-ellipsis">
+      Problem: Anisotropic Voxels
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solution-automatic-downsampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution: Automatic Downsampling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      How It Works
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#benefits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Benefits
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      When to Use
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#manual-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manual Control
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance Impact
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      See Also
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -723,54 +741,72 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
+  <a href="#problem-anisotropic-voxels" class="md-nav__link">
     <span class="md-ellipsis">
-      Table of Contents
+      Problem: Anisotropic Voxels
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#loading-datasets" class="md-nav__link">
+  <a href="#solution-automatic-downsampling" class="md-nav__link">
     <span class="md-ellipsis">
-      Loading Datasets
+      Solution: Automatic Downsampling
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#performing-transformations" class="md-nav__link">
+  <a href="#how-it-works" class="md-nav__link">
     <span class="md-ellipsis">
-      Performing Transformations
+      How It Works
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#saving-results" class="md-nav__link">
+  <a href="#benefits" class="md-nav__link">
     <span class="md-ellipsis">
-      Saving Results
+      Benefits
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#advanced-example-full-workflow" class="md-nav__link">
+  <a href="#when-to-use" class="md-nav__link">
     <span class="md-ellipsis">
-      Advanced Example: Full Workflow
+      When to Use
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#summary" class="md-nav__link">
+  <a href="#manual-control" class="md-nav__link">
     <span class="md-ellipsis">
-      Summary
+      Manual Control
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance Impact
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      See Also
     </span>
   </a>
   
@@ -792,150 +828,82 @@
 
 
 
-<h1 id="examples-working-with-zarr-and-nifti">Examples: Working with Zarr and NIfTI</h1>
-<p>This section provides practical workflows for using <strong>ZarrNii</strong> with OME-Zarr and NIfTI datasets.</p>
-<hr />
-<h2 id="table-of-contents">Table of Contents</h2>
-<ol>
-<li><a href="#loading-datasets">Loading Datasets</a><ul>
-<li>From OME-Zarr</li>
-<li>From NIfTI</li>
-</ul>
-</li>
-<li><a href="#performing-transformations">Performing Transformations</a><ul>
-<li>Downsampling</li>
-<li>Cropping</li>
-<li>Combining Affine Transformations</li>
-</ul>
-</li>
-<li><a href="#saving-results">Saving Results</a><ul>
-<li>To OME-Zarr</li>
-<li>To NIfTI</li>
-</ul>
-</li>
-<li><a href="#advanced-example-full-workflow">Advanced Example: Full Workflow</a></li>
-</ol>
-<hr />
-<h2 id="loading-datasets">Loading Datasets</h2>
-<h3 id="from-ome-zarr"><strong>From OME-Zarr</strong></h3>
-<p>Load a dataset from an OME-Zarr file and inspect its metadata:</p>
+<h1 id="near-isotropic-downsampling">Near-Isotropic Downsampling</h1>
+<p>This example demonstrates the automatic near-isotropic downsampling feature, which is particularly useful for lightsheet microscopy data where Z resolution is often much finer than X/Y resolution.</p>
+<h2 id="problem-anisotropic-voxels">Problem: Anisotropic Voxels</h2>
+<p>Many biomedical imaging modalities produce datasets with anisotropic voxels where one dimension has much finer resolution than others:</p>
 <pre><code class="language-python">from zarrnii import ZarrNii
 
-# Load OME-Zarr dataset
-znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.zarr&quot;)
+# Load anisotropic lightsheet data
+znimg = ZarrNii.from_ome_zarr(&quot;lightsheet_data.ome.zarr&quot;)
 
-# Inspect data
-print(&quot;Shape:&quot;, znimg.darr.shape)
-print(&quot;Affine matrix:\n&quot;, znimg.affine.matrix)
+print(&quot;Original scales:&quot;, znimg.scale)
+# Output might show: {'z': 0.25, 'y': 1.0, 'x': 1.0}
+# Z has 4x finer resolution than X/Y
 </code></pre>
-<hr />
-<h3 id="from-nifti"><strong>From NIfTI</strong></h3>
-<p>Load a NIfTI dataset and inspect its attributes:</p>
-<pre><code class="language-python"># Load NIfTI dataset
-znimg = ZarrNii.from_nifti(&quot;path/to/dataset.nii&quot;)
-
-# Inspect data
-print(&quot;Shape:&quot;, znimg.darr.shape)
-print(&quot;Affine matrix:\n&quot;, znimg.affine.matrix)
-</code></pre>
-<hr />
-<h2 id="performing-transformations">Performing Transformations</h2>
-<h3 id="downsampling"><strong>Downsampling</strong></h3>
-<p>Reduce the resolution of the dataset using the <code>downsample</code> method:</p>
-<pre><code class="language-python"># Downsample by level
-downsampled = znimg.downsample(level=2)
-print(&quot;Downsampled shape:&quot;, downsampled.darr.shape)
-</code></pre>
-<hr />
-<h3 id="cropping"><strong>Cropping</strong></h3>
-<p>Extract a specific region from the dataset using bounding boxes:</p>
-<h4 id="voxel-space"><strong>Voxel Space</strong>:</h4>
-<pre><code class="language-python">cropped = znimg.crop((10, 10, 10), (50, 50, 50))
-print(&quot;Cropped shape:&quot;, cropped.darr.shape)
-</code></pre>
-<h4 id="with-ras-coordinates"><strong>With RAS Coordinates</strong>:</h4>
-<pre><code class="language-python"># Note: crop_with_bounding_box is a legacy method that still supports RAS coords
-cropped_ras = znimg.crop_with_bounding_box(
-    (-20, -20, -20), (20, 20, 20), ras_coords=True
+<h2 id="solution-automatic-downsampling">Solution: Automatic Downsampling</h2>
+<p>The <code>downsample_near_isotropic</code> parameter automatically identifies and corrects anisotropic voxels:</p>
+<pre><code class="language-python"># Load with automatic near-isotropic downsampling
+znimg_isotropic = ZarrNii.from_ome_zarr(
+    &quot;lightsheet_data.ome.zarr&quot;, 
+    downsample_near_isotropic=True
 )
-print(&quot;Cropped shape:&quot;, cropped_ras.darr.shape)
+
+print(&quot;Isotropic scales:&quot;, znimg_isotropic.scale)
+# Output: {'z': 1.0, 'y': 1.0, 'x': 1.0}
+# All dimensions now have the same resolution
+
+print(&quot;Shape comparison:&quot;)
+print(f&quot;Original:  {znimg.darr.shape}&quot;)
+print(f&quot;Isotropic: {znimg_isotropic.darr.shape}&quot;)
+# Z dimension is reduced by the downsampling factor
 </code></pre>
-<hr />
-<h3 id="combining-affine-transformations"><strong>Combining Affine Transformations</strong></h3>
-<p>Apply multiple transformations to the dataset in sequence:</p>
-<pre><code class="language-python">from zarrnii.transform import AffineTransform
-import numpy as np
-
-# Define transformations using matrices
-scale_matrix = np.array([
-    [2.0, 0.0, 0.0, 0.0],
-    [0.0, 2.0, 0.0, 0.0], 
-    [0.0, 0.0, 1.0, 0.0],
-    [0.0, 0.0, 0.0, 1.0]
-])
-scale = AffineTransform.from_array(scale_matrix)
-
-translate_matrix = np.array([
-    [1.0, 0.0, 0.0, 10.0],
-    [0.0, 1.0, 0.0, -5.0],
-    [0.0, 0.0, 1.0, 0.0],
-    [0.0, 0.0, 0.0, 1.0]
-])
-translate = AffineTransform.from_array(translate_matrix)
-
-# Apply transformations
-transformed = znimg.apply_transform(scale, translate, ref_znimg=znimg)
-print(&quot;Transformed affine matrix:\n&quot;, transformed.affine.matrix)
+<h2 id="how-it-works">How It Works</h2>
+<p>The algorithm:</p>
+<ol>
+<li><strong>Identifies the coarsest resolution</strong> (largest scale value) among spatial dimensions</li>
+<li><strong>Calculates downsampling factors</strong> as powers of 2 for finer resolution dimensions  </li>
+<li><strong>Applies selective downsampling</strong> using the existing downsample method</li>
+</ol>
+<pre><code class="language-python"># For scales z=0.25, y=1.0, x=1.0:
+# - Max scale = 1.0 (coarsest resolution)
+# - Z ratio = 1.0 / 0.25 = 4.0
+# - Z downsampling factor = 2^2 = 4
+# - Result: z=1.0, y=1.0, x=1.0 (isotropic)
 </code></pre>
-<hr />
-<h2 id="saving-results">Saving Results</h2>
-<h3 id="to-ome-zarr"><strong>To OME-Zarr</strong></h3>
-<p>Save the dataset to OME-Zarr format:</p>
-<pre><code class="language-python">znimg.to_ome_zarr(&quot;output.zarr&quot;, max_layer=3, scaling_method=&quot;local_mean&quot;)
+<h2 id="benefits">Benefits</h2>
+<ul>
+<li><strong>Improved processing efficiency</strong>: Isotropic voxels work better with many algorithms</li>
+<li><strong>Consistent visualization</strong>: Equal sampling in all dimensions for 3D rendering</li>
+<li><strong>Memory reduction</strong>: Removes unnecessary oversampling in fine dimensions</li>
+<li><strong>Algorithm compatibility</strong>: Many image processing algorithms assume isotropic voxels</li>
+</ul>
+<h2 id="when-to-use">When to Use</h2>
+<p>This feature is most beneficial for:
+- <strong>Lightsheet microscopy</strong> data with fine Z-sampling
+- <strong>High-resolution imaging</strong> with anisotropic acquisition
+- <strong>Preprocessing</strong> before analysis algorithms that assume isotropy
+- <strong>Visualization</strong> where consistent sampling is desired</p>
+<h2 id="manual-control">Manual Control</h2>
+<p>For fine-grained control, you can still use manual downsampling:</p>
+<pre><code class="language-python"># Manual approach - downsample Z dimension by specific factor
+znimg_manual = znimg.downsample(along_z=4, along_y=1, along_x=1)
+
+# This gives the same result as downsample_near_isotropic=True
+# but allows custom control over factors
 </code></pre>
-<hr />
-<h3 id="to-nifti"><strong>To NIfTI</strong></h3>
-<p>Save the dataset to NIfTI format:</p>
-<pre><code class="language-python">znimg.to_nifti(&quot;output.nii&quot;)
-</code></pre>
-<hr />
-<h2 id="advanced-example-full-workflow">Advanced Example: Full Workflow</h2>
-<p>Combine multiple operations in a single workflow:</p>
-<pre><code class="language-python">from zarrnii import ZarrNii
-from zarrnii.transform import AffineTransform
-import numpy as np
-
-# Load an OME-Zarr dataset
-znimg = ZarrNii.from_ome_zarr(&quot;path/to/dataset.zarr&quot;)
-
-# Crop the dataset
-cropped = znimg.crop((10, 10, 10), (100, 100, 100))
-
-# Downsample the dataset
-downsampled = cropped.downsample(level=2)
-
-# Apply an affine transformation
-scale_matrix = np.array([
-    [1.5, 0.0, 0.0, 0.0],
-    [0.0, 1.5, 0.0, 0.0],
-    [0.0, 0.0, 1.0, 0.0],
-    [0.0, 0.0, 0.0, 1.0]
-])
-scale = AffineTransform.from_array(scale_matrix)
-transformed = downsampled.apply_transform(scale, ref_znimg=downsampled)
-
-# Save the result as a NIfTI file
-transformed.to_nifti(&quot;final_output.nii&quot;)
-</code></pre>
-<hr />
-<h2 id="summary">Summary</h2>
-<p>In this section, you learned how to:
-- Load datasets from OME-Zarr and NIfTI formats.
-- Perform transformations like downsampling, cropping, and affine transformations.
-- Save results back to OME-Zarr or NIfTI.</p>
-<p>Next:
-- Explore the <a href="../../reference/">API Reference</a> for in-depth details about ZarrNii's classes and methods.
-- Check the <a href="../../faq/">FAQ</a> for answers to common questions.</p>
+<h2 id="performance-impact">Performance Impact</h2>
+<p>The automatic downsampling:
+- Uses the same efficient downsampling algorithm as manual methods
+- Is applied lazily with Dask for memory efficiency<br />
+- Reduces data size and subsequent processing time
+- Preserves all metadata and coordinate system information</p>
+<h2 id="see-also">See Also</h2>
+<ul>
+<li><a href="../downsampling/">Downsampling and Upsampling</a> for general resolution operations</li>
+<li><a href="../../walkthrough/basic_tasks/">Basic Tasks</a> for getting started with transformations</li>
+<li><a href="../../reference/">API Reference</a> for detailed parameter documentation</li>
+</ul>
 
 
 
