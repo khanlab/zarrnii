@@ -493,6 +493,17 @@ class ZarrNii:
         """Legacy property name for image data."""
         return self.ngff_image.data
     
+    @darr.setter
+    def darr(self, value: da.Array) -> None:
+        """Set the image data via the legacy `darr` property."""
+        self.ngff_image.data = value
+
+    @data.setter
+    def data(self, value: da.Array) -> None:
+        """Set the image data via the data property"""
+        self.ngff_image.data = value
+
+
     @property
     def shape(self) -> tuple:
         """Shape of the image data."""
