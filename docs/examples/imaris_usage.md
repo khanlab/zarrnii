@@ -8,14 +8,14 @@
     pip install zarrnii[imaris]
     ```
 
-!!! info "PyImarisWriter Integration"
-    ZarrNii automatically uses **PyImarisWriter** when available for better Imaris compatibility. This creates files that are fully compatible with Imaris software. If PyImarisWriter libraries are not available, ZarrNii falls back to a custom HDF5 implementation.
+!!! info "HDF5-Based Imaris Support"
+    ZarrNii provides robust Imaris (.ims) file support through a carefully crafted HDF5 implementation. The implementation follows the exact structure of correctly-formed Imaris files to ensure maximum compatibility with Imaris software.
     
-    For best results with Imaris software:
-    1. Install PyImarisWriter: `pip install PyImarisWriter`
-    2. Install Imaris SDK libraries (requires Imaris installation)
-    
-    Without these, ZarrNii will still work but the created files may have limited Imaris compatibility.
+    **Key Features:**
+    - Reads all standard Imaris files with multiple channels, timepoints, and resolution levels
+    - Creates Imaris-compatible files using the correct HDF5 structure and metadata
+    - Handles both single and multi-channel data automatically
+    - Preserves spatial metadata and supports histogram generation
 
 ## Loading Imaris Files
 
@@ -149,43 +149,30 @@ MyData.ims
 
 **ZarrNii** handles this structure automatically, extracting spatial metadata and presenting a unified interface consistent with other supported formats.
 
-## Imaris Compatibility Options
+## Imaris File Format Support
 
-ZarrNii provides two approaches for writing Imaris files:
+ZarrNii provides comprehensive Imaris (.ims) file support through a robust HDF5-based implementation:
 
-### PyImarisWriter (Recommended)
-When PyImarisWriter and Imaris SDK libraries are available, ZarrNii automatically uses PyImarisWriter for maximum compatibility:
+### File Creation and Compatibility
+ZarrNii creates Imaris files that are compatible with Imaris software by following the exact structure found in correctly-formed Imaris files:
 
 ```python
-# Automatically uses PyImarisWriter when available
+# Create Imaris-compatible files
 znimg.to_imaris("output.ims", compression="gzip")
 ```
 
-**Advantages:**
-- Maximum compatibility with Imaris software
-- Proper handling of all Imaris metadata
-- Support for advanced compression options
+**Key Features:**
+- **Correct HDF5 structure**: Follows the exact directory hierarchy used by Imaris
+- **Proper metadata**: Includes all necessary attributes for Imaris compatibility
+- **Multi-channel support**: Automatically handles single and multi-channel data
+- **Histogram generation**: Creates proper histograms for each channel
+- **Compression support**: Supports various HDF5 compression options
 
-**Requirements:**
-- PyImarisWriter package: `pip install PyImarisWriter`
-- Imaris SDK libraries (requires Imaris installation)
-
-### HDF5 Fallback
-When PyImarisWriter is not available, ZarrNii falls back to a custom HDF5 implementation:
-
-```python
-# Uses HDF5 fallback when PyImarisWriter unavailable
-znimg.to_imaris("output.ims", compression="gzip")
-```
-
-**Advantages:**
-- Works without additional dependencies
-- Basic Imaris file structure
-- Good for data exchange and storage
-
-**Limitations:**
-- May have limited compatibility with Imaris software
-- Simpler metadata handling
+**File Structure Created:**
+- Top-level attributes matching Imaris format (ImarisVersion, DataSetDirectoryName, etc.)
+- `DataSet/ResolutionLevel 0/TimePoint 0/Channel X/Data` hierarchy
+- `DataSetInfo` group with channel metadata
+- Proper histogram data for each channel
 
 ## Best Practices
 
