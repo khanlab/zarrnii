@@ -597,6 +597,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="examples/segmentation_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Segmentation Plugins
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -773,6 +796,7 @@
 <li><strong>Multiscale Support</strong>: Work with multiscale OME-Zarr pyramids.</li>
 <li><strong>Metadata Handling</strong>: Access and modify OME-Zarr metadata like axes and transformations.</li>
 <li><strong>Lazy Loading</strong>: Leverage Dask arrays for efficient processing of large datasets.</li>
+<li><strong>Segmentation Plugins</strong>: Extensible plugin architecture for image segmentation algorithms.</li>
 </ul>
 <hr />
 <h2 id="quick-start">Quick Start</h2>
@@ -787,8 +811,12 @@ znimg_subset = ZarrNii.from_ome_zarr(&quot;timeseries.zarr&quot;, timepoints=[0,
 # Perform a transformation (e.g., downsample)
 downsampled_znimg = znimg.downsample(level=2)
 
+# Apply segmentation using Otsu thresholding
+segmented_znimg = znimg.segment_otsu(nbins=256)
+
 # Save as NIfTI
 downsampled_znimg.to_nifti(&quot;output_dataset.nii&quot;)
+segmented_znimg.to_nifti(&quot;segmented_dataset.nii&quot;)
 </code></pre>
 <hr />
 <h2 id="learn-more">Learn More</h2>
@@ -797,6 +825,7 @@ downsampled_znimg.to_nifti(&quot;output_dataset.nii&quot;)
 <li><a href="walkthrough/overview/">Walkthrough: Overview</a>: Understand the core concepts.</li>
 <li><a href="reference/">API Reference</a>: Dive into the technical details.</li>
 <li><a href="examples/zarr_nifti/">Examples</a>: Learn through practical examples.</li>
+<li><a href="examples/segmentation_example/">Segmentation Plugin Examples</a>: Learn how to use and create segmentation plugins.</li>
 <li><a href="faq/">FAQ</a>: Find answers to common questions.</li>
 </ul>
 

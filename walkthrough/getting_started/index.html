@@ -614,6 +614,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/segmentation_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Segmentation Plugins
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -876,6 +899,26 @@ print(&quot;Downsampled shape:&quot;, downsampled.darr.shape)
 print(&quot;Upsampled shape:&quot;, upsampled.darr.shape)
 </code></pre>
 <hr />
+<h3 id="3-image-segmentation"><strong>3. Image Segmentation</strong></h3>
+<p>ZarrNii includes a plugin architecture for image segmentation algorithms. You can apply segmentation to identify regions of interest in your data.</p>
+<h4 id="otsu-thresholding"><strong>Otsu Thresholding</strong>:</h4>
+<p>Apply automatic Otsu thresholding for binary segmentation:</p>
+<pre><code class="language-python">segmented = znimg.segment_otsu(nbins=256)
+print(&quot;Segmented shape:&quot;, segmented.darr.shape)
+print(&quot;Unique values:&quot;, segmented.darr.compute().unique())  # Should show [0, 1]
+</code></pre>
+<h4 id="using-plugin-interface"><strong>Using Plugin Interface</strong>:</h4>
+<p>You can also use the generic plugin interface:</p>
+<pre><code class="language-python">from zarrnii import OtsuSegmentation
+
+plugin = OtsuSegmentation(nbins=128)
+segmented = znimg.segment(plugin)
+</code></pre>
+<h4 id="custom-chunk-processing"><strong>Custom Chunk Processing</strong>:</h4>
+<p>For large datasets, you can control memory usage with custom chunk sizes:</p>
+<pre><code class="language-python">segmented = znimg.segment_otsu(chunk_size=(1, 10, 50, 50))
+</code></pre>
+<hr />
 <h3 id="4-saving-data"><strong>4. Saving Data</strong></h3>
 <p>ZarrNii makes it easy to save your datasets in both OME-Zarr and NIfTI formats.</p>
 <h4 id="to-nifti"><strong>To NIfTI</strong>:</h4>
@@ -901,15 +944,23 @@ cropped = znimg.crop((10, 10, 10), (100, 100, 100))
 downsampled = cropped.downsample(level=2)
 
 # Save the result as a NIfTI file
+
 downsampled.to_nifti(&quot;processed_timeseries.nii&quot;)
 
 # Or save as OME-Zarr with metadata preservation
 downsampled.to_ome_zarr(&quot;processed_timeseries.ome.zarr&quot;)
+
+
+# Apply segmentation to the original image
+segmented = znimg.segment_otsu(nbins=256)
+segmented.to_nifti(&quot;segmented_output.nii&quot;)
+
 </code></pre>
 <hr />
 <h2 id="whats-next">What’s Next?</h2>
 <ul>
 <li><a href="../basic_tasks/">Walkthrough: Basic Tasks</a>: Learn more about common workflows like cropping, interpolation, and combining transformations.</li>
+<li><a href="../../examples/segmentation_example/">Segmentation Plugin Examples</a>: Learn how to use and create segmentation plugins.</li>
 <li><a href="../../reference/">API Reference</a>: Explore the detailed API for ZarrNii.</li>
 </ul>
 

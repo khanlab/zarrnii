@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/walkthrough/overview/">
+        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/examples/segmentation_example/">
       
       
-        <link rel="prev" href="../..">
+        <link rel="prev" href="../multiscale/">
       
       
-        <link rel="next" href="../getting_started/">
+        <link rel="next" href="../../faq/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>Overview - ZarrNii Documentation</title>
+        <title>Segmentation Plugins - ZarrNii Documentation</title>
       
     
     
@@ -66,7 +66,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#walkthrough-overview" class="md-skip">
+        <a href="#segmentation-plugin-example" class="md-skip">
           Skip to content
         </a>
       
@@ -102,7 +102,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Overview
+              Segmentation Plugins
             
           </span>
         </div>
@@ -217,20 +217,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
@@ -246,7 +244,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             Walkthrough
@@ -257,32 +255,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Overview
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../walkthrough/overview/" class="md-nav__link">
         
   
   
@@ -293,62 +269,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#core-concepts" class="md-nav__link">
-    <span class="md-ellipsis">
-      Core Concepts
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#data-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      Data Model
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#example-workflow" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Workflow
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#whats-next" class="md-nav__link">
-    <span class="md-ellipsis">
-      What’s Next?
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -361,7 +281,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../getting_started/" class="md-nav__link">
+      <a href="../../walkthrough/getting_started/" class="md-nav__link">
         
   
   
@@ -384,7 +304,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../basic_tasks/" class="md-nav__link">
+      <a href="../../walkthrough/basic_tasks/" class="md-nav__link">
         
   
   
@@ -407,7 +327,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced_use_cases/" class="md-nav__link">
+      <a href="../../walkthrough/advanced_use_cases/" class="md-nav__link">
         
   
   
@@ -456,18 +376,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
@@ -483,7 +405,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             Examples
@@ -497,7 +419,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/zarr_nifti/" class="md-nav__link">
+      <a href="../zarr_nifti/" class="md-nav__link">
         
   
   
@@ -520,7 +442,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/transformations/" class="md-nav__link">
+      <a href="../transformations/" class="md-nav__link">
         
   
   
@@ -543,7 +465,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/downsampling/" class="md-nav__link">
+      <a href="../downsampling/" class="md-nav__link">
         
   
   
@@ -566,7 +488,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/near_isotropic/" class="md-nav__link">
+      <a href="../near_isotropic/" class="md-nav__link">
         
   
   
@@ -589,7 +511,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/multiscale/" class="md-nav__link">
+      <a href="../multiscale/" class="md-nav__link">
         
   
   
@@ -609,10 +531,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../examples/segmentation_example/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Segmentation Plugins
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -623,6 +567,71 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#basic-otsu-segmentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Basic Otsu Segmentation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#custom-chunk-processing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Custom Chunk Processing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-custom-segmentation-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      Creating Custom Segmentation Plugins
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#working-with-multi-channel-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      Working with Multi-channel Images
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-existing-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Integration with Existing Workflows
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -728,36 +737,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#core-concepts" class="md-nav__link">
+  <a href="#basic-otsu-segmentation" class="md-nav__link">
     <span class="md-ellipsis">
-      Core Concepts
+      Basic Otsu Segmentation
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#data-model" class="md-nav__link">
+  <a href="#custom-chunk-processing" class="md-nav__link">
     <span class="md-ellipsis">
-      Data Model
+      Custom Chunk Processing
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#example-workflow" class="md-nav__link">
+  <a href="#creating-custom-segmentation-plugins" class="md-nav__link">
     <span class="md-ellipsis">
-      Example Workflow
+      Creating Custom Segmentation Plugins
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#whats-next" class="md-nav__link">
+  <a href="#working-with-multi-channel-images" class="md-nav__link">
     <span class="md-ellipsis">
-      What’s Next?
+      Working with Multi-channel Images
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-existing-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Integration with Existing Workflows
     </span>
   </a>
   
@@ -779,85 +797,114 @@
 
 
 
-<h1 id="walkthrough-overview">Walkthrough: Overview</h1>
-<p>This page provides an overview of the core concepts behind <strong>ZarrNii</strong>. It’s the starting point for understanding how to work with OME-Zarr, NIfTI, and ZarrNii’s transformation tools.</p>
-<hr />
-<h2 id="core-concepts">Core Concepts</h2>
-<h3 id="1-zarr-and-ome-zarr"><strong>1. Zarr and OME-Zarr</strong></h3>
-<ul>
-<li><strong>Zarr</strong> is a format for chunked, compressed N-dimensional arrays.</li>
-<li><strong>OME-Zarr</strong> extends Zarr with metadata for multidimensional microscopy images, supporting axes definitions and multiscale pyramids.</li>
-</ul>
-<h4 id="key-features-of-ome-zarr">Key Features of OME-Zarr:</h4>
-<ul>
-<li><strong>Axes Metadata</strong>: Defines spatial dimensions (e.g., <code>x</code>, <code>y</code>, <code>z</code>).</li>
-<li><strong>Multiscale Pyramids</strong>: Stores image resolutions at multiple scales.</li>
-<li><strong>Annotations</strong>: Includes OME metadata for visualization and analysis.</li>
-</ul>
-<hr />
-<h3 id="2-nifti"><strong>2. NIfTI</strong></h3>
-<ul>
-<li><strong>NIfTI</strong> is a neuroimaging file format, commonly used for MRI and fMRI data.</li>
-<li>It supports spatial metadata, such as voxel sizes and affine transformations, for anatomical alignment.</li>
-</ul>
-<hr />
-<h3 id="3-zarrnii"><strong>3. ZarrNii</strong></h3>
-<ul>
-<li>ZarrNii provides tools to bridge these formats while preserving spatial metadata and enabling transformations.</li>
-</ul>
-<h4 id="main-features">Main Features:</h4>
-<ul>
-<li>Read and write OME-Zarr and NIfTI formats.</li>
-<li>Apply transformations like cropping, downsampling, and interpolation.</li>
-<li>Apply segmentation algorithms through an extensible plugin system.</li>
-<li>Convert between ZYX (OME-Zarr) and XYZ (NIfTI) axes orders.</li>
-</ul>
-<hr />
-<h2 id="data-model">Data Model</h2>
-<p>ZarrNii wraps datasets using the <code>ZarrNii</code> class, which has the following attributes:</p>
-<ul>
-<li><strong><code>darr</code></strong>: The dask array containing image data.</li>
-<li><strong><code>affine</code></strong>: An affine transformation matrix for spatial alignment.</li>
-<li><strong><code>axes_order</code></strong>: Specifies the data layout (<code>ZYX</code> or <code>XYZ</code>).</li>
-<li><strong>OME-Zarr Metadata</strong>:</li>
-<li><strong><code>axes</code></strong>: Defines the dimensions and units.</li>
-<li><strong><code>coordinate_transformations</code></strong>: Lists scaling and translation transformations.</li>
-<li><strong><code>omero</code></strong>: Contains channel and visualization metadata.</li>
-</ul>
-<hr />
-<h2 id="example-workflow">Example Workflow</h2>
-<p>Here’s a high-level example workflow using ZarrNii:</p>
-<ol>
-<li>
-<p><strong>Read Data</strong>:
-   <code>python
-   from zarrnii import ZarrNii
-   znimg = ZarrNii.from_ome_zarr("path/to/dataset.ome.zarr")</code></p>
-</li>
-<li>
-<p><strong>Apply Transformations</strong>:
-   <code>python
-   znimg_downsampled = znimg.downsample(level=2)
-   znimg_cropped = znimg_downsampled.crop((0, 0, 0), (100, 100, 100))</code></p>
-</li>
-<li>
-<p><strong>Apply Segmentation</strong>:
-   <code>python
-   znimg_segmented = znimg.segment_otsu(nbins=256)</code></p>
-</li>
-<li>
-<p><strong>Convert Formats</strong>:
-   <code>python
-   znimg_cropped.to_nifti("output.nii")
-   znimg_segmented.to_nifti("segmented.nii")</code></p>
-</li>
-</ol>
-<hr />
-<h2 id="whats-next">What’s Next?</h2>
-<ul>
-<li><a href="../getting_started/">Getting Started</a>: Step-by-step guide to installing and using ZarrNii.</li>
-<li><a href="../basic_tasks/">Basic Tasks</a>: Learn how to read, write, and transform data.</li>
-</ul>
+<h1 id="segmentation-plugin-example">Segmentation Plugin Example</h1>
+<p>This example demonstrates how to use the segmentation plugin system in ZarrNii.</p>
+<h2 id="basic-otsu-segmentation">Basic Otsu Segmentation</h2>
+<pre><code class="language-python">import numpy as np
+import dask.array as da
+from zarrnii import ZarrNii, OtsuSegmentation
+
+# Load or create your image data
+# For this example, we'll create synthetic bimodal data
+np.random.seed(42)
+image_data = np.random.normal(0.2, 0.05, (1, 50, 100, 100))  # Background
+image_data[0, 20:30, 40:60, 40:60] = np.random.normal(0.8, 0.05, (10, 20, 20))  # Foreground
+
+# Create ZarrNii instance
+darr = da.from_array(image_data, chunks=(1, 25, 50, 50))
+znimg = ZarrNii.from_darr(darr, axes_order=&quot;ZYX&quot;, orientation=&quot;RAS&quot;)
+
+# Method 1: Using the convenience method
+segmented = znimg.segment_otsu(nbins=256)
+
+# Method 2: Using the plugin directly
+plugin = OtsuSegmentation(nbins=256)
+segmented = znimg.segment(plugin)
+
+# Method 3: Using plugin class with parameters
+segmented = znimg.segment(OtsuSegmentation, nbins=128)
+
+# The result is a new ZarrNii instance with binary segmentation
+print(f&quot;Original shape: {znimg.shape}&quot;)
+print(f&quot;Segmented shape: {segmented.shape}&quot;)
+print(f&quot;Segmented dtype: {segmented.data.dtype}&quot;)
+print(f&quot;Unique values: {np.unique(segmented.data.compute())}&quot;)
+
+# Save segmented result as OME-Zarr
+segmented.to_ome_zarr(&quot;segmented_image.ome.zarr&quot;)
+</code></pre>
+<h2 id="custom-chunk-processing">Custom Chunk Processing</h2>
+<p>For large datasets, you can control the chunk size for blockwise processing:</p>
+<pre><code class="language-python"># Segment with custom chunk size for memory efficiency
+custom_chunks = (1, 10, 25, 25)
+segmented = znimg.segment_otsu(chunk_size=custom_chunks)
+
+# The segmentation will be applied block-wise using dask
+result_data = segmented.data.compute()
+</code></pre>
+<h2 id="creating-custom-segmentation-plugins">Creating Custom Segmentation Plugins</h2>
+<p>You can create your own segmentation plugins by inheriting from <code>SegmentationPlugin</code>:</p>
+<pre><code class="language-python">from zarrnii.plugins.segmentation import SegmentationPlugin
+import numpy as np
+
+class ThresholdSegmentation(SegmentationPlugin):
+    &quot;&quot;&quot;Simple threshold-based segmentation plugin.&quot;&quot;&quot;
+
+    def __init__(self, threshold: float = 0.5, **kwargs):
+        super().__init__(threshold=threshold, **kwargs)
+        self.threshold = threshold
+
+    def segment(self, image: np.ndarray, metadata=None) -&gt; np.ndarray:
+        &quot;&quot;&quot;Apply threshold segmentation.&quot;&quot;&quot;
+        binary_mask = image &gt; self.threshold
+        return binary_mask.astype(np.uint8)
+
+    @property
+    def name(self) -&gt; str:
+        return &quot;Threshold Segmentation&quot;
+
+    @property
+    def description(self) -&gt; str:
+        return f&quot;Simple thresholding at value {self.threshold}&quot;
+
+# Use your custom plugin
+custom_plugin = ThresholdSegmentation(threshold=0.3)
+segmented = znimg.segment(custom_plugin)
+</code></pre>
+<h2 id="working-with-multi-channel-images">Working with Multi-channel Images</h2>
+<p>The segmentation plugins automatically handle multi-channel images:</p>
+<pre><code class="language-python"># Create multi-channel test data
+multichannel_data = np.random.rand(3, 50, 100, 100)  # 3 channels
+multichannel_data[0, 20:30, 40:60, 40:60] += 0.5  # Add signal to first channel
+
+darr = da.from_array(multichannel_data, chunks=(1, 25, 50, 50))
+znimg = ZarrNii.from_darr(darr, axes_order=&quot;ZYX&quot;, orientation=&quot;RAS&quot;)
+
+# Segment - will use first channel for threshold calculation
+# but preserve all channel dimensions in output
+segmented = znimg.segment_otsu()
+print(f&quot;Input shape: {znimg.shape}&quot;)       # (3, 50, 100, 100)
+print(f&quot;Output shape: {segmented.shape}&quot;)   # (3, 50, 100, 100)
+</code></pre>
+<h2 id="integration-with-existing-workflows">Integration with Existing Workflows</h2>
+<p>The segmentation plugins integrate seamlessly with other ZarrNii operations:</p>
+<pre><code class="language-python"># Complete workflow: load, downsample, segment, save
+znimg = ZarrNii.from_ome_zarr(&quot;input_image.ome.zarr&quot;, level=1)
+
+# Downsample for faster processing
+downsampled = znimg.downsample(factors=2, spatial_dims=[&quot;z&quot;, &quot;y&quot;, &quot;x&quot;])
+
+# Apply segmentation
+segmented = downsampled.segment_otsu(nbins=128)
+
+# Crop to region of interest
+bbox_min = (10, 20, 20)
+bbox_max = (40, 80, 80)
+cropped = segmented.crop_with_bounding_box(bbox_min, bbox_max)
+
+# Save final result
+cropped.to_ome_zarr(&quot;processed_segmentation.ome.zarr&quot;)
+</code></pre>
 
 
 
