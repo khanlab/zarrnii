@@ -1903,7 +1903,7 @@ class ZarrNii:
         """
         Save to Imaris (.ims) file format using HDF5.
 
-        This method creates Imaris files compatible with Imaris software by 
+        This method creates Imaris files compatible with Imaris software by
         following the exact HDF5 structure from correctly-formed reference files.
         All attributes use byte-array encoding as required by Imaris.
 
@@ -1935,7 +1935,7 @@ class ZarrNii:
             return np.array([c.encode() for c in s])
 
         # Get data and metadata
-        if hasattr(self.darr, 'compute'):
+        if hasattr(self.darr, "compute"):
             data = self.darr.compute()  # Convert Dask array to numpy array
         else:
             data = np.asarray(self.darr)  # Handle numpy arrays directly
@@ -1951,7 +1951,9 @@ class ZarrNii:
             z, y, x = data.shape
             data = data[np.newaxis, ...]  # Add channel dimension
         else:
-            raise ValueError(f"Unsupported data shape: {data.shape}. Expected 3D (ZYX) or 4D (CZYX)")
+            raise ValueError(
+                f"Unsupported data shape: {data.shape}. Expected 3D (ZYX) or 4D (CZYX)"
+            )
 
         # Create Imaris file structure exactly matching reference file
         with h5py.File(path, "w") as f:
@@ -1972,20 +1974,28 @@ class ZarrNii:
             for c in range(n_channels):
                 channel_group = time_group.create_group(f"Channel {c}")
                 channel_data = data[c]  # (Z, Y, X)
-                
+
                 # Channel attributes - use byte array format exactly like reference
                 channel_group.attrs["ImageSizeX"] = _string_to_byte_array(str(x))
                 channel_group.attrs["ImageSizeY"] = _string_to_byte_array(str(y))
                 channel_group.attrs["ImageSizeZ"] = _string_to_byte_array(str(z))
                 channel_group.attrs["ImageBlockSizeX"] = _string_to_byte_array(str(x))
                 channel_group.attrs["ImageBlockSizeY"] = _string_to_byte_array(str(y))
-                channel_group.attrs["ImageBlockSizeZ"] = _string_to_byte_array(str(min(z, 16)))
-                
+                channel_group.attrs["ImageBlockSizeZ"] = _string_to_byte_array(
+                    str(min(z, 16))
+                )
+
                 # Histogram range attributes
-                data_min, data_max = float(channel_data.min()), float(channel_data.max())
-                channel_group.attrs["HistogramMin"] = _string_to_byte_array(f"{data_min:.3f}")
-                channel_group.attrs["HistogramMax"] = _string_to_byte_array(f"{data_max:.3f}")
-                
+                data_min, data_max = float(channel_data.min()), float(
+                    channel_data.max()
+                )
+                channel_group.attrs["HistogramMin"] = _string_to_byte_array(
+                    f"{data_min:.3f}"
+                )
+                channel_group.attrs["HistogramMax"] = _string_to_byte_array(
+                    f"{data_max:.3f}"
+                )
+
                 # Create data dataset with proper compression
                 # Preserve original data type but ensure it's compatible with Imaris
                 if channel_data.dtype == np.float32 or channel_data.dtype == np.float64:
@@ -1997,67 +2007,79 @@ class ZarrNii:
                 else:
                     # Convert other types to uint8
                     data_for_storage = channel_data.astype(np.uint8)
-                
+
                 channel_group.create_dataset(
                     "Data",
                     data=data_for_storage,
                     compression=compression,
                     compression_opts=compression_opts,
-                    chunks=True
+                    chunks=True,
                 )
-                
-                # Create histogram
-                hist_data, _ = np.histogram(channel_data.flatten(), bins=256, range=(data_min, data_max))
-                channel_group.create_dataset("Histogram", data=hist_data.astype(np.uint64))
 
-            # Get spacing from affine if available
+                # Create histogram
+                hist_data, _ = np.histogram(
+                    channel_data.flatten(), bins=256, range=(data_min, data_max)
+                )
+                channel_group.create_dataset(
+                    "Histogram", data=hist_data.astype(np.uint64)
+                )
+
+            # Get spacing directly from scale dictionary with proper XYZ order
             try:
-                spacing = self.get_zooms()
-                if len(spacing) >= 3:
-                    sx, sy, sz = spacing[:3]
-                else:
-                    sx = sy = sz = 1.0
+                # Extract voxel sizes directly from ngff_image scale dictionary
+                # This ensures we get X, Y, Z in the correct order regardless of axes_order
+                sx = self.ngff_image.scale.get("x", 1.0)
+                sy = self.ngff_image.scale.get("y", 1.0)
+                sz = self.ngff_image.scale.get("z", 1.0)
             except:
                 sx = sy = sz = 1.0
-            
+
             # Calculate extents (physical coordinates)
             ext_x = sx * x
-            ext_y = sy * y 
+            ext_y = sy * y
             ext_z = sz * z
 
             # Create comprehensive DataSetInfo structure matching reference
             info_group = f.create_group("DataSetInfo")
-            
+
             # Create channel info groups
             for c in range(n_channels):
                 channel_info = info_group.create_group(f"Channel {c}")
-                
+
                 # Essential channel attributes in byte array format
-                channel_info.attrs["Color"] = _string_to_byte_array("1.000 0.000 0.000" if c == 0 else f"0.000 {1.0 if c == 1 else 0.0:.3f} {1.0 if c == 2 else 0.0:.3f}")
+                channel_info.attrs["Color"] = _string_to_byte_array(
+                    "1.000 0.000 0.000"
+                    if c == 0
+                    else f"0.000 {1.0 if c == 1 else 0.0:.3f} {1.0 if c == 2 else 0.0:.3f}"
+                )
                 channel_info.attrs["Name"] = _string_to_byte_array(f"Channel {c}")
                 channel_info.attrs["ColorMode"] = _string_to_byte_array("BaseColor")
                 channel_info.attrs["ColorOpacity"] = _string_to_byte_array("1.000")
                 channel_info.attrs["ColorRange"] = _string_to_byte_array("0 255")
                 channel_info.attrs["GammaCorrection"] = _string_to_byte_array("1.000")
-                channel_info.attrs["LSMEmissionWavelength"] = _string_to_byte_array("500")
-                channel_info.attrs["LSMExcitationWavelength"] = _string_to_byte_array("500")
+                channel_info.attrs["LSMEmissionWavelength"] = _string_to_byte_array(
+                    "500"
+                )
+                channel_info.attrs["LSMExcitationWavelength"] = _string_to_byte_array(
+                    "500"
+                )
                 channel_info.attrs["LSMPhotons"] = _string_to_byte_array("1")
                 channel_info.attrs["LSMPinhole"] = _string_to_byte_array("0")
-                
+
                 # Add description
                 description = f"Channel {c} created by ZarrNii"
                 channel_info.attrs["Description"] = _string_to_byte_array(description)
-            
+
             # Create CRITICAL Image group with voxel size information (this was missing!)
             image_info = info_group.create_group("Image")
-            
+
             # Add essential image metadata with proper voxel size information
             image_info.attrs["X"] = _string_to_byte_array(str(x))
             image_info.attrs["Y"] = _string_to_byte_array(str(y))
             image_info.attrs["Z"] = _string_to_byte_array(str(z))
             image_info.attrs["Unit"] = _string_to_byte_array("um")
             image_info.attrs["Noc"] = _string_to_byte_array(str(n_channels))
-            
+
             # CRITICAL: Set proper physical extents that define voxel size
             # Imaris reads voxel size from these extent values
             image_info.attrs["ExtMin0"] = _string_to_byte_array(f"{-ext_x/2:.3f}")
@@ -2066,22 +2088,26 @@ class ZarrNii:
             image_info.attrs["ExtMax1"] = _string_to_byte_array(f"{ext_y/2:.3f}")
             image_info.attrs["ExtMin2"] = _string_to_byte_array(f"{-ext_z/2:.3f}")
             image_info.attrs["ExtMax2"] = _string_to_byte_array(f"{ext_z/2:.3f}")
-            
+
             # Add device/acquisition metadata
             image_info.attrs["ManufactorString"] = _string_to_byte_array("ZarrNii")
             image_info.attrs["ManufactorType"] = _string_to_byte_array("Generic")
             image_info.attrs["LensPower"] = _string_to_byte_array("")
             image_info.attrs["NumericalAperture"] = _string_to_byte_array("")
-            image_info.attrs["RecordingDate"] = _string_to_byte_array("2024-01-01 00:00:00.000")
-            image_info.attrs["Filename"] = _string_to_byte_array(path.split('/')[-1])
+            image_info.attrs["RecordingDate"] = _string_to_byte_array(
+                "2024-01-01 00:00:00.000"
+            )
+            image_info.attrs["Filename"] = _string_to_byte_array(path.split("/")[-1])
             image_info.attrs["Name"] = _string_to_byte_array("ZarrNii Export")
             image_info.attrs["Compression"] = _string_to_byte_array("5794")
-            
+
             # Add description
-            description = f"Imaris file created by ZarrNii from {self.axes_order} format data. " \
-                         f"Original shape: {self.darr.shape}. Converted to Imaris format " \
-                         f"with {n_channels} channel(s) and dimensions {z}x{y}x{x}. " \
-                         f"Voxel size: {sx:.3f} x {sy:.3f} x {sz:.3f} um."
+            description = (
+                f"Imaris file created by ZarrNii from {self.axes_order} format data. "
+                f"Original shape: {self.darr.shape}. Converted to Imaris format "
+                f"with {n_channels} channel(s) and dimensions {z}x{y}x{x}. "
+                f"Voxel size: {sx:.3f} x {sy:.3f} x {sz:.3f} um."
+            )
             image_info.attrs["Description"] = _string_to_byte_array(description)
 
             # Create Imaris metadata group
@@ -2095,7 +2121,7 @@ class ZarrNii:
             dataset_info.attrs["Creator"] = _string_to_byte_array("Imaris")
             dataset_info.attrs["Version"] = _string_to_byte_array("7.0")
             dataset_info.attrs["NumberOfImages"] = _string_to_byte_array("1")
-            
+
             # Add version-specific groups as seen in reference
             dataset_info_ver = info_group.create_group("ImarisDataSet       0.0.0")
             dataset_info_ver.attrs["NumberOfImages"] = _string_to_byte_array("1")
@@ -2106,22 +2132,26 @@ class ZarrNii:
             time_info = info_group.create_group("TimeInfo")
             time_info.attrs["DatasetTimePoints"] = _string_to_byte_array("1")
             time_info.attrs["FileTimePoints"] = _string_to_byte_array("1")
-            time_info.attrs["TimePoint1"] = _string_to_byte_array("2024-01-01 00:00:00.000")
+            time_info.attrs["TimePoint1"] = _string_to_byte_array(
+                "2024-01-01 00:00:00.000"
+            )
 
             # Create Log group (basic processing log)
             log_group = info_group.create_group("Log")
             log_group.attrs["Entries"] = _string_to_byte_array("1")
-            log_group.attrs["Entry0"] = _string_to_byte_array(f"<ZarrNiiExport channels=\"{' '.join(['on'] * n_channels)}\"/>")
+            log_group.attrs["Entry0"] = _string_to_byte_array(
+                f"<ZarrNiiExport channels=\"{' '.join(['on'] * n_channels)}\"/>"
+            )
 
             # Create thumbnail group with proper multi-channel thumbnail
             thumbnail_group = f.create_group("Thumbnail")
-            
+
             # Create a combined thumbnail (256x1024 for multi-channel as in reference)
             if n_channels > 1:
                 # Multi-channel thumbnail: concatenate channels horizontally
                 thumb_width = 256 * n_channels
                 thumbnail_data = np.zeros((256, thumb_width), dtype=np.uint8)
-                
+
                 for c in range(n_channels):
                     # Downsample each channel to 256x256
                     channel_data = data[c]
@@ -2131,7 +2161,7 @@ class ZarrNii:
                     step_y = max(1, mip.shape[0] // 256)
                     step_x = max(1, mip.shape[1] // 256)
                     thumb_channel = mip[::step_y, ::step_x]
-                    
+
                     # Pad or crop to exactly 256x256
                     if thumb_channel.shape[0] < 256 or thumb_channel.shape[1] < 256:
                         padded = np.zeros((256, 256), dtype=thumb_channel.dtype)
@@ -2140,9 +2170,9 @@ class ZarrNii:
                         thumb_channel = padded
                     else:
                         thumb_channel = thumb_channel[:256, :256]
-                    
+
                     # Place in thumbnail
-                    thumbnail_data[:, c*256:(c+1)*256] = thumb_channel
+                    thumbnail_data[:, c * 256 : (c + 1) * 256] = thumb_channel
             else:
                 # Single channel: 256x256 thumbnail
                 channel_data = data[0]
@@ -2150,7 +2180,7 @@ class ZarrNii:
                 step_y = max(1, mip.shape[0] // 256)
                 step_x = max(1, mip.shape[1] // 256)
                 thumbnail_data = mip[::step_y, ::step_x]
-                
+
                 if thumbnail_data.shape[0] < 256 or thumbnail_data.shape[1] < 256:
                     padded = np.zeros((256, 256), dtype=thumbnail_data.dtype)
                     h, w = thumbnail_data.shape
@@ -2158,7 +2188,7 @@ class ZarrNii:
                     thumbnail_data = padded
                 else:
                     thumbnail_data = thumbnail_data[:256, :256]
-            
+
             thumbnail_group.create_dataset("Data", data=thumbnail_data.astype(np.uint8))
 
         return path
