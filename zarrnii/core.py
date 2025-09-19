@@ -46,10 +46,6 @@ def load_ngff_image(
     Returns:
         NgffImage: The loaded image at the specified level
     """
-<<<<<<< HEAD
-    # Load the multiscales object
-    multiscales = nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
-=======
     import zarr
 
     # Handle ZIP files by creating a ZipStore
@@ -60,22 +56,14 @@ def load_ngff_image(
     else:
         # Load the multiscales object normally
         multiscales = nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
->>>>>>> main
 
     # Get the specified level
     ngff_image = multiscales.images[level]
 
-<<<<<<< HEAD
-    # Handle channel selection if specified
-    if channels is not None or channel_labels is not None:
-        ngff_image = _select_channels_from_image(
-            ngff_image, multiscales, channels, channel_labels
-=======
     # Handle channel and timepoint selection if specified
     if channels is not None or channel_labels is not None or timepoints is not None:
         ngff_image = _select_dimensions_from_image(
             ngff_image, multiscales, channels, channel_labels, timepoints
->>>>>>> main
         )
 
     return ngff_image
@@ -86,10 +74,7 @@ def save_ngff_image(
     store_or_path,
     max_layer: int = 4,
     scale_factors: Optional[List[int]] = None,
-<<<<<<< HEAD
-=======
     orientation: Optional[str] = None,
->>>>>>> main
     **kwargs,
 ):
     """
@@ -111,10 +96,6 @@ def save_ngff_image(
     # Create multiscales from the image
     multiscales = nz.to_multiscales(ngff_image, scale_factors=scale_factors)
 
-<<<<<<< HEAD
-    # Write to zarr store
-    nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)
-=======
     # Check if the target is a ZIP file (based on extension)
     if isinstance(store_or_path, str) and store_or_path.endswith(".zip"):
         # For ZIP files, use temp directory approach due to zarr v3.x ZipStore compatibility issues
@@ -154,7 +135,6 @@ def save_ngff_image(
             except Exception:
                 # If we can't write orientation metadata, that's not critical
                 pass
->>>>>>> main
 
 
 def get_multiscales(
@@ -632,19 +612,11 @@ def _extract_channel_labels_from_omero(channel_info):
     return labels
 
 
-<<<<<<< HEAD
-def _select_channels_from_image_with_omero(
-    ngff_image, multiscales, channels, channel_labels, omero_metadata
-):
-    """
-    Select specific channels from an NgffImage and filter omero metadata accordingly.
-=======
 def _select_dimensions_from_image_with_omero(
     ngff_image, multiscales, channels, channel_labels, timepoints, omero_metadata
 ):
     """
     Select specific channels and timepoints from an NgffImage and filter omero metadata accordingly.
->>>>>>> main
 
     Returns:
         Tuple of (selected_ngff_image, filtered_omero_metadata)
@@ -664,26 +636,6 @@ def _select_dimensions_from_image_with_omero(
             channel_indices.append(available_labels.index(label))
         channels = channel_indices
 
-<<<<<<< HEAD
-    if channels is None:
-        # Return original image and metadata
-        return ngff_image, omero_metadata
-
-    # Select channels from data (assumes channel is the first dimension after spatial ones)
-    # Data is typically shaped as (c, z, y, x) or (z, y, x, c)
-    data = ngff_image.data
-
-    # Find channel dimension by checking dims
-    if "c" in ngff_image.dims:
-        c_idx = ngff_image.dims.index("c")
-        # Create slice objects
-        slices = [slice(None)] * len(data.shape)
-        slices[c_idx] = channels
-        selected_data = data[tuple(slices)]
-    else:
-        # Assume channel is last dimension if no 'c' dim specified
-        selected_data = data[..., channels]
-=======
     # If no selection is specified, return original
     if channels is None and timepoints is None:
         return ngff_image, omero_metadata
@@ -705,7 +657,6 @@ def _select_dimensions_from_image_with_omero(
         slices = [slice(None)] * len(data.shape)
         slices[c_idx] = channels
         data = data[tuple(slices)]
->>>>>>> main
 
     # Create new NgffImage with selected data
     selected_ngff_image = nz.NgffImage(
@@ -716,11 +667,6 @@ def _select_dimensions_from_image_with_omero(
         name=ngff_image.name,
     )
 
-<<<<<<< HEAD
-    # Filter omero metadata to match selected channels
-    filtered_omero = None
-    if omero_metadata is not None and hasattr(omero_metadata, "channels"):
-=======
     # Filter omero metadata to match selected channels (timepoints don't affect omero metadata)
     filtered_omero = omero_metadata
     if (
@@ -728,7 +674,6 @@ def _select_dimensions_from_image_with_omero(
         and omero_metadata is not None
         and hasattr(omero_metadata, "channels")
     ):
->>>>>>> main
 
         class FilteredOmero:
             def __init__(self, channels):
@@ -1067,11 +1012,8 @@ class ZarrNii:
             storage_options: Storage options for Zarr
             axes_order: Spatial axes order for NIfTI compatibility
             orientation: Default input orientation if none is specified in metadata (default: 'RAS')
-<<<<<<< HEAD
-=======
             downsample_near_isotropic: If True, downsample dimensions with smaller pixel sizes
                                       to make the resulting image nearly isotropic (default: False)
->>>>>>> main
 
         Returns:
             ZarrNii instance
@@ -1083,11 +1025,6 @@ class ZarrNii:
         # Load the multiscales object
         try:
             if isinstance(store_or_path, str):
-<<<<<<< HEAD
-                multiscales = nz.from_ngff_zarr(
-                    store_or_path, storage_options=storage_options or {}
-                )
-=======
                 # Handle ZIP files by creating a ZipStore
                 if store_or_path.endswith(".zip"):
                     import zarr
@@ -1101,7 +1038,6 @@ class ZarrNii:
                     multiscales = nz.from_ngff_zarr(
                         store_or_path, storage_options=storage_options or {}
                     )
->>>>>>> main
             else:
                 multiscales = nz.from_ngff_zarr(store_or_path)
         except Exception as e:
@@ -1117,11 +1053,7 @@ class ZarrNii:
                     multiscales = nz.from_ngff_zarr(store)
             else:
                 store = store_or_path
-<<<<<<< HEAD
-            multiscales = nz.from_ngff_zarr(store)
-=======
                 multiscales = nz.from_ngff_zarr(store)
->>>>>>> main
 
         # Extract omero metadata if available
         omero_metadata = None
@@ -1129,9 +1061,6 @@ class ZarrNii:
             import zarr
 
             if isinstance(store_or_path, str):
-<<<<<<< HEAD
-                group = zarr.open_group(store_or_path, mode="r")
-=======
                 if store_or_path.endswith(".zip"):
                     zip_store = zarr.storage.ZipStore(store_or_path, mode="r")
                     group = zarr.open_group(zip_store, mode="r")
@@ -1140,7 +1069,6 @@ class ZarrNii:
                 else:
                     group = zarr.open_group(store_or_path, mode="r")
 
->>>>>>> main
             else:
                 group = zarr.open_group(store_or_path, mode="r")
 
@@ -1191,14 +1119,6 @@ class ZarrNii:
             import zarr
 
             if isinstance(store_or_path, str):
-<<<<<<< HEAD
-                group = zarr.open_group(store_or_path, mode="r")
-            else:
-                group = zarr.open_group(store_or_path, mode="r")
-
-            # Get orientation from zarr metadata, fallback to provided orientation
-            orientation = group.attrs.get("orientation", orientation)
-=======
                 if store_or_path.endswith(".zip"):
                     zip_store = zarr.storage.ZipStore(store_or_path, mode="r")
                     group = zarr.open_group(zip_store, mode="r")
@@ -1214,7 +1134,6 @@ class ZarrNii:
                 # Get orientation from zarr metadata, fallback to provided orientation
                 orientation = group.attrs.get("orientation", orientation)
 
->>>>>>> main
         except Exception:
             # If we can't read orientation metadata, use the provided default
             pass
@@ -1227,11 +1146,7 @@ class ZarrNii:
         # Get the highest available level
         ngff_image = multiscales.images[actual_level]
 
-<<<<<<< HEAD
-        # Handle channel selection and filter omero metadata accordingly
-=======
         # Handle channel and timepoint selection and filter omero metadata accordingly
->>>>>>> main
         filtered_omero = omero_metadata
         if channels is not None or channel_labels is not None or timepoints is not None:
             ngff_image, filtered_omero = _select_dimensions_from_image_with_omero(
@@ -1264,13 +1179,10 @@ class ZarrNii:
                 factors=downsample_factor, spatial_dims=spatial_dims
             )
 
-<<<<<<< HEAD
-=======
         # Apply near-isotropic downsampling if requested
         if downsample_near_isotropic:
             znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
 
->>>>>>> main
         return znimg
 
     @classmethod
@@ -1322,14 +1234,6 @@ class ZarrNii:
             array = nifti_img.get_fdata()
             darr = da.from_array(array, chunks=chunks)
 
-<<<<<<< HEAD
-        # Add channel dimension if not present
-        if len(darr.shape) == 3:
-            darr = darr[np.newaxis, ...]
-
-        # Create dimensions
-        dims = ["c"] + list(axes_order.lower())
-=======
         # Add channel and time dimensions if not present
         original_ndim = len(darr.shape)
 
@@ -1358,7 +1262,6 @@ class ZarrNii:
         else:
             # Fallback for other cases
             dims = ["c"] + list(axes_order.lower())
->>>>>>> main
 
         # Extract scale and translation from affine
         scale = {}
@@ -1708,26 +1611,6 @@ class ZarrNii:
             ngff_image_to_save = self.ngff_image
 
         save_ngff_image(
-<<<<<<< HEAD
-            ngff_image_to_save, store_or_path, max_layer, scale_factors, **kwargs
-        )
-
-        # Add orientation metadata to the zarr store
-        try:
-            import zarr
-
-            if isinstance(store_or_path, str):
-                group = zarr.open_group(store_or_path, mode="r+")
-            else:
-                group = zarr.open_group(store_or_path, mode="r+")
-
-            # Add metadata for orientation
-            if hasattr(self, "orientation") and self.orientation:
-                group.attrs["orientation"] = self.orientation
-        except Exception:
-            # If we can't write orientation metadata, that's not critical
-            pass
-=======
             ngff_image_to_save,
             store_or_path,
             max_layer,
@@ -1753,7 +1636,6 @@ class ZarrNii:
             except Exception:
                 # If we can't write orientation metadata, that's not critical
                 pass
->>>>>>> main
 
         return self
 
@@ -1764,14 +1646,11 @@ class ZarrNii:
         NIfTI files are always written in XYZ order. If the current axes_order is ZYX,
         the data will be reordered to XYZ and the affine matrix adjusted accordingly.
 
-<<<<<<< HEAD
-=======
 
         For 5D data (T,C,Z,Y,X), singleton dimensions are removed automatically.
         Non-singleton time and channel dimensions will raise an error as NIfTI doesn't
         support more than 4D data.
 
->>>>>>> main
         Args:
             filename: Output filename, if None return nibabel image
 
@@ -1781,19 +1660,6 @@ class ZarrNii:
         # Get data and dimensions
         data = self.data.compute()
 
-<<<<<<< HEAD
-        # Remove channel dimension for NIfTI if it's size 1
-        if data.shape[0] == 1:
-            data = data[0]
-
-        # Reorder data and affine if axes_order is ZYX
-        if self.axes_order == "ZYX":
-            # Data is currently [Z, Y, X], need to transpose to [X, Y, Z]
-            data = data.transpose(2, 1, 0)  # ZYX -> XYZ
-            affine_matrix = self.get_affine_matrix(
-                axes_order="XYZ"
-            )  # Get XYZ affine directly
-=======
         dims = self.dims
 
         # Handle dimensional reduction for NIfTI compatibility
@@ -1839,7 +1705,6 @@ class ZarrNii:
 
             # Get affine matrix in XYZ order
             affine_matrix = self.get_affine_matrix(axes_order="XYZ")
->>>>>>> main
         else:
             # Data is already in XYZ order
             affine_matrix = self.get_affine_matrix(axes_order="XYZ")
@@ -2427,8 +2292,6 @@ class ZarrNii:
             _omero=filtered_omero,
         )
 
-<<<<<<< HEAD
-=======
     def select_timepoints(self, timepoints: Optional[List[int]] = None) -> "ZarrNii":
         """
         Select timepoints from the image data and return a new ZarrNii instance.
@@ -2473,7 +2336,6 @@ class ZarrNii:
             _omero=self._omero,  # Timepoint selection doesn't affect omero metadata
         )
 
->>>>>>> main
     def to_ngff_image(self, name: str = None) -> nz.NgffImage:
         """
         Convert to NgffImage object.
