@@ -1,0 +1,162 @@
+{
+  "omero": {
+    "channels": [
+      {
+        "color": "00FF00",
+        "window": {
+          "min": 0.0,
+          "max": 65535.0,
+          "start": 0.0,
+          "end": 65535.0
+        },
+        "label": "Abeta"
+      },
+      {
+        "color": "FFFFFF",
+        "window": {
+          "min": 0.0,
+          "max": 65535.0,
+          "start": 0.0,
+          "end": 65535.0
+        },
+        "label": "CD31"
+      },
+      {
+        "color": "FFFFFF",
+        "window": {
+          "min": 0.0,
+          "max": 65535.0,
+          "start": 0.0,
+          "end": 65535.0
+        },
+        "label": "YoPro"
+      }
+    ]
+  },
+  "multiscales": [
+    {
+      "axes": [
+        {
+          "name": "c",
+          "type": "channel"
+        },
+        {
+          "name": "z",
+          "type": "space"
+        },
+        {
+          "name": "y",
+          "type": "space"
+        },
+        {
+          "name": "x",
+          "type": "space"
+        }
+      ],
+      "datasets": [
+        {
+          "path": "scale0/image",
+          "coordinateTransformations": [
+            {
+              "scale": [
+                1.0,
+                0.03852799999999999,
+                0.104,
+                0.104
+              ],
+              "type": "scale"
+            },
+            {
+              "translation": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "type": "translation"
+            }
+          ]
+        },
+        {
+          "path": "scale1/image",
+          "coordinateTransformations": [
+            {
+              "scale": [
+                1.0,
+                0.07705599999999999,
+                0.208,
+                0.208
+              ],
+              "type": "scale"
+            },
+            {
+              "translation": [
+                0.0,
+                0.019263999999999996,
+                0.052,
+                0.052
+              ],
+              "type": "translation"
+            }
+          ]
+        },
+        {
+          "path": "scale2/image",
+          "coordinateTransformations": [
+            {
+              "scale": [
+                1.0,
+                0.15411199999999997,
+                0.416,
+                0.416
+              ],
+              "type": "scale"
+            },
+            {
+              "translation": [
+                0.0,
+                0.05779199999999999,
+                0.156,
+                0.156
+              ],
+              "type": "translation"
+            }
+          ]
+        },
+        {
+          "path": "scale3/image",
+          "coordinateTransformations": [
+            {
+              "scale": [
+                1.0,
+                0.30822399999999994,
+                0.832,
+                0.832
+              ],
+              "type": "scale"
+            },
+            {
+              "translation": [
+                0.0,
+                0.13484799999999997,
+                0.364,
+                0.364
+              ],
+              "type": "translation"
+            }
+          ]
+        }
+      ],
+      "name": "image",
+      "version": "0.4",
+      "type": "itkwasm_gaussian",
+      "metadata": {
+        "description": "Smoothed with a discrete gaussian filter to generate a scale space, ideal for intensity images. ITK-Wasm implementation is extremely portable and SIMD accelerated.",
+        "method": "itkwasm_downsample.downsample",
+        "version": "1.7.1"
+      },
+      "@type": "ngff:Image"
+    }
+  ],
+  "orientation": "LAI"
+}
