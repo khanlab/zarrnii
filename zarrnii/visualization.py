@@ -87,7 +87,9 @@ def _create_widget(zarr_path: Path, **kwargs) -> "vizarr.Viewer":
     """Create a vizarr widget for use in Jupyter notebooks."""
     try:
         viewer = vizarr.Viewer()
-        viewer.add_image(source=str(zarr_path), **kwargs)
+        # Convert path to file:// URL to ensure proper handling by the browser
+        zarr_url = zarr_path.absolute().as_uri()
+        viewer.add_image(source=zarr_url, **kwargs)
         return viewer
     except Exception as e:
         raise RuntimeError(f"Failed to create vizarr widget: {e}") from e
@@ -120,7 +122,9 @@ def _generate_html_fallback(
     try:
         # Create widget
         viewer = vizarr.Viewer()
-        viewer.add_image(source=str(zarr_path), **kwargs)
+        # Convert path to file:// URL to ensure proper handling by the browser
+        zarr_url = zarr_path.absolute().as_uri()
+        viewer.add_image(source=zarr_url, **kwargs)
         
         # Generate a basic HTML page with instructions
         html_content = f"""<!DOCTYPE html>
