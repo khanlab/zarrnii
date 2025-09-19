@@ -919,13 +919,13 @@
 <h3 id="code-style-and-quality">Code Style and Quality</h3>
 <p>ZarrNii follows Python best practices and uses several tools to maintain code quality:</p>
 <ul>
-<li><strong>Black</strong>: Code formatting</li>
-<li><strong>isort</strong>: Import sorting  </li>
-<li><strong>flake8</strong>: Linting and style checking</li>
+<li><strong>Black</strong>: Code formatting (line-length: 88)</li>
+<li><strong>isort</strong>: Import sorting (profile: black, line-length: 88)  </li>
+<li><strong>flake8</strong>: Linting and style checking (max-line-length: 88, extend-ignore: E203,W503)</li>
 <li><strong>pre-commit</strong>: Automated checks before commits</li>
 </ul>
 <p>Run quality checks:</p>
-<pre><code class="language-bash"># Format code
+<pre><code class="language-bash"># Format code  
 uv run black .
 
 # Sort imports
@@ -934,10 +934,18 @@ uv run isort .
 # Lint code
 uv run flake8 .
 
+# Run all quality checks (matches CI exactly)
+./scripts/quality-check.sh
+
 # Or use justfile for convenience (if just is installed)
 just format
-just lint
+just lint  
+just quality
 </code></pre>
+<p><strong>Important</strong>: All tools are configured with consistent settings:
+- Line length: 88 characters (matches Black's default)
+- Import profile: black (ensures compatibility)
+- Flake8 ignores: E203, W503 (compatibility with Black)</p>
 <h3 id="testing">Testing</h3>
 <p>ZarrNii uses pytest for testing. Tests are located in the <code>tests/</code> directory.</p>
 <pre><code class="language-bash"># Run all tests
