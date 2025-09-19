@@ -29,6 +29,7 @@ dependencies = [
     "pandas>=2.2.0",
     "ngff-zarr[all]>=0.13.1",
     "scikit-image>=0.22.0",
+    "h5py>=3.14.0",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +50,10 @@ dev = [
     "mkdocs-material>=9.5.50",
     "mkdocstrings>=0.27.0",
     "mkdocstrings-python>=1.13.0",
+]
+
+imaris = [
+    "h5py>=3.8.0",
 ]
 
 [build-system]

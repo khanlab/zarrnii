@@ -1,4 +1,4 @@
-Welcome to the documentation for **ZarrNii**, a Python library for working with OME-Zarr and NIfTI formats. ZarrNii bridges the gap between these two popular formats, enabling seamless data transformation, metadata preservation, and efficient processing of large biomedical images.
+Welcome to the documentation for **ZarrNii**, a Python library for working with OME-Zarr, NIfTI, and Imaris formats. ZarrNii bridges the gap between these popular formats, enabling seamless data transformation, metadata preservation, and efficient processing of large biomedical images.
 
 ---
 
@@ -8,10 +8,11 @@ ZarrNii is designed for researchers and engineers working with:
 
  - **OME-Zarr**: A format for storing multidimensional image data, commonly used in microscopy.
  - **NIfTI**: A standard format for neuroimaging data.
+ - **Imaris**: A microscopy file format (.ims) using HDF5 structure for 3D/4D image analysis.
 
 ZarrNii allows you to:
 
- - Read and write OME-Zarr and NIfTI datasets.
+ - Read and write OME-Zarr, NIfTI, and Imaris datasets.
  - Work with 4D and 5D images, including time-series data (T,C,Z,Y,X).
  - Perform transformations like cropping, downsampling, and interpolation.
  - Select specific channels and timepoints from multidimensional datasets.
@@ -21,7 +22,7 @@ ZarrNii allows you to:
 
 ## Key Features
 
- - **Seamless Format Conversion**: Easily convert between OME-Zarr and NIfTI while preserving spatial metadata.
+ - **Seamless Format Conversion**: Easily convert between OME-Zarr, NIfTI, and Imaris while preserving spatial metadata.
  - **5D Image Support**: Work with time-series data in (T,C,Z,Y,X) format with timepoint and channel selection.
  - **Transformations**: Apply common operations like affine transformations, downsampling, and upsampling.
  - **Multiscale Support**: Work with multiscale OME-Zarr pyramids.
@@ -39,8 +40,13 @@ from zarrnii import ZarrNii
 # Load an OME-Zarr dataset
 znimg = ZarrNii.from_ome_zarr("path/to/zarr_dataset.ome.zarr")
 
+<<<<<<< HEAD
+# Or load from Imaris (requires optional dependency)
+# znimg = ZarrNii.from_imaris("path/to/microscopy_data.ims")
+=======
 # Load with specific timepoints and channels (5D support)
 znimg_subset = ZarrNii.from_ome_zarr("timeseries.zarr", timepoints=[0, 2], channels=[1])
+>>>>>>> main
 
 # Perform a transformation (e.g., downsample)
 downsampled_znimg = znimg.downsample(level=2)

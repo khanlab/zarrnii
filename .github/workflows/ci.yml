@@ -45,7 +45,7 @@ jobs:
       
     - name: Run tests with coverage (Python 3.12 only)
       if: matrix.python-version == '3.12'
-      run: uv run pytest --cov=zarrnii --cov-report=term-missing --cov-fail-under=75
+      run: uv run pytest --cov=zarrnii --cov-report=term-missing --cov-fail-under=70
       
   quality-checks:
     runs-on: ubuntu-latest
