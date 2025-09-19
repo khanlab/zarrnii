@@ -36,7 +36,7 @@ def load_ngff_image(
     Load an NgffImage from an OME-Zarr store.
 
     Args:
-        store_or_path: Store or path to the OME-Zarr file
+        store_or_path: Store or path to the OME-Zarr file (supports .zip extensions for ZipStore)
         level: Pyramid level to load (default: 0)
         channels: Channels to load by index (default: None, loads all channels)
         channel_labels: Channels to load by label name (default: None)
@@ -46,11 +46,21 @@ def load_ngff_image(
     Returns:
         NgffImage: The loaded image at the specified level
     """
-    # Load the multiscales object
-    multiscales = nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
+    import zarr
+
+    # Handle ZIP files by creating a ZipStore
+    if isinstance(store_or_path, str) and store_or_path.endswith(".zip"):
+        store = zarr.storage.ZipStore(store_or_path, mode="r")
+        multiscales = nz.from_ngff_zarr(store, storage_options=storage_options)
+        store.close()
+    else:
+        # Load the multiscales object normally
+        multiscales = nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
+
 
     # Get the specified level
     ngff_image = multiscales.images[level]
+
 
     # Handle channel and timepoint selection if specified
     if channels is not None or channel_labels is not None or timepoints is not None:
@@ -66,6 +76,7 @@ def save_ngff_image(
     store_or_path,
     max_layer: int = 4,
     scale_factors: Optional[List[int]] = None,
+    orientation: Optional[str] = None,
     **kwargs,
 ):
     """
@@ -73,19 +84,60 @@ def save_ngff_image(
 
     Args:
         ngff_image: NgffImage to save
-        store_or_path: Target store or path
+        store_or_path: Target store or path (supports .zip extensions for ZipStore)
         max_layer: Maximum number of pyramid levels
         scale_factors: Custom scale factors for pyramid levels
+        orientation: Orientation metadata to save
         **kwargs: Additional arguments for to_ngff_zarr
     """
+    import zarr
+
     if scale_factors is None:
         scale_factors = [2**i for i in range(1, max_layer)]
 
     # Create multiscales from the image
     multiscales = nz.to_multiscales(ngff_image, scale_factors=scale_factors)
 
-    # Write to zarr store
-    nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)
+    # Check if the target is a ZIP file (based on extension)
+    if isinstance(store_or_path, str) and store_or_path.endswith(".zip"):
+        # For ZIP files, use temp directory approach due to zarr v3.x ZipStore compatibility issues
+        import tempfile
+        import shutil
+        import os
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Save to temporary directory first
+            temp_zarr_path = os.path.join(tmpdir, "temp.zarr")
+            nz.to_ngff_zarr(temp_zarr_path, multiscales, **kwargs)
+
+            # Add orientation metadata to the temporary zarr store if provided
+            if orientation:
+                try:
+                    group = zarr.open_group(temp_zarr_path, mode="r+")
+                    group.attrs["orientation"] = orientation
+                except Exception:
+                    # If we can't write orientation metadata, that's not critical
+                    pass
+
+            # Create ZIP file from the directory
+            zip_base_path = store_or_path.replace(".zip", "")
+            shutil.make_archive(zip_base_path, "zip", temp_zarr_path)
+    else:
+        # Write to zarr store directly
+        nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)
+
+        # Add orientation metadata if provided
+        if orientation:
+            try:
+                if isinstance(store_or_path, str):
+                    group = zarr.open_group(store_or_path, mode="r+")
+                else:
+                    group = zarr.open_group(store_or_path, mode="r+")
+                group.attrs["orientation"] = orientation
+            except Exception:
+                # If we can't write orientation metadata, that's not critical
+                pass
+
 
 
 def get_multiscales(
@@ -563,6 +615,7 @@ def _extract_channel_labels_from_omero(channel_info):
     return labels
 
 
+
 def _select_dimensions_from_image_with_omero(
     ngff_image, multiscales, channels, channel_labels, timepoints, omero_metadata
 ):
@@ -586,6 +639,7 @@ def _select_dimensions_from_image_with_omero(
                 raise ValueError(f"Channel label '{label}' not found")
             channel_indices.append(available_labels.index(label))
         channels = channel_indices
+
 
     # If no selection is specified, return original
     if channels is None and timepoints is None:
@@ -618,6 +672,7 @@ def _select_dimensions_from_image_with_omero(
         name=ngff_image.name,
     )
 
+
     # Filter omero metadata to match selected channels (timepoints don't affect omero metadata)
     filtered_omero = omero_metadata
     if (
@@ -632,6 +687,7 @@ def _select_dimensions_from_image_with_omero(
 
         filtered_channels = [omero_metadata.channels[i] for i in channels]
         filtered_omero = FilteredOmero(filtered_channels)
+
 
     return selected_ngff_image, filtered_omero
 
@@ -976,18 +1032,35 @@ class ZarrNii:
         # Load the multiscales object
         try:
             if isinstance(store_or_path, str):
-                multiscales = nz.from_ngff_zarr(
-                    store_or_path, storage_options=storage_options or {}
-                )
+                # Handle ZIP files by creating a ZipStore
+                if store_or_path.endswith(".zip"):
+                    import zarr
+
+                    store = zarr.storage.ZipStore(store_or_path, mode="r")
+                    multiscales = nz.from_ngff_zarr(
+                        store, storage_options=storage_options or {}
+                    )
+                    # Note: We'll close the store after extracting metadata
+                else:
+                    multiscales = nz.from_ngff_zarr(
+                        store_or_path, storage_options=storage_options or {}
+                    )
             else:
                 multiscales = nz.from_ngff_zarr(store_or_path)
         except Exception as e:
             # Fallback for older zarr/ngff_zarr versions
             if isinstance(store_or_path, str):
-                store = fsspec.get_mapper(store_or_path, **storage_options or {})
+                if store_or_path.endswith(".zip"):
+                    import zarr
+
+                    store = zarr.storage.ZipStore(store_or_path, mode="r")
+                    multiscales = nz.from_ngff_zarr(store)
+                else:
+                    store = fsspec.get_mapper(store_or_path, **storage_options or {})
+                    multiscales = nz.from_ngff_zarr(store)
             else:
                 store = store_or_path
-            multiscales = nz.from_ngff_zarr(store)
+                multiscales = nz.from_ngff_zarr(store)
 
         # Extract omero metadata if available
         omero_metadata = None
@@ -995,7 +1068,14 @@ class ZarrNii:
             import zarr
 
             if isinstance(store_or_path, str):
-                group = zarr.open_group(store_or_path, mode="r")
+                if store_or_path.endswith(".zip"):
+                    zip_store = zarr.storage.ZipStore(store_or_path, mode="r")
+                    group = zarr.open_group(zip_store, mode="r")
+                    # Close zip store after getting group
+                    zip_store.close()
+                else:
+                    group = zarr.open_group(store_or_path, mode="r")
+
             else:
                 group = zarr.open_group(store_or_path, mode="r")
 
@@ -1046,12 +1126,21 @@ class ZarrNii:
             import zarr
 
             if isinstance(store_or_path, str):
-                group = zarr.open_group(store_or_path, mode="r")
+                if store_or_path.endswith(".zip"):
+                    zip_store = zarr.storage.ZipStore(store_or_path, mode="r")
+                    group = zarr.open_group(zip_store, mode="r")
+                    # Get orientation from zarr metadata, fallback to provided orientation
+                    orientation = group.attrs.get("orientation", orientation)
+                    zip_store.close()
+                else:
+                    group = zarr.open_group(store_or_path, mode="r")
+                    # Get orientation from zarr metadata, fallback to provided orientation
+                    orientation = group.attrs.get("orientation", orientation)
             else:
                 group = zarr.open_group(store_or_path, mode="r")
+                # Get orientation from zarr metadata, fallback to provided orientation
+                orientation = group.attrs.get("orientation", orientation)
 
-            # Get orientation from zarr metadata, fallback to provided orientation
-            orientation = group.attrs.get("orientation", orientation)
         except Exception:
             # If we can't read orientation metadata, use the provided default
             pass
@@ -1063,6 +1152,7 @@ class ZarrNii:
 
         # Get the highest available level
         ngff_image = multiscales.images[actual_level]
+
 
         # Handle channel and timepoint selection and filter omero metadata accordingly
         filtered_omero = omero_metadata
@@ -1096,6 +1186,7 @@ class ZarrNii:
             znimg = znimg.downsample(
                 factors=downsample_factor, spatial_dims=spatial_dims
             )
+
 
         # Apply near-isotropic downsampling if requested
         if downsample_near_isotropic:
@@ -1151,6 +1242,7 @@ class ZarrNii:
             # Load the NIfTI data and convert to a dask array
             array = nifti_img.get_fdata()
             darr = da.from_array(array, chunks=chunks)
+
 
         # Add channel and time dimensions if not present
         original_ndim = len(darr.shape)
@@ -1529,24 +1621,32 @@ class ZarrNii:
             ngff_image_to_save = self.ngff_image
 
         save_ngff_image(
-            ngff_image_to_save, store_or_path, max_layer, scale_factors, **kwargs
+            ngff_image_to_save,
+            store_or_path,
+            max_layer,
+            scale_factors,
+            orientation=self.orientation if hasattr(self, "orientation") else None,
+            **kwargs,
         )
 
-        # Add orientation metadata to the zarr store
-        try:
-            import zarr
+        # Add orientation metadata to the zarr store (only for non-ZIP files)
+        # For ZIP files, orientation is handled inside save_ngff_image
+        if not (isinstance(store_or_path, str) and store_or_path.endswith(".zip")):
+            try:
+                import zarr
 
-            if isinstance(store_or_path, str):
-                group = zarr.open_group(store_or_path, mode="r+")
-            else:
-                group = zarr.open_group(store_or_path, mode="r+")
+                if isinstance(store_or_path, str):
+                    group = zarr.open_group(store_or_path, mode="r+")
+                else:
+                    group = zarr.open_group(store_or_path, mode="r+")
 
-            # Add metadata for orientation
-            if hasattr(self, "orientation") and self.orientation:
-                group.attrs["orientation"] = self.orientation
-        except Exception:
-            # If we can't write orientation metadata, that's not critical
-            pass
+                # Add metadata for orientation
+                if hasattr(self, "orientation") and self.orientation:
+                    group.attrs["orientation"] = self.orientation
+            except Exception:
+                # If we can't write orientation metadata, that's not critical
+                pass
+
 
         return self
 
@@ -1900,6 +2000,7 @@ class ZarrNii:
 
             filtered_channels = [self.omero.channels[i] for i in channels]
             filtered_omero = FilteredOmero(filtered_channels)
+
 
         return ZarrNii(
             ngff_image=new_ngff_image,
