@@ -2961,6 +2961,97 @@ class ZarrNii:
         plugin = OtsuSegmentation(nbins=nbins)
         return self.segment(plugin, chunk_size=chunk_size)
 
+    def visualize(
+        self,
+        mode: str = "vol",
+        output_path: Optional[Union[str, "os.PathLike"]] = None,
+        port: int = 8080,
+        open_browser: bool = True,
+        temp_zarr_path: Optional[Union[str, "os.PathLike"]] = None,
+        **kwargs,
+    ) -> Union[str, None, Any]:
+        """
+        Visualize the OME-Zarr data using vizarr or VolumeViewer for interactive web-based viewing.
+
+        This method provides interactive visualization of the current ZarrNii instance
+        using different visualization backends.
+
+        Args:
+            mode: Visualization mode - 'widget', 'vol', or 'server' (default: 'vol')
+                  - 'widget': Return vizarr widget (for Jupyter notebooks)
+                  - 'vol': Open dataset in VolumeViewer web viewer
+                  - 'server': Not supported in current vizarr version
+            output_path: Not used (deprecated, kept for compatibility)
+            port: Port number for HTTP server (used in 'vol' mode)
+            open_browser: Whether to automatically open the visualization in browser
+            temp_zarr_path: Path for temporary OME-Zarr file. If None, creates in temp directory.
+            **kwargs: Additional arguments passed to visualization backend
+
+        Returns:
+            For 'widget' mode: vizarr.Viewer widget object (for display in Jupyter)
+            For 'vol' mode: URL to the VolumeViewer
+            For 'server' mode: None (not supported)
+
+        Raises:
+            ImportError: If vizarr is not installed (for widget mode)
+            NotImplementedError: If server mode is requested
+
+        Examples:
+            >>> znimg = ZarrNii.from_ome_zarr("data.ome.zarr")
+            >>> # Open in VolumeViewer (default)
+            >>> url = znimg.visualize()
+            >>> print(f"View at: {url}")
+
+            >>> # In Jupyter notebook:
+            >>> widget = znimg.visualize(mode="widget")
+            >>> widget  # Display the widget
+
+        Notes:
+            - Widget mode requires vizarr package: pip install zarrnii[viz]
+            - Vol mode uses built-in HTTP server (no extra dependencies)
+            - Creates a temporary OME-Zarr file for visualization
+            - Widget mode is recommended for interactive use in Jupyter notebooks
+            - Vol mode is recommended for web browser viewing and is the default
+            - HTML mode generates an informational page with usage instructions
+        """
+        try:
+            from . import visualization
+            if visualization is None:
+                raise ImportError("Visualization module not available")
+        except ImportError:
+            raise ImportError(
+                "Visualization functionality requires vizarr. "
+                "Install with: pip install zarrnii[viz]"
+            )
+        import tempfile
+        import os
+
+        # Create temporary OME-Zarr file for visualization
+        if temp_zarr_path is None:
+            temp_dir = tempfile.mkdtemp(prefix="zarrnii_viz_")
+            temp_zarr_path = os.path.join(temp_dir, "temp_data.ome.zarr")
+        
+        try:
+            # Save current data as OME-Zarr for visualization
+            # Use conservative settings to avoid multiscale issues
+            self.to_ome_zarr(temp_zarr_path, max_layer=1)
+            
+            # Use the visualization module
+            return visualization.visualize(
+                zarr_path=temp_zarr_path,
+                mode=mode,
+                output_path=output_path,
+                port=port,
+                open_browser=open_browser,
+                **kwargs
+            )
+        except Exception as e:
+            # Clean up temporary files on error
+            if os.path.exists(temp_zarr_path):
+                import shutil
+                shutil.rmtree(os.path.dirname(temp_zarr_path), ignore_errors=True)
+            raise
+
     def __repr__(self) -> str:
         """String representation."""
         return (

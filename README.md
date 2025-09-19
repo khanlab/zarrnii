@@ -22,6 +22,12 @@ For additional format support:
 ```bash
 # For Imaris (.ims) file support
 pip install zarrnii[imaris]
+
+# For interactive visualization with vizarr
+pip install zarrnii[viz]
+
+# For all optional features
+pip install zarrnii[imaris,viz]
 ```
 
 ### Development installation  
@@ -37,17 +43,46 @@ uv sync --dev
 
 ## Key Features
 
-<<<<<<< HEAD
- - **Seamless Format Conversion**: Easily convert between OME-Zarr, NIfTI, and Imaris while preserving spatial metadata.
-=======
  - **Seamless Format Conversion**: Easily convert between OME-Zarr and NIfTI while preserving spatial metadata.
  - **ZipStore Support**: Read and write OME-Zarr files in compressed ZIP format (.ome.zarr.zip) for efficient storage and sharing.
->>>>>>> main
+ - **Interactive Visualization**: Explore OME-Zarr data interactively with vizarr integration in Jupyter notebooks.
  - **Transformations**: Apply common operations like affine transformations, downsampling, and upsampling.
  - **Multiscale Support**: Work with multiscale OME-Zarr pyramids.
  - **Metadata Handling**: Access and modify OME-Zarr metadata like axes and transformations.
  - **Lazy Loading**: Leverage Dask arrays for efficient processing of large datasets.
  - **Segmentation Plugins**: Extensible plugin architecture for image segmentation algorithms.
+
+---
+
+## Interactive Visualization
+
+ZarrNii includes interactive visualization capabilities using [vizarr](https://github.com/hms-dbmi/vizarr) for exploring OME-Zarr data in Jupyter notebooks:
+
+```python
+from zarrnii import ZarrNii
+
+# Load your OME-Zarr data
+znimg = ZarrNii.from_ome_zarr("data.ome.zarr")
+
+# Create interactive widget for Jupyter notebook
+widget = znimg.visualize(mode="widget")
+widget  # Display the interactive viewer
+```
+
+### Visualization Features
+
+- **Interactive Widget**: Full-featured viewer for Jupyter notebooks
+- **Multiple Modes**: Widget mode for notebooks, HTML mode for documentation
+- **OME-Zarr Native**: Direct visualization of multiscale OME-Zarr data
+- **Easy Integration**: Simple one-line visualization from any ZarrNii object
+
+### Installation for Visualization
+
+```bash
+pip install zarrnii[viz]
+```
+
+**Note**: Visualization requires the `vizarr` package and is optimized for Jupyter notebook environments.
 
 ---
 

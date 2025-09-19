@@ -56,6 +56,10 @@ imaris = [
     "h5py>=3.8.0",
 ]
 
+viz = [
+    "vizarr>=0.1.0",
+]
+
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
