@@ -2074,6 +2074,100 @@ class ZarrNii:
             name=name,
         )
 
+    def segment(
+        self, plugin, chunk_size: Optional[Tuple[int, ...]] = None, **kwargs
+    ) -> "ZarrNii":
+        """
+        Apply segmentation plugin to the image using blockwise processing.
+
+        This method applies a segmentation plugin to the image data using dask's
+        blockwise processing for efficient computation on large datasets.
+
+        Args:
+            plugin: Segmentation plugin instance or class to apply
+            chunk_size: Optional chunk size for dask processing. If None, uses current chunks.
+            **kwargs: Additional arguments passed to the plugin
+
+        Returns:
+            New ZarrNii instance with segmented data as labels
+        """
+        from .plugins.segmentation import SegmentationPlugin
+
+        # Handle plugin instance or class
+        if isinstance(plugin, type) and issubclass(plugin, SegmentationPlugin):
+            plugin = plugin(**kwargs)
+        elif not isinstance(plugin, SegmentationPlugin):
+            raise TypeError(
+                "Plugin must be an instance or subclass of SegmentationPlugin"
+            )
+
+        # Prepare chunk size
+        if chunk_size is not None:
+            # Rechunk the data if different chunk size requested
+            data = self.data.rechunk(chunk_size)
+        else:
+            data = self.data
+
+        # Create metadata dict to pass to plugin
+        metadata = {
+            "axes_order": self.axes_order,
+            "orientation": self.orientation,
+            "shape": self.shape,
+            "dims": self.dims,
+            "scale": self.scale,
+            "translation": self.translation,
+        }
+
+        # Create a wrapper function for map_blocks
+        def segment_block(block):
+            """Wrapper function to apply segmentation to a single block."""
+            # Handle single blocks
+            return plugin.segment(block, metadata)
+
+        # Apply segmentation using dask map_blocks
+        segmented_data = da.map_blocks(
+            segment_block,
+            data,
+            dtype=np.uint8,  # Segmentation results are typically uint8
+            meta=np.array([], dtype=np.uint8),  # Provide meta information
+        )
+
+        # Create new NgffImage with segmented data
+        new_ngff_image = nz.NgffImage(
+            data=segmented_data,
+            dims=self.dims.copy(),
+            scale=self.scale.copy(),
+            translation=self.translation.copy(),
+            name=f"{self.name}_segmented_{plugin.name.lower().replace(' ', '_')}",
+        )
+
+        # Return new ZarrNii instance
+        return ZarrNii(
+            ngff_image=new_ngff_image,
+            axes_order=self.axes_order,
+            orientation=self.orientation,
+        )
+
+    def segment_otsu(
+        self, nbins: int = 256, chunk_size: Optional[Tuple[int, ...]] = None
+    ) -> "ZarrNii":
+        """
+        Apply Otsu thresholding segmentation to the image.
+
+        Convenience method for Otsu thresholding segmentation.
+
+        Args:
+            nbins: Number of bins for histogram computation (default: 256)
+            chunk_size: Optional chunk size for dask processing
+
+        Returns:
+            New ZarrNii instance with binary segmentation
+        """
+        from .plugins.segmentation import OtsuSegmentation
+
+        plugin = OtsuSegmentation(nbins=nbins)
+        return self.segment(plugin, chunk_size=chunk_size)
+
     def __repr__(self) -> str:
         """String representation."""
         return (

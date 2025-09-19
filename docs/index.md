@@ -27,6 +27,7 @@ ZarrNii allows you to:
  - **Multiscale Support**: Work with multiscale OME-Zarr pyramids.
  - **Metadata Handling**: Access and modify OME-Zarr metadata like axes and transformations.
  - **Lazy Loading**: Leverage Dask arrays for efficient processing of large datasets.
+ - **Segmentation Plugins**: Extensible plugin architecture for image segmentation algorithms.
 
 ---
 
@@ -44,8 +45,12 @@ znimg_subset = ZarrNii.from_ome_zarr("timeseries.zarr", timepoints=[0, 2], chann
 # Perform a transformation (e.g., downsample)
 downsampled_znimg = znimg.downsample(level=2)
 
+# Apply segmentation using Otsu thresholding
+segmented_znimg = znimg.segment_otsu(nbins=256)
+
 # Save as NIfTI
 downsampled_znimg.to_nifti("output_dataset.nii")
+segmented_znimg.to_nifti("segmented_dataset.nii")
 ```
 
 ---
@@ -57,6 +62,7 @@ Explore the documentation to get started:
  - [Walkthrough: Overview](walkthrough/overview.md): Understand the core concepts.
  - [API Reference](reference.md): Dive into the technical details.
  - [Examples](examples/zarr_nifti.md): Learn through practical examples.
+ - [Segmentation Plugin Examples](examples/segmentation_example.md): Learn how to use and create segmentation plugins.
  - [FAQ](faq.md): Find answers to common questions.
 
 

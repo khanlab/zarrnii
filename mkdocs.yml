@@ -15,6 +15,7 @@ nav:
       - Downsampling and Upsampling: examples/downsampling.md
       - Near-Isotropic Downsampling: examples/near_isotropic.md
       - Multiscale OME-Zarr: examples/multiscale.md
+      - Segmentation Plugins: examples/segmentation_example.md
   - FAQ: faq.md
   - Changelog: changelog.md
   - Contributing: contributing.md
