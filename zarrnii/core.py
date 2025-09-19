@@ -57,10 +57,8 @@ def load_ngff_image(
         # Load the multiscales object normally
         multiscales = nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
 
-
     # Get the specified level
     ngff_image = multiscales.images[level]
-
 
     # Handle channel and timepoint selection if specified
     if channels is not None or channel_labels is not None or timepoints is not None:
@@ -101,9 +99,9 @@ def save_ngff_image(
     # Check if the target is a ZIP file (based on extension)
     if isinstance(store_or_path, str) and store_or_path.endswith(".zip"):
         # For ZIP files, use temp directory approach due to zarr v3.x ZipStore compatibility issues
-        import tempfile
-        import shutil
         import os
+        import shutil
+        import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Save to temporary directory first
@@ -137,7 +135,6 @@ def save_ngff_image(
             except Exception:
                 # If we can't write orientation metadata, that's not critical
                 pass
-
 
 
 def get_multiscales(
@@ -615,7 +612,6 @@ def _extract_channel_labels_from_omero(channel_info):
     return labels
 
 
-
 def _select_dimensions_from_image_with_omero(
     ngff_image, multiscales, channels, channel_labels, timepoints, omero_metadata
 ):
@@ -639,7 +635,6 @@ def _select_dimensions_from_image_with_omero(
                 raise ValueError(f"Channel label '{label}' not found")
             channel_indices.append(available_labels.index(label))
         channels = channel_indices
-
 
     # If no selection is specified, return original
     if channels is None and timepoints is None:
@@ -672,7 +667,6 @@ def _select_dimensions_from_image_with_omero(
         name=ngff_image.name,
     )
 
-
     # Filter omero metadata to match selected channels (timepoints don't affect omero metadata)
     filtered_omero = omero_metadata
     if (
@@ -687,7 +681,6 @@ def _select_dimensions_from_image_with_omero(
 
         filtered_channels = [omero_metadata.channels[i] for i in channels]
         filtered_omero = FilteredOmero(filtered_channels)
-
 
     return selected_ngff_image, filtered_omero
 
@@ -1153,7 +1146,6 @@ class ZarrNii:
         # Get the highest available level
         ngff_image = multiscales.images[actual_level]
 
-
         # Handle channel and timepoint selection and filter omero metadata accordingly
         filtered_omero = omero_metadata
         if channels is not None or channel_labels is not None or timepoints is not None:
@@ -1186,7 +1178,6 @@ class ZarrNii:
             znimg = znimg.downsample(
                 factors=downsample_factor, spatial_dims=spatial_dims
             )
-
 
         # Apply near-isotropic downsampling if requested
         if downsample_near_isotropic:
@@ -1242,7 +1233,6 @@ class ZarrNii:
             # Load the NIfTI data and convert to a dask array
             array = nifti_img.get_fdata()
             darr = da.from_array(array, chunks=chunks)
-
 
         # Add channel and time dimensions if not present
         original_ndim = len(darr.shape)
@@ -1647,7 +1637,6 @@ class ZarrNii:
                 # If we can't write orientation metadata, that's not critical
                 pass
 
-
         return self
 
     def to_nifti(self, filename=None):
@@ -2000,7 +1989,6 @@ class ZarrNii:
 
             filtered_channels = [self.omero.channels[i] for i in channels]
             filtered_omero = FilteredOmero(filtered_channels)
-
 
         return ZarrNii(
             ngff_image=new_ngff_image,

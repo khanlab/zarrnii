@@ -4094,12 +4094,20 @@ dev = [
 [package.dev-dependencies]
 dev = [
     { name = "black" },
+    { name = "bokeh" },
     { name = "flake8" },
+    { name = "flake8-bugbear" },
+    { name = "flake8-docstrings" },
+    { name = "flake8-import-order" },
     { name = "isort" },
+    { name = "jupyterlab" },
+    { name = "matplotlib" },
     { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings" },
     { name = "mkdocstrings-python" },
+    { name = "pre-commit" },
+    { name = "pytest" },
     { name = "pytest-cov" },
 ]
 
@@ -4108,7 +4116,7 @@ requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.10.0" },
     { name = "bokeh", marker = "extra == 'dev'", specifier = ">=3.4.1" },
     { name = "dask", specifier = ">=2025.5.1" },
-    { name = "flake8", marker = "extra == 'dev'", specifier = ">=7.1.1" },
+    { name = "flake8", marker = "extra == 'dev'", specifier = ">=7.3.0" },
     { name = "flake8-bugbear", marker = "extra == 'dev'", specifier = ">=24.12.12" },
     { name = "flake8-docstrings", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "flake8-import-order", marker = "extra == 'dev'", specifier = ">=0.18.2" },
@@ -4123,7 +4131,7 @@ requires-dist = [
     { name = "nibabel", specifier = ">=5.2.0" },
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "pandas", specifier = ">=2.2.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=2.17.0" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "scikit-image", specifier = ">=0.22.0" },
@@ -4135,12 +4143,20 @@ provides-extras = ["dev"]
 [package.metadata.requires-dev]
 dev = [
     { name = "black", specifier = ">=25.1.0" },
+    { name = "bokeh", specifier = ">=3.4.1" },
     { name = "flake8", specifier = ">=7.3.0" },
+    { name = "flake8-bugbear", specifier = ">=24.12.12" },
+    { name = "flake8-docstrings", specifier = ">=1.7.0" },
+    { name = "flake8-import-order", specifier = ">=0.18.2" },
     { name = "isort", specifier = ">=6.0.1" },
+    { name = "jupyterlab", specifier = ">=4.2.1" },
+    { name = "matplotlib", specifier = ">=3.9.0" },
     { name = "mkdocs", specifier = ">=1.6.1" },
     { name = "mkdocs-material", specifier = ">=9.6.19" },
     { name = "mkdocstrings", specifier = ">=0.30.0" },
     { name = "mkdocstrings-python", specifier = ">=1.18.2" },
+    { name = "pre-commit", specifier = ">=4.0.0" },
+    { name = "pytest", specifier = ">=8.2.0" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
 ]
 

@@ -61,8 +61,12 @@ install:
 test-import:
     uv run python -c "from zarrnii import ZarrNii; print('Import successful')"
 
-# Run all quality checks
-quality: check-format check-imports lint
+# Run all quality checks (same as CI)
+quality:
+    ./scripts/quality-check.sh
+
+# Run individual quality checks  
+quality-individual: check-format check-imports lint
 
 # Build package
 build:
