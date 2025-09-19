@@ -2963,7 +2963,7 @@ class ZarrNii:
 
     def visualize(
         self,
-        mode: str = "widget",
+        mode: str = "vol",
         output_path: Optional[Union[str, "os.PathLike"]] = None,
         port: int = 8080,
         open_browser: bool = True,
@@ -2971,55 +2971,47 @@ class ZarrNii:
         **kwargs,
     ) -> Union[str, None, Any]:
         """
-        Visualize the OME-Zarr data using vizarr for interactive web-based viewing.
+        Visualize the OME-Zarr data using vizarr or VolumeViewer for interactive web-based viewing.
 
         This method provides interactive visualization of the current ZarrNii instance
-        using the vizarr library. Note that vizarr is primarily designed for Jupyter
-        notebooks.
+        using different visualization backends.
 
         Args:
-            mode: Visualization mode - 'widget', 'html', 'avivator', or 'server' (default: 'widget')
+            mode: Visualization mode - 'widget', 'vol', or 'server' (default: 'vol')
                   - 'widget': Return vizarr widget (for Jupyter notebooks)
-                  - 'html': Generate informational HTML file (limited functionality)
-                  - 'avivator': Open dataset in Avivator web viewer
+                  - 'vol': Open dataset in VolumeViewer web viewer
                   - 'server': Not supported in current vizarr version
-            output_path: Output path for HTML file (only used in 'html' mode).
-                        If None, creates a temporary file.
-            port: Port number for HTTP server (used in 'avivator' mode)
+            output_path: Not used (deprecated, kept for compatibility)
+            port: Port number for HTTP server (used in 'vol' mode)
             open_browser: Whether to automatically open the visualization in browser
             temp_zarr_path: Path for temporary OME-Zarr file. If None, creates in temp directory.
             **kwargs: Additional arguments passed to visualization backend
 
         Returns:
             For 'widget' mode: vizarr.Viewer widget object (for display in Jupyter)
-            For 'html' mode: Path to the generated HTML file
-            For 'avivator' mode: URL to the Avivator viewer
+            For 'vol' mode: URL to the VolumeViewer
             For 'server' mode: None (not supported)
 
         Raises:
-            ImportError: If vizarr is not installed (for widget/html modes)
+            ImportError: If vizarr is not installed (for widget mode)
             NotImplementedError: If server mode is requested
 
         Examples:
             >>> znimg = ZarrNii.from_ome_zarr("data.ome.zarr")
+            >>> # Open in VolumeViewer (default)
+            >>> url = znimg.visualize()
+            >>> print(f"View at: {url}")
+
             >>> # In Jupyter notebook:
             >>> widget = znimg.visualize(mode="widget")
             >>> widget  # Display the widget
 
-            >>> # Open in Avivator web viewer
-            >>> url = znimg.visualize(mode="avivator")
-            >>> print(f"View at: {url}")
-
-            >>> # Generate informational HTML
-            >>> html_path = znimg.visualize(mode="html")
-            >>> print(f"Info saved to: {html_path}")
-
         Notes:
             - Widget mode requires vizarr package: pip install zarrnii[viz]
-            - Avivator mode uses built-in HTTP server (no extra dependencies)
+            - Vol mode uses built-in HTTP server (no extra dependencies)
             - Creates a temporary OME-Zarr file for visualization
             - Widget mode is recommended for interactive use in Jupyter notebooks
-            - Avivator mode is recommended for web browser viewing
+            - Vol mode is recommended for web browser viewing and is the default
             - HTML mode generates an informational page with usage instructions
         """
         try:

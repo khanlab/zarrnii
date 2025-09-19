@@ -64,8 +64,8 @@ class TestVisualizationModule:
         with pytest.raises(FileNotFoundError, match="does not exist"):
             visualization.visualize("nonexistent.zarr")
 
-    def test_visualize_avivator_mode(self):
-        """Test that avivator mode works correctly."""
+    def test_visualize_vol_mode(self):
+        """Test that vol mode works correctly."""
         from zarrnii import visualization
         if visualization is None:
             pytest.skip("visualization not available")
@@ -77,16 +77,16 @@ class TestVisualizationModule:
             try:
                 result = visualization.visualize(
                     zarr_path, 
-                    mode="avivator", 
+                    mode="vol", 
                     open_browser=False
                 )
                 
                 # Should return a URL
                 assert isinstance(result, str)
-                assert "avivator.gehlenborglab.org" in result
-                assert "image_url=" in result
+                assert "volumeviewer.allencell.org" in result
+                assert "url=" in result
                 assert "localhost:" in result
-                print(f"Avivator URL: {result}")
+                print(f"VolumeViewer URL: {result}")
                 
                 # Clean up servers
                 visualization.stop_servers()
@@ -99,8 +99,8 @@ class TestVisualizationModule:
                     pass
                 raise e
 
-    def test_visualize_invalid_mode_with_avivator(self):
-        """Test that invalid mode raises ValueError with avivator in the list."""
+    def test_visualize_invalid_mode_with_vol(self):
+        """Test that invalid mode raises ValueError with vol in the list."""
         from zarrnii import visualization
         if visualization is None:
             pytest.skip("visualization not available")
@@ -109,7 +109,7 @@ class TestVisualizationModule:
             zarr_path = Path(tmpdir) / "test.zarr"
             zarr_path.mkdir()
             
-            with pytest.raises(ValueError, match="Must be 'widget', 'html', 'avivator', or 'server'"):
+            with pytest.raises(ValueError, match="Must be 'widget', 'vol', or 'server'"):
                 visualization.visualize(zarr_path, mode="invalid")
 
 
@@ -165,18 +165,18 @@ class TestZarrNiiVisualization:
             # The important thing is that the method exists and can be called
             assert True
 
-    def test_zarrnii_visualize_avivator_mode(self):
-        """Test ZarrNii.visualize with avivator mode."""
+    def test_zarrnii_visualize_vol_mode(self):
+        """Test ZarrNii.visualize with vol mode."""
         znimg = self.create_test_zarrnii()
         
         try:
-            # Test avivator mode (without opening browser)
-            result = znimg.visualize(mode="avivator", open_browser=False)
+            # Test vol mode (without opening browser)
+            result = znimg.visualize(mode="vol", open_browser=False)
             
             # Should return a URL string
             assert isinstance(result, str)
-            assert "avivator.gehlenborglab.org" in result
-            assert "image_url=" in result
+            assert "volumeviewer.allencell.org" in result
+            assert "url=" in result
             
             # Clean up servers
             from zarrnii import stop_servers
@@ -191,7 +191,7 @@ class TestZarrNiiVisualization:
                     stop_servers()
             except:
                 pass
-            # For CI environments, avivator mode might fail due to network/server issues
+            # For CI environments, vol mode might fail due to network/server issues
             # The important thing is that it doesn't crash unexpectedly
             assert True
 
