@@ -529,6 +529,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../../examples/imaris_usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Working with Imaris Files
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../examples/transformations/" class="md-nav__link">
         
   
@@ -814,11 +837,17 @@ cd zarrnii
 <p>If you don't use uv, install ZarrNii and its dependencies using <code>pip</code>:</p>
 <pre><code class="language-bash">pip install zarrnii
 </code></pre>
+<h3 id="3-optional-dependencies"><strong>3. Optional Dependencies</strong></h3>
+<p>For additional format support, install optional dependencies:</p>
+<pre><code class="language-bash"># For Imaris (.ims) file support
+pip install zarrnii[imaris]
+</code></pre>
 <hr />
 <h2 id="prerequisites">Prerequisites</h2>
 <p>Before using ZarrNii, ensure you have:
 - <strong>OME-Zarr datasets</strong>: Multidimensional images in Zarr format.
-- <strong>NIfTI datasets</strong>: Neuroimaging data in <code>.nii</code> or <code>.nii.gz</code> format.</p>
+- <strong>NIfTI datasets</strong>: Neuroimaging data in <code>.nii</code> or <code>.nii.gz</code> format.
+- <strong>Imaris datasets</strong> (optional): Microscopy data in <code>.ims</code> format (requires <code>zarrnii[imaris]</code>).</p>
 <hr />
 <h2 id="basic-usage">Basic Usage</h2>
 <h3 id="1-reading-data"><strong>1. Reading Data</strong></h3>
@@ -844,6 +873,13 @@ print(&quot;5D subset shape:&quot;, znimg_5d.darr.shape)
 <h4 id="from-nifti"><strong>From NIfTI</strong>:</h4>
 <pre><code class="language-python"># Load NIfTI (supports 3D, 4D, and 5D data)
 znimg = ZarrNii.from_nifti(&quot;path/to/dataset.nii&quot;)
+
+print(&quot;Data shape:&quot;, znimg.darr.shape)
+print(&quot;Affine matrix:\n&quot;, znimg.affine.matrix)
+</code></pre>
+<h4 id="from-imaris-requires-zarrniiimaris"><strong>From Imaris</strong> (requires <code>zarrnii[imaris]</code>):</h4>
+<pre><code class="language-python"># Load Imaris
+znimg = ZarrNii.from_imaris(&quot;path/to/dataset.ims&quot;)
 
 print(&quot;Data shape:&quot;, znimg.darr.shape)
 print(&quot;Affine matrix:\n&quot;, znimg.affine.matrix)

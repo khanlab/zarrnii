@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/examples/multiscale/">
+        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/examples/imaris_usage/">
       
       
-        <link rel="prev" href="../near_isotropic/">
+        <link rel="prev" href="../zarr_nifti/">
       
       
-        <link rel="next" href="../segmentation_example/">
+        <link rel="next" href="../transformations/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>Multiscale OME-Zarr - ZarrNii Documentation</title>
+        <title>Working with Imaris Files - ZarrNii Documentation</title>
       
     
     
@@ -66,7 +66,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#multiscale-ome-zarr" class="md-skip">
+        <a href="#working-with-imaris-files" class="md-skip">
           Skip to content
         </a>
       
@@ -102,7 +102,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Multiscale OME-Zarr
+              Working with Imaris Files
             
           </span>
         </div>
@@ -439,10 +439,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../imaris_usage/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Working with Imaris Files
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -453,6 +475,98 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#loading-imaris-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      Loading Imaris Files
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#saving-to-imaris-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      Saving to Imaris Format
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#format-conversions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Format Conversions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-other-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Integration with Other Formats
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#understanding-imaris-file-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Understanding Imaris File Structure
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#imaris-file-format-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      Imaris File Format Support
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      Best Practices
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-complete-microscopy-processing-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example: Complete Microscopy Processing Pipeline
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -531,32 +645,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Multiscale OME-Zarr
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../multiscale/" class="md-nav__link">
         
   
   
@@ -567,107 +659,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      Overview
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#understanding-ome-zarr-multiscale" class="md-nav__link">
-    <span class="md-ellipsis">
-      Understanding OME-Zarr Multiscale
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#creating-multiscale-ome-zarr" class="md-nav__link">
-    <span class="md-ellipsis">
-      Creating Multiscale OME-Zarr
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#working-with-different-resolution-levels" class="md-nav__link">
-    <span class="md-ellipsis">
-      Working with Different Resolution Levels
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#channel-and-time-series-support" class="md-nav__link">
-    <span class="md-ellipsis">
-      Channel and Time Series Support
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#memory-management" class="md-nav__link">
-    <span class="md-ellipsis">
-      Memory Management
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#best-practices" class="md-nav__link">
-    <span class="md-ellipsis">
-      Best Practices
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#performance-tips" class="md-nav__link">
-    <span class="md-ellipsis">
-      Performance Tips
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      See Also
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -796,54 +787,54 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#loading-imaris-files" class="md-nav__link">
     <span class="md-ellipsis">
-      Overview
+      Loading Imaris Files
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#understanding-ome-zarr-multiscale" class="md-nav__link">
+  <a href="#saving-to-imaris-format" class="md-nav__link">
     <span class="md-ellipsis">
-      Understanding OME-Zarr Multiscale
+      Saving to Imaris Format
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#creating-multiscale-ome-zarr" class="md-nav__link">
+  <a href="#format-conversions" class="md-nav__link">
     <span class="md-ellipsis">
-      Creating Multiscale OME-Zarr
+      Format Conversions
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#working-with-different-resolution-levels" class="md-nav__link">
+  <a href="#integration-with-other-formats" class="md-nav__link">
     <span class="md-ellipsis">
-      Working with Different Resolution Levels
+      Integration with Other Formats
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#channel-and-time-series-support" class="md-nav__link">
+  <a href="#understanding-imaris-file-structure" class="md-nav__link">
     <span class="md-ellipsis">
-      Channel and Time Series Support
+      Understanding Imaris File Structure
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#memory-management" class="md-nav__link">
+  <a href="#imaris-file-format-support" class="md-nav__link">
     <span class="md-ellipsis">
-      Memory Management
+      Imaris File Format Support
     </span>
   </a>
   
@@ -859,18 +850,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#performance-tips" class="md-nav__link">
+  <a href="#example-complete-microscopy-processing-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
-      Performance Tips
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      See Also
+      Example: Complete Microscopy Processing Pipeline
     </span>
   </a>
   
@@ -892,156 +874,197 @@
 
 
 
-<h1 id="multiscale-ome-zarr">Multiscale OME-Zarr</h1>
-<p>This section covers working with multi-resolution OME-Zarr datasets, including creation, manipulation, and optimization strategies.</p>
-<h2 id="overview">Overview</h2>
-<p>OME-Zarr supports multi-resolution image pyramids that enable efficient visualization and analysis at different scales. ZarrNii provides support for creating and reading multiscale datasets.</p>
-<h2 id="understanding-ome-zarr-multiscale">Understanding OME-Zarr Multiscale</h2>
-<h3 id="loading-multiscale-data">Loading Multiscale Data</h3>
+<h1 id="working-with-imaris-files">Working with Imaris Files</h1>
+<p><strong>ZarrNii</strong> provides seamless support for reading and writing Imaris (.ims) files, enabling integration with microscopy workflows that use Imaris for image analysis and visualization.</p>
+<p>!!! note "Optional Dependency"
+    Imaris support requires the optional <code>imaris</code> dependency. Install it with:
+    <code>bash
+    pip install zarrnii[imaris]</code></p>
+<p>!!! info "HDF5-Based Imaris Support"
+    ZarrNii provides robust Imaris (.ims) file support through a carefully crafted HDF5 implementation. The implementation follows the exact structure of correctly-formed Imaris files to ensure maximum compatibility with Imaris software.</p>
+<pre><code>**Key Features:**
+- Reads all standard Imaris files with multiple channels, timepoints, and resolution levels
+- Creates Imaris-compatible files using the correct HDF5 structure and metadata
+- Handles both single and multi-channel data automatically
+- Preserves spatial metadata and supports histogram generation
+</code></pre>
+<h2 id="loading-imaris-files">Loading Imaris Files</h2>
+<h3 id="basic-loading">Basic Loading</h3>
 <pre><code class="language-python">from zarrnii import ZarrNii
-import zarr
 
-# Load different resolution levels of a multiscale OME-Zarr dataset
-znimg_level0 = ZarrNii.from_ome_zarr(&quot;path/to/multiscale.zarr&quot;, level=0)  # Full resolution
-znimg_level1 = ZarrNii.from_ome_zarr(&quot;path/to/multiscale.zarr&quot;, level=1)  # Half resolution
-znimg_level2 = ZarrNii.from_ome_zarr(&quot;path/to/multiscale.zarr&quot;, level=2)  # Quarter resolution
+# Load an Imaris file
+znimg = ZarrNii.from_imaris(&quot;microscopy_data.ims&quot;)
 
-print(&quot;Level 0 shape:&quot;, znimg_level0.darr.shape)
-print(&quot;Level 1 shape:&quot;, znimg_level1.darr.shape)
-print(&quot;Level 2 shape:&quot;, znimg_level2.darr.shape)
+print(f&quot;Data shape: {znimg.darr.shape}&quot;)
+print(f&quot;Spacing: {znimg.get_zooms()}&quot;)
 </code></pre>
-<h3 id="inspecting-available-levels">Inspecting Available Levels</h3>
-<pre><code class="language-python"># Use zarr directly to inspect the structure
-store = zarr.open_group(&quot;path/to/multiscale.zarr&quot;, mode='r')
-print(&quot;Available arrays:&quot;, list(store.keys()))
+<h3 id="selecting-specific-data">Selecting Specific Data</h3>
+<p>Imaris files can contain multiple resolution levels, timepoints, and channels. You can specify which to load:</p>
+<pre><code class="language-python"># Load specific resolution level, timepoint, and channel
+znimg = ZarrNii.from_imaris(
+    &quot;microscopy_data.ims&quot;,
+    level=1,        # Resolution level (0 = full resolution)
+    timepoint=5,    # Time point
+    channel=0       # Channel index
+)
 
-# Check shapes at each level
-for key in sorted(store.keys()):
-    if key.isdigit():
-        array = store[key]
-        print(f&quot;Level {key}: shape {array.shape}, chunks {array.chunks}&quot;)
-</code></pre>
-<h2 id="creating-multiscale-ome-zarr">Creating Multiscale OME-Zarr</h2>
-<h3 id="basic-multiscale-creation">Basic Multiscale Creation</h3>
-<pre><code class="language-python"># Load a single-resolution image
-znimg = ZarrNii.from_nifti(&quot;path/to/highres.nii&quot;)
-
-# Create multiscale OME-Zarr with default parameters
-znimg.to_ome_zarr(
-    &quot;output_multiscale.zarr&quot;,
-    max_layer=4  # Creates 4 downsampling levels
+# Specify axes order and orientation
+znimg = ZarrNii.from_imaris(
+    &quot;microscopy_data.ims&quot;,
+    axes_order=&quot;ZYX&quot;,     # Spatial axes order
+    orientation=&quot;RAS&quot;     # Coordinate system orientation
 )
 </code></pre>
-<h3 id="custom-multiscale-parameters">Custom Multiscale Parameters</h3>
-<pre><code class="language-python"># Create multiscale with custom settings
-znimg.to_ome_zarr(
-    &quot;custom_multiscale.zarr&quot;,
-    max_layer=6,  # More downsampling levels
-    scaling_method=None  # Use default downsampling
+<h2 id="saving-to-imaris-format">Saving to Imaris Format</h2>
+<h3 id="basic-saving">Basic Saving</h3>
+<pre><code class="language-python">import numpy as np
+import dask.array as da
+
+# Create or load data
+data = np.random.rand(64, 128, 96).astype(np.float32)
+darr = da.from_array(data[np.newaxis, ...], chunks=&quot;auto&quot;)
+znimg = ZarrNii.from_darr(darr, spacing=[2.0, 1.0, 1.0])
+
+# Save to Imaris format
+output_path = znimg.to_imaris(&quot;output_data.ims&quot;)
+print(f&quot;Saved to: {output_path}&quot;)
+</code></pre>
+<h3 id="compression-options">Compression Options</h3>
+<pre><code class="language-python"># Save with specific compression settings
+znimg.to_imaris(
+    &quot;compressed_data.ims&quot;,
+    compression=&quot;gzip&quot;,      # Compression method
+    compression_opts=6       # Compression level (0-9)
 )
 </code></pre>
-<h2 id="working-with-different-resolution-levels">Working with Different Resolution Levels</h2>
-<h3 id="processing-at-different-scales">Processing at Different Scales</h3>
-<pre><code class="language-python"># Load and process at different resolutions for different tasks
-
-# Use low resolution for quick overview
-thumbnail = ZarrNii.from_ome_zarr(&quot;data.zarr&quot;, level=3)
-overview_stats = compute_statistics(thumbnail)
-
-# Use medium resolution for analysis  
-analysis_res = ZarrNii.from_ome_zarr(&quot;data.zarr&quot;, level=1)
-feature_map = extract_features(analysis_res)
-
-# Use full resolution for final processing
-full_res = ZarrNii.from_ome_zarr(&quot;data.zarr&quot;, level=0)
-final_result = apply_detailed_processing(full_res)
+<h2 id="format-conversions">Format Conversions</h2>
+<h3 id="imaris-to-nifti">Imaris to NIfTI</h3>
+<pre><code class="language-python"># Load from Imaris and save as NIfTI
+znimg = ZarrNii.from_imaris(&quot;microscopy_data.ims&quot;)
+znimg.to_nifti(&quot;converted_data.nii.gz&quot;)
 </code></pre>
-<h3 id="multi-resolution-workflow">Multi-Resolution Workflow</h3>
-<pre><code class="language-python"># Progressive processing workflow
-def progressive_analysis(zarr_path):
-    # Start with thumbnail for parameter estimation
-    low_res = ZarrNii.from_ome_zarr(zarr_path, level=3)
-    parameters = estimate_parameters(low_res)
-
-    # Refine on medium resolution
-    med_res = ZarrNii.from_ome_zarr(zarr_path, level=1) 
-    refined_params = refine_parameters(med_res, parameters)
-
-    # Apply to full resolution
-    full_res = ZarrNii.from_ome_zarr(zarr_path, level=0)
-    final_result = process_with_params(full_res, refined_params)
-
-    return final_result
-
-result = progressive_analysis(&quot;multiscale_data.zarr&quot;)
+<h3 id="nifti-to-imaris">NIfTI to Imaris</h3>
+<pre><code class="language-python"># Load from NIfTI and save as Imaris
+znimg = ZarrNii.from_nifti(&quot;brain_scan.nii.gz&quot;)
+znimg.to_imaris(&quot;brain_scan.ims&quot;)
 </code></pre>
-<h2 id="channel-and-time-series-support">Channel and Time Series Support</h2>
-<h3 id="multi-channel-multiscale">Multi-Channel Multiscale</h3>
-<pre><code class="language-python"># Load specific channels from multiscale data
-# Channel selection works with any resolution level
-dapi_full = ZarrNii.from_ome_zarr(&quot;multi_channel.zarr&quot;, level=0, channels=[0])
-gfp_thumbnail = ZarrNii.from_ome_zarr(&quot;multi_channel.zarr&quot;, level=3, channels=[1])
+<h3 id="round-trip-processing">Round-trip Processing</h3>
+<pre><code class="language-python"># Load, process, and save back to Imaris
+znimg = ZarrNii.from_imaris(&quot;original_data.ims&quot;)
 
-print(&quot;DAPI full resolution:&quot;, dapi_full.darr.shape)
-print(&quot;GFP thumbnail:&quot;, gfp_thumbnail.darr.shape)
+# Apply transformations
+cropped = znimg.crop((10, 10, 10), (100, 100, 100))
+downsampled = cropped.downsample(level=2)
+
+# Save processed result
+downsampled.to_imaris(&quot;processed_data.ims&quot;)
 </code></pre>
-<h3 id="channel-labels">Channel labels</h3>
-<pre><code class="language-python"># If channel labels are present from OME metadata (e.g. for data from SPIMprep)
-# You can select channels based on label
-abeta_full = ZarrNii.from_ome_zarr(&quot;multi_channel.zarr&quot;, level=3, channel_labels=[&quot;Abeta&quot;])
+<h2 id="integration-with-other-formats">Integration with Other Formats</h2>
+<h3 id="multi-format-workflow">Multi-format Workflow</h3>
+<pre><code class="language-python"># Load from Imaris
+microscopy_data = ZarrNii.from_imaris(&quot;confocal_stack.ims&quot;)
+
+# Convert to OME-Zarr for analysis
+microscopy_data.to_ome_zarr(&quot;analysis_data.ome.zarr&quot;)
+
+# Load analysis results and convert back
+results = ZarrNii.from_ome_zarr(&quot;analysis_results.ome.zarr&quot;)
+results.to_imaris(&quot;final_results.ims&quot;)
 </code></pre>
-<h2 id="memory-management">Memory Management</h2>
-<h3 id="efficient-loading">Efficient Loading</h3>
-<pre><code class="language-python"># Load only what you need
-# Zarr and Dask handle lazy loading automatically
-
-# Load with appropriate chunking
-znimg = ZarrNii.from_ome_zarr(&quot;large_dataset.zarr&quot;, level=1)
-
-# Process in blocks to manage memory
-def process_large_dataset(znimg):
-    # Process data block by block
-    result = znimg.darr.map_blocks(
-        process_block,
-        dtype=np.float32,
-        drop_axis=None
-    )
-    return result
-
-processed = process_large_dataset(znimg)
+<h2 id="understanding-imaris-file-structure">Understanding Imaris File Structure</h2>
+<p>Imaris files use HDF5 format with a specific hierarchy:</p>
+<pre><code>MyData.ims
+├── DataSet/
+│   └── ResolutionLevel 0/
+│       └── TimePoint 0/
+│           └── Channel 0/
+│               └── Data          # The actual image data
+├── DataSetInfo/
+│   ├── Image/                   # Image metadata
+│   └── Channel 0/               # Channel information
+└── DataSetTimes/
+    └── Time                     # Temporal information
 </code></pre>
+<p><strong>ZarrNii</strong> handles this structure automatically, extracting spatial metadata and presenting a unified interface consistent with other supported formats.</p>
+<h2 id="imaris-file-format-support">Imaris File Format Support</h2>
+<p>ZarrNii provides comprehensive Imaris (.ims) file support through a robust HDF5-based implementation:</p>
+<h3 id="file-creation-and-compatibility">File Creation and Compatibility</h3>
+<p>ZarrNii creates Imaris files that are compatible with Imaris software by following the exact structure found in correctly-formed Imaris files:</p>
+<pre><code class="language-python"># Create Imaris-compatible files
+znimg.to_imaris(&quot;output.ims&quot;, compression=&quot;gzip&quot;)
+</code></pre>
+<p><strong>Key Features:</strong>
+- <strong>Correct HDF5 structure</strong>: Follows the exact directory hierarchy used by Imaris
+- <strong>Proper metadata</strong>: Includes all necessary attributes for Imaris compatibility
+- <strong>Multi-channel support</strong>: Automatically handles single and multi-channel data
+- <strong>Histogram generation</strong>: Creates proper histograms for each channel
+- <strong>Compression support</strong>: Supports various HDF5 compression options</p>
+<p><strong>File Structure Created:</strong>
+- Top-level attributes matching Imaris format (ImarisVersion, DataSetDirectoryName, etc.)
+- <code>DataSet/ResolutionLevel 0/TimePoint 0/Channel X/Data</code> hierarchy
+- <code>DataSetInfo</code> group with channel metadata
+- Proper histogram data for each channel</p>
 <h2 id="best-practices">Best Practices</h2>
-<h3 id="choosing-resolution-levels">Choosing Resolution Levels</h3>
-<pre><code class="language-python"># Guidelines for choosing appropriate resolution levels
+<h3 id="memory-management">Memory Management</h3>
+<p>For large Imaris files, consider using chunked processing:</p>
+<pre><code class="language-python"># Load with specific chunking strategy
+znimg = ZarrNii.from_imaris(&quot;large_dataset.ims&quot;, chunks=(1, 64, 64, 64))
 
-def choose_resolution_level(task_type, data_size):
-    &quot;&quot;&quot;Choose optimal resolution level based on task and data size&quot;&quot;&quot;
-    if task_type == &quot;thumbnail&quot;:
-        return 4  # Very low resolution for quick preview
-    elif task_type == &quot;segmentation&quot;:
-        return 1  # Medium resolution for segmentation
-    elif task_type == &quot;measurement&quot;:
-        return 0  # Full resolution for accurate measurements
-    else:
-        # Default to medium resolution
-        return 2
-
-# Use the function
-level = choose_resolution_level(&quot;segmentation&quot;, data.shape)
-znimg = ZarrNii.from_ome_zarr(&quot;data.zarr&quot;, level=level)
+# Process in chunks to avoid memory issues
+cropped = znimg.crop((0, 0, 0), (500, 500, 500))  # Crop first
+downsampled = cropped.downsample(level=2)          # Then downsample
 </code></pre>
-<h2 id="performance-tips">Performance Tips</h2>
-<ol>
-<li><strong>Choose appropriate levels</strong>: Use lower resolution levels for exploratory analysis</li>
-<li><strong>Minimize data loading</strong>: Only load the resolution level you actually need</li>
-<li><strong>Leverage lazy evaluation</strong>: Let Dask handle memory management automatically</li>
-</ol>
-<h2 id="see-also">See Also</h2>
-<ul>
-<li><a href="../downsampling/">Downsampling and Upsampling</a> for resolution change operations</li>
-<li><a href="../zarr_nifti/">Working with Zarr and NIfTI</a> for basic format operations  </li>
-<li><a href="../../reference/">API Reference</a> for detailed method documentation</li>
-</ul>
+<h3 id="metadata-preservation">Metadata Preservation</h3>
+<p><strong>ZarrNii</strong> automatically extracts and preserves spatial metadata from Imaris files:</p>
+<pre><code class="language-python">znimg = ZarrNii.from_imaris(&quot;calibrated_data.ims&quot;)
+
+# Access spatial information
+print(f&quot;Voxel spacing: {znimg.get_zooms()}&quot;)
+print(f&quot;Origin: {znimg.get_origin()}&quot;)
+print(f&quot;Orientation: {znimg.orientation}&quot;)
+</code></pre>
+<h3 id="error-handling">Error Handling</h3>
+<pre><code class="language-python">try:
+    znimg = ZarrNii.from_imaris(&quot;data.ims&quot;, level=5)
+except ValueError as e:
+    print(f&quot;Invalid parameters: {e}&quot;)
+except ImportError as e:
+    print(f&quot;Missing dependency: {e}&quot;)
+    print(&quot;Install with: pip install zarrnii[imaris]&quot;)
+</code></pre>
+<h2 id="example-complete-microscopy-processing-pipeline">Example: Complete Microscopy Processing Pipeline</h2>
+<pre><code class="language-python">from zarrnii import ZarrNii
+
+def process_microscopy_data(input_path, output_path):
+    &quot;&quot;&quot;Complete processing pipeline for microscopy data.&quot;&quot;&quot;
+
+    # Load original Imaris data
+    print(&quot;Loading Imaris data...&quot;)
+    znimg = ZarrNii.from_imaris(input_path)
+
+    # Apply processing steps
+    print(&quot;Processing data...&quot;)
+
+    # 1. Crop to region of interest
+    cropped = znimg.crop((50, 50, 50), (400, 400, 300))
+
+    # 2. Downsample for faster processing
+    downsampled = cropped.downsample(level=1)
+
+    # 3. Save intermediate result as OME-Zarr for analysis
+    downsampled.to_ome_zarr(&quot;intermediate_analysis.ome.zarr&quot;)
+
+    # 4. Save final result as Imaris
+    print(&quot;Saving processed data...&quot;)
+    downsampled.to_imaris(output_path)
+
+    print(f&quot;Processing complete. Output saved to: {output_path}&quot;)
+    return downsampled
+
+# Run the pipeline
+result = process_microscopy_data(&quot;raw_confocal.ims&quot;, &quot;processed_confocal.ims&quot;)
+</code></pre>
+<p>This example demonstrates <strong>ZarrNii's</strong> ability to seamlessly integrate Imaris files into broader image processing workflows while maintaining spatial accuracy and metadata consistency.</p>
 
 
 

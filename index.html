@@ -512,6 +512,29 @@
   
   
     <li class="md-nav__item">
+      <a href="examples/imaris_usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Working with Imaris Files
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="examples/transformations/" class="md-nav__link">
         
   
@@ -771,17 +794,18 @@
 
   <h1>Home</h1>
 
-<p>Welcome to the documentation for <strong>ZarrNii</strong>, a Python library for working with OME-Zarr and NIfTI formats. ZarrNii bridges the gap between these two popular formats, enabling seamless data transformation, metadata preservation, and efficient processing of large biomedical images.</p>
+<p>Welcome to the documentation for <strong>ZarrNii</strong>, a Python library for working with OME-Zarr, NIfTI, and Imaris formats. ZarrNii bridges the gap between these popular formats, enabling seamless data transformation, metadata preservation, and efficient processing of large biomedical images.</p>
 <hr />
 <h2 id="what-is-zarrnii">What is ZarrNii?</h2>
 <p>ZarrNii is designed for researchers and engineers working with:</p>
 <ul>
 <li><strong>OME-Zarr</strong>: A format for storing multidimensional image data, commonly used in microscopy.</li>
 <li><strong>NIfTI</strong>: A standard format for neuroimaging data.</li>
+<li><strong>Imaris</strong>: A microscopy file format (.ims) using HDF5 structure for 3D/4D image analysis.</li>
 </ul>
 <p>ZarrNii allows you to:</p>
 <ul>
-<li>Read and write OME-Zarr and NIfTI datasets.</li>
+<li>Read and write OME-Zarr, NIfTI, and Imaris datasets.</li>
 <li>Work with 4D and 5D images, including time-series data (T,C,Z,Y,X).</li>
 <li>Perform transformations like cropping, downsampling, and interpolation.</li>
 <li>Select specific channels and timepoints from multidimensional datasets.</li>
@@ -790,7 +814,7 @@
 <hr />
 <h2 id="key-features">Key Features</h2>
 <ul>
-<li><strong>Seamless Format Conversion</strong>: Easily convert between OME-Zarr and NIfTI while preserving spatial metadata.</li>
+<li><strong>Seamless Format Conversion</strong>: Easily convert between OME-Zarr, NIfTI, and Imaris while preserving spatial metadata.</li>
 <li><strong>5D Image Support</strong>: Work with time-series data in (T,C,Z,Y,X) format with timepoint and channel selection.</li>
 <li><strong>Transformations</strong>: Apply common operations like affine transformations, downsampling, and upsampling.</li>
 <li><strong>Multiscale Support</strong>: Work with multiscale OME-Zarr pyramids.</li>
@@ -805,8 +829,13 @@
 # Load an OME-Zarr dataset
 znimg = ZarrNii.from_ome_zarr(&quot;path/to/zarr_dataset.ome.zarr&quot;)
 
+&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
+# Or load from Imaris (requires optional dependency)
+# znimg = ZarrNii.from_imaris(&quot;path/to/microscopy_data.ims&quot;)
+=======
 # Load with specific timepoints and channels (5D support)
 znimg_subset = ZarrNii.from_ome_zarr(&quot;timeseries.zarr&quot;, timepoints=[0, 2], channels=[1])
+&gt;&gt;&gt;&gt;&gt;&gt;&gt; main
 
 # Perform a transformation (e.g., downsample)
 downsampled_znimg = znimg.downsample(level=2)
