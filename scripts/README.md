@@ -51,7 +51,6 @@ All scripts use consistent tool configurations:
 
 These settings are synchronized across:
 - `pyproject.toml`
-- `setup.cfg` 
 - `.pre-commit-config.yaml`
 - GitHub Actions CI
 
