@@ -1,14 +1,15 @@
 """Visualization module for ZarrNii using vizarr and avivator for interactive OME-Zarr viewing."""
 
 import os
+import socket
 import tempfile
-import webbrowser
-from pathlib import Path
-from typing import Optional, Union
 import threading
 import time
-import socket
+import webbrowser
+from functools import partial
 from http.server import HTTPServer, SimpleHTTPRequestHandler
+from pathlib import Path
+from typing import Optional, Union
 
 try:
     import vizarr
@@ -18,13 +19,13 @@ except ImportError:
 
 class CORSHTTPRequestHandler(SimpleHTTPRequestHandler):
     """HTTP request handler that enables CORS for cross-origin requests."""
-    
+
     def end_headers(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', '*')
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "*")
         super().end_headers()
-    
+
     def do_OPTIONS(self):
         self.send_response(200, "ok")
         self.end_headers()
@@ -33,7 +34,7 @@ class CORSHTTPRequestHandler(SimpleHTTPRequestHandler):
 def _find_free_port() -> int:
     """Find a free port for the HTTP server."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('', 0))
+        s.bind(("", 0))
         s.listen(1)
         port = s.getsockname()[1]
     return port
@@ -45,7 +46,7 @@ def visualize(
     output_path: Optional[Union[str, Path]] = None,
     port: int = 8080,
     open_browser: bool = True,
-    **kwargs
+    **kwargs,
 ) -> Union[str, None, "vizarr.Viewer"]:
     """
     Visualize OME-Zarr data using vizarr or avivator.
@@ -96,7 +97,9 @@ def visualize(
         raise FileNotFoundError(f"Zarr path does not exist: {zarr_path}")
 
     if mode not in ["widget", "html", "server", "avivator"]:
-        raise ValueError(f"Invalid mode '{mode}'. Must be 'widget', 'html', 'avivator', or 'server'")
+        raise ValueError(
+            f"Invalid mode '{mode}'. Must be 'widget', 'html', 'avivator', or 'server'"
+        )
 
     if mode in ["widget", "html"] and vizarr is None:
         raise ImportError(
@@ -117,54 +120,45 @@ def visualize(
         )
 
 
-def _launch_avivator(
-    zarr_path: Path, 
-    port: int, 
-    open_browser: bool, 
-    **kwargs
-) -> str:
+def _launch_avivator(zarr_path: Path, port: int, open_browser: bool, **kwargs) -> str:
     """Launch Avivator web viewer with the OME-Zarr dataset."""
     # Find available port if specified port is in use
     if port == 8080:  # Default port
         port = _find_free_port()
-    
+
     # Start HTTP server in a separate thread
     server_dir = zarr_path.parent
-    original_dir = os.getcwd()
-    os.chdir(server_dir)
-    
-    try:
-        httpd = HTTPServer(('localhost', port), CORSHTTPRequestHandler)
-        server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        server_thread.start()
-        
-        # Give server time to start
-        time.sleep(1)
-        
-        # Build URLs
-        dataset_filename = zarr_path.name
-        local_url = f"http://localhost:{port}/{dataset_filename}"
-        avivator_url = f"http://avivator.gehlenborglab.org/?image_url={local_url}"
-        
-        print(f"🚀 Starting HTTP server on port {port}")
-        print(f"📁 Serving directory: {server_dir}")
-        print(f"🔗 Dataset URL: {local_url}")
-        print(f"👁️  Avivator viewer: {avivator_url}")
-        print(f"⚠️  Keep this Python session running to maintain the server")
-        
-        if open_browser:
-            print(f"🌐 Opening Avivator in browser...")
-            webbrowser.open(avivator_url)
-        
-        # Store server reference for potential cleanup
-        if not hasattr(_launch_avivator, '_servers'):
-            _launch_avivator._servers = []
-        _launch_avivator._servers.append(httpd)
-        
-        return avivator_url
-        
-    finally:
-        os.chdir(original_dir)
+
+    # Wrap your handler with the directory you want
+    handler = partial(CORSHTTPRequestHandler, directory=server_dir)
+    httpd = HTTPServer(("localhost", port), handler)
+    server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    server_thread.start()
+
+    # Give server time to start
+    time.sleep(1)
+
+    # Build URLs
+    dataset_filename = zarr_path.name
+    local_url = f"http://localhost:{port}/{dataset_filename}"
+    avivator_url = f"http://volumeviewer.allencell.org/viewer?url={local_url}"
+
+    print(f"🚀 Starting HTTP server on port {port}")
+    print(f"📁 Serving directory: {server_dir}")
+    print(f"🔗 Dataset URL: {local_url}")
+    print(f"👁️  Avivator viewer: {avivator_url}")
+    print(f"⚠️  Keep this Python session running to maintain the server")
+
+    if open_browser:
+        print(f"🌐 Opening Avivator in browser...")
+        webbrowser.open(avivator_url)
+
+    # Store server reference for potential cleanup
+    if not hasattr(_launch_avivator, "_servers"):
+        _launch_avivator._servers = []
+    _launch_avivator._servers.append(httpd)
+
+    return avivator_url
 
 
 def _create_widget(zarr_path: Path, **kwargs) -> "vizarr.Viewer":
@@ -183,11 +177,11 @@ def _generate_html_fallback(
     zarr_path: Path,
     output_path: Optional[Union[str, Path]],
     open_browser: bool,
-    **kwargs
+    **kwargs,
 ) -> str:
     """
     Generate HTML fallback using widget embedding.
-    
+
     Note: This is a fallback implementation since vizarr 0.1.0 doesn't
     directly support HTML generation. This creates a basic HTML page
     that embeds the widget, but may have limited functionality.
@@ -209,7 +203,7 @@ def _generate_html_fallback(
         # Convert path to file:// URL to ensure proper handling by the browser
         zarr_url = zarr_path.absolute().as_uri()
         viewer.add_image(source=zarr_url, **kwargs)
-        
+
         # Generate a basic HTML page with instructions
         html_content = f"""<!DOCTYPE html>
 <html>
@@ -250,12 +244,12 @@ def _generate_html_fallback(
 <body>
     <div class="container">
         <h1>ZarrNii Visualization</h1>
-        
+
         <div class="info">
             <h3>Visualization Not Available in HTML Mode</h3>
-            <p>The vizarr library (version 0.1.0) is designed primarily for Jupyter notebooks 
+            <p>The vizarr library (version 0.1.0) is designed primarily for Jupyter notebooks
             and doesn't support standalone HTML generation.</p>
-            
+
             <h4>Recommended Usage:</h4>
             <ol>
                 <li><strong>Jupyter Notebook:</strong> Use the widget mode for interactive visualization:
@@ -275,14 +269,14 @@ def _generate_html_fallback(
                 </li>
             </ol>
         </div>
-        
+
         <div class="error">
             <h4>Dataset Information:</h4>
             <p><strong>Zarr Path:</strong> {zarr_path}</p>
             <p><strong>File exists:</strong> {zarr_path.exists()}</p>
             <p>To view this dataset, please use a Jupyter notebook with the vizarr widget or Avivator mode.</p>
         </div>
-        
+
         <h3>Example Usage:</h3>
         <pre><code>from zarrnii import ZarrNii
 
@@ -299,9 +293,9 @@ print(f"View at: {{url}}")</code></pre>
     </div>
 </body>
 </html>"""
-        
+
         # Write to file
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(html_content)
 
         if open_browser:
@@ -323,7 +317,7 @@ def is_available() -> bool:
 
 def stop_servers():
     """Stop all running HTTP servers started by avivator mode."""
-    if hasattr(_launch_avivator, '_servers'):
+    if hasattr(_launch_avivator, "_servers"):
         for server in _launch_avivator._servers:
             try:
                 server.shutdown()
