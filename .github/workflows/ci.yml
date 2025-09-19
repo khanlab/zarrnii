@@ -75,24 +75,5 @@ jobs:
     - name: Install dependencies
       run: uv sync --dev
       
-    - name: Check code formatting with black
-      run: uv run black --check .
-      continue-on-error: true  # Allow formatting check to fail due to existing issues
-      
-    - name: Check import sorting with isort
-      run: uv run isort --check .
-      continue-on-error: true  # Allow import sorting check to fail due to existing issues
-      
-    - name: Run linting with flake8
-      run: uv run flake8 .
-      continue-on-error: true  # Allow linting to fail due to existing issues
-      
-    - name: Test basic import
-      run: uv run python -c "from zarrnii import ZarrNii; print('Import successful')"
-      
-    - name: Build documentation
-      run: uv run mkdocs build
-      continue-on-error: true  # Allow docs to fail due to missing files
-      
-    - name: Check package build
-      run: uv build
+    - name: Run quality checks (same configuration as local development)
+      run: ./scripts/quality-check.sh

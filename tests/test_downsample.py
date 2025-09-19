@@ -136,7 +136,6 @@ def test_read_from_downsampled_level(nifti_nib):
     # now we have znimg with axes_order == 'XYZ'
     znimg.to_ome_zarr("test_fromznimg.ome.zarr", max_layer=4)
 
-
     level = 2
     znimg2 = ZarrNii.from_ome_zarr("test_fromznimg.ome.zarr", level=level)
     znimg2
