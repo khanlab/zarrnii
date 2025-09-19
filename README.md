@@ -1,6 +1,6 @@
 # zarrnii
 
- **ZarrNii** is a Python library for working with OME-Zarr, NIfTI, and Imaris formats. ZarrNii bridges the gap between these popular formats, enabling seamless data transformation, metadata preservation, and efficient processing of biomedical images. The motivating application is for whole brain lightsheet microscopy and ultra-high field MRI, but it can generally be used for any 3T+channel datasets.
+ **ZarrNii** is a Python library for working with OME-Zarr, NIfTI, and Imaris formats. ZarrNii bridges the gap between these popular formats, enabling seamless data transformation, metadata preservation, and efficient processing of biomedical images. The motivating application is for whole brain lightsheet microscopy and ultra-high field MRI, but it can generally be used for any 3D+[channel,time] datasets.
 
 ZarrNii allows you to:
 
@@ -37,11 +37,61 @@ uv sync --dev
 
 ## Key Features
 
+<<<<<<< HEAD
  - **Seamless Format Conversion**: Easily convert between OME-Zarr, NIfTI, and Imaris while preserving spatial metadata.
+=======
+ - **Seamless Format Conversion**: Easily convert between OME-Zarr and NIfTI while preserving spatial metadata.
+ - **ZipStore Support**: Read and write OME-Zarr files in compressed ZIP format (.ome.zarr.zip) for efficient storage and sharing.
+>>>>>>> main
  - **Transformations**: Apply common operations like affine transformations, downsampling, and upsampling.
  - **Multiscale Support**: Work with multiscale OME-Zarr pyramids.
  - **Metadata Handling**: Access and modify OME-Zarr metadata like axes and transformations.
  - **Lazy Loading**: Leverage Dask arrays for efficient processing of large datasets.
+ - **Segmentation Plugins**: Extensible plugin architecture for image segmentation algorithms.
+
+---
+
+## Segmentation Plugin System
+
+ZarrNii includes a plugin architecture for image segmentation algorithms, starting with Otsu thresholding:
+
+```python
+from zarrnii import ZarrNii, OtsuSegmentation
+
+# Load your image
+znimg = ZarrNii.from_ome_zarr("image.ome.zarr")
+
+# Apply Otsu thresholding segmentation
+segmented = znimg.segment_otsu(nbins=256)
+
+# Or use the generic plugin interface
+plugin = OtsuSegmentation(nbins=128)
+segmented = znimg.segment(plugin)
+
+# Save segmented results
+segmented.to_ome_zarr("segmented_image.ome.zarr")
+```
+
+### Custom Plugins
+
+Create your own segmentation algorithms by extending the `SegmentationPlugin` base class:
+
+```python
+from zarrnii.plugins.segmentation import SegmentationPlugin
+
+class CustomSegmentation(SegmentationPlugin):
+    def segment(self, image, metadata=None):
+        # Your segmentation logic here
+        return binary_mask.astype(np.uint8)
+    
+    @property
+    def name(self):
+        return "Custom Algorithm"
+    
+    @property 
+    def description(self):
+        return "Description of your algorithm"
+```
 
 ---
 
@@ -53,14 +103,22 @@ from zarrnii import ZarrNii
 # Load an OME-Zarr dataset
 znimg = ZarrNii.from_ome_zarr("path/to/zarr_dataset.ome.zarr")
 
+<<<<<<< HEAD
 # Or load from Imaris (requires zarrnii[imaris])
 # znimg = ZarrNii.from_imaris("path/to/microscopy_data.ims")
+=======
+# Load from compressed ZIP format
+znimg_zip = ZarrNii.from_ome_zarr("path/to/dataset.ome.zarr.zip")
+>>>>>>> main
 
 # Perform a transformation (e.g., downsample)
 downsampled_znimg = znimg.downsample(level=2)
 
 # Save as NIfTI
 downsampled_znimg.to_nifti("output_dataset.nii")
+
+# Save as compressed OME-Zarr ZIP file
+downsampled_znimg.to_ome_zarr("compressed_output.ome.zarr.zip")
 ```
 
 ---

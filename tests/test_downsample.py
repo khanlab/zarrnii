@@ -147,3 +147,157 @@ def test_read_from_downsampled_level(nifti_nib):
     assert_array_equal(int(xyz_orig[0] / (2**level)), xyz_ds[0])
     assert_array_equal(int(xyz_orig[1] / (2**level)), xyz_ds[1])
     assert_array_equal(int(xyz_orig[2] / (2**level)), xyz_ds[2])
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_near_isotropic_downsampling(nifti_nib):
+    """Test near-isotropic downsampling functionality."""
+    nifti_nib.to_filename("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
+
+    # Create an OME-Zarr with anisotropic voxels
+    znimg.to_ome_zarr("test_anisotropic.ome.zarr", max_layer=0)
+
+    # Manually modify the scale to create anisotropic data
+    # We'll make z scale much smaller (higher resolution) than x and y
+    import zarr
+
+    store = zarr.open("test_anisotropic.ome.zarr", mode="r+")
+    multiscales = store.attrs["multiscales"]
+
+    # Modify the scale to make z resolution 4x finer than x and y
+    original_transforms = multiscales[0]["datasets"][0]["coordinateTransformations"]
+    for transform in original_transforms:
+        if transform["type"] == "scale":
+            # Make z scale much smaller (finer resolution) than x and y
+            if len(transform["scale"]) >= 4:  # [c, z, y, x] for ZYX
+                # Set specific scales to ensure z is the finest
+                transform["scale"][-3] = 0.1  # z dimension - very fine
+                transform["scale"][-2] = 0.4  # y dimension - coarse
+                transform["scale"][-1] = 0.4  # x dimension - coarse
+
+    # Update the multiscales metadata
+    store.attrs["multiscales"] = multiscales
+
+    # Load without downsampling
+    znimg_normal = ZarrNii.from_ome_zarr(
+        "test_anisotropic.ome.zarr", downsample_near_isotropic=False
+    )
+
+    # Debug: Print scales
+    print(f"Normal scales: {znimg_normal.scale}")
+
+    # Load with near-isotropic downsampling
+    znimg_isotropic = ZarrNii.from_ome_zarr(
+        "test_anisotropic.ome.zarr", downsample_near_isotropic=True
+    )
+
+    # Debug: Print scales and shapes
+    print(f"Isotropic scales: {znimg_isotropic.scale}")
+    print(f"Normal shape: {znimg_normal.shape}")
+    print(f"Isotropic shape: {znimg_isotropic.shape}")
+
+    # The z dimension should be downsampled by a factor of 4 (since 0.4/0.1 = 4, and 2^2 = 4)
+    # Check that the z dimension was downsampled
+    if znimg_normal.axes_order == "ZYX":
+        z_dim_idx = 1  # z is the second dimension (after channel)
+    else:  # XYZ
+        z_dim_idx = 3  # z is the fourth dimension (after channel, x, y)
+
+    # The z dimension should be roughly 1/4 the size due to downsampling by factor of 4
+    normal_z_size = znimg_normal.shape[z_dim_idx]
+    isotropic_z_size = znimg_isotropic.shape[z_dim_idx]
+
+    # Verify that downsampling occurred by factor of 4 (allowing for rounding)
+    expected_size = normal_z_size // 4
+    assert abs(isotropic_z_size - expected_size) <= 1
+
+    # Check that the scales are more isotropic
+    normal_scales = [
+        znimg_normal.scale[dim] for dim in ["x", "y", "z"] if dim in znimg_normal.scale
+    ]
+    isotropic_scales = [
+        znimg_isotropic.scale[dim]
+        for dim in ["x", "y", "z"]
+        if dim in znimg_isotropic.scale
+    ]
+
+    # Calculate the ratio of max to min scale
+    normal_ratio = max(normal_scales) / min(normal_scales)
+    isotropic_ratio = max(isotropic_scales) / min(isotropic_scales)
+
+    # The isotropic version should have a smaller ratio (more isotropic)
+    assert isotropic_ratio < normal_ratio
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_near_isotropic_downsampling_no_effect(nifti_nib):
+    """Test that near-isotropic downsampling has no effect when voxels are already isotropic."""
+    nifti_nib.to_filename("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
+
+    # Create an OME-Zarr and manually set isotropic scales
+    znimg.to_ome_zarr("test_isotropic.ome.zarr", max_layer=0)
+
+    # Manually modify the scale to ensure isotropy
+    import zarr
+
+    store = zarr.open("test_isotropic.ome.zarr", mode="r+")
+    multiscales = store.attrs["multiscales"]
+
+    original_transforms = multiscales[0]["datasets"][0]["coordinateTransformations"]
+    for transform in original_transforms:
+        if transform["type"] == "scale":
+            # Set all spatial dimensions to the same scale
+            if len(transform["scale"]) >= 4:  # [c, z, y, x] for ZYX
+                transform["scale"][-3] = 1.0  # z dimension
+                transform["scale"][-2] = 1.0  # y dimension
+                transform["scale"][-1] = 1.0  # x dimension
+
+    # Update the multiscales metadata
+    store.attrs["multiscales"] = multiscales
+
+    # Load without downsampling
+    znimg_normal = ZarrNii.from_ome_zarr(
+        "test_isotropic.ome.zarr", downsample_near_isotropic=False
+    )
+
+    # Load with near-isotropic downsampling (should have no effect)
+    znimg_isotropic = ZarrNii.from_ome_zarr(
+        "test_isotropic.ome.zarr", downsample_near_isotropic=True
+    )
+
+    # Shapes should be identical since no downsampling is needed
+    assert znimg_normal.shape == znimg_isotropic.shape
+
+    # Scales should be identical
+    for dim in ["x", "y", "z"]:
+        if dim in znimg_normal.scale and dim in znimg_isotropic.scale:
+            assert abs(znimg_normal.scale[dim] - znimg_isotropic.scale[dim]) < 1e-6
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_near_isotropic_downsampling_parameter_validation(nifti_nib):
+    """Test that the downsample_near_isotropic parameter is properly handled."""
+    nifti_nib.to_filename("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
+    znimg.to_ome_zarr("test_param.ome.zarr", max_layer=0)
+
+    # Test with explicit False
+    znimg1 = ZarrNii.from_ome_zarr(
+        "test_param.ome.zarr", downsample_near_isotropic=False
+    )
+
+    # Test with explicit True
+    znimg2 = ZarrNii.from_ome_zarr(
+        "test_param.ome.zarr", downsample_near_isotropic=True
+    )
+
+    # Test default behavior (should be same as False)
+    znimg3 = ZarrNii.from_ome_zarr("test_param.ome.zarr")
+
+    # Default and explicit False should be identical
+    assert znimg1.shape == znimg3.shape
+    for dim in ["x", "y", "z"]:
+        if dim in znimg1.scale and dim in znimg3.scale:
+            assert abs(znimg1.scale[dim] - znimg3.scale[dim]) < 1e-6

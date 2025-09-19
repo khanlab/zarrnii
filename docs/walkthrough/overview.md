@@ -34,6 +34,7 @@ This page provides an overview of the core concepts behind **ZarrNii**. It’s t
 
 - Read and write OME-Zarr and NIfTI formats.
 - Apply transformations like cropping, downsampling, and interpolation.
+- Apply segmentation algorithms through an extensible plugin system.
 - Convert between ZYX (OME-Zarr) and XYZ (NIfTI) axes orders.
 
 ---
@@ -68,9 +69,15 @@ Here’s a high-level example workflow using ZarrNii:
    znimg_cropped = znimg_downsampled.crop((0, 0, 0), (100, 100, 100))
    ```
 
+3. **Apply Segmentation**:
+   ```python
+   znimg_segmented = znimg.segment_otsu(nbins=256)
+   ```
+
 3. **Convert Formats**:
    ```python
    znimg_cropped.to_nifti("output.nii")
+   znimg_segmented.to_nifti("segmented.nii")
    ```
 
 ---

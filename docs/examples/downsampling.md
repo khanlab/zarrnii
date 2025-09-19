@@ -79,6 +79,30 @@ znimg.to_ome_zarr(
 )
 ```
 
+### Automatic Near-Isotropic Downsampling
+
+For datasets with anisotropic voxels (e.g., lightsheet microscopy with fine Z resolution), you can automatically downsample to create more isotropic voxels:
+
+```python
+# Load with automatic near-isotropic downsampling
+znimg_isotropic = ZarrNii.from_ome_zarr(
+    "path/to/anisotropic_data.ome.zarr", 
+    downsample_near_isotropic=True
+)
+
+# Example: if original scales are z=0.25μm, y=1.0μm, x=1.0μm
+# Z dimension gets downsampled by 4x to make scales isotropic:
+# Result: z=1.0μm, y=1.0μm, x=1.0μm (isotropic voxels)
+print("Original anisotropic scales:", znimg_normal.scale)
+print("Near-isotropic scales:", znimg_isotropic.scale)
+```
+
+**How it works:**
+- Identifies dimensions with finer resolution (smaller scale values)
+- Downsamples by powers of 2 to match the coarsest resolution
+- Works for any spatial dimension (X, Y, or Z)
+- Only applies when significant anisotropy is detected
+
 ## Memory-Efficient Processing
 
 ```python

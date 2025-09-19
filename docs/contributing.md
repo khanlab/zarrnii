@@ -38,14 +38,14 @@ Thank you for your interest in contributing to ZarrNii! This document provides g
 
 ZarrNii follows Python best practices and uses several tools to maintain code quality:
 
-- **Black**: Code formatting
-- **isort**: Import sorting  
-- **flake8**: Linting and style checking
+- **Black**: Code formatting (line-length: 88)
+- **isort**: Import sorting (profile: black, line-length: 88)  
+- **flake8**: Linting and style checking (max-line-length: 88, extend-ignore: E203,W503)
 - **pre-commit**: Automated checks before commits
 
 Run quality checks:
 ```bash
-# Format code
+# Format code  
 uv run black .
 
 # Sort imports
@@ -54,10 +54,19 @@ uv run isort .
 # Lint code
 uv run flake8 .
 
+# Run all quality checks (matches CI exactly)
+./scripts/quality-check.sh
+
 # Or use justfile for convenience (if just is installed)
 just format
-just lint
+just lint  
+just quality
 ```
+
+**Important**: All tools are configured with consistent settings:
+- Line length: 88 characters (matches Black's default)
+- Import profile: black (ensures compatibility)
+- Flake8 ignores: E203, W503 (compatibility with Black)
 
 ### Testing
 

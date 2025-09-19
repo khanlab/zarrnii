@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Near-isotropic downsampling**: New `downsample_near_isotropic` parameter in `from_ome_zarr()` automatically downsamples dimensions with higher resolution to create more isotropic voxels
 - Comprehensive documentation with examples and API reference
 - Multi-resolution OME-Zarr support with pyramid creation
 - Enhanced transformation pipeline with composite operations
