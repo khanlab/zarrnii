@@ -12,7 +12,9 @@ ZarrNii is designed for researchers and engineers working with:
 ZarrNii allows you to:
 
  - Read and write OME-Zarr and NIfTI datasets.
+ - Work with 4D and 5D images, including time-series data (T,C,Z,Y,X).
  - Perform transformations like cropping, downsampling, and interpolation.
+ - Select specific channels and timepoints from multidimensional datasets.
  - Preserve and manipulate metadata from OME-Zarr (e.g., axes, coordinate transformations, OME annotations).
 
 ---
@@ -20,6 +22,7 @@ ZarrNii allows you to:
 ## Key Features
 
  - **Seamless Format Conversion**: Easily convert between OME-Zarr and NIfTI while preserving spatial metadata.
+ - **5D Image Support**: Work with time-series data in (T,C,Z,Y,X) format with timepoint and channel selection.
  - **Transformations**: Apply common operations like affine transformations, downsampling, and upsampling.
  - **Multiscale Support**: Work with multiscale OME-Zarr pyramids.
  - **Metadata Handling**: Access and modify OME-Zarr metadata like axes and transformations.
@@ -35,6 +38,9 @@ from zarrnii import ZarrNii
 
 # Load an OME-Zarr dataset
 znimg = ZarrNii.from_ome_zarr("path/to/zarr_dataset.ome.zarr")
+
+# Load with specific timepoints and channels (5D support)
+znimg_subset = ZarrNii.from_ome_zarr("timeseries.zarr", timepoints=[0, 2], channels=[1])
 
 # Perform a transformation (e.g., downsample)
 downsampled_znimg = znimg.downsample(level=2)
