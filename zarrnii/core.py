@@ -2961,6 +2961,92 @@ class ZarrNii:
         plugin = OtsuSegmentation(nbins=nbins)
         return self.segment(plugin, chunk_size=chunk_size)
 
+    def visualize(
+        self,
+        mode: str = "html",
+        output_path: Optional[Union[str, "os.PathLike"]] = None,
+        port: int = 8080,
+        open_browser: bool = True,
+        temp_zarr_path: Optional[Union[str, "os.PathLike"]] = None,
+        **kwargs,
+    ) -> Union[str, None]:
+        """
+        Visualize the OME-Zarr data using vizarr for interactive web-based viewing.
+
+        This method provides interactive visualization of the current ZarrNii instance
+        using the vizarr library. It supports two modes:
+        1. 'html': Generate a self-contained HTML file
+        2. 'server': Start a local HTTP server
+
+        Args:
+            mode: Visualization mode - 'html' or 'server' (default: 'html')
+            output_path: Output path for HTML file (only used in 'html' mode).
+                        If None, creates a temporary file.
+            port: Port number for HTTP server (only used in 'server' mode)
+            open_browser: Whether to automatically open the visualization in browser
+            temp_zarr_path: Path for temporary OME-Zarr file. If None, creates in temp directory.
+            **kwargs: Additional arguments passed to vizarr
+
+        Returns:
+            For 'html' mode: Path to the generated HTML file
+            For 'server' mode: None (server runs until interrupted)
+
+        Raises:
+            ImportError: If vizarr is not installed
+
+        Examples:
+            >>> znimg = ZarrNii.from_ome_zarr("data.ome.zarr")
+            >>> # Generate HTML file
+            >>> html_path = znimg.visualize(mode="html")
+            >>> print(f"Visualization saved to: {html_path}")
+
+            >>> # Start HTTP server
+            >>> znimg.visualize(mode="server", port=8080)
+
+        Notes:
+            - Requires vizarr package: pip install zarrnii[viz]
+            - Creates a temporary OME-Zarr file for visualization
+            - HTML mode generates self-contained files that can be shared
+            - Server mode allows real-time interaction with the data
+        """
+        try:
+            from . import visualization
+            if visualization is None:
+                raise ImportError("Visualization module not available")
+        except ImportError:
+            raise ImportError(
+                "Visualization functionality requires vizarr. "
+                "Install with: pip install zarrnii[viz]"
+            )
+        import tempfile
+        import os
+
+        # Create temporary OME-Zarr file for visualization
+        if temp_zarr_path is None:
+            temp_dir = tempfile.mkdtemp(prefix="zarrnii_viz_")
+            temp_zarr_path = os.path.join(temp_dir, "temp_data.ome.zarr")
+        
+        try:
+            # Save current data as OME-Zarr for visualization
+            # Use conservative settings to avoid multiscale issues
+            self.to_ome_zarr(temp_zarr_path, max_layer=1)
+            
+            # Use the visualization module
+            return visualization.visualize(
+                zarr_path=temp_zarr_path,
+                mode=mode,
+                output_path=output_path,
+                port=port,
+                open_browser=open_browser,
+                **kwargs
+            )
+        except Exception as e:
+            # Clean up temporary files on error
+            if os.path.exists(temp_zarr_path):
+                import shutil
+                shutil.rmtree(os.path.dirname(temp_zarr_path), ignore_errors=True)
+            raise
+
     def __repr__(self) -> str:
         """String representation."""
         return (
