@@ -57,10 +57,8 @@ def load_ngff_image(
         # Load the multiscales object normally
         multiscales = nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
 
-
     # Get the specified level
     ngff_image = multiscales.images[level]
-
 
     # Handle channel and timepoint selection if specified
     if channels is not None or channel_labels is not None or timepoints is not None:
@@ -101,9 +99,9 @@ def save_ngff_image(
     # Check if the target is a ZIP file (based on extension)
     if isinstance(store_or_path, str) and store_or_path.endswith(".zip"):
         # For ZIP files, use temp directory approach due to zarr v3.x ZipStore compatibility issues
-        import tempfile
-        import shutil
         import os
+        import shutil
+        import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Save to temporary directory first
@@ -137,7 +135,6 @@ def save_ngff_image(
             except Exception:
                 # If we can't write orientation metadata, that's not critical
                 pass
-
 
 
 def get_multiscales(
@@ -615,7 +612,6 @@ def _extract_channel_labels_from_omero(channel_info):
     return labels
 
 
-
 def _select_dimensions_from_image_with_omero(
     ngff_image, multiscales, channels, channel_labels, timepoints, omero_metadata
 ):
@@ -639,7 +635,6 @@ def _select_dimensions_from_image_with_omero(
                 raise ValueError(f"Channel label '{label}' not found")
             channel_indices.append(available_labels.index(label))
         channels = channel_indices
-
 
     # If no selection is specified, return original
     if channels is None and timepoints is None:
@@ -672,7 +667,6 @@ def _select_dimensions_from_image_with_omero(
         name=ngff_image.name,
     )
 
-
     # Filter omero metadata to match selected channels (timepoints don't affect omero metadata)
     filtered_omero = omero_metadata
     if (
@@ -687,7 +681,6 @@ def _select_dimensions_from_image_with_omero(
 
         filtered_channels = [omero_metadata.channels[i] for i in channels]
         filtered_omero = FilteredOmero(filtered_channels)
-
 
     return selected_ngff_image, filtered_omero
 
@@ -1153,7 +1146,6 @@ class ZarrNii:
         # Get the highest available level
         ngff_image = multiscales.images[actual_level]
 
-
         # Handle channel and timepoint selection and filter omero metadata accordingly
         filtered_omero = omero_metadata
         if channels is not None or channel_labels is not None or timepoints is not None:
@@ -1186,7 +1178,6 @@ class ZarrNii:
             znimg = znimg.downsample(
                 factors=downsample_factor, spatial_dims=spatial_dims
             )
-
 
         # Apply near-isotropic downsampling if requested
         if downsample_near_isotropic:
@@ -1242,7 +1233,6 @@ class ZarrNii:
             # Load the NIfTI data and convert to a dask array
             array = nifti_img.get_fdata()
             darr = da.from_array(array, chunks=chunks)
-
 
         # Add channel and time dimensions if not present
         original_ndim = len(darr.shape)
@@ -1647,7 +1637,6 @@ class ZarrNii:
                 # If we can't write orientation metadata, that's not critical
                 pass
 
-
         return self
 
     def to_nifti(self, filename=None):
@@ -2001,7 +1990,6 @@ class ZarrNii:
             filtered_channels = [self.omero.channels[i] for i in channels]
             filtered_omero = FilteredOmero(filtered_channels)
 
-
         return ZarrNii(
             ngff_image=new_ngff_image,
             axes_order=self.axes_order,
@@ -2167,6 +2155,75 @@ class ZarrNii:
 
         plugin = OtsuSegmentation(nbins=nbins)
         return self.segment(plugin, chunk_size=chunk_size)
+
+    def apply_scaled_processing(
+        self,
+        plugin,
+        downsample_factor: int = 4,
+        chunk_size: Optional[Tuple[int, ...]] = None,
+        **kwargs,
+    ) -> "ZarrNii":
+        """
+        Apply scaled processing plugin using multi-resolution approach.
+
+        This method implements a multi-resolution processing pipeline where:
+        1. The image is downsampled for efficient computation
+        2. The plugin's lowres_func is applied to the downsampled data
+        3. The plugin's highres_func applies the result to full-resolution data
+
+        Args:
+            plugin: ScaledProcessingPlugin instance or class to apply
+            downsample_factor: Factor for downsampling (default: 4)
+            chunk_size: Optional chunk size for dask processing. If None, uses current chunks.
+            **kwargs: Additional arguments passed to the plugin
+
+        Returns:
+            New ZarrNii instance with processed data
+        """
+        from .plugins.scaled_processing import ScaledProcessingPlugin
+
+        # Handle plugin instance or class
+        if isinstance(plugin, type) and issubclass(plugin, ScaledProcessingPlugin):
+            plugin = plugin(**kwargs)
+        elif not isinstance(plugin, ScaledProcessingPlugin):
+            raise TypeError(
+                "Plugin must be an instance or subclass of ScaledProcessingPlugin"
+            )
+
+        # Step 1: Downsample the data for low-resolution processing
+        lowres_znimg = self.downsample(level=int(np.log2(downsample_factor)))
+
+        # Convert to numpy array for lowres processing
+        lowres_array = lowres_znimg.data.compute()
+
+        # Step 2: Apply low-resolution function
+        lowres_output = plugin.lowres_func(lowres_array)
+
+        # Step 3: Prepare full-resolution data
+        if chunk_size is not None:
+            fullres_data = self.data.rechunk(chunk_size)
+        else:
+            fullres_data = self.data
+
+        # Step 4: Apply high-resolution function
+        processed_data = plugin.highres_func(fullres_data, lowres_output)
+
+        # Create new NgffImage with processed data
+        new_ngff_image = nz.NgffImage(
+            data=processed_data,
+            dims=self.dims.copy(),
+            scale=self.scale.copy(),
+            translation=self.translation.copy(),
+            name=f"{self.name}_{plugin.name.lower().replace(' ', '_')}",
+        )
+
+        # Return new ZarrNii instance
+        return ZarrNii(
+            ngff_image=new_ngff_image,
+            axes_order=self.axes_order,
+            orientation=self.orientation,
+            _omero=self._omero,
+        )
 
     def __repr__(self) -> str:
         """String representation."""

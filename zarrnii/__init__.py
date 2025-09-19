@@ -1,5 +1,10 @@
 from .core import ZarrNii, affine_to_orientation
-from .plugins import OtsuSegmentation, SegmentationPlugin
+from .plugins import (
+    BiasFieldCorrection,
+    OtsuSegmentation,
+    ScaledProcessingPlugin,
+    SegmentationPlugin,
+)
 from .transform import AffineTransform, DisplacementTransform, Transform
 
 __all__ = [
@@ -10,4 +15,6 @@ __all__ = [
     "affine_to_orientation",
     "SegmentationPlugin",
     "OtsuSegmentation",
+    "ScaledProcessingPlugin",
+    "BiasFieldCorrection",
 ]
