@@ -87,6 +87,7 @@ target-version = ['py39']  # Set to your target Python version
 [tool.isort]
 profile = "black"  # Ensure compatibility with Black
 line_length = 88
+skip_glob = ["zarrnii/_version.py"]
 
 [tool.coverage.run]
 source = ["zarrnii"]
