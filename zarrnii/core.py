@@ -1935,7 +1935,10 @@ class ZarrNii:
             return np.array([c.encode() for c in s])
 
         # Get data and metadata
-        data = self.darr.compute()  # Convert to numpy array
+        if hasattr(self.darr, 'compute'):
+            data = self.darr.compute()  # Convert Dask array to numpy array
+        else:
+            data = np.asarray(self.darr)  # Handle numpy arrays directly
 
         # Handle dimensions: expect ZYX or CZYX
         if len(data.shape) == 4:
@@ -2007,6 +2010,21 @@ class ZarrNii:
                 hist_data, _ = np.histogram(channel_data.flatten(), bins=256, range=(data_min, data_max))
                 channel_group.create_dataset("Histogram", data=hist_data.astype(np.uint64))
 
+            # Get spacing from affine if available
+            try:
+                spacing = self.get_zooms()
+                if len(spacing) >= 3:
+                    sx, sy, sz = spacing[:3]
+                else:
+                    sx = sy = sz = 1.0
+            except:
+                sx = sy = sz = 1.0
+            
+            # Calculate extents (physical coordinates)
+            ext_x = sx * x
+            ext_y = sy * y 
+            ext_z = sz * z
+
             # Create comprehensive DataSetInfo structure matching reference
             info_group = f.create_group("DataSetInfo")
             
@@ -2017,47 +2035,54 @@ class ZarrNii:
                 # Essential channel attributes in byte array format
                 channel_info.attrs["Color"] = _string_to_byte_array("1.000 0.000 0.000" if c == 0 else f"0.000 {1.0 if c == 1 else 0.0:.3f} {1.0 if c == 2 else 0.0:.3f}")
                 channel_info.attrs["Name"] = _string_to_byte_array(f"Channel {c}")
-                channel_info.attrs["X"] = _string_to_byte_array(str(x))
-                channel_info.attrs["Y"] = _string_to_byte_array(str(y))
-                channel_info.attrs["Z"] = _string_to_byte_array(str(z))
-                channel_info.attrs["Unit"] = _string_to_byte_array("um")
-                channel_info.attrs["Noc"] = _string_to_byte_array(str(n_channels))
-                
-                # Get spacing from affine if available
-                try:
-                    spacing = self.get_zooms()
-                    if len(spacing) >= 3:
-                        sx, sy, sz = spacing[:3]
-                    else:
-                        sx = sy = sz = 1.0
-                except:
-                    sx = sy = sz = 1.0
-                
-                # Calculate extents (physical coordinates)
-                ext_x = sx * x
-                ext_y = sy * y 
-                ext_z = sz * z
-                
-                channel_info.attrs["ExtMin0"] = _string_to_byte_array(f"{-ext_x/2:.3f}")
-                channel_info.attrs["ExtMax0"] = _string_to_byte_array(f"{ext_x/2:.3f}")
-                channel_info.attrs["ExtMin1"] = _string_to_byte_array(f"{-ext_y/2:.3f}")
-                channel_info.attrs["ExtMax1"] = _string_to_byte_array(f"{ext_y/2:.3f}")
-                channel_info.attrs["ExtMin2"] = _string_to_byte_array(f"{-ext_z/2:.3f}")
-                channel_info.attrs["ExtMax2"] = _string_to_byte_array(f"{ext_z/2:.3f}")
-                
-                # Add device/acquisition metadata
-                channel_info.attrs["ManufactorString"] = _string_to_byte_array("ZarrNii")
-                channel_info.attrs["ManufactorType"] = _string_to_byte_array("Generic")
-                channel_info.attrs["LensPower"] = _string_to_byte_array("")
-                channel_info.attrs["NumericalAperture"] = _string_to_byte_array("")
-                channel_info.attrs["RecordingDate"] = _string_to_byte_array("2024-01-01 00:00:00.000")
-                channel_info.attrs["Filename"] = _string_to_byte_array(path.split('/')[-1])
+                channel_info.attrs["ColorMode"] = _string_to_byte_array("BaseColor")
+                channel_info.attrs["ColorOpacity"] = _string_to_byte_array("1.000")
+                channel_info.attrs["ColorRange"] = _string_to_byte_array("0 255")
+                channel_info.attrs["GammaCorrection"] = _string_to_byte_array("1.000")
+                channel_info.attrs["LSMEmissionWavelength"] = _string_to_byte_array("500")
+                channel_info.attrs["LSMExcitationWavelength"] = _string_to_byte_array("500")
+                channel_info.attrs["LSMPhotons"] = _string_to_byte_array("1")
+                channel_info.attrs["LSMPinhole"] = _string_to_byte_array("0")
                 
                 # Add description
-                description = f"Imaris file created by ZarrNii from {self.axes_order} format data. " \
-                             f"Original shape: {self.darr.shape}. Converted to Imaris format " \
-                             f"with {n_channels} channel(s) and dimensions {z}x{y}x{x}."
+                description = f"Channel {c} created by ZarrNii"
                 channel_info.attrs["Description"] = _string_to_byte_array(description)
+            
+            # Create CRITICAL Image group with voxel size information (this was missing!)
+            image_info = info_group.create_group("Image")
+            
+            # Add essential image metadata with proper voxel size information
+            image_info.attrs["X"] = _string_to_byte_array(str(x))
+            image_info.attrs["Y"] = _string_to_byte_array(str(y))
+            image_info.attrs["Z"] = _string_to_byte_array(str(z))
+            image_info.attrs["Unit"] = _string_to_byte_array("um")
+            image_info.attrs["Noc"] = _string_to_byte_array(str(n_channels))
+            
+            # CRITICAL: Set proper physical extents that define voxel size
+            # Imaris reads voxel size from these extent values
+            image_info.attrs["ExtMin0"] = _string_to_byte_array(f"{-ext_x/2:.3f}")
+            image_info.attrs["ExtMax0"] = _string_to_byte_array(f"{ext_x/2:.3f}")
+            image_info.attrs["ExtMin1"] = _string_to_byte_array(f"{-ext_y/2:.3f}")
+            image_info.attrs["ExtMax1"] = _string_to_byte_array(f"{ext_y/2:.3f}")
+            image_info.attrs["ExtMin2"] = _string_to_byte_array(f"{-ext_z/2:.3f}")
+            image_info.attrs["ExtMax2"] = _string_to_byte_array(f"{ext_z/2:.3f}")
+            
+            # Add device/acquisition metadata
+            image_info.attrs["ManufactorString"] = _string_to_byte_array("ZarrNii")
+            image_info.attrs["ManufactorType"] = _string_to_byte_array("Generic")
+            image_info.attrs["LensPower"] = _string_to_byte_array("")
+            image_info.attrs["NumericalAperture"] = _string_to_byte_array("")
+            image_info.attrs["RecordingDate"] = _string_to_byte_array("2024-01-01 00:00:00.000")
+            image_info.attrs["Filename"] = _string_to_byte_array(path.split('/')[-1])
+            image_info.attrs["Name"] = _string_to_byte_array("ZarrNii Export")
+            image_info.attrs["Compression"] = _string_to_byte_array("5794")
+            
+            # Add description
+            description = f"Imaris file created by ZarrNii from {self.axes_order} format data. " \
+                         f"Original shape: {self.darr.shape}. Converted to Imaris format " \
+                         f"with {n_channels} channel(s) and dimensions {z}x{y}x{x}. " \
+                         f"Voxel size: {sx:.3f} x {sy:.3f} x {sz:.3f} um."
+            image_info.attrs["Description"] = _string_to_byte_array(description)
 
             # Create Imaris metadata group
             imaris_info = info_group.create_group("Imaris")

@@ -4088,6 +4088,7 @@ name = "zarrnii"
 source = { editable = "." }
 dependencies = [
     { name = "dask" },
+    { name = "h5py" },
     { name = "ngff-zarr", extra = ["all"] },
     { name = "nibabel" },
     { name = "numpy" },
@@ -4149,6 +4150,7 @@ requires-dist = [
     { name = "flake8-bugbear", marker = "extra == 'dev'", specifier = ">=24.12.12" },
     { name = "flake8-docstrings", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "flake8-import-order", marker = "extra == 'dev'", specifier = ">=0.18.2" },
+    { name = "h5py", specifier = ">=3.14.0" },
     { name = "h5py", marker = "extra == 'imaris'", specifier = ">=3.8.0" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.13.2" },
     { name = "jupyterlab", marker = "extra == 'dev'", specifier = ">=4.2.1" },
