@@ -1,15 +1,42 @@
-"""Visualization module for ZarrNii using vizarr for interactive OME-Zarr viewing."""
+"""Visualization module for ZarrNii using vizarr and avivator for interactive OME-Zarr viewing."""
 
 import os
 import tempfile
 import webbrowser
 from pathlib import Path
 from typing import Optional, Union
+import threading
+import time
+import socket
+from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 try:
     import vizarr
 except ImportError:
     vizarr = None
+
+
+class CORSHTTPRequestHandler(SimpleHTTPRequestHandler):
+    """HTTP request handler that enables CORS for cross-origin requests."""
+    
+    def end_headers(self):
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', '*')
+        super().end_headers()
+    
+    def do_OPTIONS(self):
+        self.send_response(200, "ok")
+        self.end_headers()
+
+
+def _find_free_port() -> int:
+    """Find a free port for the HTTP server."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', 0))
+        s.listen(1)
+        port = s.getsockname()[1]
+    return port
 
 
 def visualize(
@@ -21,31 +48,32 @@ def visualize(
     **kwargs
 ) -> Union[str, None, "vizarr.Viewer"]:
     """
-    Visualize OME-Zarr data using vizarr.
+    Visualize OME-Zarr data using vizarr or avivator.
 
     This function provides interactive web-based visualization of OME-Zarr images
-    using the vizarr library. Note that vizarr is primarily designed for Jupyter
-    notebooks, so HTML and server modes have limited support.
+    using different visualization backends.
 
     Args:
         zarr_path: Path to the OME-Zarr dataset to visualize
-        mode: Visualization mode - 'widget', 'html', or 'server' (default: 'widget')
+        mode: Visualization mode - 'widget', 'html', 'avivator', or 'server' (default: 'widget')
               - 'widget': Return vizarr widget (for Jupyter notebooks)
-              - 'html': Attempt to generate HTML (limited support)
+              - 'html': Generate informational HTML file (limited functionality)
+              - 'avivator': Open dataset in Avivator web viewer
               - 'server': Not supported in vizarr 0.1.0
         output_path: Output path for HTML file (only used in 'html' mode).
                     If None, creates a temporary file.
-        port: Port number for HTTP server (not supported in current vizarr version)
+        port: Port number for HTTP server (used in 'avivator' mode)
         open_browser: Whether to automatically open the visualization in browser
-        **kwargs: Additional arguments passed to vizarr
+        **kwargs: Additional arguments passed to visualization backend
 
     Returns:
         For 'widget' mode: vizarr.Viewer widget object
         For 'html' mode: Path to the generated HTML file (if successful)
+        For 'avivator' mode: URL to the Avivator viewer
         For 'server' mode: None (not supported)
 
     Raises:
-        ImportError: If vizarr is not installed
+        ImportError: If vizarr is not installed (for widget/html modes)
         ValueError: If invalid mode is specified
         FileNotFoundError: If zarr_path does not exist
         NotImplementedError: If requested mode is not supported
@@ -55,32 +83,88 @@ def visualize(
         >>> widget = visualize("data.ome.zarr", mode="widget")
         >>> widget  # Display in notebook
 
-        >>> # Attempt HTML generation (limited support)
+        >>> # Open in Avivator web viewer
+        >>> url = visualize("data.ome.zarr", mode="avivator")
+        >>> print(f"View at: {url}")
+
+        >>> # Generate informational HTML
         >>> html_path = visualize("data.ome.zarr", mode="html")
     """
-    if vizarr is None:
-        raise ImportError(
-            "vizarr is required for visualization. "
-            "Install with: pip install zarrnii[viz]"
-        )
-
     # Validate inputs
     zarr_path = Path(zarr_path)
     if not zarr_path.exists():
         raise FileNotFoundError(f"Zarr path does not exist: {zarr_path}")
 
-    if mode not in ["widget", "html", "server"]:
-        raise ValueError(f"Invalid mode '{mode}'. Must be 'widget', 'html', or 'server'")
+    if mode not in ["widget", "html", "server", "avivator"]:
+        raise ValueError(f"Invalid mode '{mode}'. Must be 'widget', 'html', 'avivator', or 'server'")
+
+    if mode in ["widget", "html"] and vizarr is None:
+        raise ImportError(
+            "vizarr is required for visualization. "
+            "Install with: pip install zarrnii[viz]"
+        )
 
     if mode == "widget":
         return _create_widget(zarr_path, **kwargs)
     elif mode == "html":
         return _generate_html_fallback(zarr_path, output_path, open_browser, **kwargs)
+    elif mode == "avivator":
+        return _launch_avivator(zarr_path, port, open_browser, **kwargs)
     elif mode == "server":
         raise NotImplementedError(
             "Server mode is not supported in vizarr 0.1.0. "
-            "Use 'widget' mode in Jupyter notebooks instead."
+            "Use 'widget' mode in Jupyter notebooks or 'avivator' mode for web viewing."
         )
+
+
+def _launch_avivator(
+    zarr_path: Path, 
+    port: int, 
+    open_browser: bool, 
+    **kwargs
+) -> str:
+    """Launch Avivator web viewer with the OME-Zarr dataset."""
+    # Find available port if specified port is in use
+    if port == 8080:  # Default port
+        port = _find_free_port()
+    
+    # Start HTTP server in a separate thread
+    server_dir = zarr_path.parent
+    original_dir = os.getcwd()
+    os.chdir(server_dir)
+    
+    try:
+        httpd = HTTPServer(('localhost', port), CORSHTTPRequestHandler)
+        server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        server_thread.start()
+        
+        # Give server time to start
+        time.sleep(1)
+        
+        # Build URLs
+        dataset_filename = zarr_path.name
+        local_url = f"http://localhost:{port}/{dataset_filename}"
+        avivator_url = f"http://avivator.gehlenborglab.org/?image_url={local_url}"
+        
+        print(f"🚀 Starting HTTP server on port {port}")
+        print(f"📁 Serving directory: {server_dir}")
+        print(f"🔗 Dataset URL: {local_url}")
+        print(f"👁️  Avivator viewer: {avivator_url}")
+        print(f"⚠️  Keep this Python session running to maintain the server")
+        
+        if open_browser:
+            print(f"🌐 Opening Avivator in browser...")
+            webbrowser.open(avivator_url)
+        
+        # Store server reference for potential cleanup
+        if not hasattr(_launch_avivator, '_servers'):
+            _launch_avivator._servers = []
+        _launch_avivator._servers.append(httpd)
+        
+        return avivator_url
+        
+    finally:
+        os.chdir(original_dir)
 
 
 def _create_widget(zarr_path: Path, **kwargs) -> "vizarr.Viewer":
@@ -178,6 +262,10 @@ def _generate_html_fallback(
                     <br><code>widget = znimg.visualize(mode="widget")</code>
                     <br>Then display the widget in your notebook.
                 </li>
+                <li><strong>Web Browser:</strong> Use Avivator for full-featured web viewing:
+                    <br><code>url = znimg.visualize(mode="avivator")</code>
+                    <br>This will start a local server and open Avivator.
+                </li>
                 <li><strong>Alternative viewers:</strong> Consider using other OME-Zarr viewers like:
                     <ul>
                         <li>Napari with OME-Zarr plugin</li>
@@ -192,20 +280,22 @@ def _generate_html_fallback(
             <h4>Dataset Information:</h4>
             <p><strong>Zarr Path:</strong> {zarr_path}</p>
             <p><strong>File exists:</strong> {zarr_path.exists()}</p>
-            <p>To view this dataset, please use a Jupyter notebook with the vizarr widget.</p>
+            <p>To view this dataset, please use a Jupyter notebook with the vizarr widget or Avivator mode.</p>
         </div>
         
-        <h3>Example Notebook Code:</h3>
+        <h3>Example Usage:</h3>
         <pre><code>from zarrnii import ZarrNii
 
 # Load your data
 znimg = ZarrNii.from_ome_zarr("{zarr_path}")
 
-# Create visualization widget
+# For Jupyter notebooks
 widget = znimg.visualize(mode="widget")
+widget
 
-# Display the widget
-widget</code></pre>
+# For web browser viewing
+url = znimg.visualize(mode="avivator")
+print(f"View at: {{url}}")</code></pre>
     </div>
 </body>
 </html>"""
@@ -229,3 +319,18 @@ widget</code></pre>
 def is_available() -> bool:
     """Check if visualization functionality is available."""
     return vizarr is not None
+
+
+def stop_servers():
+    """Stop all running HTTP servers started by avivator mode."""
+    if hasattr(_launch_avivator, '_servers'):
+        for server in _launch_avivator._servers:
+            try:
+                server.shutdown()
+                server.server_close()
+            except:
+                pass
+        _launch_avivator._servers.clear()
+        print("🛑 All HTTP servers stopped")
+    else:
+        print("ℹ️  No active servers to stop")

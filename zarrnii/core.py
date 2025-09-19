@@ -2978,24 +2978,26 @@ class ZarrNii:
         notebooks.
 
         Args:
-            mode: Visualization mode - 'widget', 'html', or 'server' (default: 'widget')
+            mode: Visualization mode - 'widget', 'html', 'avivator', or 'server' (default: 'widget')
                   - 'widget': Return vizarr widget (for Jupyter notebooks)
                   - 'html': Generate informational HTML file (limited functionality)
+                  - 'avivator': Open dataset in Avivator web viewer
                   - 'server': Not supported in current vizarr version
             output_path: Output path for HTML file (only used in 'html' mode).
                         If None, creates a temporary file.
-            port: Port number for HTTP server (not supported in current vizarr version)
+            port: Port number for HTTP server (used in 'avivator' mode)
             open_browser: Whether to automatically open the visualization in browser
             temp_zarr_path: Path for temporary OME-Zarr file. If None, creates in temp directory.
-            **kwargs: Additional arguments passed to vizarr
+            **kwargs: Additional arguments passed to visualization backend
 
         Returns:
             For 'widget' mode: vizarr.Viewer widget object (for display in Jupyter)
             For 'html' mode: Path to the generated HTML file
+            For 'avivator' mode: URL to the Avivator viewer
             For 'server' mode: None (not supported)
 
         Raises:
-            ImportError: If vizarr is not installed
+            ImportError: If vizarr is not installed (for widget/html modes)
             NotImplementedError: If server mode is requested
 
         Examples:
@@ -3004,14 +3006,20 @@ class ZarrNii:
             >>> widget = znimg.visualize(mode="widget")
             >>> widget  # Display the widget
 
+            >>> # Open in Avivator web viewer
+            >>> url = znimg.visualize(mode="avivator")
+            >>> print(f"View at: {url}")
+
             >>> # Generate informational HTML
             >>> html_path = znimg.visualize(mode="html")
             >>> print(f"Info saved to: {html_path}")
 
         Notes:
-            - Requires vizarr package: pip install zarrnii[viz]
+            - Widget mode requires vizarr package: pip install zarrnii[viz]
+            - Avivator mode uses built-in HTTP server (no extra dependencies)
             - Creates a temporary OME-Zarr file for visualization
             - Widget mode is recommended for interactive use in Jupyter notebooks
+            - Avivator mode is recommended for web browser viewing
             - HTML mode generates an informational page with usage instructions
         """
         try:
