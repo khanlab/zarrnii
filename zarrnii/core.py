@@ -2963,51 +2963,56 @@ class ZarrNii:
 
     def visualize(
         self,
-        mode: str = "html",
+        mode: str = "widget",
         output_path: Optional[Union[str, "os.PathLike"]] = None,
         port: int = 8080,
         open_browser: bool = True,
         temp_zarr_path: Optional[Union[str, "os.PathLike"]] = None,
         **kwargs,
-    ) -> Union[str, None]:
+    ) -> Union[str, None, Any]:
         """
         Visualize the OME-Zarr data using vizarr for interactive web-based viewing.
 
         This method provides interactive visualization of the current ZarrNii instance
-        using the vizarr library. It supports two modes:
-        1. 'html': Generate a self-contained HTML file
-        2. 'server': Start a local HTTP server
+        using the vizarr library. Note that vizarr is primarily designed for Jupyter
+        notebooks.
 
         Args:
-            mode: Visualization mode - 'html' or 'server' (default: 'html')
+            mode: Visualization mode - 'widget', 'html', or 'server' (default: 'widget')
+                  - 'widget': Return vizarr widget (for Jupyter notebooks)
+                  - 'html': Generate informational HTML file (limited functionality)
+                  - 'server': Not supported in current vizarr version
             output_path: Output path for HTML file (only used in 'html' mode).
                         If None, creates a temporary file.
-            port: Port number for HTTP server (only used in 'server' mode)
+            port: Port number for HTTP server (not supported in current vizarr version)
             open_browser: Whether to automatically open the visualization in browser
             temp_zarr_path: Path for temporary OME-Zarr file. If None, creates in temp directory.
             **kwargs: Additional arguments passed to vizarr
 
         Returns:
+            For 'widget' mode: vizarr.Viewer widget object (for display in Jupyter)
             For 'html' mode: Path to the generated HTML file
-            For 'server' mode: None (server runs until interrupted)
+            For 'server' mode: None (not supported)
 
         Raises:
             ImportError: If vizarr is not installed
+            NotImplementedError: If server mode is requested
 
         Examples:
             >>> znimg = ZarrNii.from_ome_zarr("data.ome.zarr")
-            >>> # Generate HTML file
-            >>> html_path = znimg.visualize(mode="html")
-            >>> print(f"Visualization saved to: {html_path}")
+            >>> # In Jupyter notebook:
+            >>> widget = znimg.visualize(mode="widget")
+            >>> widget  # Display the widget
 
-            >>> # Start HTTP server
-            >>> znimg.visualize(mode="server", port=8080)
+            >>> # Generate informational HTML
+            >>> html_path = znimg.visualize(mode="html")
+            >>> print(f"Info saved to: {html_path}")
 
         Notes:
             - Requires vizarr package: pip install zarrnii[viz]
             - Creates a temporary OME-Zarr file for visualization
-            - HTML mode generates self-contained files that can be shared
-            - Server mode allows real-time interaction with the data
+            - Widget mode is recommended for interactive use in Jupyter notebooks
+            - HTML mode generates an informational page with usage instructions
         """
         try:
             from . import visualization
