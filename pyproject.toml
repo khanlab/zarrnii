@@ -9,7 +9,7 @@ requires-python = ">=3.11"
 keywords = ["neuroimaging", "ome-zarr", "nifti", "biomedical", "imaging", "microscopy", "mri"]
 classifiers = [
     "Development Status :: 4 - Beta",
-    "Intended Audience :: Science/Research", 
+    "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
@@ -93,6 +93,7 @@ target-version = ['py39']  # Set to your target Python version
 profile = "black"  # Ensure compatibility with Black
 line_length = 88
 skip_glob = ["zarrnii/_version.py"]
+skip = [".pixi",".venv"]
 
 [tool.coverage.run]
 source = ["zarrnii"]
@@ -120,7 +121,7 @@ directory = "htmlcov"
 [dependency-groups]
 dev = [
     "pytest>=8.2.0",
-    "pytest-cov>=6.0.0", 
+    "pytest-cov>=6.0.0",
     "pre-commit>=4.0.0",
     "jupyterlab>=4.2.1",
     "matplotlib>=3.9.0",
@@ -136,4 +137,3 @@ dev = [
     "mkdocstrings>=0.30.0",
     "mkdocstrings-python>=1.18.2",
 ]
-
