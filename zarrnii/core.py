@@ -3010,16 +3010,23 @@ class ZarrNii:
         lowres_array = lowres_znimg.data.compute()
 
         # Step 2: Apply low-resolution function
-        lowres_output = plugin.lowres_func(lowres_array)
+        lowres_znimg.data = da.from_array(
+            plugin.lowres_func(lowres_array), chunks=(1, 10, 10, 10)
+        )
+
+        upsampled_znimg = lowres_znimg.upsample(to_shape=self.shape)
+        upsampled_znimg.to_ome_zarr("temp.ome.zarr")
 
         # Step 3: Prepare full-resolution data
-        if chunk_size is not None:
-            fullres_data = self.data.rechunk(chunk_size)
-        else:
-            fullres_data = self.data
+        #        if chunk_size is not None:
+        #            fullres_data = self.data.rechunk(chunk_size)
+        #        else:
+        #            fullres_data = self.data
 
         # Step 4: Apply high-resolution function
-        processed_data = plugin.highres_func(fullres_data, lowres_output)
+        processed_data = plugin.highres_func(
+            self.data, ZarrNii.from_ome_zarr("temp.ome.zarr").data
+        )
 
         # Create new NgffImage with processed data
         new_ngff_image = nz.NgffImage(

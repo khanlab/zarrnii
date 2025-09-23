@@ -106,69 +106,27 @@ class BiasFieldCorrection(ScaledProcessingPlugin):
         return smoothed
 
     def highres_func(
-        self, fullres_array: da.Array, lowres_output: np.ndarray
+        self, fullres_array: da.Array, upsampled_output: np.ndarray
     ) -> da.Array:
         """
         Apply bias field correction to full-resolution data.
 
-        This function upsamples the low-resolution bias field and applies
+        This function upsamples takes the upsampled bias field
+        and applies
         it to the full-resolution data by division.
 
         Args:
             fullres_array: Full-resolution dask array
-            lowres_output: Low-resolution bias field from lowres_func
+            upsampled_output: Low-resolution bias field upsampled
 
         Returns:
             Bias-corrected full-resolution array
         """
         # Get shapes for upsampling calculation
         fullres_shape = fullres_array.shape
-        lowres_shape = lowres_output.shape
+        upsampled_shape = upsampled_output.shape
 
-        # Calculate zoom factors for upsampling
-        # Handle potential dimension mismatches
-        if len(fullres_shape) == len(lowres_shape):
-            zoom_factors = [f / l for f, l in zip(fullres_shape, lowres_shape)]
-        else:
-            # If shapes have different number of dimensions, assume spatial dimensions align
-            # and handle leading dimensions appropriately
-            spatial_dims = min(len(fullres_shape), len(lowres_shape))
-            zoom_factors = [1.0] * len(lowres_shape)
-
-            for i in range(spatial_dims):
-                zoom_factors[-(i + 1)] = (
-                    fullres_shape[-(i + 1)] / lowres_shape[-(i + 1)]
-                )
-
-        # Upsample the bias field to match full resolution
-        upsampled_bias = ndimage.zoom(
-            lowres_output, zoom_factors, order=1, mode=self.mode  # Linear interpolation
-        )
-
-        # Ensure upsampled bias has the same shape as full-res data
-        if upsampled_bias.shape != fullres_shape:
-            # Handle small shape mismatches due to rounding in zoom
-            upsampled_bias = np.resize(upsampled_bias, fullres_shape)
-
-        # Apply bias field correction by division
-        # Use map_blocks for efficient dask processing
-        def apply_correction(block, bias_block):
-            # Ensure bias block has same shape as data block
-            if bias_block.shape != block.shape:
-                bias_block = np.resize(bias_block, block.shape)
-
-            # Apply correction, avoiding division by zero
-            corrected = block / np.maximum(bias_block, np.finfo(bias_block.dtype).eps)
-            return corrected.astype(block.dtype)
-
-        # Apply correction using dask map_blocks
-        corrected_array = da.map_blocks(
-            apply_correction,
-            fullres_array,
-            upsampled_bias,
-            dtype=fullres_array.dtype,
-            meta=np.array([], dtype=fullres_array.dtype),
-        )
+        corrected_array = fullres_array / upsampled_output
 
         return corrected_array
 
