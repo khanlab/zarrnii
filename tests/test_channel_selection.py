@@ -421,19 +421,11 @@ class TestChannelSelection:
         dims = ["c", "z", "y", "x"]
 
         ngff_image = nz.NgffImage(
-            data=arr,
-            dims=dims,
-            scale=scale,
-            translation=translation,
-            name="test_czyx"
+            data=arr, dims=dims, scale=scale, translation=translation, name="test_czyx"
         )
 
         # Create ZarrNii object
-        znii = ZarrNii(
-            ngff_image=ngff_image,
-            axes_order="ZYX",
-            orientation="RAS"
-        )
+        znii = ZarrNii(ngff_image=ngff_image, axes_order="ZYX", orientation="RAS")
 
         # Test selecting channels 0 and 2
         selected = znii.select_channels(channels=[0, 2])
@@ -445,13 +437,17 @@ class TestChannelSelection:
         # Verify the data values are correct
         selected_data = selected.data.compute()
         channel_0_sum = selected_data[0, :, :, :].sum()  # Should be 100 * volume
-        channel_1_sum = selected_data[1, :, :, :].sum()  # Should be 300 * volume (original channel 2)
+        channel_1_sum = selected_data[
+            1, :, :, :
+        ].sum()  # Should be 300 * volume (original channel 2)
 
         expected_volume = 8 * 16 * 16
         expected_sums = [100 * expected_volume, 300 * expected_volume]
         actual_sums = [int(channel_0_sum), int(channel_1_sum)]
 
-        assert actual_sums == expected_sums, f"Channel data mismatch: expected {expected_sums}, got {actual_sums}"
+        assert (
+            actual_sums == expected_sums
+        ), f"Channel data mismatch: expected {expected_sums}, got {actual_sums}"
 
     def test_select_channels_error_no_channel_dimension(self):
         """Test that proper error is raised when there's no channel dimension."""
@@ -472,14 +468,10 @@ class TestChannelSelection:
             dims=dims,
             scale=scale,
             translation=translation,
-            name="test_no_channels"
+            name="test_no_channels",
         )
 
-        znii = ZarrNii(
-            ngff_image=ngff_image,
-            axes_order="ZYX",
-            orientation="RAS"
-        )
+        znii = ZarrNii(ngff_image=ngff_image, axes_order="ZYX", orientation="RAS")
 
         with pytest.raises(ValueError, match="No channel dimension found"):
             znii.select_channels(channels=[0])
