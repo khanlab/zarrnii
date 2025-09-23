@@ -1050,6 +1050,8 @@ class ZarrNii:
         axes_order: str = "ZYX",
         orientation: str = "RAS",
         downsample_near_isotropic: bool = False,
+        chunks: tuple[int, Ellipsis] | Literal["auto"] = "auto",
+        rechunk: bool = False,
     ) -> "ZarrNii":
         """Load ZarrNii from OME-Zarr store with flexible options.
 
@@ -1080,6 +1082,9 @@ class ZarrNii:
             downsample_near_isotropic: If True, automatically downsample
                 dimensions with smaller voxel sizes to achieve near-isotropic
                 resolution
+            chunks: chunking strategy, or explicit chunk sizes to use if not automatic
+            rechunk: If True, rechunks the dataset after lazy loading, based
+                on the chunks parameter
 
         Returns:
             ZarrNii instance with loaded data and metadata
@@ -1273,6 +1278,9 @@ class ZarrNii:
         # Apply near-isotropic downsampling if requested
         if downsample_near_isotropic:
             znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
+
+        if rechunk:
+            znimg.data = znimg.data.rechunk(chunks)
 
         return znimg
 
