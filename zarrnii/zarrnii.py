@@ -361,13 +361,129 @@ class ZarrNii:
         rechunk: bool = False,
     ) -> "ZarrNii":
         """Load ZarrNii from OME-Zarr store with flexible options."""
-        # Load NgffImage using the io module
+        # Validate channel and timepoint selection arguments
+        if channels is not None and channel_labels is not None:
+            raise ValueError("Cannot specify both 'channels' and 'channel_labels'")
+
+        # Load the multiscales object
+        import ngff_zarr as nz
+
+        try:
+            if isinstance(store_or_path, str):
+                # Handle ZIP files by creating a ZipStore
+                if store_or_path.endswith(".zip"):
+                    import zarr
+
+                    store = zarr.storage.ZipStore(store_or_path, mode="r")
+                    multiscales = nz.from_ngff_zarr(
+                        store, storage_options=storage_options or {}
+                    )
+                    # Note: We'll close the store after extracting metadata
+                else:
+                    multiscales = nz.from_ngff_zarr(
+                        store_or_path, storage_options=storage_options or {}
+                    )
+            else:
+                multiscales = nz.from_ngff_zarr(store_or_path)
+        except Exception as e:
+            # Fallback for older zarr/ngff_zarr versions
+            if isinstance(store_or_path, str):
+                if store_or_path.endswith(".zip"):
+                    import zarr
+
+                    store = zarr.storage.ZipStore(store_or_path, mode="r")
+                    multiscales = nz.from_ngff_zarr(store)
+                else:
+                    store = fsspec.get_mapper(store_or_path, **storage_options or {})
+                    multiscales = nz.from_ngff_zarr(store)
+            else:
+                store = store_or_path
+                multiscales = nz.from_ngff_zarr(store)
+
+        # Extract omero metadata if available
+        omero_metadata = None
+        try:
+            import zarr
+
+            if isinstance(store_or_path, str):
+                if store_or_path.endswith(".zip"):
+                    zip_store = zarr.storage.ZipStore(store_or_path, mode="r")
+                    group = zarr.open_group(zip_store, mode="r")
+                    # Close zip store after getting group
+                    zip_store.close()
+                else:
+                    group = zarr.open_group(store_or_path, mode="r")
+
+            else:
+                group = zarr.open_group(store_or_path, mode="r")
+
+            if "omero" in group.attrs:
+                omero_dict = group.attrs["omero"]
+
+                # Create a simple object to hold omero metadata
+                class OmeroMetadata:
+                    def __init__(self, omero_dict):
+                        self.channels = []
+                        if "channels" in omero_dict:
+                            for ch_dict in omero_dict["channels"]:
+                                # Create channel objects
+                                class ChannelMetadata:
+                                    def __init__(self, ch_dict):
+                                        self.label = ch_dict.get("label", "")
+                                        self.color = ch_dict.get("color", "")
+                                        if "window" in ch_dict:
+
+                                            class WindowMetadata:
+                                                def __init__(self, win_dict):
+                                                    self.min = win_dict.get("min", 0.0)
+                                                    self.max = win_dict.get(
+                                                        "max", 65535.0
+                                                    )
+                                                    self.start = win_dict.get(
+                                                        "start", 0.0
+                                                    )
+                                                    self.end = win_dict.get(
+                                                        "end", 65535.0
+                                                    )
+
+                                            self.window = WindowMetadata(
+                                                ch_dict["window"]
+                                            )
+                                        else:
+                                            self.window = None
+
+                                self.channels.append(ChannelMetadata(ch_dict))
+
+                omero_metadata = OmeroMetadata(omero_dict)
+        except Exception:
+            # If we can't extract omero metadata, continue without it
+            pass
+
+        # Load NgffImage and select dimensions
         ngff_image = load_ngff_image(
-            store_or_path, level, channels, channel_labels, timepoints, storage_options
+            store_or_path, level, None, None, None, storage_options
         )
 
+        # Apply channel and timepoint selection with OMERO metadata
+        if channels is not None or channel_labels is not None or timepoints is not None:
+            ngff_image, filtered_omero = _select_dimensions_from_image_with_omero(
+                ngff_image,
+                multiscales,
+                channels,
+                channel_labels,
+                timepoints,
+                omero_metadata,
+            )
+        else:
+            filtered_omero = omero_metadata
+
         # Create ZarrNii instance
-        znimg = cls.from_ngff_image(ngff_image, axes_order, orientation)
+        znimg = cls(
+            ngff_image=ngff_image,
+            axes_order=axes_order,
+            orientation=orientation,
+            _omero=filtered_omero,
+        )
 
         # Apply near-isotropic downsampling if requested
         if downsample_near_isotropic:
@@ -405,12 +521,34 @@ class ZarrNii:
             array = nifti_img.get_fdata()
             darr = da.from_array(array, chunks=chunks)
 
-        # Add channel dimension if not present
-        if len(darr.shape) == 3:
+        # Add channel and time dimensions if not present
+        original_ndim = len(darr.shape)
+
+        if original_ndim == 3:
+            # 3D data: add channel dimension -> (c, z, y, x) or (c, x, y, z)
+            darr = darr[np.newaxis, ...]
+        elif original_ndim == 4:
+            # 4D data: could be (c, z, y, x) or (t, z, y, x) - assume channel by default
+            # User can specify if it's time by using appropriate axes_order
+            pass  # Keep as is - 4D is already handled
+        elif original_ndim == 5:
+            # 5D data: assume (t, z, y, x, c) and handle appropriately
+            pass  # Keep as is - 5D is already the target format
+        else:
+            # For 1D, 2D, or >5D data, add channel dimension and let user handle
             darr = darr[np.newaxis, ...]
 
-        # Create dimensions based on axes_order
-        dims = ["c"] + list(axes_order.lower())
+        # Create dimensions based on data shape after dimension adjustments
+        final_ndim = len(darr.shape)
+        if final_ndim == 4:
+            # 4D: (c, z, y, x) or (c, x, y, z) - standard case
+            dims = ["c"] + list(axes_order.lower())
+        elif final_ndim == 5:
+            # 5D: (t, c, z, y, x) or (t, c, x, y, z) - time dimension included
+            dims = ["t", "c"] + list(axes_order.lower())
+        else:
+            # Fallback for other cases
+            dims = ["c"] + list(axes_order.lower())
 
         # Extract scale and translation from affine
         scale = {}
