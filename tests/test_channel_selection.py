@@ -388,8 +388,8 @@ class TestChannelSelection:
 
     def test_select_channels_with_czyx_dimension_order(self):
         """Test that select_channels works when channels are not in the last dimension."""
-        import ngff_zarr as nz
         import dask.array as da
+        import ngff_zarr as nz
         import numpy as np
 
         # Create test data in CZYX order (channels first)
@@ -451,8 +451,8 @@ class TestChannelSelection:
 
     def test_select_channels_error_no_channel_dimension(self):
         """Test that proper error is raised when there's no channel dimension."""
-        import ngff_zarr as nz
         import dask.array as da
+        import ngff_zarr as nz
         import numpy as np
 
         # Create 3D data with no channel dimension
