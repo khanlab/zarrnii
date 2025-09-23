@@ -15,7 +15,6 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pandas as pd
-
 from attrs import define, field
 
 from .core import ZarrNii
@@ -60,9 +59,7 @@ class Atlas:
             )
 
         # Check that label column contains integers
-        if not pd.api.types.is_integer_dtype(
-            self.labels_df[self.label_column]
-        ):
+        if not pd.api.types.is_integer_dtype(self.labels_df[self.label_column]):
             warnings.warn(
                 f"Label column '{self.label_column}' should contain integers. "
                 "Converting to int.",
@@ -75,12 +72,8 @@ class Atlas:
         # Check for duplicate labels
         duplicates = self.labels_df[self.label_column].duplicated()
         if duplicates.any():
-            dup_labels = self.labels_df[duplicates][
-                self.label_column
-            ].tolist()
-            raise ValueError(
-                f"Duplicate labels found in atlas: {dup_labels}"
-            )
+            dup_labels = self.labels_df[duplicates][self.label_column].tolist()
+            raise ValueError(f"Duplicate labels found in atlas: {dup_labels}")
 
     @classmethod
     def from_files(
@@ -468,8 +461,7 @@ def import_lut_csv_as_tsv(
 
 
 def import_lut_itksnap_as_tsv(
-    itksnap_path: Union[str, Path],
-    tsv_path: Union[str, Path]
+    itksnap_path: Union[str, Path], tsv_path: Union[str, Path]
 ) -> None:
     """Convert ITK-SNAP label file to TSV format for BIDS compatibility.
 
