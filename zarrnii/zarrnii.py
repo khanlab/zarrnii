@@ -762,6 +762,400 @@ class ZarrNii:
             _omero=self._omero,
         )
 
+    @classmethod
+    def from_imaris(
+        cls,
+        path: str,
+        level: int = 0,
+        timepoint: int = 0,
+        channel: int = 0,
+        chunks: str = "auto",
+        axes_order: str = "ZYX",
+        orientation: str = "RAS",
+    ) -> "ZarrNii":
+        """
+        Load from Imaris (.ims) file format.
+
+        Imaris files use HDF5 format with specific dataset structure.
+        This method requires the 'imaris' extra dependency (h5py).
+
+        Args:
+            path: Path to Imaris (.ims) file
+            level: Resolution level to load (0 = full resolution)
+            timepoint: Time point to load (default: 0)
+            channel: Channel to load (default: 0)
+            chunks: Chunking strategy for dask array
+            axes_order: Spatial axes order for compatibility (default: "ZYX")
+            orientation: Default orientation (default: "RAS")
+
+        Returns:
+            ZarrNii instance
+
+        Raises:
+            ImportError: If h5py is not available
+            ValueError: If the file is not a valid Imaris file
+        """
+        try:
+            import h5py
+        except ImportError:
+            raise ImportError(
+                "h5py is required for Imaris support. "
+                "Install with: pip install zarrnii[imaris] or pip install h5py"
+            )
+
+        # Open Imaris file
+        with h5py.File(path, "r") as f:
+            # Verify it's an Imaris file by checking for standard structure
+            if "DataSet" not in f:
+                raise ValueError(
+                    f"File {path} does not appear to be a valid Imaris file (missing DataSet group)"
+                )
+
+            # Navigate to the specific dataset
+            dataset_group = f["DataSet"]
+
+            # Find available resolution levels
+            resolution_levels = [
+                key for key in dataset_group.keys() if key.startswith("ResolutionLevel")
+            ]
+            if not resolution_levels:
+                raise ValueError("No resolution levels found in Imaris file")
+
+            # Validate level parameter
+            if level >= len(resolution_levels):
+                raise ValueError(
+                    f"Level {level} not available. Available levels: 0-{len(resolution_levels)-1}"
+                )
+
+            # Navigate to specified resolution level
+            res_level_key = f"ResolutionLevel {level}"
+            if res_level_key not in dataset_group:
+                raise ValueError(f"Resolution level {level} not found")
+
+            res_group = dataset_group[res_level_key]
+
+            # Find available timepoints
+            timepoints = [
+                key for key in res_group.keys() if key.startswith("TimePoint")
+            ]
+            if not timepoints:
+                raise ValueError("No timepoints found in Imaris file")
+
+            # Validate timepoint parameter
+            if timepoint >= len(timepoints):
+                raise ValueError(
+                    f"Timepoint {timepoint} not available. Available timepoints: 0-{len(timepoints)-1}"
+                )
+
+            # Navigate to specified timepoint
+            time_key = f"TimePoint {timepoint}"
+            if time_key not in res_group:
+                raise ValueError(f"Timepoint {timepoint} not found")
+
+            time_group = res_group[time_key]
+
+            # Find available channels
+            channels = [key for key in time_group.keys() if key.startswith("Channel")]
+            if not channels:
+                raise ValueError("No channels found in Imaris file")
+
+            # Validate channel parameter
+            if channel >= len(channels):
+                raise ValueError(
+                    f"Channel {channel} not available. Available channels: 0-{len(channels)-1}"
+                )
+
+            # Navigate to specified channel
+            channel_key = f"Channel {channel}"
+            if channel_key not in time_group:
+                raise ValueError(f"Channel {channel} not found")
+
+            channel_group = time_group[channel_key]
+
+            # Load the actual data
+            if "Data" not in channel_group:
+                raise ValueError("No Data dataset found in channel group")
+
+            data_dataset = channel_group["Data"]
+
+            # Load data into memory first (necessary because HDF5 file will be closed)
+            data_numpy = data_dataset[:]
+
+            # Create dask array from numpy array
+            data_array = da.from_array(data_numpy, chunks=chunks)
+
+            # Add channel dimension if not present
+            if len(data_array.shape) == 3:
+                data_array = data_array[np.newaxis, ...]
+
+            # Extract spatial metadata
+            # Try to get spacing information from Imaris metadata
+            spacing = [1.0, 1.0, 1.0]  # Default spacing
+            origin = [0.0, 0.0, 0.0]  # Default origin
+
+            # Look for ImageSizeX, ImageSizeY, ImageSizeZ attributes
+            try:
+                # Navigate back to get image info
+                if "ImageSizeX" in f.attrs:
+                    x_size = f.attrs["ImageSizeX"]
+                    y_size = f.attrs["ImageSizeY"]
+                    z_size = f.attrs["ImageSizeZ"]
+
+                    # Calculate spacing based on physical size and voxel count
+                    if data_array.shape[-1] > 0:  # X dimension
+                        spacing[0] = x_size / data_array.shape[-1]
+                    if data_array.shape[-2] > 0:  # Y dimension
+                        spacing[1] = y_size / data_array.shape[-2]
+                    if data_array.shape[-3] > 0:  # Z dimension
+                        spacing[2] = z_size / data_array.shape[-3]
+            except (KeyError, IndexError):
+                # Use default spacing if metadata is not available
+                pass
+
+            # Create dimensions
+            dims = ["c"] + list(axes_order.lower())
+
+            # Create scale and translation dictionaries
+            scale_dict = {}
+            translation_dict = {}
+            spatial_dims = ["z", "y", "x"] if axes_order == "ZYX" else ["x", "y", "z"]
+
+            for i, dim in enumerate(spatial_dims):
+                scale_dict[dim] = spacing[i]
+                translation_dict[dim] = origin[i]
+
+            # Create NgffImage
+            ngff_image = nz.NgffImage(
+                data=data_array,
+                dims=dims,
+                scale=scale_dict,
+                translation=translation_dict,
+                name=f"imaris_image_{path}_{level}_{timepoint}_{channel}",
+            )
+
+        # Create and return ZarrNii instance
+        return cls(
+            ngff_image=ngff_image,
+            axes_order=axes_order,
+            orientation=orientation,
+            _omero=None,
+        )
+
+    def upsample(self, along_x=1, along_y=1, along_z=1, to_shape=None):
+        """
+        Upsamples the ZarrNii instance using `scipy.ndimage.zoom`.
+
+        Parameters:
+            along_x (int, optional): Upsampling factor along the X-axis (default: 1).
+            along_y (int, optional): Upsampling factor along the Y-axis (default: 1).
+            along_z (int, optional): Upsampling factor along the Z-axis (default: 1).
+            to_shape (tuple, optional): Target shape for upsampling. Should include all dimensions
+                                         (e.g., `(c, z, y, x)` for ZYX or `(c, x, y, z)` for XYZ).
+                                         If provided, `along_x`, `along_y`, and `along_z` are ignored.
+
+        Returns:
+            ZarrNii: A new ZarrNii instance with the upsampled data and updated affine.
+        """
+        # Determine scaling and chunks based on input parameters
+        if to_shape is None:
+            if self.axes_order == "XYZ":
+                scaling = (1, along_x, along_y, along_z)
+            else:
+                scaling = (1, along_z, along_y, along_x)
+
+            chunks_out = tuple(
+                tuple(c * scale for c in chunks_i)
+                for chunks_i, scale in zip(self.data.chunks, scaling)
+            )
+        else:
+            chunks_out, scaling = self.__get_upsampled_chunks(to_shape)
+
+        # Define block-wise upsampling function
+        def zoom_blocks(x, block_info=None):
+            """Scales blocks to the desired size using `scipy.ndimage.zoom`."""
+            # Calculate scaling factors based on input and output chunk shapes
+            scaling = tuple(
+                out_n / in_n
+                for out_n, in_n in zip(block_info[None]["chunk-shape"], x.shape)
+            )
+            return zoom(x, scaling, order=1, prefilter=False)
+
+        # Perform block-wise upsampling
+        darr_scaled = da.map_blocks(
+            zoom_blocks, self.data, dtype=self.data.dtype, chunks=chunks_out
+        )
+
+        # Update the affine matrix to reflect the new voxel size
+        if self.axes_order == "XYZ":
+            scaling_matrix = np.diag(
+                (1 / scaling[1], 1 / scaling[2], 1 / scaling[3], 1)
+            )
+        else:
+            scaling_matrix = np.diag(
+                (1 / scaling[-1], 1 / scaling[-2], 1 / scaling[-3], 1)
+            )
+        new_affine = AffineTransform.from_array(scaling_matrix @ self.affine.matrix)
+
+        # Create new NgffImage with upsampled data
+        dims = self.dims
+        if self.axes_order == "XYZ":
+            new_scale = {
+                dims[1]: self.scale[dims[1]] / scaling[1],
+                dims[2]: self.scale[dims[2]] / scaling[2],
+                dims[3]: self.scale[dims[3]] / scaling[3],
+            }
+        else:
+            new_scale = {
+                dims[1]: self.scale[dims[1]] / scaling[1],
+                dims[2]: self.scale[dims[2]] / scaling[2],
+                dims[3]: self.scale[dims[3]] / scaling[3],
+            }
+
+        upsampled_ngff = nz.NgffImage(
+            data=darr_scaled,
+            dims=dims,
+            scale=new_scale,
+            translation=self.translation.copy(),
+            name=self.name,
+        )
+
+        # Return a new ZarrNii instance with the upsampled data
+        return ZarrNii.from_ngff_image(
+            upsampled_ngff,
+            axes_order=self.axes_order,
+            orientation=self.orientation,
+            omero=self.omero,
+        )
+
+    def __get_upsampled_chunks(self, target_shape, return_scaling=True):
+        """Calculate new chunk sizes for a dask array to match a target shape."""
+        new_chunks = []
+        scaling = []
+
+        for dim, (orig_shape, orig_chunks, new_shape) in enumerate(
+            zip(self.data.shape, self.data.chunks, target_shape)
+        ):
+            # Calculate the scaling factor for this dimension
+            scaling_factor = new_shape / orig_shape
+
+            # Scale each chunk size and round to get an initial estimate
+            scaled_chunks = [
+                int(round(chunk * scaling_factor)) for chunk in orig_chunks
+            ]
+            total = sum(scaled_chunks)
+
+            # Adjust the chunks to ensure they sum up to the target shape exactly
+            diff = new_shape - total
+            if diff != 0:
+                # Correct rounding errors by adjusting the last chunk size in the dimension
+                scaled_chunks[-1] += diff
+
+            new_chunks.append(tuple(scaled_chunks))
+            scaling.append(scaling_factor)
+
+        if return_scaling:
+            return tuple(new_chunks), scaling
+        else:
+            return tuple(new_chunks)
+
+    def to_imaris(
+        self, path: str, compression: str = "gzip", compression_opts: int = 6
+    ) -> str:
+        """
+        Save to Imaris (.ims) file format using HDF5.
+
+        Args:
+            path: Output path for Imaris (.ims) file
+            compression: HDF5 compression method (default: "gzip")
+            compression_opts: Compression level (default: 6)
+
+        Returns:
+            str: Path to the saved file
+
+        Raises:
+            ImportError: If h5py is not available
+        """
+        try:
+            import h5py
+        except ImportError:
+            raise ImportError(
+                "h5py is required for Imaris support. "
+                "Install with: pip install zarrnii[imaris] or pip install h5py"
+            )
+
+        # Ensure path has .ims extension
+        if not path.endswith(".ims"):
+            path = path + ".ims"
+
+        def _string_to_byte_array(s: str) -> np.ndarray:
+            """Convert string to byte array as required by Imaris."""
+            return np.array([c.encode() for c in s])
+
+        # Get data and metadata
+        if hasattr(self.darr, "compute"):
+            data = self.darr.compute()  # Convert Dask array to numpy array
+        else:
+            data = np.asarray(self.darr)  # Handle numpy arrays directly
+
+        # Handle dimensions: expect ZYX or CZYX
+        if len(data.shape) == 4:
+            # CZYX format
+            n_channels = data.shape[0]
+            z, y, x = data.shape[1:]
+        elif len(data.shape) == 3:
+            # ZYX format - single channel
+            n_channels = 1
+            z, y, x = data.shape
+            data = data[np.newaxis, ...]  # Add channel dimension
+        else:
+            raise ValueError(
+                f"Unsupported data shape: {data.shape}. Expected 3D (ZYX) or 4D (CZYX)"
+            )
+
+        # Create basic Imaris file structure
+        with h5py.File(path, "w") as f:
+            # Root attributes
+            f.attrs["DataSetDirectoryName"] = _string_to_byte_array("DataSet")
+            f.attrs["DataSetInfoDirectoryName"] = _string_to_byte_array("DataSetInfo")
+            f.attrs["ImarisDataSet"] = _string_to_byte_array("ImarisDataSet")
+            f.attrs["ImarisVersion"] = _string_to_byte_array("5.5.0")
+            f.attrs["NumberOfDataSets"] = np.array([1], dtype=np.uint32)
+
+            # Create main DataSet group structure
+            dataset_group = f.create_group("DataSet")
+            res_group = dataset_group.create_group("ResolutionLevel 0")
+            time_group = res_group.create_group("TimePoint 0")
+
+            # Create channels with data
+            for c in range(n_channels):
+                channel_group = time_group.create_group(f"Channel {c}")
+                channel_data = data[c]  # (Z, Y, X)
+
+                # Channel attributes
+                channel_group.attrs["ImageSizeX"] = _string_to_byte_array(str(x))
+                channel_group.attrs["ImageSizeY"] = _string_to_byte_array(str(y))
+                channel_group.attrs["ImageSizeZ"] = _string_to_byte_array(str(z))
+
+                # Create data dataset
+                channel_group.create_dataset(
+                    "Data",
+                    data=channel_data.astype(np.float32),
+                    compression=compression,
+                    compression_opts=compression_opts,
+                    chunks=True,
+                )
+
+            # Create basic DataSetInfo structure
+            info_group = f.create_group("DataSetInfo")
+            image_info = info_group.create_group("Image")
+            image_info.attrs["X"] = _string_to_byte_array(str(x))
+            image_info.attrs["Y"] = _string_to_byte_array(str(y))
+            image_info.attrs["Z"] = _string_to_byte_array(str(z))
+            image_info.attrs["Unit"] = _string_to_byte_array("um")
+            image_info.attrs["Noc"] = _string_to_byte_array(str(n_channels))
+
+        return path
+
     def __repr__(self) -> str:
         """String representation."""
         return (
