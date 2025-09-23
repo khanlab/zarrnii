@@ -55,11 +55,13 @@ class TestScaledProcessingPlugin:
         assert lowres_result.shape == test_lowres.shape
         np.testing.assert_array_equal(lowres_result, test_lowres)
 
-        # Test highres function
+        # Test highres function - now both arrays should be same size
         test_fullres = da.from_array(
             np.random.rand(20, 20).astype(np.float32), chunks=(10, 10)
         )
-        highres_result = plugin.highres_func(test_fullres, lowres_result)
+        # Create upsampled version (same size as fullres for new interface)
+        upsampled_result = da.from_array(lowres_result, chunks=(10, 10))
+        highres_result = plugin.highres_func(test_fullres, upsampled_result)
         assert highres_result.shape == test_fullres.shape
         # Result should be double the original
         np.testing.assert_array_almost_equal(
@@ -120,19 +122,19 @@ class TestBiasFieldCorrection:
         with pytest.raises(ValueError, match="Input array must be at least 2D"):
             plugin.lowres_func(np.array([1, 2, 3]))
 
-    def test_highres_func_upsampling(self):
-        """Test the highres_func upsampling and application."""
+    def test_highres_func_application(self):
+        """Test the highres_func with upsampled bias field."""
         plugin = BiasFieldCorrection()
 
-        # Create test data
+        # Create test data - both arrays same size now
         fullres_data = (
             da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 100
         )  # Original image
-        lowres_bias = (
-            np.ones((20, 20), dtype=np.float32) * 2
-        )  # 2x downsampled bias field
+        upsampled_bias = (
+            da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 2
+        )  # Upsampled bias field (same size as fullres)
 
-        result = plugin.highres_func(fullres_data, lowres_bias)
+        result = plugin.highres_func(fullres_data, upsampled_bias)
 
         # Result should have same shape as full-res data
         assert result.shape == fullres_data.shape
@@ -144,18 +146,22 @@ class TestBiasFieldCorrection:
             result_computed, np.full_like(result_computed, expected), decimal=1
         )
 
-    def test_highres_func_shape_mismatch(self):
-        """Test highres_func with different dimensional inputs."""
+    def test_highres_func_division_by_zero_protection(self):
+        """Test highres_func protects against division by zero."""
         plugin = BiasFieldCorrection()
 
-        # Test with different aspect ratios
-        fullres_data = da.ones((60, 40), chunks=(30, 20), dtype=np.float32) * 100
-        lowres_bias = np.ones((15, 10), dtype=np.float32) * 2  # 4x downsampled
+        # Test with some zero values in bias field
+        fullres_data = da.ones((20, 20), chunks=(10, 10), dtype=np.float32) * 100
+        upsampled_bias = da.zeros(
+            (20, 20), chunks=(10, 10), dtype=np.float32
+        )  # All zeros
 
-        result = plugin.highres_func(fullres_data, lowres_bias)
+        result = plugin.highres_func(fullres_data, upsampled_bias)
 
         assert result.shape == fullres_data.shape
-        # Should still work despite shape differences due to resizing
+        # Should not result in inf values
+        result_computed = result.compute()
+        assert np.all(np.isfinite(result_computed))
 
 
 class TestZarrNiiScaledProcessingIntegration:

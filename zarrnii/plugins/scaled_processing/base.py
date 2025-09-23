@@ -54,18 +54,18 @@ class ScaledProcessingPlugin(ABC):
 
     @abstractmethod
     def highres_func(
-        self, fullres_array: da.Array, lowres_output: np.ndarray
+        self, fullres_array: da.Array, upsampled_output: da.Array
     ) -> da.Array:
         """
-        Apply low-resolution output to full-resolution data blockwise.
+        Apply upsampled output to full-resolution data blockwise.
 
         This function receives the full-resolution dask array and the
-        low-resolution output, handles internal upsampling of the lowres_output
-        to match fullres_array shape, and applies the operation.
+        upsampled output (same size as fullres_array), and applies the operation.
+        The upsampling is handled internally by the apply_scaled_processing method.
 
         Args:
             fullres_array: Full-resolution dask array
-            lowres_output: Output from lowres_func to be upsampled and applied
+            upsampled_output: Upsampled output (same shape as fullres_array)
 
         Returns:
             Processed full-resolution dask array

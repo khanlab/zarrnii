@@ -3009,24 +3009,31 @@ class ZarrNii:
         # Convert to numpy array for lowres processing
         lowres_array = lowres_znimg.data.compute()
 
-        # Step 2: Apply low-resolution function
-        lowres_znimg.data = da.from_array(
-            plugin.lowres_func(lowres_array), chunks=(1, 10, 10, 10)
-        )
+        # Step 2: Apply low-resolution function and prepare for upsampling
+        # Use chunk_size parameter for the low-res processing chunks
+        lowres_chunks = chunk_size if chunk_size is not None else (1, 10, 10, 10)
+        lowres_result = plugin.lowres_func(lowres_array)
 
-        upsampled_znimg = lowres_znimg.upsample(to_shape=self.shape)
-        upsampled_znimg.to_ome_zarr("temp.ome.zarr")
+        # Step 3: Upsample the result directly to match original shape
+        from scipy.ndimage import zoom
 
-        # Step 3: Prepare full-resolution data
-        #        if chunk_size is not None:
-        #            fullres_data = self.data.rechunk(chunk_size)
-        #        else:
-        #            fullres_data = self.data
+        zoom_factors = tuple(o / l for o, l in zip(self.shape, lowres_result.shape))
+        upsampled_result = zoom(lowres_result, zoom_factors, order=1)
+
+        # Ensure exact shape match (handle any rounding errors)
+        if upsampled_result.shape != self.shape:
+            # Crop or pad to exact shape
+            slices = tuple(
+                slice(0, min(s1, s2))
+                for s1, s2 in zip(upsampled_result.shape, self.shape)
+            )
+            upsampled_result = upsampled_result[slices]
+
+        # Convert to dask array with appropriate chunks
+        upsampled_data = da.from_array(upsampled_result, chunks=self.data.chunks)
 
         # Step 4: Apply high-resolution function
-        processed_data = plugin.highres_func(
-            self.data, ZarrNii.from_ome_zarr("temp.ome.zarr").data
-        )
+        processed_data = plugin.highres_func(self.data, upsampled_data)
 
         # Create new NgffImage with processed data
         new_ngff_image = nz.NgffImage(

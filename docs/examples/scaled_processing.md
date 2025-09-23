@@ -19,9 +19,9 @@ All scaled processing plugins must inherit from `ScaledProcessingPlugin` and imp
 
 This function processes the downsampled data and returns a result that will be upsampled and applied to the full-resolution data.
 
-### `highres_func(fullres_array: dask.array, lowres_output: np.ndarray) -> dask.array`
+### `highres_func(fullres_array: dask.array, upsampled_output: dask.array) -> dask.array`
 
-This function receives the full-resolution dask array and the low-resolution output, handles upsampling internally, and applies the operation blockwise.
+This function receives the full-resolution dask array and the upsampled output (already upsampled to match the full-resolution shape), and applies the operation blockwise. The upsampling is handled internally by the `apply_scaled_processing` method.
 
 ## Basic Usage
 
@@ -83,26 +83,12 @@ class CustomPlugin(ScaledProcessingPlugin):
         correction_map = np.ones_like(lowres_array) * self.param1
         return correction_map
     
-    def highres_func(self, fullres_array: da.Array, lowres_output: np.ndarray) -> da.Array:
-        # The upsampling is handled internally in the base implementation
+    def highres_func(self, fullres_array: da.Array, upsampled_output: da.Array) -> da.Array:
+        # The upsampling is handled internally by apply_scaled_processing
         # This example shows a simple multiplication operation
         
-        # Calculate zoom factors for upsampling
-        zoom_factors = [f/l for f, l in zip(fullres_array.shape, lowres_output.shape)]
-        
-        # Upsample the correction map
-        upsampled_correction = ndimage.zoom(lowres_output, zoom_factors, order=1)
-        
-        # Apply correction using map_blocks
-        def apply_correction(block, correction_block):
-            return block * correction_block
-            
-        result = da.map_blocks(
-            apply_correction,
-            fullres_array,
-            upsampled_correction,
-            dtype=fullres_array.dtype
-        )
+        # Apply correction directly (both arrays are same size)
+        result = fullres_array * upsampled_output
         
         return result
     
@@ -133,10 +119,11 @@ result = znimg.apply_scaled_processing(
 ### Custom Chunk Sizes
 
 ```python
-# Specify custom chunk sizes for dask processing
+# Specify custom chunk sizes for low-resolution processing
+# The chunk_size parameter controls the chunking of low-resolution intermediate results
 result = znimg.apply_scaled_processing(
     BiasFieldCorrection(),
-    chunk_size=(1, 64, 64, 64)
+    chunk_size=(1, 32, 32, 32)  # Used for low-res processing chunks
 )
 ```
 

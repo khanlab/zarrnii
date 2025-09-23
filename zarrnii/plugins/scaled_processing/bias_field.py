@@ -106,27 +106,26 @@ class BiasFieldCorrection(ScaledProcessingPlugin):
         return smoothed
 
     def highres_func(
-        self, fullres_array: da.Array, upsampled_output: np.ndarray
+        self, fullres_array: da.Array, upsampled_output: da.Array
     ) -> da.Array:
         """
         Apply bias field correction to full-resolution data.
 
-        This function upsamples takes the upsampled bias field
-        and applies
-        it to the full-resolution data by division.
+        This function takes the upsampled bias field (same size as fullres_array)
+        and applies it to the full-resolution data by division.
 
         Args:
             fullres_array: Full-resolution dask array
-            upsampled_output: Low-resolution bias field upsampled
+            upsampled_output: Upsampled bias field (same shape as fullres_array)
 
         Returns:
             Bias-corrected full-resolution array
         """
-        # Get shapes for upsampling calculation
-        fullres_shape = fullres_array.shape
-        upsampled_shape = upsampled_output.shape
-
-        corrected_array = fullres_array / upsampled_output
+        # Apply bias field correction by division using dask operations
+        # Avoid division by zero by adding small epsilon
+        corrected_array = fullres_array / da.maximum(
+            upsampled_output, np.finfo(fullres_array.dtype).eps
+        )
 
         return corrected_array
 
