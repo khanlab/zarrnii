@@ -220,6 +220,35 @@ class TestZarrNiiScaledProcessingIntegration:
         assert isinstance(result, ZarrNii)
         assert result.shape == znimg.shape
 
+    @pytest.mark.usefixtures("cleandir")
+    def test_apply_scaled_processing_temp_zarr_options(self, nifti_nib):
+        """Test apply_scaled_processing with temp zarr options."""
+        nifti_nib.to_filename("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii")
+
+        plugin = BiasFieldCorrection(sigma=1.0)
+
+        # Test with temp zarr disabled
+        result1 = znimg.apply_scaled_processing(
+            plugin, downsample_factor=2, use_temp_zarr=False
+        )
+        assert isinstance(result1, ZarrNii)
+        assert result1.shape == znimg.shape
+
+        # Test with custom temp zarr path
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = os.path.join(temp_dir, "custom_temp.ome.zarr")
+            result2 = znimg.apply_scaled_processing(
+                plugin, downsample_factor=2, temp_zarr_path=temp_path
+            )
+            assert isinstance(result2, ZarrNii)
+            assert result2.shape == znimg.shape
+            # Temp file should be cleaned up
+            assert not os.path.exists(temp_path)
+
 
 class TestScaledProcessingWorkflow:
     """Test complete scaled processing workflows."""

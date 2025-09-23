@@ -2974,6 +2974,8 @@ class ZarrNii:
         plugin,
         downsample_factor: int = 4,
         chunk_size: Optional[Tuple[int, ...]] = None,
+        use_temp_zarr: bool = True,
+        temp_zarr_path: Optional[str] = None,
         **kwargs,
     ) -> "ZarrNii":
         """
@@ -2982,12 +2984,15 @@ class ZarrNii:
         This method implements a multi-resolution processing pipeline where:
         1. The image is downsampled for efficient computation
         2. The plugin's lowres_func is applied to the downsampled data
-        3. The plugin's highres_func applies the result to full-resolution data
+        3. The result is upsampled using dask-based upsampling
+        4. The plugin's highres_func applies the result to full-resolution data
 
         Args:
             plugin: ScaledProcessingPlugin instance or class to apply
             downsample_factor: Factor for downsampling (default: 4)
-            chunk_size: Optional chunk size for dask processing. If None, uses current chunks.
+            chunk_size: Optional chunk size for low-res processing. If None, uses (1, 10, 10, 10).
+            use_temp_zarr: Whether to use temporary OME-Zarr for breaking up dask graph (default: True)
+            temp_zarr_path: Path for temporary OME-Zarr file. If None, uses temp directory.
             **kwargs: Additional arguments passed to the plugin
 
         Returns:
@@ -3012,25 +3017,56 @@ class ZarrNii:
         # Step 2: Apply low-resolution function and prepare for upsampling
         # Use chunk_size parameter for the low-res processing chunks
         lowres_chunks = chunk_size if chunk_size is not None else (1, 10, 10, 10)
-        lowres_result = plugin.lowres_func(lowres_array)
+        lowres_znimg.data = da.from_array(
+            plugin.lowres_func(lowres_array), chunks=lowres_chunks
+        )
 
-        # Step 3: Upsample the result directly to match original shape
-        from scipy.ndimage import zoom
+        # Step 3: Upsample using dask-based upsampling
+        upsampled_znimg = lowres_znimg.upsample(to_shape=self.shape)
 
-        zoom_factors = tuple(o / l for o, l in zip(self.shape, lowres_result.shape))
-        upsampled_result = zoom(lowres_result, zoom_factors, order=1)
+        if use_temp_zarr:
+            # Use temporary OME-Zarr to break up dask graph for performance
+            import os
+            import tempfile
 
-        # Ensure exact shape match (handle any rounding errors)
-        if upsampled_result.shape != self.shape:
-            # Crop or pad to exact shape
-            slices = tuple(
-                slice(0, min(s1, s2))
-                for s1, s2 in zip(upsampled_result.shape, self.shape)
-            )
-            upsampled_result = upsampled_result[slices]
+            if temp_zarr_path is None:
+                # Create temp file in system temp directory
+                temp_dir = tempfile.gettempdir()
+                temp_name = (
+                    f"zarrnii_scaled_processing_{os.getpid()}_{id(self)}.ome.zarr"
+                )
+                temp_zarr_path = os.path.join(temp_dir, temp_name)
 
-        # Convert to dask array with appropriate chunks
-        upsampled_data = da.from_array(upsampled_result, chunks=self.data.chunks)
+            try:
+                upsampled_znimg.to_ome_zarr(temp_zarr_path)
+                upsampled_data = ZarrNii.from_ome_zarr(temp_zarr_path).data
+            finally:
+                # Clean up temp file after loading data
+                if os.path.exists(temp_zarr_path):
+                    import shutil
+
+                    shutil.rmtree(temp_zarr_path, ignore_errors=True)
+        else:
+            # Use the upsampled data directly without temp file
+            upsampled_data = upsampled_znimg.data
+
+        # Ensure shapes match exactly (handle potential rounding errors from upsampling)
+        if upsampled_data.shape != self.data.shape:
+            # Crop or pad to exact shape as needed
+            if all(u >= o for u, o in zip(upsampled_data.shape, self.data.shape)):
+                # Upsampled is larger or equal, crop to exact size
+                slices = tuple(slice(0, s) for s in self.data.shape)
+                upsampled_data = upsampled_data[slices]
+            else:
+                # Need to pad - this shouldn't normally happen with proper upsampling
+                # but we handle it for robustness
+                from scipy.ndimage import zoom
+
+                zoom_factors = tuple(
+                    o / u for o, u in zip(self.data.shape, upsampled_data.shape)
+                )
+                upsampled_array = zoom(upsampled_data.compute(), zoom_factors, order=1)
+                upsampled_data = da.from_array(upsampled_array, chunks=self.data.chunks)
 
         # Step 4: Apply high-resolution function
         processed_data = plugin.highres_func(self.data, upsampled_data)

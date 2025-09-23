@@ -127,6 +127,24 @@ result = znimg.apply_scaled_processing(
 )
 ```
 
+### Temporary File Options
+
+The framework uses temporary OME-Zarr files to break up the dask computation graph for better performance. You can control this behavior:
+
+```python
+# Disable temporary file usage (may impact performance on large datasets)
+result = znimg.apply_scaled_processing(
+    BiasFieldCorrection(),
+    use_temp_zarr=False
+)
+
+# Use custom temporary file location
+result = znimg.apply_scaled_processing(
+    BiasFieldCorrection(),
+    temp_zarr_path="/custom/path/temp_processing.ome.zarr"
+)
+```
+
 ### Plugin Class vs Instance
 
 ```python
@@ -143,6 +161,8 @@ result2 = znimg.apply_scaled_processing(plugin)
 1. **Downsampling Factor**: Higher factors reduce computation time but may reduce accuracy
 2. **Chunk Sizes**: Optimize for your memory constraints and processing requirements
 3. **Algorithm Complexity**: The `lowres_func` runs on small numpy arrays, while `highres_func` uses dask for scalability
+4. **Temporary Files**: The default temporary OME-Zarr approach breaks up dask computation graphs for better performance on large datasets. Disable only if you have specific memory/disk constraints
+5. **Dask-based Upsampling**: Uses ZarrNii's `.upsample()` method which leverages dask for efficient parallel upsampling
 
 ## Integration with Other Operations
 
