@@ -385,3 +385,93 @@ class TestChannelSelection:
         # Data shape should match
         expected_shape = (16, 32, 32, 2)
         assert znimg.darr.shape == expected_shape
+
+    def test_select_channels_with_czyx_dimension_order(self):
+        """Test that select_channels works when channels are not in the last dimension."""
+        import dask.array as da
+        import ngff_zarr as nz
+        import numpy as np
+
+        # Create test data in CZYX order (channels first)
+        arr_sz = (3, 8, 16, 16)  # (channels, z, y, x)
+        arr = da.zeros(arr_sz, dtype=np.uint16)
+
+        # Fill with different values for each channel for easy identification
+        def fill_channel_data(block, block_info=None):
+            if block_info is not None:
+                # Get the channel slice info (first dimension)
+                block_slice = block_info[0]["array-location"]
+                c_start = block_slice[0][0]  # Channel is at index 0
+                c_end = block_slice[0][1]
+
+                # Create different values for each channel (100, 200, 300)
+                result = np.zeros(block.shape, dtype=np.uint16)
+                for c_idx in range(c_end - c_start):
+                    global_c_idx = c_start + c_idx
+                    value = (global_c_idx + 1) * 100
+                    result[c_idx, :, :, :] = value
+                return result
+            return np.zeros(block.shape, dtype=np.uint16)
+
+        arr = arr.map_blocks(fill_channel_data, dtype=np.uint16)
+
+        # Create NgffImage with explicit CZYX dims
+        scale = {"c": 1.0, "z": 1.0, "y": 1.0, "x": 1.0}
+        translation = {"c": 0.0, "z": 0.0, "y": 0.0, "x": 0.0}
+        dims = ["c", "z", "y", "x"]
+
+        ngff_image = nz.NgffImage(
+            data=arr, dims=dims, scale=scale, translation=translation, name="test_czyx"
+        )
+
+        # Create ZarrNii object
+        znii = ZarrNii(ngff_image=ngff_image, axes_order="ZYX", orientation="RAS")
+
+        # Test selecting channels 0 and 2
+        selected = znii.select_channels(channels=[0, 2])
+
+        # Verify correct shape (should keep 2 channels)
+        assert selected.data.shape == (2, 8, 16, 16)
+        assert selected.dims == ["c", "z", "y", "x"]
+
+        # Verify the data values are correct
+        selected_data = selected.data.compute()
+        channel_0_sum = selected_data[0, :, :, :].sum()  # Should be 100 * volume
+        channel_1_sum = selected_data[
+            1, :, :, :
+        ].sum()  # Should be 300 * volume (original channel 2)
+
+        expected_volume = 8 * 16 * 16
+        expected_sums = [100 * expected_volume, 300 * expected_volume]
+        actual_sums = [int(channel_0_sum), int(channel_1_sum)]
+
+        assert (
+            actual_sums == expected_sums
+        ), f"Channel data mismatch: expected {expected_sums}, got {actual_sums}"
+
+    def test_select_channels_error_no_channel_dimension(self):
+        """Test that proper error is raised when there's no channel dimension."""
+        import dask.array as da
+        import ngff_zarr as nz
+        import numpy as np
+
+        # Create 3D data with no channel dimension
+        arr_sz = (8, 16, 16)  # (z, y, x) - no channels
+        arr = da.ones(arr_sz, dtype=np.uint16)
+
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+        translation = {"z": 0.0, "y": 0.0, "x": 0.0}
+        dims = ["z", "y", "x"]
+
+        ngff_image = nz.NgffImage(
+            data=arr,
+            dims=dims,
+            scale=scale,
+            translation=translation,
+            name="test_no_channels",
+        )
+
+        znii = ZarrNii(ngff_image=ngff_image, axes_order="ZYX", orientation="RAS")
+
+        with pytest.raises(ValueError, match="No channel dimension found"):
+            znii.select_channels(channels=[0])

@@ -2780,8 +2780,19 @@ class ZarrNii:
             # Return a copy with all channels
             return self.copy()
 
-        # Select channels from data (assumes channel is last dimension)
-        selected_data = self.data[..., channels]
+        # Check if channel dimension exists
+        if "c" not in self.dims:
+            raise ValueError("No channel dimension found in the data")
+
+        # Get channel dimension index
+        c_idx = self.dims.index("c")
+
+        # Create slice objects for proper dimension indexing
+        slices = [slice(None)] * len(self.data.shape)
+        slices[c_idx] = channels
+
+        # Select channels from data using proper dimension indexing
+        selected_data = self.data[tuple(slices)]
 
         # Create new NgffImage with selected data
         new_ngff_image = nz.NgffImage(
