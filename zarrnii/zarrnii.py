@@ -26,15 +26,15 @@ from scipy.ndimage import zoom
 
 from .enums import ImageType, TransformType
 from .io import (
+    _select_dimensions_from_image_with_omero,
     load_ngff_image,
     save_ngff_image,
-    _select_dimensions_from_image_with_omero,
 )
 from .processing import (
+    apply_near_isotropic_downsampling,
+    apply_transform_to_ngff_image,
     crop_ngff_image,
     downsample_ngff_image,
-    apply_transform_to_ngff_image,
-    apply_near_isotropic_downsampling,
 )
 from .transform import AffineTransform, Transform
 from .utils import (
@@ -345,7 +345,7 @@ class ZarrNii:
         else:
             raise ValueError("Must provide either ngff_image or darr")
 
-    @classmethod  
+    @classmethod
     def from_ome_zarr(
         cls,
         store_or_path: Union[str, Any],
@@ -365,17 +365,17 @@ class ZarrNii:
         ngff_image = load_ngff_image(
             store_or_path, level, channels, channel_labels, timepoints, storage_options
         )
-        
+
         # Create ZarrNii instance
         znimg = cls.from_ngff_image(ngff_image, axes_order, orientation)
-        
+
         # Apply near-isotropic downsampling if requested
         if downsample_near_isotropic:
             znimg = apply_near_isotropic_downsampling(znimg, axes_order)
-            
+
         if rechunk:
             znimg.data = znimg.data.rechunk(chunks)
-            
+
         return znimg
 
     @classmethod
@@ -1155,6 +1155,217 @@ class ZarrNii:
             image_info.attrs["Noc"] = _string_to_byte_array(str(n_channels))
 
         return path
+
+    def segment(
+        self, plugin, chunk_size: Optional[Tuple[int, ...]] = None, **kwargs
+    ) -> "ZarrNii":
+        """
+        Apply segmentation plugin to the image using blockwise processing.
+
+        This method applies a segmentation plugin to the image data using dask's
+        blockwise processing for efficient computation on large datasets.
+
+        Args:
+            plugin: Segmentation plugin instance or class to apply
+            chunk_size: Optional chunk size for dask processing. If None, uses current chunks.
+            **kwargs: Additional arguments passed to the plugin
+
+        Returns:
+            New ZarrNii instance with segmented data as labels
+        """
+        from .plugins.segmentation import SegmentationPlugin
+
+        # Handle plugin instance or class
+        if isinstance(plugin, type) and issubclass(plugin, SegmentationPlugin):
+            plugin = plugin(**kwargs)
+        elif not isinstance(plugin, SegmentationPlugin):
+            raise TypeError(
+                "Plugin must be an instance or subclass of SegmentationPlugin"
+            )
+
+        # Prepare chunk size
+        if chunk_size is not None:
+            # Rechunk the data if different chunk size requested
+            data = self.data.rechunk(chunk_size)
+        else:
+            data = self.data
+
+        # Create metadata dict to pass to plugin
+        metadata = {
+            "axes_order": self.axes_order,
+            "orientation": self.orientation,
+            "shape": self.shape,
+            "dims": self.dims,
+            "scale": self.scale,
+            "translation": self.translation,
+        }
+
+        # Create a wrapper function for map_blocks
+        def segment_block(block):
+            """Wrapper function to apply segmentation to a single block."""
+            # Handle single blocks
+            return plugin.segment(block, metadata)
+
+        # Apply segmentation using dask map_blocks
+        segmented_data = da.map_blocks(
+            segment_block,
+            data,
+            dtype=np.uint8,  # Segmentation results are typically uint8
+            meta=np.array([], dtype=np.uint8),  # Provide meta information
+        )
+
+        # Create new NgffImage with segmented data
+        new_ngff_image = nz.NgffImage(
+            data=segmented_data,
+            dims=self.dims.copy(),
+            scale=self.scale.copy(),
+            translation=self.translation.copy(),
+            name=f"{self.name}_segmented_{plugin.name.lower().replace(' ', '_')}",
+        )
+
+        # Return new ZarrNii instance
+        return ZarrNii(
+            ngff_image=new_ngff_image,
+            axes_order=self.axes_order,
+            orientation=self.orientation,
+        )
+
+    def segment_otsu(
+        self, nbins: int = 256, chunk_size: Optional[Tuple[int, ...]] = None
+    ) -> "ZarrNii":
+        """
+        Apply Otsu thresholding segmentation to the image.
+
+        Convenience method for Otsu thresholding segmentation.
+
+        Args:
+            nbins: Number of bins for histogram computation (default: 256)
+            chunk_size: Optional chunk size for dask processing
+
+        Returns:
+            New ZarrNii instance with binary segmentation
+        """
+        from .plugins.segmentation import OtsuSegmentation
+
+        plugin = OtsuSegmentation(nbins=nbins)
+        return self.segment(plugin, chunk_size=chunk_size)
+
+    def apply_scaled_processing(
+        self,
+        plugin,
+        downsample_factor: int = 4,
+        chunk_size: Optional[Tuple[int, ...]] = None,
+        use_temp_zarr: bool = True,
+        temp_zarr_path: Optional[str] = None,
+        **kwargs,
+    ) -> "ZarrNii":
+        """
+        Apply scaled processing plugin using multi-resolution approach.
+
+        This method implements a multi-resolution processing pipeline where:
+        1. The image is downsampled for efficient computation
+        2. The plugin's lowres_func is applied to the downsampled data
+        3. The result is upsampled using dask-based upsampling
+        4. The plugin's highres_func applies the result to full-resolution data
+
+        Args:
+            plugin: ScaledProcessingPlugin instance or class to apply
+            downsample_factor: Factor for downsampling (default: 4)
+            chunk_size: Optional chunk size for low-res processing. If None, uses (1, 10, 10, 10).
+            use_temp_zarr: Whether to use temporary OME-Zarr for breaking up dask graph (default: True)
+            temp_zarr_path: Path for temporary OME-Zarr file. If None, uses temp directory.
+            **kwargs: Additional arguments passed to the plugin
+
+        Returns:
+            New ZarrNii instance with processed data
+        """
+        from .plugins.scaled_processing import ScaledProcessingPlugin
+
+        # Handle plugin instance or class
+        if isinstance(plugin, type) and issubclass(plugin, ScaledProcessingPlugin):
+            plugin = plugin(**kwargs)
+        elif not isinstance(plugin, ScaledProcessingPlugin):
+            raise TypeError(
+                "Plugin must be an instance or subclass of ScaledProcessingPlugin"
+            )
+
+        # Step 1: Downsample the data for low-resolution processing
+        lowres_znimg = self.downsample(level=int(np.log2(downsample_factor)))
+
+        # Convert to numpy array for lowres processing
+        lowres_array = lowres_znimg.data.compute()
+
+        # Step 2: Apply low-resolution function and prepare for upsampling
+        # Use chunk_size parameter for the low-res processing chunks
+        lowres_chunks = chunk_size if chunk_size is not None else (1, 10, 10, 10)
+        lowres_znimg.data = da.from_array(
+            plugin.lowres_func(lowres_array), chunks=lowres_chunks
+        )
+
+        # Step 3: Upsample using dask-based upsampling
+        upsampled_znimg = lowres_znimg.upsample(to_shape=self.shape)
+
+        if use_temp_zarr:
+            # Use temporary OME-Zarr to break up dask graph for performance
+            import os
+            import tempfile
+
+            if temp_zarr_path is None:
+                # Create temp file in system temp directory
+                temp_dir = tempfile.gettempdir()
+                temp_name = (
+                    f"zarrnii_scaled_processing_{os.getpid()}_{id(self)}.ome.zarr"
+                )
+                temp_zarr_path = os.path.join(temp_dir, temp_name)
+
+            try:
+                upsampled_znimg.to_ome_zarr(temp_zarr_path)
+                # Reload with the same axes_order to avoid shape reordering
+                reloaded_znimg = ZarrNii.from_ome_zarr(temp_zarr_path)
+                # Ensure the reloaded data matches the expected shape by preserving axes order
+                if reloaded_znimg.axes_order != self.axes_order:
+                    # If axes order changed, we need to transpose the data back
+                    if (
+                        self.axes_order == "XYZ" and reloaded_znimg.axes_order == "ZYX"
+                    ) or (
+                        self.axes_order == "ZYX" and reloaded_znimg.axes_order == "XYZ"
+                    ):
+                        # Simple case: just transpose the spatial dimensions (skip channel dim)
+                        upsampled_data = da.transpose(reloaded_znimg.data, (0, 3, 2, 1))
+                    else:
+                        # More complex reordering - fallback to direct data
+                        upsampled_data = upsampled_znimg.data
+                else:
+                    upsampled_data = reloaded_znimg.data
+            finally:
+                # Clean up temp file after loading data
+                if os.path.exists(temp_zarr_path):
+                    import shutil
+
+                    shutil.rmtree(temp_zarr_path, ignore_errors=True)
+        else:
+            # Use the upsampled data directly without temp file
+            upsampled_data = upsampled_znimg.data
+
+        # Step 4: Apply high-resolution function
+        processed_data = plugin.highres_func(self.data, upsampled_data)
+
+        # Create new NgffImage with processed data
+        new_ngff_image = nz.NgffImage(
+            data=processed_data,
+            dims=self.dims.copy(),
+            scale=self.scale.copy(),
+            translation=self.translation.copy(),
+            name=f"{self.name}_{plugin.name.lower().replace(' ', '_')}",
+        )
+
+        # Return new ZarrNii instance
+        return ZarrNii(
+            ngff_image=new_ngff_image,
+            axes_order=self.axes_order,
+            orientation=self.orientation,
+            _omero=self._omero,
+        )
 
     def __repr__(self) -> str:
         """String representation."""
