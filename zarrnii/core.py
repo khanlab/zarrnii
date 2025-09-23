@@ -3039,7 +3039,23 @@ class ZarrNii:
 
             try:
                 upsampled_znimg.to_ome_zarr(temp_zarr_path)
-                upsampled_data = ZarrNii.from_ome_zarr(temp_zarr_path).data
+                # Reload with the same axes_order to avoid shape reordering
+                reloaded_znimg = ZarrNii.from_ome_zarr(temp_zarr_path)
+                # Ensure the reloaded data matches the expected shape by preserving axes order
+                if reloaded_znimg.axes_order != self.axes_order:
+                    # If axes order changed, we need to transpose the data back
+                    if (
+                        self.axes_order == "XYZ" and reloaded_znimg.axes_order == "ZYX"
+                    ) or (
+                        self.axes_order == "ZYX" and reloaded_znimg.axes_order == "XYZ"
+                    ):
+                        # Simple case: just transpose the spatial dimensions (skip channel dim)
+                        upsampled_data = da.transpose(reloaded_znimg.data, (0, 3, 2, 1))
+                    else:
+                        # More complex reordering - fallback to direct data
+                        upsampled_data = upsampled_znimg.data
+                else:
+                    upsampled_data = reloaded_znimg.data
             finally:
                 # Clean up temp file after loading data
                 if os.path.exists(temp_zarr_path):
@@ -3049,24 +3065,6 @@ class ZarrNii:
         else:
             # Use the upsampled data directly without temp file
             upsampled_data = upsampled_znimg.data
-
-        # Ensure shapes match exactly (handle potential rounding errors from upsampling)
-        if upsampled_data.shape != self.data.shape:
-            # Crop or pad to exact shape as needed
-            if all(u >= o for u, o in zip(upsampled_data.shape, self.data.shape)):
-                # Upsampled is larger or equal, crop to exact size
-                slices = tuple(slice(0, s) for s in self.data.shape)
-                upsampled_data = upsampled_data[slices]
-            else:
-                # Need to pad - this shouldn't normally happen with proper upsampling
-                # but we handle it for robustness
-                from scipy.ndimage import zoom
-
-                zoom_factors = tuple(
-                    o / u for o, u in zip(self.data.shape, upsampled_data.shape)
-                )
-                upsampled_array = zoom(upsampled_data.compute(), zoom_factors, order=1)
-                upsampled_data = da.from_array(upsampled_array, chunks=self.data.chunks)
 
         # Step 4: Apply high-resolution function
         processed_data = plugin.highres_func(self.data, upsampled_data)
