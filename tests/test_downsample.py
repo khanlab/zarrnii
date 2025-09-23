@@ -301,3 +301,64 @@ def test_near_isotropic_downsampling_parameter_validation(nifti_nib):
     for dim in ["x", "y", "z"]:
         if dim in znimg1.scale and dim in znimg3.scale:
             assert abs(znimg1.scale[dim] - znimg3.scale[dim]) < 1e-6
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_get_upsampled_chunks_function(nifti_nib):
+    """Test the __get_upsampled_chunks function ensures exact target shapes."""
+    nifti_nib.to_filename("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
+
+    # Test various target shapes to ensure chunks sum up exactly
+    test_cases = [
+        (1, 100, 50, 200),  # Simple case
+        (1, 127, 63, 255),  # Odd numbers
+        (1, 200, 100, 400),  # Double size
+        (1, 75, 37, 150),  # Non-power-of-2 factors
+    ]
+
+    for target_shape in test_cases:
+        # Get the upsampled chunks
+        new_chunks, scaling = znimg._ZarrNii__get_upsampled_chunks(target_shape)
+
+        # Check that chunks sum up to exactly the target shape
+        for dim, (target_dim, chunks_dim) in enumerate(zip(target_shape, new_chunks)):
+            chunks_sum = sum(chunks_dim)
+            assert (
+                chunks_sum == target_dim
+            ), f"Dimension {dim}: chunks sum {chunks_sum} != target {target_dim}"
+
+        # Check that scaling factors are reasonable
+        for dim, (orig_dim, target_dim, scale) in enumerate(
+            zip(znimg.shape, target_shape, scaling)
+        ):
+            expected_scale = target_dim / orig_dim
+            assert (
+                abs(scale - expected_scale) < 1e-10
+            ), f"Dimension {dim}: scaling {scale} != expected {expected_scale}"
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_upsample_to_shape_exact_match(nifti_nib):
+    """Test that upsample with to_shape produces exactly the target shape."""
+    nifti_nib.to_filename("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
+
+    # Test various target shapes
+    test_cases = [
+        (1, 100, 50, 200),  # Simple case
+        (1, 127, 63, 255),  # Odd numbers
+        (1, 200, 100, 400),  # Double size
+        (1, 75, 37, 150),  # Non-power-of-2 factors
+    ]
+
+    for target_shape in test_cases:
+        upsampled = znimg.upsample(to_shape=target_shape)
+        assert (
+            upsampled.shape == target_shape
+        ), f"Upsampled shape {upsampled.shape} != target {target_shape}"
+
+        # Also verify the data shape matches (not just the ZarrNii shape property)
+        assert (
+            upsampled.data.shape == target_shape
+        ), f"Data shape {upsampled.data.shape} != target {target_shape}"
