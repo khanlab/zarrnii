@@ -829,13 +829,11 @@
 # Load an OME-Zarr dataset
 znimg = ZarrNii.from_ome_zarr(&quot;path/to/zarr_dataset.ome.zarr&quot;)
 
-&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
 # Or load from Imaris (requires optional dependency)
 # znimg = ZarrNii.from_imaris(&quot;path/to/microscopy_data.ims&quot;)
-=======
+
 # Load with specific timepoints and channels (5D support)
 znimg_subset = ZarrNii.from_ome_zarr(&quot;timeseries.zarr&quot;, timepoints=[0, 2], channels=[1])
-&gt;&gt;&gt;&gt;&gt;&gt;&gt; main
 
 # Perform a transformation (e.g., downsample)
 downsampled_znimg = znimg.downsample(level=2)
