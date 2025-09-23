@@ -560,3 +560,118 @@ def import_lut_itksnap_as_tsv(
     # Create DataFrame and save as TSV
     df = pd.DataFrame(labels)
     df.to_csv(tsv_path, sep="\t", index=False)
+
+
+def get_builtin_atlas(name: str = "placeholder") -> Atlas:
+    """Get a built-in atlas from the zarrnii package.
+
+    This function provides access to atlases that are packaged with zarrnii,
+    useful for testing, examples, and basic analysis workflows.
+
+    Args:
+        name: Name of the built-in atlas to retrieve.
+            Available atlases:
+            - "placeholder": A simple 4-region atlas for testing/examples
+
+    Returns:
+        Atlas instance loaded from built-in data
+
+    Raises:
+        ValueError: If the requested atlas name is not available
+
+    Examples:
+        >>> # Get the placeholder atlas
+        >>> atlas = get_builtin_atlas("placeholder")
+        >>> print(f"Atlas has {len(atlas.region_labels)} regions")
+
+        >>> # Use in analysis workflows
+        >>> atlas = get_builtin_atlas()  # defaults to "placeholder"
+        >>> mask = atlas.get_region_mask("Region_A")
+    """
+    available_atlases = ["placeholder"]
+
+    if name not in available_atlases:
+        raise ValueError(
+            f"Atlas '{name}' not found. Available built-in atlases: {available_atlases}"
+        )
+
+    if name == "placeholder":
+        return _create_placeholder_atlas()
+
+    # This should never be reached given the validation above
+    raise ValueError(f"Atlas '{name}' not implemented")
+
+
+def list_builtin_atlases() -> List[Dict[str, str]]:
+    """List all available built-in atlases.
+
+    Returns:
+        List of dictionaries containing atlas information with keys:
+        - 'name': Atlas identifier for use with get_builtin_atlas()
+        - 'description': Brief description of the atlas
+        - 'regions': Number of regions (approximate)
+        - 'resolution': Spatial resolution information
+
+    Examples:
+        >>> atlases = list_builtin_atlases()
+        >>> for atlas_info in atlases:
+        ...     print(f"{atlas_info['name']}: {atlas_info['description']}")
+    """
+    return [
+        {
+            "name": "placeholder",
+            "description": "Simple 4-region atlas for testing and examples",
+            "regions": "5 (including background)",
+            "resolution": "32x32x32 voxels, 1mm isotropic",
+        }
+    ]
+
+
+def _create_placeholder_atlas() -> Atlas:
+    """Create the placeholder atlas with synthetic data.
+
+    Returns:
+        Atlas instance with a simple 4-region segmentation
+    """
+    import tempfile
+    from pathlib import Path
+
+    # Create synthetic segmentation data
+    shape = (32, 32, 32)
+    dseg_data = np.zeros(shape, dtype=np.int32)
+
+    # Create 4 distinct regions in a simple pattern
+    # Region 1: Left half
+    dseg_data[:, :, :16] = 1
+
+    # Region 2: Right-front quarter
+    dseg_data[:16, :16, 16:] = 2
+
+    # Region 3: Right-back-top eighth
+    dseg_data[:8, 16:, 16:] = 3
+
+    # Region 4: Right-back-bottom eighth
+    dseg_data[8:16, 16:, 16:] = 4
+
+    # Create ZarrNii from synthetic data
+    from .transform import AffineTransform
+
+    affine = AffineTransform.identity()  # 1mm isotropic
+    dseg = ZarrNii.from_darr(dseg_data, affine=affine)
+
+    # Load labels from packaged TSV file
+    labels_path = Path(__file__).parent / "data" / "atlases" / "placeholder_labels.tsv"
+
+    try:
+        labels_df = pd.read_csv(labels_path, sep="\t")
+    except FileNotFoundError:
+        # Fallback to creating labels in memory if file not found
+        labels_df = pd.DataFrame(
+            {
+                "index": [0, 1, 2, 3, 4],
+                "name": ["Background", "Region_A", "Region_B", "Region_C", "Region_D"],
+                "abbreviation": ["BG", "RA", "RB", "RC", "RD"],
+            }
+        )
+
+    return Atlas(dseg=dseg, labels_df=labels_df)

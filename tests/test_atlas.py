@@ -620,3 +620,149 @@ class TestAtlasEdgeCases:
 
         with pytest.raises(ValueError, match="Feature column 'missing' not found"):
             atlas.create_feature_map(bad_df, "missing")
+
+
+class TestBuiltinAtlases:
+    """Test suite for built-in atlas functionality."""
+
+    def test_list_builtin_atlases(self):
+        """Test listing available built-in atlases."""
+        from zarrnii import list_builtin_atlases
+
+        atlases = list_builtin_atlases()
+
+        assert isinstance(atlases, list)
+        assert len(atlases) > 0
+
+        # Check that placeholder atlas is available
+        atlas_names = [atlas["name"] for atlas in atlases]
+        assert "placeholder" in atlas_names
+
+        # Check structure of atlas info
+        placeholder_info = next(
+            atlas for atlas in atlases if atlas["name"] == "placeholder"
+        )
+        required_keys = ["name", "description", "regions", "resolution"]
+        for key in required_keys:
+            assert key in placeholder_info
+            assert isinstance(placeholder_info[key], str)
+
+    def test_get_builtin_atlas_placeholder(self):
+        """Test getting the placeholder atlas."""
+        from zarrnii import get_builtin_atlas
+
+        # Test default (should be placeholder)
+        atlas = get_builtin_atlas()
+        assert isinstance(atlas, Atlas)
+
+        # Test explicit placeholder request
+        atlas = get_builtin_atlas("placeholder")
+        assert isinstance(atlas, Atlas)
+
+        # Check atlas properties
+        assert len(atlas.region_labels) == 5  # 0-4 including background
+        assert atlas.dseg.shape == (32, 32, 32)
+
+        # Check that we have expected region names
+        region_names = atlas.region_names
+        assert "Background" in region_names
+        assert "Region_A" in region_names
+        assert "Region_B" in region_names
+        assert "Region_C" in region_names
+        assert "Region_D" in region_names
+
+    def test_get_builtin_atlas_invalid_name(self):
+        """Test error handling for invalid atlas names."""
+        from zarrnii import get_builtin_atlas
+
+        with pytest.raises(ValueError, match="Atlas 'nonexistent' not found"):
+            get_builtin_atlas("nonexistent")
+
+    def test_placeholder_atlas_functionality(self):
+        """Test that the placeholder atlas works with all Atlas methods."""
+        from zarrnii import get_builtin_atlas
+
+        atlas = get_builtin_atlas("placeholder")
+
+        # Test region info retrieval by different identifiers
+        info_by_index = atlas.get_region_info(1)
+        info_by_name = atlas.get_region_info("Region_A")
+        info_by_abbrev = atlas.get_region_info("RA")
+
+        assert info_by_index["index"] == 1
+        assert info_by_name["index"] == 1
+        assert info_by_abbrev["index"] == 1
+
+        # Test mask creation
+        mask = atlas.get_region_mask("Region_B")
+        assert mask.shape == atlas.dseg.shape
+
+        # Test volume calculation
+        volume = atlas.get_region_volume("RC")
+        assert volume > 0
+
+        # Test summary statistics
+        summary = atlas.get_summary_statistics()
+        assert len(summary) == 5
+        assert "volume_mm3" in summary.columns
+
+    def test_placeholder_atlas_region_distribution(self):
+        """Test that placeholder atlas has expected region distribution."""
+        from zarrnii import get_builtin_atlas
+
+        atlas = get_builtin_atlas("placeholder")
+        dseg_data = atlas.dseg.data
+        if hasattr(dseg_data, "compute"):
+            dseg_data = dseg_data.compute()
+
+        # Check that all regions 0-4 are present
+        unique_labels = np.unique(dseg_data)
+        expected_labels = np.array([0, 1, 2, 3, 4])
+        np.testing.assert_array_equal(np.sort(unique_labels), expected_labels)
+
+        # Check that Region_A (label 1) is the largest non-background region
+        # (it should be the left half)
+        region_sizes = []
+        for label in [1, 2, 3, 4]:
+            size = np.sum(dseg_data == label)
+            region_sizes.append(size)
+
+        # Region 1 should be largest (left half = 16*32*32 = 16384 voxels)
+        assert region_sizes[0] == max(region_sizes)
+        assert region_sizes[0] == 16 * 32 * 32
+
+    def test_placeholder_atlas_with_synthetic_image(self):
+        """Test using placeholder atlas for image analysis."""
+        from zarrnii import get_builtin_atlas
+
+        atlas = get_builtin_atlas("placeholder")
+
+        # Create a synthetic image with different values in each region
+        shape = atlas.dseg.shape
+        img_data = np.random.rand(*shape) * 100  # Random values 0-100
+
+        # Set specific values for each region for testing
+        dseg_data = atlas.dseg.data
+        if hasattr(dseg_data, "compute"):
+            dseg_data = dseg_data.compute()
+
+        img_data[dseg_data == 1] = 10.0  # Region_A
+        img_data[dseg_data == 2] = 20.0  # Region_B
+        img_data[dseg_data == 3] = 30.0  # Region_C
+        img_data[dseg_data == 4] = 40.0  # Region_D
+
+        # Create ZarrNii image
+        test_image = ZarrNii.from_darr(img_data, affine=atlas.dseg.affine)
+
+        # Test aggregation
+        results = atlas.aggregate_image_by_regions(test_image, aggregation_func="mean")
+
+        # Check results
+        assert len(results) == 5  # All regions including background
+
+        # Check specific region values
+        region_a_row = results[results["name"] == "Region_A"].iloc[0]
+        region_b_row = results[results["name"] == "Region_B"].iloc[0]
+
+        assert abs(region_a_row["mean_value"] - 10.0) < 1e-10
+        assert abs(region_b_row["mean_value"] - 20.0) < 1e-10

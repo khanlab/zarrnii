@@ -4,6 +4,28 @@ This example demonstrates how to use the atlas functionality in ZarrNii for work
 
 ## Basic Atlas Usage
 
+### Using Built-in Atlases
+
+ZarrNii comes with built-in atlases for quick testing and examples:
+
+```python
+from zarrnii import get_builtin_atlas, list_builtin_atlases
+
+# List all available built-in atlases
+atlases = list_builtin_atlases()
+for atlas_info in atlases:
+    print(f"{atlas_info['name']}: {atlas_info['description']}")
+
+# Get the placeholder atlas (default)
+atlas = get_builtin_atlas()  # or get_builtin_atlas("placeholder")
+print(f"Atlas shape: {atlas.dseg.shape}")
+print(f"Regions: {atlas.region_names}")
+
+# Use immediately for testing
+mask = atlas.get_region_mask("Region_A")
+volume = atlas.get_region_volume("RA")  # By abbreviation
+```
+
 ### Loading an Atlas from Files
 
 ```python
