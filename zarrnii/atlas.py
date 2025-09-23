@@ -149,36 +149,78 @@ class Atlas:
         else:
             return [""] * len(self.labels_df)
 
-    def get_region_info(self, label: int) -> Dict[str, Any]:
-        """Get information for a specific region label.
+    def _find_region_label(self, identifier: Union[int, str]) -> int:
+        """Find region label from identifier (index, name, or abbreviation).
 
         Args:
-            label: Region label/index
+            identifier: Region identifier - can be:
+                - int: Direct label/index
+                - str: Region name or abbreviation
+
+        Returns:
+            Region label/index as integer
+
+        Raises:
+            ValueError: If identifier not found in atlas
+        """
+        # If already an integer (including numpy integers), validate and return
+        if isinstance(identifier, (int, np.integer)):
+            identifier = int(identifier)  # Convert numpy integers to Python int
+            if identifier not in self.region_labels:
+                raise ValueError(f"Label {identifier} not found in atlas")
+            return identifier
+
+        # Search by name first
+        name_mask = self.labels_df[self.name_column] == identifier
+        if name_mask.any():
+            return int(self.labels_df[name_mask].iloc[0][self.label_column])
+
+        # Search by abbreviation if available
+        if self.abbrev_column in self.labels_df.columns:
+            abbrev_mask = self.labels_df[self.abbrev_column] == identifier
+            if abbrev_mask.any():
+                return int(self.labels_df[abbrev_mask].iloc[0][self.label_column])
+
+        # Not found
+        raise ValueError(
+            f"Region '{identifier}' not found in atlas. "
+            f"Must be a valid label, name, or abbreviation."
+        )
+
+    def get_region_info(self, identifier: Union[int, str]) -> Dict[str, Any]:
+        """Get information for a specific region.
+
+        Args:
+            identifier: Region identifier - can be:
+                - int: Region label/index
+                - str: Region name or abbreviation
 
         Returns:
             Dictionary with region information
 
         Raises:
-            ValueError: If label not found in atlas
+            ValueError: If identifier not found in atlas
         """
+        label = self._find_region_label(identifier)
         mask = self.labels_df[self.label_column] == label
-        if not mask.any():
-            raise ValueError(f"Label {label} not found in atlas")
-
         row = self.labels_df[mask].iloc[0]
         return row.to_dict()
 
-    def get_region_mask(self, label: int) -> ZarrNii:
+    def get_region_mask(self, identifier: Union[int, str]) -> ZarrNii:
         """Get binary mask for a specific region.
 
         Args:
-            label: Region label/index
+            identifier: Region identifier - can be:
+                - int: Region label/index
+                - str: Region name or abbreviation
 
         Returns:
             ZarrNii with binary mask (1 for region, 0 elsewhere)
+
+        Raises:
+            ValueError: If identifier not found in atlas
         """
-        if label not in self.region_labels:
-            raise ValueError(f"Label {label} not found in atlas")
+        label = self._find_region_label(identifier)
 
         # Create binary mask
         dseg_data = self.dseg.data
@@ -197,17 +239,21 @@ class Atlas:
             orientation=self.dseg.orientation,
         )
 
-    def get_region_volume(self, label: int) -> float:
+    def get_region_volume(self, identifier: Union[int, str]) -> float:
         """Calculate volume of a specific region in mm³.
 
         Args:
-            label: Region label/index
+            identifier: Region identifier - can be:
+                - int: Region label/index
+                - str: Region name or abbreviation
 
         Returns:
             Region volume in mm³
+
+        Raises:
+            ValueError: If identifier not found in atlas
         """
-        if label not in self.region_labels:
-            raise ValueError(f"Label {label} not found in atlas")
+        label = self._find_region_label(identifier)
 
         # Count voxels in region
         dseg_data = self.dseg.data

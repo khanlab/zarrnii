@@ -48,10 +48,18 @@ atlas = Atlas(dseg=dseg, labels_df=labels_df)
 ### Getting Region Information
 
 ```python
-# Get information about a specific region
+# Get information about a specific region by index (traditional way)
 region_info = atlas.get_region_info(2)  # Hippocampus
 print(f"Region: {region_info['name']}")
 print(f"Abbreviation: {region_info['abbreviation']}")
+
+# NEW: Get information by region name
+region_info = atlas.get_region_info("Hippocampus")
+print(f"Hippocampus index: {region_info['index']}")
+
+# NEW: Get information by abbreviation
+region_info = atlas.get_region_info("HIP")
+print(f"HIP full name: {region_info['name']}")
 
 # Get all region names and labels
 for label, name in zip(atlas.region_labels, atlas.region_names):
@@ -61,8 +69,16 @@ for label, name in zip(atlas.region_labels, atlas.region_names):
 ### Creating Region Masks
 
 ```python
-# Get binary mask for hippocampus
+# Get binary mask for hippocampus by index
 hippocampus_mask = atlas.get_region_mask(2)
+print(f"Hippocampus mask shape: {hippocampus_mask.shape}")
+
+# NEW: Get mask by region name
+hippocampus_mask = atlas.get_region_mask("Hippocampus")
+print(f"Hippocampus mask shape: {hippocampus_mask.shape}")
+
+# NEW: Get mask by abbreviation
+hippocampus_mask = atlas.get_region_mask("HIP")
 print(f"Hippocampus mask shape: {hippocampus_mask.shape}")
 
 # Save mask as NIfTI
@@ -79,6 +95,12 @@ for label in atlas.region_labels:
     name = atlas.get_region_info(label)['name']
     volumes[name] = volume
     print(f"{name}: {volume:.2f} mm³")
+
+# NEW: Calculate volume by name or abbreviation
+cortex_volume = atlas.get_region_volume("Cortex")
+hippocampus_volume = atlas.get_region_volume("HIP")  # By abbreviation
+print(f"Cortex volume: {cortex_volume:.2f} mm³")
+print(f"Hippocampus volume: {hippocampus_volume:.2f} mm³")
 ```
 
 ## Image Analysis with Atlas

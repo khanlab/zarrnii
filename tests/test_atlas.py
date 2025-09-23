@@ -154,6 +154,111 @@ class TestAtlas:
         with pytest.raises(ValueError, match="Label 999 not found"):
             atlas.get_region_volume(999)
 
+    def test_get_region_info_by_name_and_abbreviation(self, sample_atlas):
+        """Test getting region information by name and abbreviation."""
+        atlas = sample_atlas
+
+        # Test lookup by name
+        info_by_name = atlas.get_region_info("Left Region")
+        assert info_by_name["index"] == 1
+        assert info_by_name["name"] == "Left Region"
+        assert info_by_name["abbreviation"] == "LR"
+
+        # Test lookup by abbreviation
+        info_by_abbrev = atlas.get_region_info("RT")
+        assert info_by_abbrev["index"] == 2
+        assert info_by_abbrev["name"] == "Right Top"
+        assert info_by_abbrev["abbreviation"] == "RT"
+
+        # Test lookup by index (backward compatibility)
+        info_by_index = atlas.get_region_info(3)
+        assert info_by_index["index"] == 3
+        assert info_by_index["name"] == "Right Bottom"
+        assert info_by_index["abbreviation"] == "RB"
+
+        # Test invalid name
+        with pytest.raises(ValueError, match="Region 'Invalid Name' not found"):
+            atlas.get_region_info("Invalid Name")
+
+        # Test invalid abbreviation
+        with pytest.raises(ValueError, match="Region 'XX' not found"):
+            atlas.get_region_info("XX")
+
+    def test_get_region_mask_by_name_and_abbreviation(self, sample_atlas):
+        """Test creating region masks by name and abbreviation."""
+        atlas = sample_atlas
+
+        # Test mask by name
+        mask_by_name = atlas.get_region_mask("Left Region")
+        mask_by_index = atlas.get_region_mask(1)
+
+        # Should be identical
+        name_data = mask_by_name.data
+        if hasattr(name_data, "compute"):
+            name_data = name_data.compute()
+        index_data = mask_by_index.data
+        if hasattr(index_data, "compute"):
+            index_data = index_data.compute()
+        np.testing.assert_array_equal(name_data, index_data)
+
+        # Test mask by abbreviation
+        mask_by_abbrev = atlas.get_region_mask("RT")
+        mask_by_index2 = atlas.get_region_mask(2)
+
+        # Should be identical
+        abbrev_data = mask_by_abbrev.data
+        if hasattr(abbrev_data, "compute"):
+            abbrev_data = abbrev_data.compute()
+        index2_data = mask_by_index2.data
+        if hasattr(index2_data, "compute"):
+            index2_data = index2_data.compute()
+        np.testing.assert_array_equal(abbrev_data, index2_data)
+
+        # Test invalid identifiers
+        with pytest.raises(ValueError, match="Region 'Invalid Name' not found"):
+            atlas.get_region_mask("Invalid Name")
+
+    def test_get_region_volume_by_name_and_abbreviation(self, sample_atlas):
+        """Test calculating region volumes by name and abbreviation."""
+        atlas = sample_atlas
+
+        # Test volume by name
+        volume_by_name = atlas.get_region_volume("Left Region")
+        volume_by_index = atlas.get_region_volume(1)
+        assert volume_by_name == volume_by_index
+
+        # Test volume by abbreviation
+        volume_by_abbrev = atlas.get_region_volume("RT")
+        volume_by_index2 = atlas.get_region_volume(2)
+        assert volume_by_abbrev == volume_by_index2
+
+        # Test invalid identifiers
+        with pytest.raises(ValueError, match="Region 'Invalid Name' not found"):
+            atlas.get_region_volume("Invalid Name")
+
+    def test_find_region_label_helper(self, sample_atlas):
+        """Test the internal _find_region_label helper method."""
+        atlas = sample_atlas
+
+        # Test with integer
+        assert atlas._find_region_label(1) == 1
+        assert atlas._find_region_label(2) == 2
+
+        # Test with name
+        assert atlas._find_region_label("Left Region") == 1
+        assert atlas._find_region_label("Right Top") == 2
+
+        # Test with abbreviation
+        assert atlas._find_region_label("LR") == 1
+        assert atlas._find_region_label("RT") == 2
+
+        # Test invalid cases
+        with pytest.raises(ValueError, match="Label 999 not found"):
+            atlas._find_region_label(999)
+
+        with pytest.raises(ValueError, match="Region 'Invalid' not found"):
+            atlas._find_region_label("Invalid")
+
     def test_aggregate_image_by_regions(self, sample_atlas):
         """Test aggregating image values by atlas regions."""
         atlas = sample_atlas
@@ -475,6 +580,15 @@ class TestAtlasEdgeCases:
         # Should return empty strings for abbreviations
         abbrevs = atlas.region_abbreviations
         assert abbrevs == ["", "", ""]
+
+        # Test that name lookup still works without abbreviations
+        info = atlas.get_region_info("Region1")
+        assert info["index"] == 1
+        assert info["name"] == "Region1"
+
+        # Test that abbreviation lookup fails gracefully
+        with pytest.raises(ValueError, match="Region 'R1' not found"):
+            atlas.get_region_info("R1")
 
     def test_aggregation_with_invalid_function(self, sample_atlas_data):
         """Test error handling for invalid aggregation functions."""
