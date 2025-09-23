@@ -9,9 +9,7 @@ StarDist dependencies are not installed.
 from unittest.mock import Mock, patch
 
 import dask.array as da
-
 import numpy as np
-
 import pytest
 
 # Try to import StarDist components
