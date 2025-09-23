@@ -1050,7 +1050,7 @@ class ZarrNii:
         axes_order: str = "ZYX",
         orientation: str = "RAS",
         downsample_near_isotropic: bool = False,
-        chunks: tuple[int, Ellipsis] | Literal['auto'] = 'auto',
+        chunks: tuple[int, Ellipsis] | Literal["auto"] = "auto",
         rechunk: bool = False,
     ) -> "ZarrNii":
         """Load ZarrNii from OME-Zarr store with flexible options.
