@@ -56,6 +56,11 @@ imaris = [
     "h5py>=3.8.0",
 ]
 
+stardist = [
+    "stardist>=0.8.0",
+    "tensorflow>=2.10.0",
+]
+
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"

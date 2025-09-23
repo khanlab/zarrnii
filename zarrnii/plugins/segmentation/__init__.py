@@ -18,3 +18,15 @@ __all__ = [
     "LocalOtsuSegmentation",
     "ThresholdSegmentation",
 ]
+
+# StarDist plugin - optional dependency
+try:
+    # Check if StarDist is actually available
+    import stardist  # noqa: F401
+
+    from .stardist import StarDistSegmentation  # noqa: F401
+
+    __all__.append("StarDistSegmentation")
+except ImportError:
+    # StarDist dependencies not available
+    pass

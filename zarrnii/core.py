@@ -2981,6 +2981,62 @@ class ZarrNii:
         plugin = LocalOtsuSegmentation(nbins=nbins)
         return self.segment(plugin, chunk_size=chunk_size)
 
+    def segment_stardist(
+        self,
+        model_name: str = "2D_versatile_fluo",
+        model_path: Optional[str] = None,
+        prob_thresh: float = 0.5,
+        nms_thresh: float = 0.4,
+        use_gpu: Optional[bool] = None,
+        chunk_size: Optional[Tuple[int, ...]] = None,
+        use_dask_relabeling: bool = False,
+        overlap: int = 64,
+        **kwargs,
+    ) -> "ZarrNii":
+        """
+        Apply StarDist deep learning segmentation to the image.
+
+        Convenience method for StarDist instance segmentation using pre-trained
+        or custom models. Supports both 2D and 3D segmentation with GPU acceleration
+        and efficient processing of large images using dask_relabeling.
+
+        Args:
+            model_name: Name of pre-trained model (e.g., '2D_versatile_fluo', '3D_demo')
+            model_path: Path to custom model (optional, overrides model_name)
+            prob_thresh: Probability threshold for object detection (default: 0.5)
+            nms_thresh: Non-maximum suppression threshold (default: 0.4)
+            use_gpu: Whether to use GPU acceleration (None for auto-detect)
+            chunk_size: Optional chunk size for dask processing
+            use_dask_relabeling: Whether to use dask_relabeling for large images
+            overlap: Overlap size for dask_relabeling tiles in pixels
+            **kwargs: Additional parameters passed to StarDist model
+
+        Returns:
+            New ZarrNii instance with instance segmentation labels
+
+        Raises:
+            ImportError: If StarDist dependencies are not installed
+        """
+        try:
+            from .plugins.segmentation import StarDistSegmentation
+        except ImportError:
+            raise ImportError(
+                "StarDist is not available. Install with: "
+                "pip install 'zarrnii[stardist]' or pip install stardist tensorflow"
+            )
+
+        plugin = StarDistSegmentation(
+            model_name=model_name,
+            model_path=model_path,
+            prob_thresh=prob_thresh,
+            nms_thresh=nms_thresh,
+            use_gpu=use_gpu,
+            use_dask_relabeling=use_dask_relabeling,
+            overlap=overlap,
+            **kwargs,
+        )
+        return self.segment(plugin, chunk_size=chunk_size)
+
     def segment_threshold(
         self,
         thresholds: Union[float, List[float]],

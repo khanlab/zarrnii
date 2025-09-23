@@ -22,6 +22,9 @@ For additional format support:
 ```bash
 # For Imaris (.ims) file support
 pip install zarrnii[imaris]
+
+# For StarDist deep learning segmentation
+pip install zarrnii[stardist]
 ```
 
 ### Development installation  
@@ -66,6 +69,42 @@ segmented = znimg.segment(plugin)
 
 # Save segmented results
 segmented.to_ome_zarr("segmented_image.ome.zarr")
+```
+
+### StarDist Deep Learning Segmentation
+
+ZarrNii supports StarDist for accurate cell and nuclei instance segmentation:
+
+```python
+from zarrnii import ZarrNii
+
+# Load your image  
+znimg = ZarrNii.from_ome_zarr("image.ome.zarr")
+
+# Apply StarDist segmentation with pre-trained model
+segmented = znimg.segment_stardist(
+    model_name="2D_versatile_fluo",  # or "3D_demo" for 3D
+    prob_thresh=0.5,
+    use_gpu=True,  # Enable GPU acceleration if available
+    use_dask_relabeling=False  # Set to True if dask_relabeling is available
+)
+
+# Or use custom model
+segmented = znimg.segment_stardist(
+    model_path="/path/to/custom/model",
+    prob_thresh=0.6,
+    overlap=64  # Overlap size for tiled processing
+)
+```
+
+**Note**: StarDist requires additional dependencies. Install with:
+```bash
+pip install zarrnii[stardist]
+```
+
+For advanced tiled processing of very large images, you can optionally install dask_relabeling:
+```bash
+pip install git+https://github.com/TheJacksonLaboratory/dask_relabeling.git
 ```
 
 ### Custom Plugins
