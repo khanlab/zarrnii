@@ -2964,9 +2964,10 @@ class ZarrNii:
         self, nbins: int = 256, chunk_size: Optional[Tuple[int, ...]] = None
     ) -> "ZarrNii":
         """
-        Apply Otsu thresholding segmentation to the image.
+        Apply local Otsu thresholding segmentation to the image.
 
-        Convenience method for Otsu thresholding segmentation.
+        Convenience method for local Otsu thresholding segmentation.
+        This computes the threshold locally for each processing block.
 
         Args:
             nbins: Number of bins for histogram computation (default: 256)
@@ -2975,10 +2976,134 @@ class ZarrNii:
         Returns:
             New ZarrNii instance with binary segmentation
         """
-        from .plugins.segmentation import OtsuSegmentation
+        from .plugins.segmentation import LocalOtsuSegmentation
 
-        plugin = OtsuSegmentation(nbins=nbins)
+        plugin = LocalOtsuSegmentation(nbins=nbins)
         return self.segment(plugin, chunk_size=chunk_size)
+
+    def segment_threshold(
+        self,
+        thresholds: Union[float, List[float]],
+        inclusive: bool = True,
+        chunk_size: Optional[Tuple[int, ...]] = None,
+    ) -> "ZarrNii":
+        """
+        Apply threshold-based segmentation to the image.
+
+        Convenience method for threshold-based segmentation using either
+        manual threshold values or computed thresholds.
+
+        Args:
+            thresholds: Single threshold value or list of threshold values.
+                For single threshold, creates binary segmentation (0/1).
+                For multiple thresholds, creates multi-class segmentation (0/1/2/...).
+            inclusive: Whether thresholds are inclusive (default: True).
+                If True, pixels >= threshold are labeled as foreground.
+                If False, pixels > threshold are labeled as foreground.
+            chunk_size: Optional chunk size for dask processing
+
+        Returns:
+            New ZarrNii instance with labeled segmentation
+
+        Examples:
+            >>> # Binary threshold segmentation
+            >>> segmented = znimg.segment_threshold(0.5)
+            >>>
+            >>> # Multi-level threshold segmentation
+            >>> thresholds = znimg.compute_otsu_thresholds(classes=3)
+            >>> segmented = znimg.segment_threshold(thresholds[1:-1])  # Exclude min/max values
+        """
+        from .plugins.segmentation import ThresholdSegmentation
+
+        plugin = ThresholdSegmentation(thresholds=thresholds, inclusive=inclusive)
+        return self.segment(plugin, chunk_size=chunk_size)
+
+    def compute_histogram(
+        self,
+        bins: int = 256,
+        range: Optional[Tuple[float, float]] = None,
+        mask: Optional["ZarrNii"] = None,
+        **kwargs: Any,
+    ) -> Tuple[da.Array, da.Array]:
+        """
+        Compute histogram of the image.
+
+        This method computes the histogram of image intensities, optionally using
+        a mask to weight the computation. The histogram is computed using dask for
+        efficient processing of large datasets.
+
+        Args:
+            bins: Number of histogram bins (default: 256)
+            range: Optional tuple (min, max) defining histogram range. If None,
+                uses the full range of the data
+            mask: Optional ZarrNii mask of same shape as image. Only pixels
+                where mask > 0 are included in histogram computation
+            **kwargs: Additional arguments passed to dask.array.histogram
+
+        Returns:
+            Tuple of (histogram_counts, bin_edges) where:
+            - histogram_counts: dask array of histogram bin counts
+            - bin_edges: dask array of bin edge values (length = bins + 1)
+
+        Examples:
+            >>> # Compute histogram
+            >>> hist, bin_edges = znimg.compute_histogram(bins=128)
+            >>>
+            >>> # Compute histogram with mask
+            >>> mask = znimg > 0.5
+            >>> hist_masked, _ = znimg.compute_histogram(mask=mask)
+        """
+        from .analysis import compute_histogram
+
+        mask_data = mask.darr if mask is not None else None
+        return compute_histogram(
+            self.darr, bins=bins, range=range, mask=mask_data, **kwargs
+        )
+
+    def compute_otsu_thresholds(
+        self,
+        classes: int = 2,
+        bins: int = 256,
+        range: Optional[Tuple[float, float]] = None,
+        mask: Optional["ZarrNii"] = None,
+    ) -> List[float]:
+        """
+        Compute Otsu multi-level thresholds for the image.
+
+        This method first computes the histogram of the image, then uses
+        scikit-image's threshold_multiotsu to compute optimal threshold values.
+
+        Args:
+            classes: Number of classes to separate data into (default: 2).
+                Must be >= 2. For classes=2, returns 1 threshold. For classes=k,
+                returns k-1 thresholds.
+            bins: Number of histogram bins (default: 256)
+            range: Optional tuple (min, max) defining histogram range. If None,
+                uses the full range of the data
+            mask: Optional ZarrNii mask of same shape as image. Only pixels
+                where mask > 0 are included in histogram computation
+
+        Returns:
+            List of threshold values. For classes=k, returns k+1 values:
+            [0, threshold1, threshold2, ..., threshold_k-1, max_intensity]
+            where 0 represents the minimum and max_intensity represents the maximum.
+
+        Examples:
+            >>> # Compute binary threshold (2 classes)
+            >>> thresholds = znimg.compute_otsu_thresholds(classes=2)
+            >>> print(f"Binary thresholds: {thresholds}")
+            >>>
+            >>> # Compute multi-level thresholds (3 classes)
+            >>> thresholds = znimg.compute_otsu_thresholds(classes=3)
+            >>> print(f"Multi-level thresholds: {thresholds}")
+        """
+        from .analysis import compute_otsu_thresholds
+
+        # First compute histogram
+        hist, bin_edges = self.compute_histogram(bins=bins, range=range, mask=mask)
+
+        # Then compute thresholds
+        return compute_otsu_thresholds(hist, classes=classes, bin_edges=bin_edges)
 
     def apply_scaled_processing(
         self,

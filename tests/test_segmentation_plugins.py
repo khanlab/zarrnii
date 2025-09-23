@@ -60,8 +60,8 @@ class TestOtsuSegmentation:
         # Default initialization
         plugin = OtsuSegmentation()
         assert plugin.nbins == 256
-        assert plugin.name == "Otsu Thresholding"
-        assert "Otsu's automatic threshold" in plugin.description
+        assert plugin.name == "Local Otsu Thresholding"  # Updated name
+        assert "Local Otsu" in plugin.description  # Updated to check for "Local Otsu"
 
         # Custom initialization
         plugin_custom = OtsuSegmentation(nbins=128)
@@ -204,7 +204,7 @@ class TestZarrNiiSegmentationIntegration:
         assert segmented.data.dtype == np.uint8
         assert segmented.axes_order == znimg.axes_order
         assert segmented.orientation == znimg.orientation
-        assert "segmented_otsu_thresholding" in segmented.name
+        assert "segmented_local_otsu_thresholding" in segmented.name  # Updated name
 
         # Check that segmentation worked
         result_data = segmented.data.compute()
@@ -264,7 +264,7 @@ class TestZarrNiiSegmentationIntegration:
         assert isinstance(segmented, ZarrNii)
         assert segmented.shape == znimg.shape
         assert segmented.data.dtype == np.uint8
-        assert "segmented_otsu_thresholding" in segmented.name
+        assert "segmented_local_otsu_thresholding" in segmented.name  # Updated name
 
         # Check that segmentation worked
         result_data = segmented.data.compute()
