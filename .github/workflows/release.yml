@@ -109,3 +109,4 @@ jobs:
           echo "Release '${{ github.ref_name }}' already exists, skipping artifact upload."
         else
           gh release upload '${{ github.ref_name }}' dist/** --repo '${{ github.repository }}'
+        fi
