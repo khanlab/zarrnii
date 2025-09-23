@@ -11,6 +11,7 @@ nav:
   - API Reference: reference.md
   - Examples:
       - Working with Zarr and NIfTI: examples/zarr_nifti.md
+      - Working with Imaris Files: examples/imaris_usage.md
       - Transformations: examples/transformations.md
       - Downsampling and Upsampling: examples/downsampling.md
       - Near-Isotropic Downsampling: examples/near_isotropic.md

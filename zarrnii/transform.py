@@ -1,6 +1,9 @@
+"""Transformation classes for spatial transformations in ZarrNii."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Tuple, Union
 
 import nibabel as nib
 import numpy as np
@@ -10,77 +13,151 @@ from scipy.interpolate import interpn
 
 @define
 class Transform(ABC):
-    """Base class for transformations"""
+    """Abstract base class for spatial transformations.
+
+    This class defines the interface that all transformation classes must implement
+    to be used with ZarrNii. Transformations convert coordinates from one space
+    to another (e.g., subject space to template space).
+    """
 
     @abstractmethod
-    def apply_transform(self, vecs: np.array) -> np.array:
-        """Apply transformation to an image"""
+    def apply_transform(self, vecs: np.ndarray) -> np.ndarray:
+        """Apply transformation to coordinate vectors.
 
+        Args:
+            vecs: Input coordinates as numpy array. Shape can be:
+                - (3,) for single 3D point
+                - (3, N) for N 3D points
+                - (4,) for single homogeneous coordinate
+                - (4, N) for N homogeneous coordinates
+
+        Returns:
+            Transformed coordinates with same shape as input
+
+        Raises:
+            NotImplementedError: If not implemented by subclass
+        """
         pass
 
 
 @define
 class AffineTransform(Transform):
-    matrix: np.array = None
+    """Affine transformation for spatial coordinate mapping.
+
+    Represents a 4x4 affine transformation matrix that can be used to transform
+    3D coordinates between different coordinate systems. Supports various
+    operations including matrix multiplication, inversion, and point transformation.
+
+    Attributes:
+        matrix: 4x4 affine transformation matrix
+    """
+
+    matrix: np.ndarray = None
 
     @classmethod
-    def from_txt(cls, path, invert=False):
+    def from_txt(
+        cls, path: Union[str, bytes], invert: bool = False
+    ) -> "AffineTransform":
+        """Create AffineTransform from text file containing matrix.
+
+        Args:
+            path: Path to text file containing 4x4 affine matrix
+            invert: Whether to invert the matrix after loading
+
+        Returns:
+            AffineTransform instance with loaded matrix
+
+        Raises:
+            OSError: If file cannot be read
+            ValueError: If file does not contain valid 4x4 matrix
+        """
         matrix = np.loadtxt(path)
         if invert:
             matrix = np.linalg.inv(matrix)
-
         return cls(matrix=matrix)
 
     @classmethod
-    def from_array(cls, matrix, invert=False):
+    def from_array(cls, matrix: np.ndarray, invert: bool = False) -> "AffineTransform":
+        """Create AffineTransform from numpy array.
+
+        Args:
+            matrix: 4x4 numpy array representing affine transformation
+            invert: Whether to invert the matrix
+
+        Returns:
+            AffineTransform instance with the matrix
+
+        Raises:
+            ValueError: If matrix is not 4x4
+        """
+        if matrix.shape != (4, 4):
+            raise ValueError(f"Matrix must be 4x4, got shape {matrix.shape}")
+
         if invert:
             matrix = np.linalg.inv(matrix)
-
         return cls(matrix=matrix)
 
     @classmethod
-    def identity(cls):
+    def identity(cls) -> "AffineTransform":
+        """Create identity transformation.
+
+        Returns:
+            AffineTransform representing identity transformation (no change)
+        """
         return cls(matrix=np.eye(4, 4))
 
-    def __array__(self):
-        """
-        Define how the object behaves when converted to a numpy array.
-        Returns the matrix of the affine transform.
+    def __array__(self) -> np.ndarray:
+        """Convert to numpy array.
+
+        Defines how the object behaves when converted to a numpy array.
+
+        Returns:
+            The 4x4 affine transformation matrix
         """
         return self.matrix
 
-    def __getitem__(self, key):
-        """
-        Enable array-like indexing on the matrix.
+    def __getitem__(self, key) -> Union[np.ndarray, float]:
+        """Enable array-like indexing on the matrix.
+
+        Args:
+            key: Index or slice for matrix access
+
+        Returns:
+            Element(s) from the transformation matrix
         """
         return self.matrix[key]
 
-    def __setitem__(self, key, value):
-        """
-        Enable array-like assignment to the matrix.
+    def __setitem__(self, key, value: Union[float, np.ndarray]) -> None:
+        """Enable array-like assignment to the matrix.
+
+        Args:
+            key: Index or slice for matrix assignment
+            value: Value(s) to assign to matrix
         """
         self.matrix[key] = value
 
-    def __matmul__(self, other):
-        """
-        Perform matrix multiplication with another object.
+    def __matmul__(
+        self, other: Union[np.ndarray, "AffineTransform"]
+    ) -> Union[np.ndarray, "AffineTransform"]:
+        """Perform matrix multiplication with another object.
 
-        Parameters:
-        - other (np.ndarray or AffineTransform): The object to multiply with:
-            - (3,) or (3, 1): A 3D point or vector (voxel coordinates).
-            - (3, N): A batch of N 3D points or vectors (voxel coordinates).
-            - (4,) or (4, 1): A 4D point/vector in homogeneous coordinates.
-            - (4, N): A batch of N 4D points in homogeneous coordinates.
-            - (4, 4): Another affine transformation matrix.
+        Args:
+            other: The object to multiply with. Supported types:
+                - (3,) or (3, 1): A 3D point or vector (voxel coordinates)
+                - (3, N): A batch of N 3D points or vectors (voxel coordinates)
+                - (4,) or (4, 1): A 4D point/vector in homogeneous coordinates
+                - (4, N): A batch of N 4D points in homogeneous coordinates
+                - (4, 4): Another affine transformation matrix
+                - AffineTransform: Another affine transformation object
 
         Returns:
-        - np.ndarray or AffineTransform:
-            - Transformed 3D point(s) or vector(s) as a numpy array.
-            - A new AffineTransform object if multiplying two affine matrices.
+            Transformed coordinates as numpy array or new AffineTransform:
+                - For coordinate inputs: transformed coordinates with same shape
+                - For matrix/AffineTransform inputs: new AffineTransform object
 
         Raises:
-        - ValueError: If the shape of `other` is unsupported.
-        - TypeError: If `other` is not an np.ndarray or AffineTransform.
+            ValueError: If the shape of `other` is unsupported
+            TypeError: If `other` is not an np.ndarray or AffineTransform
         """
         if isinstance(other, np.ndarray):
             if other.shape == (3,):
@@ -118,20 +195,42 @@ class AffineTransform(Transform):
         else:
             raise TypeError(f"Unsupported type for multiplication: {type(other)}")
 
-    def apply_transform(self, vecs: np.array) -> np.array:
+    def apply_transform(self, vecs: np.ndarray) -> np.ndarray:
+        """Apply transformation to coordinate vectors.
+
+        Args:
+            vecs: Input coordinates to transform
+
+        Returns:
+            Transformed coordinates
+        """
         return self @ vecs
 
-    def invert(self):
-        """Return the inverse of the matrix transformation."""
+    def invert(self) -> "AffineTransform":
+        """Return the inverse of the matrix transformation.
+
+        Returns:
+            New AffineTransform with inverted matrix
+
+        Raises:
+            np.linalg.LinAlgError: If matrix is singular and cannot be inverted
+        """
         return AffineTransform.from_array(np.linalg.inv(self.matrix))
 
-    def update_for_orientation(self, input_orientation, output_orientation):
-        """
-        Update the matrix to map from the input orientation to the output orientation.
+    def update_for_orientation(
+        self, input_orientation: str, output_orientation: str
+    ) -> "AffineTransform":
+        """Update the matrix to map from input orientation to output orientation.
 
-        Parameters:
-            input_orientation (str): Current anatomical orientation (e.g., 'RPI').
-            output_orientation (str): Target anatomical orientation (e.g., 'RAS').
+        Args:
+            input_orientation: Current anatomical orientation (e.g., 'RPI')
+            output_orientation: Target anatomical orientation (e.g., 'RAS')
+
+        Returns:
+            New AffineTransform updated for orientation mapping
+
+        Raises:
+            ValueError: If orientations are invalid or cannot be matched
         """
 
         # Define a mapping of anatomical directions to axis indices and flips
@@ -175,20 +274,46 @@ class AffineTransform(Transform):
 
 @define
 class DisplacementTransform(Transform):
-    disp_xyz: np.array = None
-    disp_grid: np.array = None
+    """Non-linear displacement field transformation.
+
+    Represents a displacement field transformation where each point in space
+    has an associated displacement vector. Uses interpolation to compute
+    displacements for arbitrary coordinates.
+
+    Attributes:
+        disp_xyz: Displacement vectors at grid points (4D array: x, y, z, vector_component)
+        disp_grid: Grid coordinates for displacement field
+        disp_affine: Affine transformation from world to displacement field coordinates
+    """
+
+    disp_xyz: np.ndarray = None
+    disp_grid: Tuple[np.ndarray, ...] = None
     disp_affine: AffineTransform = None
 
     @classmethod
-    def from_nifti(cls, path):
+    def from_nifti(cls, path: Union[str, bytes]) -> "DisplacementTransform":
+        """Create DisplacementTransform from NIfTI file.
+
+        Args:
+            path: Path to NIfTI displacement field file
+
+        Returns:
+            DisplacementTransform instance loaded from file
+
+        Raises:
+            OSError: If file cannot be read
+            ValueError: If file format is invalid
+        """
         disp_nib = nib.load(path)
         disp_xyz = disp_nib.get_fdata().squeeze()
         disp_affine = AffineTransform.from_array(disp_nib.affine)
 
-        # convert from itk transform
+        # Convert from ITK transform convention
+        # ITK uses opposite sign convention for x and y displacements
         disp_xyz[:, :, :, 0] = -disp_xyz[:, :, :, 0]
         disp_xyz[:, :, :, 1] = -disp_xyz[:, :, :, 1]
 
+        # Create grid coordinates
         disp_grid = (
             np.arange(disp_xyz.shape[0]),
             np.arange(disp_xyz.shape[1]),
@@ -201,15 +326,30 @@ class DisplacementTransform(Transform):
             disp_affine=disp_affine,
         )
 
-    def apply_transform(self, vecs: np.array) -> np.array:
-        # we have the grid points, the volumes to interpolate displacements
+    def apply_transform(self, vecs: np.ndarray) -> np.ndarray:
+        """Apply displacement transformation to coordinate vectors.
 
-        # first we need to transform points to vox space of the warp
+        Transforms input coordinates by interpolating displacement vectors
+        from the displacement field and adding them to the input coordinates.
+
+        Args:
+            vecs: Input coordinates as numpy array. Shape should be (3, N) for
+                N points or (3,) for single point
+
+        Returns:
+            Transformed coordinates with same shape as input
+
+        Notes:
+            Points outside the displacement field domain are filled with
+            zero displacement (no transformation).
+        """
+        # Transform points to voxel space of the displacement field
         vox_vecs = self.disp_affine.invert() @ vecs
 
-        # then interpolate the displacement in x, y, z:
+        # Initialize displacement vectors
         disp_vecs = np.zeros(vox_vecs.shape)
 
+        # Interpolate displacement for each spatial dimension (x, y, z)
         for ax in range(3):
             disp_vecs[ax, :] = interpn(
                 self.disp_grid,
@@ -220,4 +360,5 @@ class DisplacementTransform(Transform):
                 fill_value=0,
             )
 
+        # Add displacement to original coordinates
         return vecs + disp_vecs

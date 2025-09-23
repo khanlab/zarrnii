@@ -1,10 +1,10 @@
 # zarrnii
 
- **ZarrNii** is a Python library for working with OME-Zarr and NIfTI formats. ZarrNii bridges the gap between these two popular formats, enabling seamless data transformation, metadata preservation, and efficient processing of biomedical images. The motivating application is for whole brain lightsheet microscopy and ultra-high field MRI, but it can generally be used for any 3T+channel datasets.
+ **ZarrNii** is a Python library for working with OME-Zarr, NIfTI, and Imaris formats. ZarrNii bridges the gap between these popular formats, enabling seamless data transformation, metadata preservation, and efficient processing of biomedical images. The motivating application is for whole brain lightsheet microscopy and ultra-high field MRI, but it can generally be used for any 3D+[channel,time] datasets.
 
 ZarrNii allows you to:
 
- - Read and write OME-Zarr and NIfTI datasets
+ - Read and write OME-Zarr, NIfTI, and Imaris datasets
  - Perform transformations like cropping, downsampling, and interpolation.
  - Preserve and manipulate metadata from OME-Zarr (e.g., axes, coordinate transformations, OME annotations).
 
@@ -15,6 +15,13 @@ ZarrNii allows you to:
 ### Using pip (recommended)
 ```bash
 pip install zarrnii
+```
+
+### Optional Dependencies
+For additional format support:
+```bash
+# For Imaris (.ims) file support
+pip install zarrnii[imaris]
 ```
 
 ### Development installation  
@@ -30,7 +37,7 @@ uv sync --dev
 
 ## Key Features
 
- - **Seamless Format Conversion**: Easily convert between OME-Zarr and NIfTI while preserving spatial metadata.
+ - **Seamless Format Conversion**: Easily convert between OME-Zarr, NIfTI, and Imaris while preserving spatial metadata.
  - **ZipStore Support**: Read and write OME-Zarr files in compressed ZIP format (.ome.zarr.zip) for efficient storage and sharing.
  - **Transformations**: Apply common operations like affine transformations, downsampling, and upsampling.
  - **Multiscale Support**: Work with multiscale OME-Zarr pyramids.
@@ -92,8 +99,13 @@ from zarrnii import ZarrNii
 # Load an OME-Zarr dataset
 znimg = ZarrNii.from_ome_zarr("path/to/zarr_dataset.ome.zarr")
 
+<<<<<<< HEAD
+# Or load from Imaris (requires zarrnii[imaris])
+# znimg = ZarrNii.from_imaris("path/to/microscopy_data.ims")
+=======
 # Load from compressed ZIP format
 znimg_zip = ZarrNii.from_ome_zarr("path/to/dataset.ome.zarr.zip")
+>>>>>>> main
 
 # Perform a transformation (e.g., downsample)
 downsampled_znimg = znimg.downsample(level=2)
