@@ -1050,6 +1050,8 @@ class ZarrNii:
         axes_order: str = "ZYX",
         orientation: str = "RAS",
         downsample_near_isotropic: bool = False,
+        chunks="auto",
+        rechunk=False,
     ) -> "ZarrNii":
         """Load ZarrNii from OME-Zarr store with flexible options.
 
@@ -1273,6 +1275,9 @@ class ZarrNii:
         # Apply near-isotropic downsampling if requested
         if downsample_near_isotropic:
             znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
+
+        if rechunk:
+            znimg.data = znimg.data.rechunk(chunks)
 
         return znimg
 
