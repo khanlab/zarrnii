@@ -10,7 +10,9 @@ from .segmentation import *
 
 __all__ = [
     "SegmentationPlugin",
-    "OtsuSegmentation",
+    "OtsuSegmentation",  # Backward compatibility
+    "LocalOtsuSegmentation",
+    "ThresholdSegmentation",
     "ScaledProcessingPlugin",
     "BiasFieldCorrection",
 ]

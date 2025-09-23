@@ -21,13 +21,16 @@ sort-imports:
 check-format:
     uv run black --check .
 
-# Check import sorting with isort (no changes) 
+# Check import sorting with isort (no changes)
 check-imports:
     uv run isort --check .
 
 # Run tests with pytest
 test:
     uv run pytest -v
+
+# Quality fix
+quality_fix: format sort-imports
 
 # Run tests with coverage reporting
 test-cov:
@@ -65,7 +68,7 @@ test-import:
 quality:
     ./scripts/quality-check.sh
 
-# Run individual quality checks  
+# Run individual quality checks
 quality-individual: check-format check-imports lint
 
 # Build package

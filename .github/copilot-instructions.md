@@ -12,9 +12,9 @@
 - **Set up pre-commit hooks**: `uv run pre-commit install` (takes ~2 seconds)
 
 ### Building and Testing  
-- **Run linting**: `uv run flake8 .` (takes ~10-30 seconds, max-line-length: 88 chars to match Black)
 - **Format code**: `uv run black .` (takes ~1 second, line-length: 88)  
 - **Sort imports**: `uv run isort .` (takes ~1 second, profile: black, line-length: 88)
+- **Precommit hooks**: instead of above format/isort you can rely on precommit hooks to perform formatting and linting.
 - **Run tests**: `uv run pytest -v` (takes ~6-14 seconds, NEVER CANCEL - set timeout to 60+ seconds)
   - **Expected**: 37 tests pass, 1 skipped, 1 expected failure (existing issue with synthetic data generation)
   - **NEVER** try to fix unrelated test failures - they are pre-existing

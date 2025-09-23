@@ -6,11 +6,17 @@ that can be applied to ZarrNii images.
 """
 
 from .base import SegmentationPlugin
-from .otsu import OtsuSegmentation
+from .local_otsu import (  # OtsuSegmentation for backward compatibility
+    LocalOtsuSegmentation,
+    OtsuSegmentation,
+)
+from .threshold import ThresholdSegmentation
 
 __all__ = [
     "SegmentationPlugin",
-    "OtsuSegmentation",
+    "OtsuSegmentation",  # Backward compatibility
+    "LocalOtsuSegmentation",
+    "ThresholdSegmentation",
 ]
 
 # StarDist plugin - optional dependency
