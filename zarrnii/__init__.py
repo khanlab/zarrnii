@@ -2,7 +2,7 @@ from .analysis import compute_histogram, compute_otsu_thresholds
 from .core import ZarrNii, affine_to_orientation
 from .plugins import OtsuSegmentation  # Backward compatibility
 from .plugins import (
-    BiasFieldCorrection,
+    GaussianBiasFieldCorrection,
     LocalOtsuSegmentation,
     ScaledProcessingPlugin,
     SegmentationPlugin,
