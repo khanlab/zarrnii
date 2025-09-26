@@ -106,7 +106,7 @@ def save_ngff_image(
     store_or_path: Union[str, Any],
     max_layer: int = 4,
     scale_factors: Optional[List[int]] = None,
-    orientation: Optional[str] = None,
+    xyz_orientation: Optional[str] = None,
     **kwargs: Any,
 ) -> None:
     """Save an NgffImage to an OME-Zarr store with multiscale pyramid.
@@ -137,7 +137,7 @@ def save_ngff_image(
 
         >>> # Save to ZIP with custom pyramid
         >>> save_ngff_image(img, "/path/to/output.zarr.zip",
-        ...                 scale_factors=[2, 4], orientation="RAS")
+        ...                 scale_factors=[2, 4], xyz_orientation="RAS")
     """
     import zarr
 
@@ -159,11 +159,11 @@ def save_ngff_image(
             temp_zarr_path = os.path.join(tmpdir, "temp.zarr")
             nz.to_ngff_zarr(temp_zarr_path, multiscales, **kwargs)
 
-            # Add orientation metadata to the temporary zarr store if provided
-            if orientation:
+            # Add xyz_orientation metadata to the temporary zarr store if provided
+            if xyz_orientation:
                 try:
                     group = zarr.open_group(temp_zarr_path, mode="r+")
-                    group.attrs["orientation"] = orientation
+                    group.attrs["xyz_orientation"] = xyz_orientation
                 except Exception:
                     # If we can't write orientation metadata, that's not critical
                     pass
@@ -175,14 +175,14 @@ def save_ngff_image(
         # Write to zarr store directly
         nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)
 
-        # Add orientation metadata if provided
-        if orientation:
+        # Add xyz_orientation metadata if provided
+        if xyz_orientation:
             try:
                 if isinstance(store_or_path, str):
                     group = zarr.open_group(store_or_path, mode="r+")
                 else:
                     group = zarr.open_group(store_or_path, mode="r+")
-                group.attrs["orientation"] = orientation
+                group.attrs["xyz_orientation"] = xyz_orientation
             except Exception:
                 # If we can't write orientation metadata, that's not critical
                 pass
@@ -748,12 +748,12 @@ class ZarrNii:
     Attributes:
         ngff_image (nz.NgffImage): The internal NgffImage object containing data and metadata.
         axes_order (str): The order of the axes for NIfTI compatibility ('ZYX' or 'XYZ').
-        orientation (str): The anatomical orientation string (e.g., 'RAS', 'LPI').
+        xyz_orientation (str): The anatomical orientation string in XYZ axes order (e.g., 'RAS', 'LPI').
     """
 
     ngff_image: nz.NgffImage
     axes_order: str = "ZYX"
-    orientation: str = "RAS"
+    xyz_orientation: str = "RAS"
     _omero: Optional[object] = None
 
     # Properties that delegate to the internal NgffImage
@@ -801,6 +801,32 @@ class ZarrNii:
     def name(self) -> str:
         """Image name from NgffImage."""
         return self.ngff_image.name
+
+    @property
+    def orientation(self) -> str:
+        """
+        Legacy property for backward compatibility.
+        
+        Returns the xyz_orientation attribute to maintain backward compatibility
+        with code that expects the 'orientation' property.
+        
+        Returns:
+            str: The anatomical orientation string in XYZ axes order
+        """
+        return self.xyz_orientation
+
+    @orientation.setter
+    def orientation(self, value: str) -> None:
+        """
+        Legacy setter for backward compatibility.
+        
+        Sets the xyz_orientation attribute to maintain backward compatibility
+        with code that sets the 'orientation' property.
+        
+        Args:
+            value: The anatomical orientation string in XYZ axes order
+        """
+        object.__setattr__(self, 'xyz_orientation', value)
 
     @property
     def affine(self) -> AffineTransform:
@@ -903,7 +929,7 @@ class ZarrNii:
         cls,
         ngff_image: nz.NgffImage,
         axes_order: str = "ZYX",
-        orientation: str = "RAS",
+        xyz_orientation: str = "RAS",
         omero: Optional[object] = None,
     ) -> "ZarrNii":
         """
@@ -912,7 +938,7 @@ class ZarrNii:
         Args:
             ngff_image: NgffImage to wrap
             axes_order: Spatial axes order for NIfTI compatibility
-            orientation: Anatomical orientation string
+            xyz_orientation: Anatomical orientation string in XYZ axes order
             omero: Optional omero metadata object
 
         Returns:
@@ -921,7 +947,7 @@ class ZarrNii:
         return cls(
             ngff_image=ngff_image,
             axes_order=axes_order,
-            orientation=orientation,
+            xyz_orientation=xyz_orientation,
             _omero=omero,
         )
 
@@ -998,7 +1024,7 @@ class ZarrNii:
         return cls(
             ngff_image=ngff_image,
             axes_order=axes_order,
-            orientation=orientation,
+            xyz_orientation=orientation,
             _omero=omero,
         )
 
@@ -1009,6 +1035,7 @@ class ZarrNii:
         affine=None,
         axes_order="ZYX",
         orientation="RAS",
+        xyz_orientation=None,
         ngff_image=None,
         _omero=None,
         **kwargs,
@@ -1016,11 +1043,15 @@ class ZarrNii:
         """
         Constructor with backward compatibility for old signature.
         """
+        # Handle backwards compatibility: if xyz_orientation is provided, use it
+        # Otherwise, use orientation for backwards compatibility
+        final_orientation = xyz_orientation if xyz_orientation is not None else orientation
+        
         if ngff_image is not None:
             # New signature
             object.__setattr__(self, "ngff_image", ngff_image)
             object.__setattr__(self, "axes_order", axes_order)
-            object.__setattr__(self, "orientation", orientation)
+            object.__setattr__(self, "xyz_orientation", final_orientation)
             object.__setattr__(self, "_omero", _omero)
         elif darr is not None:
             # Legacy signature - delegate to from_darr
@@ -1028,12 +1059,12 @@ class ZarrNii:
                 darr=darr,
                 affine=affine,
                 axes_order=axes_order,
-                orientation=orientation,
+                orientation=final_orientation,
                 **kwargs,
             )
             object.__setattr__(self, "ngff_image", instance.ngff_image)
             object.__setattr__(self, "axes_order", instance.axes_order)
-            object.__setattr__(self, "orientation", instance.orientation)
+            object.__setattr__(self, "xyz_orientation", instance.xyz_orientation)
             object.__setattr__(self, "_omero", instance._omero)
         else:
             raise ValueError("Must provide either ngff_image or darr")
@@ -1210,7 +1241,8 @@ class ZarrNii:
             # If we can't load omero metadata, that's okay
             pass
 
-        # Read orientation metadata (default to the provided orientation if not present)
+        # Read orientation metadata with backwards compatibility support
+        # Priority: xyz_orientation (new) > orientation (legacy, with reversal)
         try:
             import zarr
 
@@ -1218,17 +1250,35 @@ class ZarrNii:
                 if store_or_path.endswith(".zip"):
                     zip_store = zarr.storage.ZipStore(store_or_path, mode="r")
                     group = zarr.open_group(zip_store, mode="r")
-                    # Get orientation from zarr metadata, fallback to provided orientation
-                    orientation = group.attrs.get("orientation", orientation)
+                    # Check for new xyz_orientation first, then fallback to legacy orientation
+                    if "xyz_orientation" in group.attrs:
+                        orientation = group.attrs["xyz_orientation"]
+                    elif "orientation" in group.attrs:
+                        # Legacy orientation is ZYX-based, reverse it to get XYZ-based orientation
+                        legacy_orientation = group.attrs["orientation"]
+                        orientation = reverse_orientation_string(legacy_orientation)
+                    # If neither found, use the provided default orientation
                     zip_store.close()
                 else:
                     group = zarr.open_group(store_or_path, mode="r")
-                    # Get orientation from zarr metadata, fallback to provided orientation
-                    orientation = group.attrs.get("orientation", orientation)
+                    # Check for new xyz_orientation first, then fallback to legacy orientation
+                    if "xyz_orientation" in group.attrs:
+                        orientation = group.attrs["xyz_orientation"]
+                    elif "orientation" in group.attrs:
+                        # Legacy orientation is ZYX-based, reverse it to get XYZ-based orientation
+                        legacy_orientation = group.attrs["orientation"]
+                        orientation = reverse_orientation_string(legacy_orientation)
+                    # If neither found, use the provided default orientation
             else:
                 group = zarr.open_group(store_or_path, mode="r")
-                # Get orientation from zarr metadata, fallback to provided orientation
-                orientation = group.attrs.get("orientation", orientation)
+                # Check for new xyz_orientation first, then fallback to legacy orientation
+                if "xyz_orientation" in group.attrs:
+                    orientation = group.attrs["xyz_orientation"]
+                elif "orientation" in group.attrs:
+                    # Legacy orientation is ZYX-based, reverse it to get XYZ-based orientation
+                    legacy_orientation = group.attrs["orientation"]
+                    orientation = reverse_orientation_string(legacy_orientation)
+                # If neither found, use the provided default orientation
 
         except Exception:
             # If we can't read orientation metadata, use the provided default
@@ -1254,11 +1304,11 @@ class ZarrNii:
                 omero_metadata,
             )
 
-        # Create ZarrNii instance with orientation
+        # Create ZarrNii instance with xyz_orientation
         znimg = cls(
             ngff_image=ngff_image,
             axes_order=axes_order,
-            orientation=orientation,
+            xyz_orientation=orientation,
             _omero=filtered_omero,
         )
 
@@ -1482,7 +1532,7 @@ class ZarrNii:
         return ZarrNii(
             ngff_image=cropped_image,
             axes_order=self.axes_order,
-            orientation=self.orientation,
+            xyz_orientation=self.xyz_orientation,
             _omero=self._omero,
         )
 
@@ -1565,7 +1615,7 @@ class ZarrNii:
         return ZarrNii(
             ngff_image=downsampled_image,
             axes_order=self.axes_order,
-            orientation=self.orientation,
+            xyz_orientation=self.xyz_orientation,
             _omero=self._omero,
         )
 
@@ -1672,7 +1722,7 @@ class ZarrNii:
         return ZarrNii.from_ngff_image(
             upsampled_ngff,
             axes_order=self.axes_order,
-            orientation=self.orientation,
+            xyz_orientation=self.xyz_orientation,
             omero=self.omero,
         )
 
@@ -1808,7 +1858,7 @@ class ZarrNii:
         return ZarrNii(
             ngff_image=transformed_image,
             axes_order=self.axes_order,
-            orientation=self.orientation,
+            xyz_orientation=self.xyz_orientation,
             _omero=self._omero,
         )
 
@@ -1881,7 +1931,7 @@ class ZarrNii:
             store_or_path,
             max_layer,
             scale_factors,
-            orientation=self.orientation if hasattr(self, "orientation") else None,
+            xyz_orientation=self.xyz_orientation if hasattr(self, "xyz_orientation") else None,
             **kwargs,
         )
 
@@ -1896,9 +1946,9 @@ class ZarrNii:
                 else:
                     group = zarr.open_group(store_or_path, mode="r+")
 
-                # Add metadata for orientation
-                if hasattr(self, "orientation") and self.orientation:
-                    group.attrs["orientation"] = self.orientation
+                # Add metadata for xyz_orientation (new format)
+                if hasattr(self, "xyz_orientation") and self.xyz_orientation:
+                    group.attrs["xyz_orientation"] = self.xyz_orientation
             except Exception:
                 # If we can't write orientation metadata, that's not critical
                 pass
@@ -2186,7 +2236,7 @@ class ZarrNii:
         return cls(
             ngff_image=ngff_image,
             axes_order=axes_order,
-            orientation=orientation,
+            xyz_orientation=orientation,
             _omero=None,
         )
 
@@ -2585,7 +2635,7 @@ class ZarrNii:
         return ZarrNii(
             ngff_image=copied_image,
             axes_order=self.axes_order,
-            orientation=self.orientation,
+            xyz_orientation=self.xyz_orientation,
             _omero=self._omero,
         )
 
@@ -2817,7 +2867,7 @@ class ZarrNii:
         return ZarrNii(
             ngff_image=new_ngff_image,
             axes_order=self.axes_order,
-            orientation=self.orientation,
+            xyz_orientation=self.xyz_orientation,
             _omero=filtered_omero,
         )
 
@@ -2861,7 +2911,7 @@ class ZarrNii:
         return ZarrNii(
             ngff_image=new_ngff_image,
             axes_order=self.axes_order,
-            orientation=self.orientation,
+            xyz_orientation=self.xyz_orientation,
             _omero=self._omero,  # Timepoint selection doesn't affect omero metadata
         )
 
@@ -2923,7 +2973,7 @@ class ZarrNii:
         # Create metadata dict to pass to plugin
         metadata = {
             "axes_order": self.axes_order,
-            "orientation": self.orientation,
+            "orientation": self.xyz_orientation,
             "shape": self.shape,
             "dims": self.dims,
             "scale": self.scale,
@@ -2957,7 +3007,7 @@ class ZarrNii:
         return ZarrNii(
             ngff_image=new_ngff_image,
             axes_order=self.axes_order,
-            orientation=self.orientation,
+            xyz_orientation=self.xyz_orientation,
         )
 
     def segment_otsu(
@@ -3218,7 +3268,7 @@ class ZarrNii:
         return ZarrNii(
             ngff_image=new_ngff_image,
             axes_order=self.axes_order,
-            orientation=self.orientation,
+            xyz_orientation=self.xyz_orientation,
             _omero=self._omero,
         )
 
@@ -3233,6 +3283,31 @@ class ZarrNii:
 
 
 # Helper functions for backward compatibility
+def reverse_orientation_string(orientation_str):
+    """
+    Reverse an orientation string to convert between ZYX and XYZ axis orders.
+    
+    This function reverses the character order of an orientation string to convert
+    between ZYX-based and XYZ-based orientation encoding. For example:
+    'RAS' (ZYX order) becomes 'SAR' (XYZ order).
+    
+    Args:
+        orientation_str (str): Three-character orientation string (e.g., 'RAS', 'LPI')
+        
+    Returns:
+        str: Reversed orientation string
+        
+    Examples:
+        >>> reverse_orientation_string('RAS')
+        'SAR'
+        >>> reverse_orientation_string('LPI') 
+        'IPL'
+    """
+    if len(orientation_str) != 3:
+        raise ValueError(f"Orientation string must be exactly 3 characters, got: {orientation_str}")
+    return orientation_str[::-1]
+
+
 def affine_to_orientation(affine):
     """
     Convert an affine matrix to an anatomical orientation string (e.g., 'RAS').
