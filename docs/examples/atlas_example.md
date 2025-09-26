@@ -4,26 +4,50 @@ This example demonstrates how to use the atlas functionality in ZarrNii for work
 
 ## Basic Atlas Usage
 
-### Using Built-in Atlases
+### Using Built-in Templates and Atlases
 
-ZarrNii comes with built-in atlases for quick testing and examples:
+ZarrNii now uses a template/atlas architecture where:
+- **Templates** are anatomical reference spaces (e.g., MNI152, ABA) with anatomical images
+- **Atlases** are segmentation+lookup table pairs registered to a template
+- One template can have multiple atlases (different parcellations)
+
+```python
+from zarrnii import get_builtin_template, list_builtin_templates, get_builtin_template_atlas
+
+# List all available built-in templates
+templates = list_builtin_templates()
+for template_info in templates:
+    print(f"{template_info['name']}: {template_info['description']}")
+    print(f"  Resolution: {template_info['resolution']}")
+    print(f"  Available atlases: {template_info['atlases']}")
+
+# Get a template (includes anatomical image)
+template = get_builtin_template("placeholder")
+print(f"Template: {template.name}")
+print(f"Anatomical image shape: {template.anatomical_image.shape}")
+
+# List atlases available for this template
+atlases = template.list_available_atlases()
+for atlas in atlases:
+    print(f"  {atlas['name']}: {atlas['description']}")
+
+# Get an atlas from the template
+atlas = template.get_atlas("regions")
+
+# Convenience function (equivalent to above)
+atlas = get_builtin_template_atlas("placeholder", "regions")
+```
+
+### Backward Compatibility
+
+The old atlas functions still work for convenience:
 
 ```python
 from zarrnii import get_builtin_atlas, list_builtin_atlases
 
-# List all available built-in atlases
-atlases = list_builtin_atlases()
-for atlas_info in atlases:
-    print(f"{atlas_info['name']}: {atlas_info['description']}")
-
-# Get the placeholder atlas (default)
-atlas = get_builtin_atlas()  # or get_builtin_atlas("placeholder")
-print(f"Atlas shape: {atlas.dseg.shape}")
-print(f"Regions: {atlas.region_names}")
-
-# Use immediately for testing
-mask = atlas.get_region_mask("Region_A")
-volume = atlas.get_region_volume("RA")  # By abbreviation
+# These still work (equivalent to template system)
+atlases = list_builtin_atlases() 
+atlas = get_builtin_atlas("placeholder")  # Gets default atlas from default template
 ```
 
 ### Loading an Atlas from Files

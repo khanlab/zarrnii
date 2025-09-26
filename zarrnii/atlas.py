@@ -21,6 +21,123 @@ from .core import ZarrNii
 
 
 @define
+class Template:
+    """Brain template with anatomical image and associated atlases.
+
+    A template represents an anatomical reference space (e.g., MNI152, ABA)
+    with an anatomical image and multiple atlases that can be registered to it.
+
+    Attributes:
+        name (str): Template name/identifier
+        description (str): Human-readable description
+        anatomical_image (ZarrNii): Template anatomical image
+        resolution (str): Spatial resolution description
+        dimensions (tuple): Image dimensions
+        metadata (Dict[str, Any]): Additional template metadata
+    """
+
+    name: str
+    description: str
+    anatomical_image: ZarrNii
+    resolution: str = field(default="Unknown")
+    dimensions: tuple = field(default=())
+    metadata: Dict[str, Any] = field(factory=dict)
+
+    @classmethod
+    def from_directory(cls, template_path: Union[str, Path]) -> "Template":
+        """Load template from directory containing template files.
+
+        Args:
+            template_path: Path to template directory
+
+        Returns:
+            Template instance
+
+        Raises:
+            FileNotFoundError: If required files are missing
+            ValueError: If template metadata is invalid
+        """
+        template_path = Path(template_path)
+
+        # Load template metadata
+        info_file = template_path / "template_info.yaml"
+        if info_file.exists():
+            try:
+                import yaml
+
+                with open(info_file) as f:
+                    info = yaml.safe_load(f)
+            except ImportError:
+                raise ImportError("PyYAML is required to load template metadata")
+        else:
+            raise FileNotFoundError(f"Template info file not found: {info_file}")
+
+        # Load anatomical image
+        anat_file = template_path / info["anatomical_image"]
+        if not anat_file.exists():
+            raise FileNotFoundError(f"Anatomical image not found: {anat_file}")
+
+        anatomical_image = ZarrNii.from_nifti(str(anat_file))
+
+        # Store directory path in metadata for atlas loading
+        info["_template_dir"] = str(template_path)
+
+        return cls(
+            name=info["name"],
+            description=info["description"],
+            anatomical_image=anatomical_image,
+            resolution=info.get("resolution", "Unknown"),
+            dimensions=tuple(info.get("dimensions", anatomical_image.shape)),
+            metadata=info,
+        )
+
+    def list_available_atlases(self) -> List[Dict[str, Any]]:
+        """List all atlases available for this template.
+
+        Returns:
+            List of atlas metadata dictionaries
+        """
+        if "atlases" in self.metadata:
+            return self.metadata["atlases"]
+        return []
+
+    def get_atlas(self, atlas_name: str) -> "Atlas":
+        """Get a specific atlas for this template.
+
+        Args:
+            atlas_name: Name of the atlas to retrieve
+
+        Returns:
+            Atlas instance
+
+        Raises:
+            ValueError: If atlas not found
+        """
+        atlases = self.list_available_atlases()
+        atlas_info = None
+
+        for atlas in atlases:
+            if atlas["name"] == atlas_name:
+                atlas_info = atlas
+                break
+
+        if atlas_info is None:
+            available_names = [a["name"] for a in atlases]
+            raise ValueError(
+                f"Atlas '{atlas_name}' not found for template '{self.name}'. "
+                f"Available atlases: {available_names}"
+            )
+
+        # Construct paths relative to template directory
+        # This assumes the template was loaded from a directory
+        template_dir = Path(self.metadata.get("_template_dir", "."))
+        dseg_path = template_dir / atlas_info["dseg_file"]
+        labels_path = template_dir / atlas_info["labels_file"]
+
+        return Atlas.from_files(dseg_path, labels_path)
+
+
+@define
 class Atlas:
     """Brain atlas with segmentation image and region lookup table.
 
@@ -628,15 +745,32 @@ def list_builtin_atlases() -> List[Dict[str, str]]:
 
 
 def _create_placeholder_atlas() -> Atlas:
-    """Create the placeholder atlas with synthetic data.
+    """Load the placeholder atlas from the template system.
 
     Returns:
         Atlas instance with a simple 4-region segmentation
     """
-    import tempfile
-    from pathlib import Path
+    try:
+        # Use the new template-based approach
+        return get_builtin_template_atlas("placeholder", "regions")
+    except Exception:
+        # Fallback to synthetic data if template system fails
+        warnings.warn(
+            "Template system failed, creating synthetic placeholder atlas.",
+            stacklevel=3,
+        )
+        return _create_synthetic_placeholder_atlas()
 
-    # Create synthetic segmentation data
+
+def _create_synthetic_placeholder_atlas() -> Atlas:
+    """Fallback function to create synthetic placeholder atlas.
+
+    This is used when the packaged atlas files are not available.
+
+    Returns:
+        Atlas instance with synthetic data
+    """
+    # Create synthetic segmentation data (same as before)
     shape = (32, 32, 32)
     dseg_data = np.zeros(shape, dtype=np.int32)
 
@@ -659,19 +793,116 @@ def _create_placeholder_atlas() -> Atlas:
     affine = AffineTransform.identity()  # 1mm isotropic
     dseg = ZarrNii.from_darr(dseg_data, affine=affine)
 
-    # Load labels from packaged TSV file
-    labels_path = Path(__file__).parent / "data" / "atlases" / "placeholder_labels.tsv"
+    # Create labels DataFrame
+    labels_df = pd.DataFrame(
+        {
+            "index": [0, 1, 2, 3, 4],
+            "name": ["Background", "Region_A", "Region_B", "Region_C", "Region_D"],
+            "abbreviation": ["BG", "RA", "RB", "RC", "RD"],
+        }
+    )
 
+    return Atlas(dseg=dseg, labels_df=labels_df)
+
+
+def get_builtin_template(name: str = "placeholder") -> Template:
+    """Get a built-in template from the zarrnii package.
+
+    This function provides access to templates that are packaged with zarrnii,
+    including their anatomical images and associated atlases.
+
+    Args:
+        name: Name of the built-in template to retrieve.
+            Available templates:
+            - "placeholder": A simple synthetic template for testing/examples
+
+    Returns:
+        Template instance loaded from built-in data
+
+    Raises:
+        ValueError: If the requested template name is not available
+
+    Examples:
+        >>> # Get the placeholder template
+        >>> template = get_builtin_template("placeholder")
+        >>> print(f"Template: {template.name}")
+        >>> print(f"Available atlases: {[a['name'] for a in template.list_available_atlases()]}")
+
+        >>> # Get an atlas from the template
+        >>> atlas = template.get_atlas("regions")
+    """
+    available_templates = ["placeholder"]
+
+    if name not in available_templates:
+        raise ValueError(
+            f"Template '{name}' not found. Available built-in templates: {available_templates}"
+        )
+
+    # Load template from packaged data
+    template_path = Path(__file__).parent / "data" / "templates" / name
+    return Template.from_directory(template_path)
+
+
+def list_builtin_templates() -> List[Dict[str, str]]:
+    """List all available built-in templates.
+
+    Returns:
+        List of dictionaries containing template information with keys:
+        - 'name': Template identifier for use with get_builtin_template()
+        - 'description': Brief description of the template
+        - 'resolution': Spatial resolution information
+        - 'atlases': Number of available atlases
+
+    Examples:
+        >>> templates = list_builtin_templates()
+        >>> for template_info in templates:
+        ...     print(f"{template_info['name']}: {template_info['description']}")
+    """
+    templates = []
+
+    # Add placeholder template info
     try:
-        labels_df = pd.read_csv(labels_path, sep="\t")
-    except FileNotFoundError:
-        # Fallback to creating labels in memory if file not found
-        labels_df = pd.DataFrame(
+        placeholder = get_builtin_template("placeholder")
+        templates.append(
             {
-                "index": [0, 1, 2, 3, 4],
-                "name": ["Background", "Region_A", "Region_B", "Region_C", "Region_D"],
-                "abbreviation": ["BG", "RA", "RB", "RC", "RD"],
+                "name": "placeholder",
+                "description": placeholder.description,
+                "resolution": placeholder.resolution,
+                "atlases": str(len(placeholder.list_available_atlases())),
+            }
+        )
+    except Exception:
+        # Fallback if template can't be loaded
+        templates.append(
+            {
+                "name": "placeholder",
+                "description": "Simple synthetic template for testing and examples",
+                "resolution": "32x32x32 voxels, 1mm isotropic",
+                "atlases": "1",
             }
         )
 
-    return Atlas(dseg=dseg, labels_df=labels_df)
+    return templates
+
+
+def get_builtin_template_atlas(
+    template_name: str = "placeholder", atlas_name: str = "regions"
+) -> Atlas:
+    """Convenience function to get an atlas from a built-in template.
+
+    Args:
+        template_name: Name of the built-in template
+        atlas_name: Name of the atlas within the template
+
+    Returns:
+        Atlas instance
+
+    Examples:
+        >>> # Get the default atlas from default template
+        >>> atlas = get_builtin_template_atlas()
+
+        >>> # Get specific atlas from specific template
+        >>> atlas = get_builtin_template_atlas("placeholder", "regions")
+    """
+    template = get_builtin_template(template_name)
+    return template.get_atlas(atlas_name)

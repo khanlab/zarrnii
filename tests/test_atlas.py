@@ -661,7 +661,9 @@ class TestBuiltinAtlases:
 
         # Check atlas properties
         assert len(atlas.region_labels) == 5  # 0-4 including background
-        assert atlas.dseg.shape == (32, 32, 32)
+        # NIfTI loading may add singleton dimensions
+        expected_shapes = [(32, 32, 32), (1, 32, 32, 32)]
+        assert atlas.dseg.shape in expected_shapes
 
         # Check that we have expected region names
         region_names = atlas.region_names
@@ -766,3 +768,144 @@ class TestBuiltinAtlases:
 
         assert abs(region_a_row["mean_value"] - 10.0) < 1e-10
         assert abs(region_b_row["mean_value"] - 20.0) < 1e-10
+
+
+class TestTemplateSystem:
+    """Test suite for template/atlas system functionality."""
+
+    def test_list_builtin_templates(self):
+        """Test listing available built-in templates."""
+        from zarrnii import list_builtin_templates
+
+        templates = list_builtin_templates()
+
+        assert isinstance(templates, list)
+        assert len(templates) > 0
+
+        # Check that placeholder template is available
+        template_names = [template["name"] for template in templates]
+        assert "placeholder" in template_names
+
+        # Check structure of template info
+        placeholder_info = next(
+            template for template in templates if template["name"] == "placeholder"
+        )
+        required_keys = ["name", "description", "resolution", "atlases"]
+        for key in required_keys:
+            assert key in placeholder_info
+            assert isinstance(placeholder_info[key], str)
+
+    def test_get_builtin_template(self):
+        """Test getting a built-in template."""
+        from zarrnii import get_builtin_template
+
+        # Test getting placeholder template
+        template = get_builtin_template("placeholder")
+        assert template.name == "placeholder"
+        assert isinstance(template.description, str)
+        assert hasattr(template, "anatomical_image")
+
+        # Check anatomical image
+        assert template.anatomical_image.shape[1:] == (
+            32,
+            32,
+            32,
+        )  # May have singleton dim
+
+        # Test invalid template name
+        with pytest.raises(ValueError, match="Template 'nonexistent' not found"):
+            get_builtin_template("nonexistent")
+
+    def test_template_atlas_listing(self):
+        """Test listing atlases available in a template."""
+        from zarrnii import get_builtin_template
+
+        template = get_builtin_template("placeholder")
+
+        # Test listing atlases
+        atlases = template.list_available_atlases()
+        assert isinstance(atlases, list)
+        assert len(atlases) > 0
+
+        # Check that regions atlas is available
+        atlas_names = [atlas["name"] for atlas in atlases]
+        assert "regions" in atlas_names
+
+        # Check atlas metadata structure
+        regions_atlas = next(atlas for atlas in atlases if atlas["name"] == "regions")
+        required_keys = ["name", "description", "dseg_file", "labels_file"]
+        for key in required_keys:
+            assert key in regions_atlas
+
+    def test_template_get_atlas(self):
+        """Test getting an atlas from a template."""
+        from zarrnii import get_builtin_template
+
+        template = get_builtin_template("placeholder")
+
+        # Get regions atlas
+        atlas = template.get_atlas("regions")
+        assert hasattr(atlas, "dseg")
+        assert hasattr(atlas, "labels_df")
+        assert len(atlas.region_labels) == 5  # 0-4 including background
+
+        # Test invalid atlas name
+        with pytest.raises(ValueError, match="Atlas 'nonexistent' not found"):
+            template.get_atlas("nonexistent")
+
+    def test_template_atlas_convenience_function(self):
+        """Test convenience function for getting atlas from template."""
+        from zarrnii import get_builtin_template, get_builtin_template_atlas
+
+        # Test default parameters
+        atlas1 = get_builtin_template_atlas()
+
+        # Test explicit parameters
+        atlas2 = get_builtin_template_atlas("placeholder", "regions")
+
+        # Should be equivalent
+        assert len(atlas1.region_labels) == len(atlas2.region_labels)
+        np.testing.assert_array_equal(atlas1.region_labels, atlas2.region_labels)
+        assert atlas1.dseg.shape == atlas2.dseg.shape
+
+        # Test that it matches direct template access
+        template = get_builtin_template("placeholder")
+        atlas3 = template.get_atlas("regions")
+        np.testing.assert_array_equal(atlas1.region_labels, atlas3.region_labels)
+
+    def test_template_anatomical_image_access(self):
+        """Test accessing the anatomical image from templates."""
+        from zarrnii import get_builtin_template
+
+        template = get_builtin_template("placeholder")
+
+        # Check anatomical image properties
+        anat_img = template.anatomical_image
+        assert hasattr(anat_img, "shape")
+        assert hasattr(anat_img, "data")
+        assert hasattr(anat_img, "affine")
+
+        # Check that it has reasonable intensity values
+        img_data = anat_img.data
+        if hasattr(img_data, "compute"):
+            img_data = img_data.compute()
+
+        assert img_data.min() >= 0  # Non-negative intensities
+        assert img_data.max() > 0  # Some signal
+        assert img_data.shape[1:] == (32, 32, 32)  # Expected spatial dimensions
+
+    def test_backward_compatibility_with_builtin_atlas(self):
+        """Test that old get_builtin_atlas function still works with new system."""
+        from zarrnii import get_builtin_atlas, get_builtin_template_atlas
+
+        # Get atlas using old function
+        old_atlas = get_builtin_atlas("placeholder")
+
+        # Get atlas using new template system
+        new_atlas = get_builtin_template_atlas("placeholder", "regions")
+
+        # Should have same properties
+        assert len(old_atlas.region_labels) == len(new_atlas.region_labels)
+        np.testing.assert_array_equal(old_atlas.region_labels, new_atlas.region_labels)
+        assert old_atlas.region_names == new_atlas.region_names
+        assert old_atlas.dseg.shape == new_atlas.dseg.shape
