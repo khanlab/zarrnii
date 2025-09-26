@@ -806,10 +806,10 @@ class ZarrNii:
     def orientation(self) -> str:
         """
         Legacy property for backward compatibility.
-        
+
         Returns the xyz_orientation attribute to maintain backward compatibility
         with code that expects the 'orientation' property.
-        
+
         Returns:
             str: The anatomical orientation string in XYZ axes order
         """
@@ -819,14 +819,14 @@ class ZarrNii:
     def orientation(self, value: str) -> None:
         """
         Legacy setter for backward compatibility.
-        
+
         Sets the xyz_orientation attribute to maintain backward compatibility
         with code that sets the 'orientation' property.
-        
+
         Args:
             value: The anatomical orientation string in XYZ axes order
         """
-        object.__setattr__(self, 'xyz_orientation', value)
+        object.__setattr__(self, "xyz_orientation", value)
 
     @property
     def affine(self) -> AffineTransform:
@@ -1045,8 +1045,10 @@ class ZarrNii:
         """
         # Handle backwards compatibility: if xyz_orientation is provided, use it
         # Otherwise, use orientation for backwards compatibility
-        final_orientation = xyz_orientation if xyz_orientation is not None else orientation
-        
+        final_orientation = (
+            xyz_orientation if xyz_orientation is not None else orientation
+        )
+
         if ngff_image is not None:
             # New signature
             object.__setattr__(self, "ngff_image", ngff_image)
@@ -1148,24 +1150,24 @@ class ZarrNii:
 
         Notes:
             **Orientation Metadata Backwards Compatibility:**
-            
+
             This method implements backwards compatibility for orientation metadata:
-            
-            1. **Priority Order**: Checks for 'xyz_orientation' first (new format), 
+
+            1. **Priority Order**: Checks for 'xyz_orientation' first (new format),
                then falls back to 'orientation' (legacy format)
-               
-            2. **Legacy Fallback**: When only legacy 'orientation' is found, the 
-               orientation string is automatically reversed to convert from ZYX-based 
+
+            2. **Legacy Fallback**: When only legacy 'orientation' is found, the
+               orientation string is automatically reversed to convert from ZYX-based
                encoding (legacy) to XYZ-based encoding (current standard)
-               
-            3. **Default Fallback**: If no orientation metadata is found, uses the 
+
+            3. **Default Fallback**: If no orientation metadata is found, uses the
                provided 'orientation' parameter as the default
-               
+
             Examples of the conversion:
             - Legacy 'orientation'='SAR' (ZYX) → 'xyz_orientation'='RAS' (XYZ)
             - Legacy 'orientation'='IPL' (ZYX) → 'xyz_orientation'='LPI' (XYZ)
-            
-            This ensures consistent orientation handling while maintaining backwards 
+
+            This ensures consistent orientation handling while maintaining backwards
             compatibility with existing OME-Zarr files that use the legacy format.
         """
         # Validate channel and timepoint selection arguments
@@ -1939,7 +1941,7 @@ class ZarrNii:
             - OME-Zarr files are always saved in ZYX axis order
             - Automatic axis reordering if current order is XYZ
             - Spatial transformations and metadata are preserved
-            - Orientation information is stored using the new 'xyz_orientation' 
+            - Orientation information is stored using the new 'xyz_orientation'
               metadata key for consistency and future compatibility
         """
         # Determine the image to save
@@ -1955,7 +1957,9 @@ class ZarrNii:
             store_or_path,
             max_layer,
             scale_factors,
-            xyz_orientation=self.xyz_orientation if hasattr(self, "xyz_orientation") else None,
+            xyz_orientation=(
+                self.xyz_orientation if hasattr(self, "xyz_orientation") else None
+            ),
             **kwargs,
         )
 
@@ -3266,25 +3270,27 @@ class ZarrNii:
 def reverse_orientation_string(orientation_str):
     """
     Reverse an orientation string to convert between ZYX and XYZ axis orders.
-    
+
     This function reverses the character order of an orientation string to convert
     between ZYX-based and XYZ-based orientation encoding. For example:
     'RAS' (ZYX order) becomes 'SAR' (XYZ order).
-    
+
     Args:
         orientation_str (str): Three-character orientation string (e.g., 'RAS', 'LPI')
-        
+
     Returns:
         str: Reversed orientation string
-        
+
     Examples:
         >>> reverse_orientation_string('RAS')
         'SAR'
-        >>> reverse_orientation_string('LPI') 
+        >>> reverse_orientation_string('LPI')
         'IPL'
     """
     if len(orientation_str) != 3:
-        raise ValueError(f"Orientation string must be exactly 3 characters, got: {orientation_str}")
+        raise ValueError(
+            f"Orientation string must be exactly 3 characters, got: {orientation_str}"
+        )
     return orientation_str[::-1]
 
 
