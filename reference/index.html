@@ -7906,14 +7906,14 @@ print("Scaling factors:", scaling)</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3225</span>
-<span class="normal">3226</span>
-<span class="normal">3227</span>
-<span class="normal">3228</span>
-<span class="normal">3229</span>
-<span class="normal">3230</span>
-<span class="normal">3231</span>
-<span class="normal">3232</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3181</span>
+<span class="normal">3182</span>
+<span class="normal">3183</span>
+<span class="normal">3184</span>
+<span class="normal">3185</span>
+<span class="normal">3186</span>
+<span class="normal">3187</span>
+<span class="normal">3188</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;String representation.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">(</span>
         <span class="sa">f</span><span class="s2">&quot;ZarrNii(name=&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39;, &quot;</span>
@@ -8137,7 +8137,7 @@ The data array is transposed and scale/translation are reordered accordingly.</p
 
 
 <h2 id="zarrnii.ZarrNii.apply_scaled_processing" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">apply_scaled_processing</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="n">downsample_factor</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">chunk_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">use_temp_zarr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">temp_zarr_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">apply_scaled_processing</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="n">downsample_factor</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">chunk_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">upsampled_ome_zarr_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
 
 </h2>
 
@@ -8212,30 +8212,14 @@ The data array is transposed and scale/translation are reordered accordingly.</p
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>use_temp_zarr</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Whether to use temporary OME-Zarr for breaking up dask graph (default: True)</p>
-              </div>
-            </td>
-            <td>
-                  <code>True</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>temp_zarr_path</code>
+                <code>upsampled_ome_zarr_path</code>
             </td>
             <td>
                   <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Path for temporary OME-Zarr file. If None, uses temp directory.</p>
+                <p>Path to save intermediate OME-Zarr, default saved in system temp directory.</p>
               </div>
             </td>
             <td>
@@ -8357,57 +8341,12 @@ The data array is transposed and scale/translation are reordered accordingly.</p
 <span class="normal">3176</span>
 <span class="normal">3177</span>
 <span class="normal">3178</span>
-<span class="normal">3179</span>
-<span class="normal">3180</span>
-<span class="normal">3181</span>
-<span class="normal">3182</span>
-<span class="normal">3183</span>
-<span class="normal">3184</span>
-<span class="normal">3185</span>
-<span class="normal">3186</span>
-<span class="normal">3187</span>
-<span class="normal">3188</span>
-<span class="normal">3189</span>
-<span class="normal">3190</span>
-<span class="normal">3191</span>
-<span class="normal">3192</span>
-<span class="normal">3193</span>
-<span class="normal">3194</span>
-<span class="normal">3195</span>
-<span class="normal">3196</span>
-<span class="normal">3197</span>
-<span class="normal">3198</span>
-<span class="normal">3199</span>
-<span class="normal">3200</span>
-<span class="normal">3201</span>
-<span class="normal">3202</span>
-<span class="normal">3203</span>
-<span class="normal">3204</span>
-<span class="normal">3205</span>
-<span class="normal">3206</span>
-<span class="normal">3207</span>
-<span class="normal">3208</span>
-<span class="normal">3209</span>
-<span class="normal">3210</span>
-<span class="normal">3211</span>
-<span class="normal">3212</span>
-<span class="normal">3213</span>
-<span class="normal">3214</span>
-<span class="normal">3215</span>
-<span class="normal">3216</span>
-<span class="normal">3217</span>
-<span class="normal">3218</span>
-<span class="normal">3219</span>
-<span class="normal">3220</span>
-<span class="normal">3221</span>
-<span class="normal">3222</span>
-<span class="normal">3223</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
+<span class="normal">3179</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">plugin</span><span class="p">,</span>
     <span class="n">downsample_factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
     <span class="n">chunk_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">use_temp_zarr</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-    <span class="n">temp_zarr_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">upsampled_ome_zarr_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -8423,8 +8362,7 @@ The data array is transposed and scale/translation are reordered accordingly.</p
 <span class="sd">        plugin: ScaledProcessingPlugin instance or class to apply</span>
 <span class="sd">        downsample_factor: Factor for downsampling (default: 4)</span>
 <span class="sd">        chunk_size: Optional chunk size for low-res processing. If None, uses (1, 10, 10, 10).</span>
-<span class="sd">        use_temp_zarr: Whether to use temporary OME-Zarr for breaking up dask graph (default: True)</span>
-<span class="sd">        temp_zarr_path: Path for temporary OME-Zarr file. If None, uses temp directory.</span>
+<span class="sd">        upsampled_ome_zarr_path: Path to save intermediate OME-Zarr, default saved in system temp directory.</span>
 <span class="sd">        **kwargs: Additional arguments passed to the plugin</span>
 
 <span class="sd">    Returns:</span>
@@ -8453,70 +8391,28 @@ The data array is transposed and scale/translation are reordered accordingly.</p
         <span class="n">plugin</span><span class="o">.</span><span class="n">lowres_func</span><span class="p">(</span><span class="n">lowres_array</span><span class="p">),</span> <span class="n">chunks</span><span class="o">=</span><span class="n">lowres_chunks</span>
     <span class="p">)</span>
 
-    <span class="c1"># Step 3: Upsample using dask-based upsampling</span>
-    <span class="n">upsampled_znimg</span> <span class="o">=</span> <span class="n">lowres_znimg</span><span class="o">.</span><span class="n">upsample</span><span class="p">(</span><span class="n">to_shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="c1"># Use temporary OME-Zarr to break up dask graph for performance</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
 
-    <span class="k">if</span> <span class="n">use_temp_zarr</span><span class="p">:</span>
-        <span class="c1"># Use temporary OME-Zarr to break up dask graph for performance</span>
-        <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-        <span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+    <span class="k">if</span> <span class="n">upsampled_ome_zarr_path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">upsampled_ome_zarr_path</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">(</span><span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;_SPIM.ome.zarr&quot;</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">temp_zarr_path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="c1"># Create temp file in system temp directory</span>
-            <span class="n">temp_dir</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">gettempdir</span><span class="p">()</span>
-            <span class="n">temp_name</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;zarrnii_scaled_processing_</span><span class="si">{</span><span class="n">os</span><span class="o">.</span><span class="n">getpid</span><span class="p">()</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="si">}</span><span class="s2">.ome.zarr&quot;</span>
-            <span class="p">)</span>
-            <span class="n">temp_zarr_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">temp_dir</span><span class="p">,</span> <span class="n">temp_name</span><span class="p">)</span>
+    <span class="c1"># Step 3: Upsample using dask-based upsampling, save to ome zarr</span>
+    <span class="n">lowres_znimg</span><span class="o">.</span><span class="n">upsample</span><span class="p">(</span><span class="n">to_shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="o">.</span><span class="n">to_ome_zarr</span><span class="p">(</span>
+        <span class="n">upsampled_ome_zarr_path</span><span class="p">,</span> <span class="n">max_layer</span><span class="o">=</span><span class="mi">0</span>
+    <span class="p">)</span>
 
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">upsampled_znimg</span><span class="o">.</span><span class="n">to_ome_zarr</span><span class="p">(</span><span class="n">temp_zarr_path</span><span class="p">)</span>
-            <span class="c1"># Reload with the same axes_order to avoid shape reordering</span>
-            <span class="n">reloaded_znimg</span> <span class="o">=</span> <span class="n">ZarrNii</span><span class="o">.</span><span class="n">from_ome_zarr</span><span class="p">(</span><span class="n">temp_zarr_path</span><span class="p">)</span>
-            <span class="c1"># Ensure the reloaded data matches the expected shape by preserving axes order</span>
-            <span class="k">if</span> <span class="n">reloaded_znimg</span><span class="o">.</span><span class="n">axes_order</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">axes_order</span><span class="p">:</span>
-                <span class="c1"># If axes order changed, we need to transpose the data back</span>
-                <span class="k">if</span> <span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">axes_order</span> <span class="o">==</span> <span class="s2">&quot;XYZ&quot;</span> <span class="ow">and</span> <span class="n">reloaded_znimg</span><span class="o">.</span><span class="n">axes_order</span> <span class="o">==</span> <span class="s2">&quot;ZYX&quot;</span>
-                <span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">axes_order</span> <span class="o">==</span> <span class="s2">&quot;ZYX&quot;</span> <span class="ow">and</span> <span class="n">reloaded_znimg</span><span class="o">.</span><span class="n">axes_order</span> <span class="o">==</span> <span class="s2">&quot;XYZ&quot;</span>
-                <span class="p">):</span>
-                    <span class="c1"># Simple case: just transpose the spatial dimensions (skip channel dim)</span>
-                    <span class="n">upsampled_data</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">reloaded_znimg</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="c1"># More complex reordering - fallback to direct data</span>
-                    <span class="n">upsampled_data</span> <span class="o">=</span> <span class="n">upsampled_znimg</span><span class="o">.</span><span class="n">data</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">upsampled_data</span> <span class="o">=</span> <span class="n">reloaded_znimg</span><span class="o">.</span><span class="n">data</span>
-        <span class="k">finally</span><span class="p">:</span>
-            <span class="c1"># Clean up temp file after loading data</span>
-            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">temp_zarr_path</span><span class="p">):</span>
-                <span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+    <span class="n">upsampled_znimg</span> <span class="o">=</span> <span class="n">ZarrNii</span><span class="o">.</span><span class="n">from_ome_zarr</span><span class="p">(</span><span class="n">upsampled_ome_zarr_path</span><span class="p">)</span>
 
-                <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">temp_zarr_path</span><span class="p">,</span> <span class="n">ignore_errors</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="c1"># Use the upsampled data directly without temp file</span>
-        <span class="n">upsampled_data</span> <span class="o">=</span> <span class="n">upsampled_znimg</span><span class="o">.</span><span class="n">data</span>
+    <span class="n">corrected_znimg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
 
     <span class="c1"># Step 4: Apply high-resolution function</span>
-    <span class="n">processed_data</span> <span class="o">=</span> <span class="n">plugin</span><span class="o">.</span><span class="n">highres_func</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">upsampled_data</span><span class="p">)</span>
-
-    <span class="c1"># Create new NgffImage with processed data</span>
-    <span class="n">new_ngff_image</span> <span class="o">=</span> <span class="n">nz</span><span class="o">.</span><span class="n">NgffImage</span><span class="p">(</span>
-        <span class="n">data</span><span class="o">=</span><span class="n">processed_data</span><span class="p">,</span>
-        <span class="n">dims</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dims</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
-        <span class="n">scale</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
-        <span class="n">translation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">translation</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
-        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">plugin</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;_&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+    <span class="c1"># rechunk original data to use same chunksize as upsampled_data, before multiplying</span>
+    <span class="n">corrected_znimg</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">plugin</span><span class="o">.</span><span class="n">highres_func</span><span class="p">(</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">rechunk</span><span class="p">(</span><span class="n">upsampled_znimg</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">chunks</span><span class="p">),</span> <span class="n">upsampled_znimg</span><span class="o">.</span><span class="n">data</span>
     <span class="p">)</span>
 
-    <span class="c1"># Return new ZarrNii instance</span>
-    <span class="k">return</span> <span class="n">ZarrNii</span><span class="p">(</span>
-        <span class="n">ngff_image</span><span class="o">=</span><span class="n">new_ngff_image</span><span class="p">,</span>
-        <span class="n">axes_order</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">axes_order</span><span class="p">,</span>
-        <span class="n">orientation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">orientation</span><span class="p">,</span>
-        <span class="n">_omero</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_omero</span><span class="p">,</span>
-    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">corrected_znimg</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
