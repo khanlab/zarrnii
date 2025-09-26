@@ -3159,7 +3159,7 @@ class ZarrNii:
         import tempfile
 
         if upsampled_ome_zarr_path is None:
-            upsampled_ome_zarr_path = tempfile.mkdtemp()
+            upsampled_ome_zarr_path = tempfile.mkdtemp(suffix="_SPIM.ome.zarr")
 
         # Step 3: Upsample using dask-based upsampling, save to ome zarr
         lowres_znimg.upsample(to_shape=self.shape).to_ome_zarr(
