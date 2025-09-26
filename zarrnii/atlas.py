@@ -877,6 +877,39 @@ def _create_synthetic_placeholder_atlas() -> Atlas:
     return Atlas(dseg=dseg, labels_df=labels_df)
 
 
+def _reload_templateflow_api() -> None:
+    """Reload the TemplateFlow API to recognize newly installed templates.
+
+    This function handles the necessary reloading of TemplateFlow's internal
+    layout and API modules to ensure that newly installed templates are
+    properly recognized by the TemplateFlow system.
+    """
+    try:
+        import importlib
+
+        from templateflow import api as tflow
+        from templateflow.conf import init_layout
+
+        # Initialize/refresh the TemplateFlow layout
+        init_layout()
+
+        # Reload the API module to pick up new templates
+        importlib.reload(tflow)
+
+    except ImportError:
+        # TemplateFlow not available - this is expected in some environments
+        pass
+    except Exception:
+        # Other errors during reload - log but don't fail
+        import warnings
+
+        warnings.warn(
+            "Failed to reload TemplateFlow API. "
+            "Newly installed templates may not be immediately accessible.",
+            stacklevel=3,
+        )
+
+
 def _install_template_to_templateflow(template_name: str) -> bool:
     """Install a zarrnii built-in template to TEMPLATEFLOW_HOME.
 
@@ -911,18 +944,8 @@ def _install_template_to_templateflow(template_name: str) -> bool:
                 # Copy template directory (TF_HOME should already exist via @requires_layout)
                 shutil.copytree(zarrnii_template_dir, target_dir)
 
-                # kick-start templateflow layout ----
-                from templateflow.conf import TF_LAYOUT
-
-                init_layout()
-
-                # ensure the api uses the updated layout
-                import importlib
-
-                from templateflow import api as tflow
-
-                importlib.reload(tflow)
-                # ---
+                # Reload TemplateFlow to recognize new templates
+                _reload_templateflow_api()
 
                 # Verify templateflow can see it
                 try:

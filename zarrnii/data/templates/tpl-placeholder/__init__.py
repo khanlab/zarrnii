@@ -1,1 +1,1 @@
-\"\"\"TemplateFlow-compliant placeholder template for zarrnii.\"\"\"
+"""TemplateFlow-compliant placeholder template for zarrnii."""
