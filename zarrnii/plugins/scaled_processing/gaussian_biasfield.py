@@ -1,5 +1,5 @@
 """
-Bias field correction plugin using multi-resolution processing.
+Gaussian Bias field correction plugin using multi-resolution processing.
 
 This module implements a bias field correction plugin that estimates the bias field
 at low resolution and applies it to full resolution data.
@@ -16,7 +16,7 @@ from scipy import ndimage
 from .base import ScaledProcessingPlugin
 
 
-class BiasFieldCorrection(ScaledProcessingPlugin):
+class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
     """
     Bias field correction plugin using multi-resolution processing.
 
@@ -123,16 +123,15 @@ class BiasFieldCorrection(ScaledProcessingPlugin):
         """
         # Apply bias field correction by division using dask operations
         # Avoid division by zero by adding small epsilon
-        corrected_array = fullres_array / da.maximum(
-            upsampled_output, np.finfo(fullres_array.dtype).eps
-        )
+        epsilon = np.finfo(np.float32).eps
+        corrected_array = fullres_array / da.maximum(upsampled_output, epsilon)
 
         return corrected_array
 
     @property
     def name(self) -> str:
         """Return the name of the algorithm."""
-        return "Bias Field Correction"
+        return "Gaussian Bias Field Correction"
 
     @property
     def description(self) -> str:

@@ -13,8 +13,9 @@ from .atlas import (
 from .core import ZarrNii, affine_to_orientation
 from .plugins import OtsuSegmentation  # Backward compatibility
 from .plugins import (
-    BiasFieldCorrection,
+    GaussianBiasFieldCorrection,
     LocalOtsuSegmentation,
+    N4BiasFieldCorrection,
     ScaledProcessingPlugin,
     SegmentationPlugin,
     ThresholdSegmentation,
@@ -34,7 +35,10 @@ __all__ = [
     "LocalOtsuSegmentation",
     "ThresholdSegmentation",
     "ScaledProcessingPlugin",
-    "BiasFieldCorrection",
+    "GaussianBiasFieldCorrection",
+    "N4BiasFieldCorrection",
+    "compute_histogram",
+    "compute_otsu_thresholds",
     "import_lut_csv_as_tsv",
     "import_lut_itksnap_as_tsv",
     "get_builtin_atlas",
@@ -42,6 +46,4 @@ __all__ = [
     "get_builtin_template_atlas",
     "list_builtin_atlases",
     "list_builtin_templates",
-    "compute_histogram",
-    "compute_otsu_thresholds",
 ]

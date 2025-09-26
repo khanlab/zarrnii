@@ -26,14 +26,14 @@ This function receives the full-resolution dask array and the upsampled output (
 ## Basic Usage
 
 ```python
-from zarrnii import ZarrNii, BiasFieldCorrection
+from zarrnii import ZarrNii, GaussianBiasFieldCorrection
 
 # Load your data
 znimg = ZarrNii.from_nifti("path/to/image.nii")
 
 # Apply bias field correction
 corrected = znimg.apply_scaled_processing(
-    BiasFieldCorrection(sigma=5.0),
+    GaussianBiasFieldCorrection(sigma=5.0),
     downsample_factor=4
 )
 
@@ -43,17 +43,17 @@ corrected.to_nifti("corrected_image.nii")
 
 ## Built-in Plugins
 
-### BiasFieldCorrection
+### GaussianBiasFieldCorrection
 
 A simple bias field correction plugin that estimates smooth bias fields using Gaussian smoothing at low resolution and applies correction by division.
 
 ```python
 # Basic usage with default parameters
-corrected = znimg.apply_scaled_processing(BiasFieldCorrection())
+corrected = znimg.apply_scaled_processing(GaussianBiasFieldCorrection())
 
 # Custom parameters
 corrected = znimg.apply_scaled_processing(
-    BiasFieldCorrection(sigma=3.0, mode='constant'),
+    GaussianBiasFieldCorrection(sigma=3.0, mode='constant'),
     downsample_factor=8
 )
 ```
@@ -61,6 +61,40 @@ corrected = znimg.apply_scaled_processing(
 Parameters:
 - `sigma`: Standard deviation for Gaussian smoothing (default: 5.0)
 - `mode`: Boundary condition for smoothing (default: 'reflect')
+
+### N4BiasFieldCorrection
+
+A more sophisticated bias field correction plugin that uses the N4 algorithm from ANTsPy for superior bias field estimation at low resolution, then applies correction by division.
+
+**Installation**: Requires `antspyx` to be installed:
+```bash
+# Install with N4 support
+pip install 'zarrnii[n4]'
+# or install antspyx directly
+pip install antspyx
+```
+
+```python
+from zarrnii import N4BiasFieldCorrection
+
+# Basic usage with default parameters
+corrected = znimg.apply_scaled_processing(N4BiasFieldCorrection())
+
+# Custom parameters for more control
+corrected = znimg.apply_scaled_processing(
+    N4BiasFieldCorrection(
+        spline_spacing=150.0,
+        convergence={'iters': [25, 25], 'tol': 0.001},
+        shrink_factor=2
+    ),
+    downsample_factor=4
+)
+```
+
+Parameters:
+- `spline_spacing`: Spacing between knots for spline fitting (default: 200.0)
+- `convergence`: Dictionary with 'iters' (list) and 'tol' (float) for convergence criteria (default: {'iters': [50], 'tol': 0.001})
+- `shrink_factor`: Shrink factor for processing (default: 1)
 
 ## Creating Custom Plugins
 
@@ -111,7 +145,7 @@ result = znimg.apply_scaled_processing(CustomPlugin(param1=2.0))
 ```python
 # Use different downsampling factors
 result = znimg.apply_scaled_processing(
-    BiasFieldCorrection(), 
+    GaussianBiasFieldCorrection(), 
     downsample_factor=8  # 8x downsampling
 )
 ```
@@ -122,7 +156,7 @@ result = znimg.apply_scaled_processing(
 # Specify custom chunk sizes for low-resolution processing
 # The chunk_size parameter controls the chunking of low-resolution intermediate results
 result = znimg.apply_scaled_processing(
-    BiasFieldCorrection(),
+    GaussianBiasFieldCorrection(),
     chunk_size=(1, 32, 32, 32)  # Used for low-res processing chunks
 )
 ```
@@ -134,13 +168,13 @@ The framework uses temporary OME-Zarr files to break up the dask computation gra
 ```python
 # Disable temporary file usage (may impact performance on large datasets)
 result = znimg.apply_scaled_processing(
-    BiasFieldCorrection(),
+    GaussianBiasFieldCorrection(),
     use_temp_zarr=False
 )
 
 # Use custom temporary file location
 result = znimg.apply_scaled_processing(
-    BiasFieldCorrection(),
+    GaussianBiasFieldCorrection(),
     temp_zarr_path="/custom/path/temp_processing.ome.zarr"
 )
 ```
@@ -149,10 +183,10 @@ result = znimg.apply_scaled_processing(
 
 ```python
 # Using plugin class (parameters passed as kwargs)
-result1 = znimg.apply_scaled_processing(BiasFieldCorrection, sigma=3.0)
+result1 = znimg.apply_scaled_processing(GaussianBiasFieldCorrection, sigma=3.0)
 
 # Using plugin instance (parameters set during initialization)
-plugin = BiasFieldCorrection(sigma=3.0)
+plugin = GaussianBiasFieldCorrection(sigma=3.0)
 result2 = znimg.apply_scaled_processing(plugin)
 ```
 
@@ -171,7 +205,7 @@ The scaled processing plugins integrate seamlessly with other ZarrNii operations
 ```python
 # Chain operations
 result = (znimg
-    .apply_scaled_processing(BiasFieldCorrection())
+    .apply_scaled_processing(GaussianBiasFieldCorrection())
     .downsample(level=1)
     .segment_otsu())
 

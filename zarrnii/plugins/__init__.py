@@ -14,5 +14,6 @@ __all__ = [
     "LocalOtsuSegmentation",
     "ThresholdSegmentation",
     "ScaledProcessingPlugin",
-    "BiasFieldCorrection",
+    "GaussianBiasFieldCorrection",
+    "N4BiasFieldCorrection",
 ]
