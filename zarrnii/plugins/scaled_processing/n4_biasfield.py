@@ -32,15 +32,18 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
     correction to full resolution data by division.
 
     Parameters:
-        spline_spacing: Spacing between knots for spline fitting (default: 200)
+        spline_param: Spacing between knots for spline fitting (default: 200)
         convergence: Convergence criteria [iters, tol] (default: [50, 0.001])
         shrink_factor: Shrink factor for processing (default: 1)
     """
 
     def __init__(
         self,
-        spline_spacing: float = 200.0,
-        convergence: Optional[Dict[str, Any]] = None,
+        spline_param: tuple[int, int, int] = [2, 2, 2],
+        convergence: Optional[Dict[str, Any]] = {
+            "iters": [50, 50, 50, 50],
+            "tol": 1e-07,
+        },
         shrink_factor: int = 1,
         **kwargs,
     ):
@@ -48,7 +51,7 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
         Initialize N4 bias field correction plugin.
 
         Args:
-            spline_spacing: Spacing between knots for spline fitting
+            spline_param: Spacing between knots for spline fitting
             convergence: Convergence criteria dict with 'iters' (list), 'tol'
             shrink_factor: Shrink factor for processing
             **kwargs: Additional parameters passed to parent class
@@ -63,17 +66,13 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
                 "or pip install antspyx"
             )
 
-        # Set default convergence if not provided
-        if convergence is None:
-            convergence = {"iters": [50], "tol": 0.001}
-
         super().__init__(
-            spline_spacing=spline_spacing,
+            spline_param=spline_param,
             convergence=convergence,
             shrink_factor=shrink_factor,
             **kwargs,
         )
-        self.spline_spacing = spline_spacing
+        self.spline_param = spline_param
         self.convergence = convergence
         self.shrink_factor = shrink_factor
 
@@ -119,7 +118,7 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
             bias_result = ants.n4_bias_field_correction(
                 ants_img,
                 return_bias_field=True,
-                spline_param=self.spline_spacing,
+                spline_param=self.spline_param,
                 convergence=self.convergence,
                 shrink_factor=self.shrink_factor,
             )
@@ -134,7 +133,7 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
                     bias_result = ants.n4_bias_field_correction(
                         ants_img,
                         return_bias_field=True,
-                        spline_param=self.spline_spacing,
+                        spline_param=self.spline_param,
                         convergence=self.convergence,
                         shrink_factor=self.shrink_factor,
                     )
@@ -144,7 +143,7 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
                 bias_result = ants.n4_bias_field_correction(
                     ants_img,
                     return_bias_field=True,
-                    spline_param=self.spline_spacing,
+                    spline_param=self.spline_param,
                     convergence=self.convergence,
                     shrink_factor=self.shrink_factor,
                 )
