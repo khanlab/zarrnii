@@ -12,6 +12,12 @@ from numpy.testing import assert_array_almost_equal
 
 from zarrnii import GaussianBiasFieldCorrection, ScaledProcessingPlugin, ZarrNii
 
+# Import HAS_ANTSPYX for conditional tests
+try:
+    from zarrnii.plugins.scaled_processing.n4_biasfield import HAS_ANTSPYX
+except ImportError:
+    HAS_ANTSPYX = False
+
 
 class TestScaledProcessingPlugin:
     """Test the base ScaledProcessingPlugin interface."""
@@ -193,6 +199,45 @@ class TestZarrNiiScaledProcessingIntegration:
         assert isinstance(result, ZarrNii)
         assert result.shape == znimg.shape
 
+    @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
+    @pytest.mark.usefixtures("cleandir")
+    def test_apply_scaled_processing_n4_plugin_instance(self, nifti_nib):
+        """Test apply_scaled_processing method with N4 plugin instance."""
+        from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
+
+        nifti_nib.to_filename("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
+
+        plugin = N4BiasFieldCorrection(
+            spline_spacing=200.0,
+            convergence={"iters": [10], "tol": 0.01},
+            shrink_factor=2,
+        )
+        result = znimg.apply_scaled_processing(plugin, downsample_factor=2)
+
+        # Check that we get a new ZarrNii instance
+        assert isinstance(result, ZarrNii)
+        assert result.shape == znimg.shape
+
+    @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
+    @pytest.mark.usefixtures("cleandir")
+    def test_apply_scaled_processing_n4_plugin_class(self, nifti_nib):
+        """Test apply_scaled_processing method with N4 plugin class."""
+        from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
+
+        nifti_nib.to_filename("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
+
+        result = znimg.apply_scaled_processing(
+            N4BiasFieldCorrection,
+            spline_spacing=100.0,
+            convergence={"iters": [5], "tol": 0.01},
+            downsample_factor=2,
+        )
+
+        assert isinstance(result, ZarrNii)
+        assert result.shape == znimg.shape
+
     @pytest.mark.usefixtures("cleandir")
     def test_apply_scaled_processing_invalid_plugin(self, nifti_nib):
         """Test apply_scaled_processing with invalid plugin."""
@@ -281,3 +326,154 @@ class TestScaledProcessingWorkflow:
         assert "GaussianBiasFieldCorrection" in repr_str
         assert "sigma=3.0" in repr_str
         assert "mode=reflect" in repr_str
+
+
+class TestN4BiasFieldCorrection:
+    """Test the N4BiasFieldCorrection plugin."""
+
+    def test_n4_plugin_import_without_antspyx(self):
+        """Test N4BiasFieldCorrection import behavior without antspyx."""
+        # This test would need a way to mock the import failure
+        # For now, we'll test that the plugin can be imported when antspyx is available
+        from zarrnii.plugins.scaled_processing.n4_biasfield import HAS_ANTSPYX
+
+        if HAS_ANTSPYX:
+            from zarrnii.plugins.scaled_processing.n4_biasfield import (
+                N4BiasFieldCorrection,
+            )
+
+            plugin = N4BiasFieldCorrection()
+            assert plugin.name == "N4 Bias Field Correction"
+
+    @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
+    def test_n4_plugin_initialization(self):
+        """Test N4BiasFieldCorrection plugin initialization."""
+        from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
+
+        plugin = N4BiasFieldCorrection(
+            spline_spacing=100.0,
+            convergence={"iters": [25], "tol": 0.002},
+            shrink_factor=2,
+        )
+
+        assert plugin.name == "N4 Bias Field Correction"
+        assert "Multi-resolution N4 bias field correction" in plugin.description
+        assert plugin.spline_spacing == 100.0
+        assert plugin.convergence == {"iters": [25], "tol": 0.002}
+        assert plugin.shrink_factor == 2
+        assert plugin.params["spline_spacing"] == 100.0
+
+    @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
+    def test_n4_lowres_func_basic(self):
+        """Test the N4 lowres_func with basic input."""
+        from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
+
+        plugin = N4BiasFieldCorrection(
+            spline_spacing=200.0, convergence={"iters": [10], "tol": 0.01}
+        )
+
+        # Create test data with intensity variation (simulating bias field)
+        test_data = np.ones((20, 20), dtype=np.float32) * 100
+        test_data[:, :10] = 50  # Create intensity variation
+
+        result = plugin.lowres_func(test_data)
+
+        # Result should have the same shape
+        assert result.shape == test_data.shape
+        # Result should be positive (bias field)
+        assert np.all(result > 0)
+        # Result should be finite
+        assert np.all(np.isfinite(result))
+
+    @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
+    def test_n4_lowres_func_3d(self):
+        """Test the N4 lowres_func with 3D input."""
+        from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
+
+        plugin = N4BiasFieldCorrection(convergence={"iters": [5], "tol": 0.01})
+
+        # Create 3D test data
+        test_data = np.ones((10, 20, 20), dtype=np.float32) * 100
+        test_data[:, :, :10] = 50
+
+        result = plugin.lowres_func(test_data)
+
+        assert result.shape == test_data.shape
+        assert np.all(result > 0)
+        assert np.all(np.isfinite(result))
+
+    @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
+    def test_n4_lowres_func_edge_cases(self):
+        """Test N4 lowres_func with edge cases."""
+        from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
+
+        plugin = N4BiasFieldCorrection()
+
+        # Test empty array
+        with pytest.raises(ValueError, match="Input array is empty"):
+            plugin.lowres_func(np.array([]))
+
+        # Test 1D array
+        with pytest.raises(ValueError, match="Input array must be at least 2D"):
+            plugin.lowres_func(np.array([1, 2, 3]))
+
+    @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
+    def test_n4_highres_func_application(self):
+        """Test the N4 highres_func with upsampled bias field."""
+        from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
+
+        plugin = N4BiasFieldCorrection()
+
+        # Create test data - both arrays same size
+        fullres_data = da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 100
+        upsampled_bias = da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 2
+
+        result = plugin.highres_func(fullres_data, upsampled_bias)
+
+        # Result should have same shape as full-res data
+        assert result.shape == fullres_data.shape
+
+        # Result should be approximately original divided by bias (100/2 = 50)
+        result_computed = result.compute()
+        expected = 50.0
+        assert_array_almost_equal(
+            result_computed, np.full_like(result_computed, expected), decimal=1
+        )
+
+    @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
+    def test_n4_highres_func_division_by_zero_protection(self):
+        """Test N4 highres_func protects against division by zero."""
+        from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
+
+        plugin = N4BiasFieldCorrection()
+
+        # Test with some zero values in bias field
+        fullres_data = da.ones((20, 20), chunks=(10, 10), dtype=np.float32) * 100
+        upsampled_bias = da.zeros((20, 20), chunks=(10, 10), dtype=np.float32)
+
+        result = plugin.highres_func(fullres_data, upsampled_bias)
+
+        assert result.shape == fullres_data.shape
+        # Should not result in inf values
+        result_computed = result.compute()
+        assert np.all(np.isfinite(result_computed))
+
+    def test_n4_plugin_repr(self):
+        """Test N4 plugin string representation."""
+        from zarrnii.plugins.scaled_processing.n4_biasfield import HAS_ANTSPYX
+
+        if HAS_ANTSPYX:
+            from zarrnii.plugins.scaled_processing.n4_biasfield import (
+                N4BiasFieldCorrection,
+            )
+
+            plugin = N4BiasFieldCorrection(
+                spline_spacing=150.0,
+                convergence={"iters": [30], "tol": 0.005},
+                shrink_factor=3,
+            )
+            repr_str = repr(plugin)
+
+            assert "N4BiasFieldCorrection" in repr_str
+            assert "spline_spacing=150.0" in repr_str
+            assert "shrink_factor=3" in repr_str
