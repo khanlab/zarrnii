@@ -54,6 +54,7 @@ Examples:
   # TIFF stack export
   z2n input.ome.zarr output_z{z:04d}.tif --tiff-channel 0
   z2n input.ome.zarr slices/brain_{z:03d}.tiff --tiff-timepoint 0 --tiff-no-compress
+  z2n input.ome.zarr output_z{z:04d}.tif --tiff-dtype uint8 --tiff-no-rescale
         """,
     )
 
@@ -134,6 +135,18 @@ Examples:
         action="store_true",
         help="Disable LZW compression for TIFF files (default: compressed)",
     )
+    parser.add_argument(
+        "--tiff-dtype",
+        type=str,
+        default="uint16",
+        choices=["uint8", "uint16", "int16", "float32"],
+        help="Output data type for TIFF files (default: uint16)",
+    )
+    parser.add_argument(
+        "--tiff-no-rescale",
+        action="store_true",
+        help="Disable rescaling data to fit output dtype range (default: rescale enabled)",
+    )
 
     args = parser.parse_args()
 
@@ -199,6 +212,8 @@ Examples:
                 channel=args.tiff_channel,
                 timepoint=args.tiff_timepoint,
                 compress=not args.tiff_no_compress,
+                dtype=args.tiff_dtype,
+                rescale=not args.tiff_no_rescale,
             )
         else:
             # Default to NIfTI

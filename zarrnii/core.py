@@ -2095,6 +2095,8 @@ class ZarrNii:
         channel: Optional[int] = None,
         timepoint: Optional[int] = None,
         compress: bool = True,
+        dtype: Optional[str] = "uint16",
+        rescale: bool = True,
     ) -> str:
         """Save data as a stack of 2D TIFF images.
 
@@ -2116,24 +2118,38 @@ class ZarrNii:
             timepoint: Timepoint index to save (0-based). If None and data has multiple
                 timepoints, raises ValueError (must select single timepoint).
             compress: Whether to use LZW compression (default: True)
+            dtype: Output data type for TIFF files. Options:
+                - 'uint8': 8-bit unsigned integer (0-255)
+                - 'uint16': 16-bit unsigned integer (0-65535) [default]
+                - 'int16': 16-bit signed integer (-32768 to 32767)
+                - 'float32': 32-bit float (preserves original data)
+                Default 'uint16' provides good range and compatibility.
+            rescale: Whether to rescale data to fit the output dtype range.
+                If True, data is linearly scaled from [min, max] to the full
+                range of the output dtype. If False, data is clipped to the
+                output dtype range. Default: True
 
         Returns:
             Base directory path where files were saved
 
         Raises:
             ValueError: If data has multiple timepoints but none selected,
-                or if selected channel/timepoint is out of range
+                or if selected channel/timepoint is out of range,
+                or if dtype is not supported
             OSError: If unable to write to specified directory
 
         Examples:
-            >>> # Save all Z-slices for single channel/timepoint data
+            >>> # Save as 16-bit with auto-rescaling (default, recommended)
             >>> znii.to_tiff_stack("output_z{z:04d}.tif")
 
-            >>> # Save specific channel
-            >>> znii.to_tiff_stack("channel0_z{z:04d}.tif", channel=0)
+            >>> # Save as 8-bit for smaller file sizes
+            >>> znii.to_tiff_stack("output_z{z:04d}.tif", dtype='uint8')
 
-            >>> # Save with custom pattern and compression
-            >>> znii.to_tiff_stack("data/slice_{z:03d}.tiff", compress=False)
+            >>> # Save specific channel without rescaling
+            >>> znii.to_tiff_stack("channel0_z{z:04d}.tif", channel=0, rescale=False)
+
+            >>> # Save as float32 to preserve original precision
+            >>> znii.to_tiff_stack("precise_z{z:04d}.tif", dtype='float32')
 
         Warnings:
             This method loads all data into memory. For large datasets,
@@ -2147,6 +2163,8 @@ class ZarrNii:
             - Spatial transformations are not preserved in TIFF format
             - For 5D data (T,C,Z,Y,X), you must select a single timepoint
             - Multi-channel data can be saved as multi-channel TIFFs or selected
+            - Data type conversion helps ensure compatibility with analysis tools
+            - uint16 is recommended for most scientific applications (good range + compatibility)
         """
         try:
             import tifffile
@@ -2264,6 +2282,56 @@ class ZarrNii:
         axes_order = list(range(data.ndim))
         axes_order[0], axes_order[z_axis] = axes_order[z_axis], axes_order[0]
         data = data.transpose(axes_order)
+
+        # Handle data type conversion and rescaling
+        supported_dtypes = {
+            'uint8': np.uint8,
+            'uint16': np.uint16, 
+            'int16': np.int16,
+            'float32': np.float32
+        }
+        
+        if dtype not in supported_dtypes:
+            raise ValueError(f"Unsupported dtype '{dtype}'. Supported types: {list(supported_dtypes.keys())}")
+        
+        target_dtype = supported_dtypes[dtype]
+        
+        if rescale and dtype != 'float32':
+            # Get the data range
+            data_min = np.min(data)
+            data_max = np.max(data)
+            
+            if data_min == data_max:
+                # Handle constant data case
+                data_scaled = np.zeros_like(data, dtype=target_dtype)
+            else:
+                # Get target range for the dtype
+                if dtype == 'uint8':
+                    target_min, target_max = 0, 255
+                elif dtype == 'uint16':
+                    target_min, target_max = 0, 65535
+                elif dtype == 'int16':
+                    target_min, target_max = -32768, 32767
+                
+                # Linear rescaling: new_value = (value - data_min) * (target_max - target_min) / (data_max - data_min) + target_min
+                data_scaled = ((data - data_min) * (target_max - target_min) / (data_max - data_min) + target_min).astype(target_dtype)
+            
+            print(f"Rescaled data from [{data_min:.3f}, {data_max:.3f}] to {dtype} range")
+        else:
+            # No rescaling - just clip and convert
+            if dtype == 'uint8':
+                data_scaled = np.clip(data, 0, 255).astype(target_dtype)
+            elif dtype == 'uint16':
+                data_scaled = np.clip(data, 0, 65535).astype(target_dtype)
+            elif dtype == 'int16':
+                data_scaled = np.clip(data, -32768, 32767).astype(target_dtype)
+            else:  # float32
+                data_scaled = data.astype(target_dtype)
+            
+            if dtype != 'float32':
+                print(f"Converted data to {dtype} with clipping (no rescaling)")
+        
+        data = data_scaled
 
         # Save each Z-slice as a separate TIFF file
         compression = "lzw" if compress else None
