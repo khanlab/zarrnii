@@ -8,21 +8,25 @@
       
       
       
-        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/examples/scaled_processing/">
+        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/cli/">
       
       
+        <link rel="prev" href="../walkthrough/advanced_use_cases/">
       
       
-      <link rel="icon" href="../../assets/images/favicon.png">
+        <link rel="next" href="../reference/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.20">
     
     
       
-        <title>Multi-Resolution Plugin Architecture - ZarrNii Documentation</title>
+        <title>Command Line Interface - ZarrNii Documentation</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.e53b48f4.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.e53b48f4.min.css">
       
       
 
@@ -41,9 +45,9 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -62,7 +66,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#multi-resolution-plugin-architecture" class="md-skip">
+        <a href="#command-line-interface-cli" class="md-skip">
           Skip to content
         </a>
       
@@ -78,7 +82,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="ZarrNii Documentation" class="md-header__button md-logo" aria-label="ZarrNii Documentation" data-md-component="logo">
+    <a href=".." title="ZarrNii Documentation" class="md-header__button md-logo" aria-label="ZarrNii Documentation" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -98,7 +102,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Multi-Resolution Plugin Architecture
+              Command Line Interface
             
           </span>
         </div>
@@ -176,7 +180,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="ZarrNii Documentation" class="md-nav__button md-logo" aria-label="ZarrNii Documentation" data-md-component="logo">
+    <a href=".." title="ZarrNii Documentation" class="md-nav__button md-logo" aria-label="ZarrNii Documentation" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -194,7 +198,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -254,7 +258,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../walkthrough/overview/" class="md-nav__link">
+      <a href="../walkthrough/overview/" class="md-nav__link">
         
   
   
@@ -277,7 +281,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../walkthrough/getting_started/" class="md-nav__link">
+      <a href="../walkthrough/getting_started/" class="md-nav__link">
         
   
   
@@ -300,7 +304,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../walkthrough/basic_tasks/" class="md-nav__link">
+      <a href="../walkthrough/basic_tasks/" class="md-nav__link">
         
   
   
@@ -323,7 +327,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../walkthrough/advanced_use_cases/" class="md-nav__link">
+      <a href="../walkthrough/advanced_use_cases/" class="md-nav__link">
         
   
   
@@ -350,10 +354,32 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../cli/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Command Line Interface
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -364,6 +390,80 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Installation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#z2n-ome-zarr-to-nifti-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      z2n: OME-Zarr to NIfTI Conversion
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#n2z-nifti-to-ome-zarr-conversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      n2z: NIfTI to OME-Zarr Conversion
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Common Workflows
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Error Handling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-python-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Integration with Python API
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -375,7 +475,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/" class="md-nav__link">
+      <a href="../reference/" class="md-nav__link">
         
   
   
@@ -435,7 +535,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../zarr_nifti/" class="md-nav__link">
+      <a href="../examples/zarr_nifti/" class="md-nav__link">
         
   
   
@@ -458,7 +558,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../imaris_usage/" class="md-nav__link">
+      <a href="../examples/imaris_usage/" class="md-nav__link">
         
   
   
@@ -481,7 +581,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transformations/" class="md-nav__link">
+      <a href="../examples/transformations/" class="md-nav__link">
         
   
   
@@ -504,7 +604,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../downsampling/" class="md-nav__link">
+      <a href="../examples/downsampling/" class="md-nav__link">
         
   
   
@@ -527,7 +627,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../near_isotropic/" class="md-nav__link">
+      <a href="../examples/near_isotropic/" class="md-nav__link">
         
   
   
@@ -550,7 +650,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../multiscale/" class="md-nav__link">
+      <a href="../examples/multiscale/" class="md-nav__link">
         
   
   
@@ -573,7 +673,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../segmentation_example/" class="md-nav__link">
+      <a href="../examples/segmentation_example/" class="md-nav__link">
         
   
   
@@ -603,7 +703,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../faq/" class="md-nav__link">
+      <a href="../faq/" class="md-nav__link">
         
   
   
@@ -625,7 +725,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../changelog/" class="md-nav__link">
+      <a href="../changelog/" class="md-nav__link">
         
   
   
@@ -647,7 +747,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/" class="md-nav__link">
+      <a href="../contributing/" class="md-nav__link">
         
   
   
@@ -689,81 +789,54 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
-      Overview
+      Installation
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#plugin-interface" class="md-nav__link">
+  <a href="#z2n-ome-zarr-to-nifti-conversion" class="md-nav__link">
     <span class="md-ellipsis">
-      Plugin Interface
+      z2n: OME-Zarr to NIfTI Conversion
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#basic-usage" class="md-nav__link">
+  <a href="#n2z-nifti-to-ome-zarr-conversion" class="md-nav__link">
     <span class="md-ellipsis">
-      Basic Usage
+      n2z: NIfTI to OME-Zarr Conversion
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#built-in-plugins" class="md-nav__link">
+  <a href="#common-workflows" class="md-nav__link">
     <span class="md-ellipsis">
-      Built-in Plugins
+      Common Workflows
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#creating-custom-plugins" class="md-nav__link">
+  <a href="#error-handling" class="md-nav__link">
     <span class="md-ellipsis">
-      Creating Custom Plugins
+      Error Handling
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#advanced-usage" class="md-nav__link">
+  <a href="#integration-with-python-api" class="md-nav__link">
     <span class="md-ellipsis">
-      Advanced Usage
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#performance-considerations" class="md-nav__link">
-    <span class="md-ellipsis">
-      Performance Considerations
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#integration-with-other-operations" class="md-nav__link">
-    <span class="md-ellipsis">
-      Integration with Other Operations
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      See Also
+      Integration with Python API
     </span>
   </a>
   
@@ -785,154 +858,187 @@
 
 
 
-<h1 id="multi-resolution-plugin-architecture">Multi-Resolution Plugin Architecture</h1>
-<p>This section covers the multi-resolution plugin architecture that enables efficient processing where algorithms are computed at low resolution and applied to full resolution data.</p>
-<h2 id="overview">Overview</h2>
-<p>The scaled processing plugin architecture in ZarrNii allows for efficient multi-resolution operations. This is particularly useful for algorithms that can be computed efficiently at lower resolution and then applied to the full-resolution data. Common use cases include:</p>
+<h1 id="command-line-interface-cli">Command Line Interface (CLI)</h1>
+<p>ZarrNii provides convenient command-line tools for converting between OME-Zarr and NIfTI formats. These console scripts are simple wrappers around the main ZarrNii API, making it easy to perform conversions without writing Python code.</p>
+<h2 id="installation">Installation</h2>
+<p>The CLI scripts are automatically installed when you install ZarrNii:</p>
+<pre><code class="language-bash">pip install zarrnii
+</code></pre>
+<p>After installation, you'll have access to two console commands:
+- <code>z2n</code> - Convert OME-Zarr to NIfTI
+- <code>n2z</code> - Convert NIfTI to OME-Zarr</p>
+<h2 id="z2n-ome-zarr-to-nifti-conversion">z2n: OME-Zarr to NIfTI Conversion</h2>
+<p>The <code>z2n</code> script converts OME-Zarr datasets to NIfTI format. It's a wrapper around <code>ZarrNii.from_ome_zarr().to_nifti()</code>.</p>
+<h3 id="basic-usage">Basic Usage</h3>
+<pre><code class="language-bash">z2n input.ome.zarr output.nii.gz
+</code></pre>
+<h3 id="options">Options</h3>
+<pre><code class="language-bash">z2n --help
+</code></pre>
+<pre><code>usage: z2n [-h] [--level LEVEL] [--channels CHANNELS] 
+           [--channel-labels CHANNEL_LABELS [CHANNEL_LABELS ...]]
+           [--timepoints TIMEPOINTS] [--axes-order {ZYX,XYZ}] 
+           [--orientation ORIENTATION] [--downsample-near-isotropic] 
+           [--chunks CHUNKS] [--rechunk]
+           input output
+
+Convert OME-Zarr to NIfTI format
+
+positional arguments:
+  input                 Input OME-Zarr path or store
+  output                Output NIfTI file (.nii or .nii.gz)
+
+options:
+  -h, --help            show this help message and exit
+  --level LEVEL         Pyramid level to load (0 = highest resolution) (default: 0)
+  --channels CHANNELS   Comma-separated channel indices to load (e.g., '0,2,3')
+  --channel-labels CHANNEL_LABELS [CHANNEL_LABELS ...]
+                        Channel names to load by label
+  --timepoints TIMEPOINTS
+                        Comma-separated timepoint indices to load (e.g., '0,1,2')
+  --axes-order {ZYX,XYZ}
+                        Spatial axes order for processing (default: ZYX)
+  --orientation ORIENTATION
+                        Anatomical orientation string (default: RAS)
+  --downsample-near-isotropic
+                        Apply near-isotropic downsampling
+  --chunks CHUNKS       Chunk specification for dask arrays (default: auto)
+  --rechunk             Rechunk data arrays
+</code></pre>
+<h3 id="examples">Examples</h3>
+<pre><code class="language-bash"># Basic conversion
+z2n input.ome.zarr output.nii.gz
+
+# Convert from ZIP store with specific pyramid level
+z2n input.ome.zarr.zip output.nii.gz --level 1
+
+# Select specific channels and reorder axes
+z2n input.ome.zarr output.nii.gz --channels 0,2 --axes-order ZYX
+
+# Change orientation and apply near-isotropic downsampling
+z2n input.ome.zarr output.nii.gz --orientation LPI --downsample-near-isotropic
+
+# Load specific timepoints
+z2n input.ome.zarr output.nii.gz --timepoints 0,5,10
+
+# Use channel labels instead of indices
+z2n input.ome.zarr output.nii.gz --channel-labels DAPI GFP
+</code></pre>
+<h2 id="n2z-nifti-to-ome-zarr-conversion">n2z: NIfTI to OME-Zarr Conversion</h2>
+<p>The <code>n2z</code> script converts NIfTI files to OME-Zarr format with multiscale pyramid generation. It's a wrapper around <code>ZarrNii.from_nifti().to_ome_zarr()</code>.</p>
+<h3 id="basic-usage_1">Basic Usage</h3>
+<pre><code class="language-bash">n2z input.nii.gz output.ome.zarr
+</code></pre>
+<h3 id="options_1">Options</h3>
+<pre><code class="language-bash">n2z --help
+</code></pre>
+<pre><code>usage: n2z [-h] [--chunks CHUNKS] [--axes-order {XYZ,ZYX}] [--name NAME] 
+           [--as-ref] [--zooms ZOOMS] [--max-layer MAX_LAYER] 
+           [--scale-factors SCALE_FACTORS]
+           input output
+
+Convert NIfTI to OME-Zarr format
+
+positional arguments:
+  input                 Input NIfTI file (.nii or .nii.gz)
+  output                Output OME-Zarr path or store
+
+options:
+  -h, --help            show this help message and exit
+  --chunks CHUNKS       Chunk specification for dask arrays (default: auto)
+  --axes-order {XYZ,ZYX}
+                        Spatial axes order for processing (default: XYZ)
+  --name NAME           Name for the dataset
+  --as-ref              Create as reference without loading data
+  --zooms ZOOMS         Custom voxel sizes as comma-separated floats (e.g., '2.0,2.0,2.0')
+  --max-layer MAX_LAYER
+                        Maximum number of pyramid levels (default: 4)
+  --scale-factors SCALE_FACTORS
+                        Custom scale factors as comma-separated integers (e.g., '2,4,8')
+</code></pre>
+<h3 id="examples_1">Examples</h3>
+<pre><code class="language-bash"># Basic conversion
+n2z input.nii.gz output.ome.zarr
+
+# Create compressed ZIP store with more pyramid levels
+n2z input.nii.gz output.ome.zarr.zip --max-layer 6
+
+# Use custom voxel sizes and create as reference
+n2z input.nii.gz output.ome.zarr --as-ref --zooms 1.5,1.5,2.5
+
+# Specify custom scale factors for pyramid
+n2z input.nii.gz output.ome.zarr --scale-factors 2,4,8,16
+
+# Change axes order and add dataset name
+n2z input.nii.gz output.ome.zarr --axes-order ZYX --name &quot;brain_scan&quot;
+
+# Custom chunking specification
+n2z input.nii.gz output.ome.zarr --chunks 64,64,32
+</code></pre>
+<h2 id="common-workflows">Common Workflows</h2>
+<h3 id="round-trip-conversion">Round-trip Conversion</h3>
+<p>Convert from NIfTI to OME-Zarr and back to verify data integrity:</p>
+<pre><code class="language-bash"># Original NIfTI to OME-Zarr
+n2z original.nii.gz intermediate.ome.zarr
+
+# OME-Zarr back to NIfTI
+z2n intermediate.ome.zarr final.nii.gz
+</code></pre>
+<h3 id="working-with-zip-stores">Working with ZIP Stores</h3>
+<p>OME-Zarr supports compressed ZIP format for efficient storage and sharing:</p>
+<pre><code class="language-bash"># Create compressed OME-Zarr
+n2z input.nii.gz output.ome.zarr.zip
+
+# Convert from compressed OME-Zarr
+z2n input.ome.zarr.zip output.nii.gz
+</code></pre>
+<h3 id="multiscale-processing">Multiscale Processing</h3>
+<p>Create OME-Zarr with multiple resolution levels for efficient visualization:</p>
+<pre><code class="language-bash"># Create 6 pyramid levels
+n2z input.nii.gz output.ome.zarr --max-layer 6
+
+# Extract a lower resolution level
+z2n output.ome.zarr downsampled.nii.gz --level 2
+</code></pre>
+<h3 id="channel-and-timepoint-selection">Channel and Timepoint Selection</h3>
+<p>For multi-dimensional datasets:</p>
+<pre><code class="language-bash"># Select specific channels during conversion
+z2n multichannel.ome.zarr selected_channels.nii.gz --channels 0,2,4
+
+# Select specific timepoints
+z2n timeseries.ome.zarr timepoint_subset.nii.gz --timepoints 0,10,20
+</code></pre>
+<h2 id="error-handling">Error Handling</h2>
+<p>The CLI scripts provide informative error messages for common issues:</p>
 <ul>
-<li>Bias field correction</li>
-<li>Background estimation  </li>
-<li>Denoising operations</li>
-<li>Global intensity normalization</li>
+<li><strong>File not found</strong>: Clear error message if input file doesn't exist</li>
+<li><strong>Invalid arguments</strong>: Helpful guidance for malformed arguments</li>
+<li><strong>Conversion errors</strong>: Detailed error information for debugging</li>
 </ul>
-<h2 id="plugin-interface">Plugin Interface</h2>
-<p>All scaled processing plugins must inherit from <code>ScaledProcessingPlugin</code> and implement two key methods:</p>
-<h3 id="lowres_funclowres_array-npndarray-npndarray"><code>lowres_func(lowres_array: np.ndarray) -&gt; np.ndarray</code></h3>
-<p>This function processes the downsampled data and returns a result that will be upsampled and applied to the full-resolution data.</p>
-<h3 id="highres_funcfullres_array-daskarray-upsampled_output-daskarray-daskarray"><code>highres_func(fullres_array: dask.array, upsampled_output: dask.array) -&gt; dask.array</code></h3>
-<p>This function receives the full-resolution dask array and the upsampled output (already upsampled to match the full-resolution shape), and applies the operation blockwise. The upsampling is handled internally by the <code>apply_scaled_processing</code> method.</p>
-<h2 id="basic-usage">Basic Usage</h2>
-<pre><code class="language-python">from zarrnii import ZarrNii, BiasFieldCorrection
+<p>Example error handling:</p>
+<pre><code class="language-bash"># Missing input file
+$ z2n missing.ome.zarr output.nii.gz
+Error: Input path 'missing.ome.zarr' does not exist
 
-# Load your data
-znimg = ZarrNii.from_nifti(&quot;path/to/image.nii&quot;)
-
-# Apply bias field correction
-corrected = znimg.apply_scaled_processing(
-    BiasFieldCorrection(sigma=5.0),
-    downsample_factor=4
-)
-
-# Save result
-corrected.to_nifti(&quot;corrected_image.nii&quot;)
+# Invalid zoom specification
+$ n2z input.nii.gz output.ome.zarr --zooms 1.0,2.0
+Error during conversion: Expected exactly 3 comma-separated floats
 </code></pre>
-<h2 id="built-in-plugins">Built-in Plugins</h2>
-<h3 id="biasfieldcorrection">BiasFieldCorrection</h3>
-<p>A simple bias field correction plugin that estimates smooth bias fields using Gaussian smoothing at low resolution and applies correction by division.</p>
-<pre><code class="language-python"># Basic usage with default parameters
-corrected = znimg.apply_scaled_processing(BiasFieldCorrection())
+<h2 id="integration-with-python-api">Integration with Python API</h2>
+<p>The CLI scripts use the same underlying API as the Python interface, so you can easily switch between command-line and programmatic usage:</p>
+<pre><code class="language-python"># Equivalent Python code for: n2z input.nii.gz output.ome.zarr
+from zarrnii import ZarrNii
 
-# Custom parameters
-corrected = znimg.apply_scaled_processing(
-    BiasFieldCorrection(sigma=3.0, mode='constant'),
-    downsample_factor=8
-)
+znimg = ZarrNii.from_nifti(&quot;input.nii.gz&quot;)
+znimg.to_ome_zarr(&quot;output.ome.zarr&quot;)
 </code></pre>
-<p>Parameters:
-- <code>sigma</code>: Standard deviation for Gaussian smoothing (default: 5.0)
-- <code>mode</code>: Boundary condition for smoothing (default: 'reflect')</p>
-<h2 id="creating-custom-plugins">Creating Custom Plugins</h2>
-<p>You can create custom plugins by inheriting from <code>ScaledProcessingPlugin</code>:</p>
-<pre><code class="language-python">from zarrnii import ScaledProcessingPlugin
-import numpy as np
-import dask.array as da
-from scipy import ndimage
+<pre><code class="language-python"># Equivalent Python code for: z2n input.ome.zarr output.nii.gz --level 1
+from zarrnii import ZarrNii
 
-class CustomPlugin(ScaledProcessingPlugin):
-    def __init__(self, param1=1.0, **kwargs):
-        super().__init__(param1=param1, **kwargs)
-        self.param1 = param1
-
-    def lowres_func(self, lowres_array: np.ndarray) -&gt; np.ndarray:
-        # Your low-resolution algorithm here
-        # Example: compute some correction map
-        correction_map = np.ones_like(lowres_array) * self.param1
-        return correction_map
-
-    def highres_func(self, fullres_array: da.Array, upsampled_output: da.Array) -&gt; da.Array:
-        # The upsampling is handled internally by apply_scaled_processing
-        # This example shows a simple multiplication operation
-
-        # Apply correction directly (both arrays are same size)
-        result = fullres_array * upsampled_output
-
-        return result
-
-    @property
-    def name(self) -&gt; str:
-        return &quot;Custom Plugin&quot;
-
-    @property  
-    def description(self) -&gt; str:
-        return &quot;A custom multi-resolution processing plugin&quot;
-
-# Use your custom plugin
-result = znimg.apply_scaled_processing(CustomPlugin(param1=2.0))
+znimg = ZarrNii.from_ome_zarr(&quot;input.ome.zarr&quot;, level=1)
+znimg.to_nifti(&quot;output.nii.gz&quot;)
 </code></pre>
-<h2 id="advanced-usage">Advanced Usage</h2>
-<h3 id="custom-downsampling-factors">Custom Downsampling Factors</h3>
-<pre><code class="language-python"># Use different downsampling factors
-result = znimg.apply_scaled_processing(
-    BiasFieldCorrection(), 
-    downsample_factor=8  # 8x downsampling
-)
-</code></pre>
-<h3 id="custom-chunk-sizes">Custom Chunk Sizes</h3>
-<pre><code class="language-python"># Specify custom chunk sizes for low-resolution processing
-# The chunk_size parameter controls the chunking of low-resolution intermediate results
-result = znimg.apply_scaled_processing(
-    BiasFieldCorrection(),
-    chunk_size=(1, 32, 32, 32)  # Used for low-res processing chunks
-)
-</code></pre>
-<h3 id="temporary-file-options">Temporary File Options</h3>
-<p>The framework uses temporary OME-Zarr files to break up the dask computation graph for better performance. You can control this behavior:</p>
-<pre><code class="language-python"># Disable temporary file usage (may impact performance on large datasets)
-result = znimg.apply_scaled_processing(
-    BiasFieldCorrection(),
-    use_temp_zarr=False
-)
-
-# Use custom temporary file location
-result = znimg.apply_scaled_processing(
-    BiasFieldCorrection(),
-    temp_zarr_path=&quot;/custom/path/temp_processing.ome.zarr&quot;
-)
-</code></pre>
-<h3 id="plugin-class-vs-instance">Plugin Class vs Instance</h3>
-<pre><code class="language-python"># Using plugin class (parameters passed as kwargs)
-result1 = znimg.apply_scaled_processing(BiasFieldCorrection, sigma=3.0)
-
-# Using plugin instance (parameters set during initialization)
-plugin = BiasFieldCorrection(sigma=3.0)
-result2 = znimg.apply_scaled_processing(plugin)
-</code></pre>
-<h2 id="performance-considerations">Performance Considerations</h2>
-<ol>
-<li><strong>Downsampling Factor</strong>: Higher factors reduce computation time but may reduce accuracy</li>
-<li><strong>Chunk Sizes</strong>: Optimize for your memory constraints and processing requirements</li>
-<li><strong>Algorithm Complexity</strong>: The <code>lowres_func</code> runs on small numpy arrays, while <code>highres_func</code> uses dask for scalability</li>
-<li><strong>Temporary Files</strong>: The default temporary OME-Zarr approach breaks up dask computation graphs for better performance on large datasets. Disable only if you have specific memory/disk constraints</li>
-<li><strong>Dask-based Upsampling</strong>: Uses ZarrNii's <code>.upsample()</code> method which leverages dask for efficient parallel upsampling</li>
-</ol>
-<h2 id="integration-with-other-operations">Integration with Other Operations</h2>
-<p>The scaled processing plugins integrate seamlessly with other ZarrNii operations:</p>
-<pre><code class="language-python"># Chain operations
-result = (znimg
-    .apply_scaled_processing(BiasFieldCorrection())
-    .downsample(level=1)
-    .segment_otsu())
-
-# Save to different formats
-result.to_nifti(&quot;processed.nii&quot;)
-result.to_ome_zarr(&quot;processed.ome.zarr&quot;)
-</code></pre>
-<h2 id="see-also">See Also</h2>
-<ul>
-<li><a href="segmentation.md">Segmentation Plugins</a> for other plugin architectures</li>
-<li><a href="../downsampling/">Downsampling and Upsampling</a> for resolution operations</li>
-<li><a href="../../reference/">API Reference</a> for detailed method documentation</li>
-</ul>
+<p>This consistency makes it easy to prototype with the CLI and then integrate the same functionality into your Python workflows.</p>
 
 
 
@@ -981,10 +1087,10 @@ result.to_ome_zarr(&quot;processed.ome.zarr&quot;)
     
     
       
-      <script id="__config" type="application/json">{"base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      <script src="../assets/javascripts/bundle.f55a23d4.min.js"></script>
       
     
   </body>
