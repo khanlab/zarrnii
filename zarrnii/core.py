@@ -3110,8 +3110,7 @@ class ZarrNii:
         plugin,
         downsample_factor: int = 4,
         chunk_size: Optional[Tuple[int, ...]] = None,
-        use_temp_zarr: bool = True,
-        temp_zarr_path: Optional[str] = None,
+        upsampled_ome_zarr_path: Optional[str] = None,
         **kwargs,
     ) -> "ZarrNii":
         """
@@ -3127,8 +3126,7 @@ class ZarrNii:
             plugin: ScaledProcessingPlugin instance or class to apply
             downsample_factor: Factor for downsampling (default: 4)
             chunk_size: Optional chunk size for low-res processing. If None, uses (1, 10, 10, 10).
-            use_temp_zarr: Whether to use temporary OME-Zarr for breaking up dask graph (default: True)
-            temp_zarr_path: Path for temporary OME-Zarr file. If None, uses temp directory.
+            upsampled_ome_zarr_path: Path to save intermediate OME-Zarr, default saved in system temp directory.
             **kwargs: Additional arguments passed to the plugin
 
         Returns:
@@ -3157,70 +3155,28 @@ class ZarrNii:
             plugin.lowres_func(lowres_array), chunks=lowres_chunks
         )
 
-        # Step 3: Upsample using dask-based upsampling
-        upsampled_znimg = lowres_znimg.upsample(to_shape=self.shape)
+        # Use temporary OME-Zarr to break up dask graph for performance
+        import tempfile
 
-        if use_temp_zarr:
-            # Use temporary OME-Zarr to break up dask graph for performance
-            import os
-            import tempfile
+        if upsampled_ome_zarr_path is None:
+            upsampled_ome_zarr_path = tempfile.mkdtemp(suffix="_SPIM.ome.zarr")
 
-            if temp_zarr_path is None:
-                # Create temp file in system temp directory
-                temp_dir = tempfile.gettempdir()
-                temp_name = (
-                    f"zarrnii_scaled_processing_{os.getpid()}_{id(self)}.ome.zarr"
-                )
-                temp_zarr_path = os.path.join(temp_dir, temp_name)
+        # Step 3: Upsample using dask-based upsampling, save to ome zarr
+        lowres_znimg.upsample(to_shape=self.shape).to_ome_zarr(
+            upsampled_ome_zarr_path, max_layer=0
+        )
 
-            try:
-                upsampled_znimg.to_ome_zarr(temp_zarr_path)
-                # Reload with the same axes_order to avoid shape reordering
-                reloaded_znimg = ZarrNii.from_ome_zarr(temp_zarr_path)
-                # Ensure the reloaded data matches the expected shape by preserving axes order
-                if reloaded_znimg.axes_order != self.axes_order:
-                    # If axes order changed, we need to transpose the data back
-                    if (
-                        self.axes_order == "XYZ" and reloaded_znimg.axes_order == "ZYX"
-                    ) or (
-                        self.axes_order == "ZYX" and reloaded_znimg.axes_order == "XYZ"
-                    ):
-                        # Simple case: just transpose the spatial dimensions (skip channel dim)
-                        upsampled_data = da.transpose(reloaded_znimg.data, (0, 3, 2, 1))
-                    else:
-                        # More complex reordering - fallback to direct data
-                        upsampled_data = upsampled_znimg.data
-                else:
-                    upsampled_data = reloaded_znimg.data
-            finally:
-                # Clean up temp file after loading data
-                if os.path.exists(temp_zarr_path):
-                    import shutil
+        upsampled_znimg = ZarrNii.from_ome_zarr(upsampled_ome_zarr_path)
 
-                    shutil.rmtree(temp_zarr_path, ignore_errors=True)
-        else:
-            # Use the upsampled data directly without temp file
-            upsampled_data = upsampled_znimg.data
+        corrected_znimg = self.copy()
 
         # Step 4: Apply high-resolution function
-        processed_data = plugin.highres_func(self.data, upsampled_data)
-
-        # Create new NgffImage with processed data
-        new_ngff_image = nz.NgffImage(
-            data=processed_data,
-            dims=self.dims.copy(),
-            scale=self.scale.copy(),
-            translation=self.translation.copy(),
-            name=f"{self.name}_{plugin.name.lower().replace(' ', '_')}",
+        # rechunk original data to use same chunksize as upsampled_data, before multiplying
+        corrected_znimg.data = plugin.highres_func(
+            self.data.rechunk(upsampled_znimg.data.chunks), upsampled_znimg.data
         )
 
-        # Return new ZarrNii instance
-        return ZarrNii(
-            ngff_image=new_ngff_image,
-            axes_order=self.axes_order,
-            orientation=self.orientation,
-            _omero=self._omero,
-        )
+        return corrected_znimg
 
     def __repr__(self) -> str:
         """String representation."""

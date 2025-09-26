@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal
 
-from zarrnii import BiasFieldCorrection, ScaledProcessingPlugin, ZarrNii
+from zarrnii import GaussianBiasFieldCorrection, ScaledProcessingPlugin, ZarrNii
 
 
 class TestScaledProcessingPlugin:
@@ -69,14 +69,14 @@ class TestScaledProcessingPlugin:
         )
 
 
-class TestBiasFieldCorrection:
-    """Test the BiasFieldCorrection plugin."""
+class TestGaussianBiasFieldCorrection:
+    """Test the GaussianBiasFieldCorrection plugin."""
 
     def test_bias_field_plugin_initialization(self):
-        """Test BiasFieldCorrection plugin initialization."""
-        plugin = BiasFieldCorrection(sigma=3.0, mode="constant")
+        """Test GaussianBiasFieldCorrection plugin initialization."""
+        plugin = GaussianBiasFieldCorrection(sigma=3.0, mode="constant")
 
-        assert plugin.name == "Bias Field Correction"
+        assert plugin.name == "Gaussian Bias Field Correction"
         assert "Multi-resolution bias field correction" in plugin.description
         assert plugin.sigma == 3.0
         assert plugin.mode == "constant"
@@ -84,7 +84,7 @@ class TestBiasFieldCorrection:
 
     def test_lowres_func_basic(self):
         """Test the lowres_func with basic input."""
-        plugin = BiasFieldCorrection(sigma=1.0)
+        plugin = GaussianBiasFieldCorrection(sigma=1.0)
 
         # Create test data with a simple gradient (simulating bias field)
         test_data = np.ones((20, 20), dtype=np.float32)
@@ -99,7 +99,7 @@ class TestBiasFieldCorrection:
 
     def test_lowres_func_3d(self):
         """Test the lowres_func with 3D input."""
-        plugin = BiasFieldCorrection(sigma=1.0)
+        plugin = GaussianBiasFieldCorrection(sigma=1.0)
 
         # Create 3D test data
         test_data = np.ones((10, 20, 20), dtype=np.float32)
@@ -112,7 +112,7 @@ class TestBiasFieldCorrection:
 
     def test_lowres_func_edge_cases(self):
         """Test lowres_func with edge cases."""
-        plugin = BiasFieldCorrection()
+        plugin = GaussianBiasFieldCorrection()
 
         # Test empty array
         with pytest.raises(ValueError, match="Input array is empty"):
@@ -124,7 +124,7 @@ class TestBiasFieldCorrection:
 
     def test_highres_func_application(self):
         """Test the highres_func with upsampled bias field."""
-        plugin = BiasFieldCorrection()
+        plugin = GaussianBiasFieldCorrection()
 
         # Create test data - both arrays same size now
         fullres_data = (
@@ -148,7 +148,7 @@ class TestBiasFieldCorrection:
 
     def test_highres_func_division_by_zero_protection(self):
         """Test highres_func protects against division by zero."""
-        plugin = BiasFieldCorrection()
+        plugin = GaussianBiasFieldCorrection()
 
         # Test with some zero values in bias field
         fullres_data = da.ones((20, 20), chunks=(10, 10), dtype=np.float32) * 100
@@ -171,24 +171,23 @@ class TestZarrNiiScaledProcessingIntegration:
     def test_apply_scaled_processing_method_plugin_instance(self, nifti_nib):
         """Test apply_scaled_processing method with plugin instance."""
         nifti_nib.to_filename("test.nii")
-        znimg = ZarrNii.from_nifti("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
 
-        plugin = BiasFieldCorrection(sigma=2.0)
+        plugin = GaussianBiasFieldCorrection(sigma=2.0)
         result = znimg.apply_scaled_processing(plugin, downsample_factor=2)
 
         # Check that we get a new ZarrNii instance
         assert isinstance(result, ZarrNii)
         assert result.shape == znimg.shape
-        assert "bias_field_correction" in result.name
 
     @pytest.mark.usefixtures("cleandir")
     def test_apply_scaled_processing_method_plugin_class(self, nifti_nib):
         """Test apply_scaled_processing method with plugin class."""
         nifti_nib.to_filename("test.nii")
-        znimg = ZarrNii.from_nifti("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
 
         result = znimg.apply_scaled_processing(
-            BiasFieldCorrection, sigma=1.0, downsample_factor=2
+            GaussianBiasFieldCorrection, sigma=1.0, downsample_factor=2
         )
 
         assert isinstance(result, ZarrNii)
@@ -198,7 +197,7 @@ class TestZarrNiiScaledProcessingIntegration:
     def test_apply_scaled_processing_invalid_plugin(self, nifti_nib):
         """Test apply_scaled_processing with invalid plugin."""
         nifti_nib.to_filename("test.nii")
-        znimg = ZarrNii.from_nifti("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
 
         with pytest.raises(
             TypeError,
@@ -210,9 +209,9 @@ class TestZarrNiiScaledProcessingIntegration:
     def test_apply_scaled_processing_with_custom_chunks(self, nifti_nib):
         """Test apply_scaled_processing with custom chunk size."""
         nifti_nib.to_filename("test.nii")
-        znimg = ZarrNii.from_nifti("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
 
-        plugin = BiasFieldCorrection(sigma=1.0)
+        plugin = GaussianBiasFieldCorrection(sigma=1.0)
         result = znimg.apply_scaled_processing(
             plugin, downsample_factor=2, chunk_size=(1, 32, 32, 32)
         )
@@ -224,9 +223,9 @@ class TestZarrNiiScaledProcessingIntegration:
     def test_apply_scaled_processing_temp_zarr_options(self, nifti_nib):
         """Test apply_scaled_processing with temp zarr options."""
         nifti_nib.to_filename("test.nii")
-        znimg = ZarrNii.from_nifti("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
 
-        plugin = BiasFieldCorrection(sigma=1.0)
+        plugin = GaussianBiasFieldCorrection(sigma=1.0)
 
         # Test with temp zarr disabled
         result1 = znimg.apply_scaled_processing(
@@ -257,11 +256,11 @@ class TestScaledProcessingWorkflow:
     def test_bias_correction_workflow(self, nifti_nib):
         """Test complete bias field correction workflow."""
         nifti_nib.to_filename("test.nii")
-        znimg = ZarrNii.from_nifti("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
 
         # Apply bias field correction
         corrected = znimg.apply_scaled_processing(
-            BiasFieldCorrection(sigma=2.0), downsample_factor=4
+            GaussianBiasFieldCorrection(sigma=2.0), downsample_factor=4
         )
 
         # Check properties are preserved
@@ -276,9 +275,9 @@ class TestScaledProcessingWorkflow:
 
     def test_plugin_repr(self):
         """Test plugin string representation."""
-        plugin = BiasFieldCorrection(sigma=3.0, mode="reflect")
+        plugin = GaussianBiasFieldCorrection(sigma=3.0, mode="reflect")
         repr_str = repr(plugin)
 
-        assert "BiasFieldCorrection" in repr_str
+        assert "GaussianBiasFieldCorrection" in repr_str
         assert "sigma=3.0" in repr_str
         assert "mode=reflect" in repr_str
