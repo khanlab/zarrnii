@@ -23,6 +23,9 @@ test_znimg.ome.zarr/
 *.nii
 *.nii.gz
 
+# Exception: Include built-in data files
+!zarrnii/data/**/*.nii.gz
+
 # Generated files that should not be tracked
 zarrnii/_version.py
 __pycache__/
