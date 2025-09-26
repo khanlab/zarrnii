@@ -517,3 +517,217 @@ def test_orientation_round_trip_preservation():
         # Orientation should be preserved
         assert transformed.get_orientation() == orient
         assert transformed.orientation == orient
+
+
+def test_xyz_orientation_backwards_compatibility(tmp_path):
+    """Test that xyz_orientation is preferred over legacy orientation with reversal fallback."""
+    import dask.array as da
+    import numpy as np
+    import zarr
+
+    # Create test data
+    data = np.random.rand(1, 32, 32, 32).astype(np.float32)
+    dask_data = da.from_array(data, chunks=(1, 16, 16, 16))
+
+    # Test 1: New xyz_orientation is preferred when both exist
+    zarr_path = tmp_path / "test_new_xyz_orientation.zarr"
+    znimg = ZarrNii.from_darr(dask_data, orientation="RAS", axes_order="ZYX")
+    znimg.to_ome_zarr(str(zarr_path))
+
+    # Manually add both xyz_orientation and legacy orientation to the metadata
+    group = zarr.open_group(str(zarr_path), mode="r+")
+    group.attrs["xyz_orientation"] = "LPI"  # New format
+    group.attrs["orientation"] = "SAR"  # Legacy format (reversed for ZYX)
+
+    # Load and verify xyz_orientation takes precedence
+    loaded_znimg = ZarrNii.from_ome_zarr(str(zarr_path))
+    assert loaded_znimg.orientation == "LPI"
+    assert loaded_znimg.xyz_orientation == "LPI"
+
+    # Test 2: Legacy orientation fallback with reversal
+    zarr_path_legacy = tmp_path / "test_legacy_orientation.zarr"
+    znimg2 = ZarrNii.from_darr(dask_data, orientation="RAS", axes_order="ZYX")
+    znimg2.to_ome_zarr(str(zarr_path_legacy))
+
+    # Remove xyz_orientation and add only legacy orientation (ZYX-based)
+    group_legacy = zarr.open_group(str(zarr_path_legacy), mode="r+")
+    if "xyz_orientation" in group_legacy.attrs:
+        del group_legacy.attrs["xyz_orientation"]
+    group_legacy.attrs["orientation"] = "SAR"  # ZYX-based, should be reversed to "RAS"
+
+    # Load and verify legacy orientation is reversed properly
+    loaded_znimg_legacy = ZarrNii.from_ome_zarr(str(zarr_path_legacy))
+    assert loaded_znimg_legacy.orientation == "RAS"  # Should be reversed from "SAR"
+    assert loaded_znimg_legacy.xyz_orientation == "RAS"
+
+    # Test 3: Default orientation when neither exists
+    zarr_path_default = tmp_path / "test_default_orientation.zarr"
+    znimg3 = ZarrNii.from_darr(dask_data, orientation="RAS", axes_order="ZYX")
+    znimg3.to_ome_zarr(str(zarr_path_default))
+
+    # Remove both orientation attributes
+    group_default = zarr.open_group(str(zarr_path_default), mode="r+")
+    if "xyz_orientation" in group_default.attrs:
+        del group_default.attrs["xyz_orientation"]
+    if "orientation" in group_default.attrs:
+        del group_default.attrs["orientation"]
+
+    # Load with explicit default orientation
+    loaded_znimg_default = ZarrNii.from_ome_zarr(
+        str(zarr_path_default), orientation="LPI"
+    )
+    assert loaded_znimg_default.orientation == "LPI"
+    assert loaded_znimg_default.xyz_orientation == "LPI"
+
+
+def test_reverse_orientation_string():
+    """Test the reverse_orientation_string utility function."""
+    from zarrnii.core import reverse_orientation_string
+
+    # Test basic reversals
+    assert reverse_orientation_string("RAS") == "SAR"
+    assert reverse_orientation_string("LPI") == "IPL"
+    assert reverse_orientation_string("RAI") == "IAR"
+    assert reverse_orientation_string("LPS") == "SPL"
+
+    # Test that reversing twice returns original
+    for orientation in ["RAS", "LPI", "RAI", "LPS"]:
+        reversed_twice = reverse_orientation_string(
+            reverse_orientation_string(orientation)
+        )
+        assert reversed_twice == orientation
+
+    # Test error cases
+    with pytest.raises(
+        ValueError, match="Orientation string must be exactly 3 characters"
+    ):
+        reverse_orientation_string("RA")
+
+    with pytest.raises(
+        ValueError, match="Orientation string must be exactly 3 characters"
+    ):
+        reverse_orientation_string("RASA")
+
+
+def test_orientation_property_compatibility():
+    """Test that the orientation property provides backward compatibility."""
+    import dask.array as da
+    import numpy as np
+
+    # Create test data
+    data = np.random.rand(1, 32, 32, 32).astype(np.float32)
+    dask_data = da.from_array(data, chunks=(1, 16, 16, 16))
+
+    # Test that orientation property maps to xyz_orientation
+    znimg = ZarrNii.from_darr(dask_data, orientation="LPI", axes_order="ZYX")
+
+    # Both should return the same value
+    assert znimg.orientation == "LPI"
+    assert znimg.xyz_orientation == "LPI"
+    assert znimg.get_orientation() == "LPI"
+
+    # Test setting orientation property updates xyz_orientation
+    znimg.orientation = "RAS"
+    assert znimg.orientation == "RAS"
+    assert znimg.xyz_orientation == "RAS"
+
+    # Test direct xyz_orientation access
+    znimg.xyz_orientation = "RAI"
+    assert znimg.orientation == "RAI"
+    assert znimg.xyz_orientation == "RAI"
+
+
+def test_orientation_metadata_new_format_written(tmp_path):
+    """Test that new files write xyz_orientation instead of orientation."""
+    import dask.array as da
+    import numpy as np
+    import zarr
+
+    # Create test data
+    data = np.random.rand(1, 32, 32, 32).astype(np.float32)
+    dask_data = da.from_array(data, chunks=(1, 16, 16, 16))
+
+    # Create ZarrNii with specific orientation
+    znimg = ZarrNii.from_darr(dask_data, orientation="LPI", axes_order="ZYX")
+
+    # Save to OME-Zarr
+    zarr_path = tmp_path / "test_new_format.zarr"
+    znimg.to_ome_zarr(str(zarr_path))
+
+    # Check that the new format metadata is written
+    group = zarr.open_group(str(zarr_path), mode="r")
+    assert "xyz_orientation" in group.attrs
+    assert group.attrs["xyz_orientation"] == "LPI"
+
+    # The old orientation key should not be present in new files
+    assert "orientation" not in group.attrs
+
+
+def test_complex_orientation_scenarios(tmp_path):
+    """Test complex scenarios with orientation handling."""
+    import dask.array as da
+    import numpy as np
+    import zarr
+
+    # Create test data
+    data = np.random.rand(1, 32, 32, 32).astype(np.float32)
+    dask_data = da.from_array(data, chunks=(1, 16, 16, 16))
+
+    # Test various orientation strings that might exist in legacy files
+    legacy_orientations = [
+        ("SAR", "RAS"),  # ZYX SAR -> XYZ RAS
+        ("IPL", "LPI"),  # ZYX IPL -> XYZ LPI
+        ("IAR", "RAI"),  # ZYX IAR -> XYZ RAI
+        ("SPL", "LPS"),  # ZYX SPL -> XYZ LPS
+    ]
+
+    for legacy_orient, expected_xyz in legacy_orientations:
+        zarr_path = tmp_path / f"test_legacy_{legacy_orient}.zarr"
+
+        # Create a zarr file with only legacy orientation
+        znimg = ZarrNii.from_darr(dask_data, orientation="RAS", axes_order="ZYX")
+        znimg.to_ome_zarr(str(zarr_path))
+
+        # Modify to have only legacy orientation
+        group = zarr.open_group(str(zarr_path), mode="r+")
+        if "xyz_orientation" in group.attrs:
+            del group.attrs["xyz_orientation"]
+        group.attrs["orientation"] = legacy_orient
+
+        # Load and verify proper conversion
+        loaded_znimg = ZarrNii.from_ome_zarr(str(zarr_path))
+        assert loaded_znimg.orientation == expected_xyz
+        assert loaded_znimg.xyz_orientation == expected_xyz
+
+
+def test_orientation_round_trip_with_new_format(tmp_path):
+    """Test that round-trip operations preserve orientation with new format."""
+    import dask.array as da
+    import numpy as np
+
+    data = np.random.rand(1, 32, 32, 32).astype(np.float32)
+    dask_data = da.from_array(data, chunks=(1, 16, 16, 16))
+
+    test_orientations = ["RAS", "LPI", "RAI", "LPS", "LAI", "RPI"]
+
+    for orient in test_orientations:
+        zarr_path = tmp_path / f"test_roundtrip_{orient}.zarr"
+
+        # Create, save and reload
+        znimg = ZarrNii.from_darr(dask_data, orientation=orient, axes_order="ZYX")
+        znimg.to_ome_zarr(str(zarr_path))
+        loaded_znimg = ZarrNii.from_ome_zarr(str(zarr_path))
+
+        # Apply transformations and verify orientation preservation
+        transformed = loaded_znimg.downsample(factors=2)
+        cropped = transformed.crop(bbox_min=(0, 0, 0), bbox_max=(1, 16, 16, 16))
+
+        # All should preserve the original orientation
+        assert loaded_znimg.orientation == orient
+        assert transformed.orientation == orient
+        assert cropped.orientation == orient
+
+        # All should have xyz_orientation set correctly
+        assert loaded_znimg.xyz_orientation == orient
+        assert transformed.xyz_orientation == orient
+        assert cropped.xyz_orientation == orient
