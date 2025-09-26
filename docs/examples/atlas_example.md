@@ -6,10 +6,11 @@ This example demonstrates how to use the atlas functionality in ZarrNii for work
 
 ### Using Built-in Templates and Atlases
 
-ZarrNii now uses a template/atlas architecture where:
+ZarrNii now uses a **TemplateFlow-compliant** template/atlas architecture where:
 - **Templates** are anatomical reference spaces (e.g., MNI152, ABA) with anatomical images
 - **Atlases** are segmentation+lookup table pairs registered to a template
 - One template can have multiple atlases (different parcellations)
+- **File naming** follows TemplateFlow standard: `tpl-{name}_*.nii.gz` and `template_description.json`
 
 ```python
 from zarrnii import get_builtin_template, list_builtin_templates, get_builtin_template_atlas
@@ -36,6 +37,27 @@ atlas = template.get_atlas("regions")
 
 # Convenience function (equivalent to above)
 atlas = get_builtin_template_atlas("placeholder", "regions")
+```
+
+### TemplateFlow Integration
+
+ZarrNii supports the **TemplateFlow standard** for neuroimaging templates:
+
+- **TemplateFlow naming**: `tpl-{name}/tpl-{name}_{suffix}.nii.gz`
+- **BIDS-compliant metadata**: `template_description.json` 
+- **Atlas naming**: `tpl-{name}_atlas-{atlas}_dseg.{nii.gz,tsv}`
+- **Future TemplateFlow API integration**: Access remote templates
+
+```python
+# TemplateFlow integration (requires templateflow package)
+from zarrnii import get_templateflow_template, list_templateflow_templates
+
+# List available templates from TemplateFlow
+templates = list_templateflow_templates()  # Requires: pip install templateflow
+
+# Get template from TemplateFlow repository
+template = get_templateflow_template("MNI152NLin2009cAsym", "T1w")
+anatomical_img = template.anatomical_image
 ```
 
 ### Backward Compatibility

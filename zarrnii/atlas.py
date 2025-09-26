@@ -47,6 +47,10 @@ class Template:
     def from_directory(cls, template_path: Union[str, Path]) -> "Template":
         """Load template from directory containing template files.
 
+        Supports both TemplateFlow standard and legacy formats:
+        - TemplateFlow: template_description.json, tpl-{name}_*.nii.gz
+        - Legacy: template_info.yaml, template.nii.gz
+
         Args:
             template_path: Path to template directory
 
@@ -59,36 +63,97 @@ class Template:
         """
         template_path = Path(template_path)
 
-        # Load template metadata
-        info_file = template_path / "template_info.yaml"
-        if info_file.exists():
+        # Try TemplateFlow format first
+        templateflow_info = template_path / "template_description.json"
+        legacy_info = template_path / "template_info.yaml"
+
+        if templateflow_info.exists():
+            # Load TemplateFlow JSON metadata
+            import json
+
+            with open(templateflow_info) as f:
+                info = json.load(f)
+
+            # Extract template name from directory or metadata
+            if template_path.name.startswith("tpl-"):
+                template_name = template_path.name[4:]  # Remove 'tpl-' prefix
+            else:
+                template_name = info.get("Name", template_path.name)
+
+            # Find anatomical image following TemplateFlow convention
+            # Look for tpl-{name}_*.nii.gz files (SPIM, T1w, T2w, etc.)
+            anat_patterns = [
+                f"tpl-{template_name}_SPIM.nii.gz",
+                f"tpl-{template_name}_T1w.nii.gz",
+                f"tpl-{template_name}_T2w.nii.gz",
+                f"tpl-{template_name}_desc-brain_T1w.nii.gz",
+            ]
+
+            anat_file = None
+            for pattern in anat_patterns:
+                candidate = template_path / pattern
+                if candidate.exists():
+                    anat_file = candidate
+                    break
+
+            if anat_file is None:
+                # Fallback: look for any tpl-{name}_*.nii.gz file
+                candidates = list(template_path.glob(f"tpl-{template_name}_*.nii.gz"))
+                # Filter out atlas files
+                candidates = [
+                    c
+                    for c in candidates
+                    if "_atlas-" not in c.name and "_dseg" not in c.name
+                ]
+                if candidates:
+                    anat_file = candidates[0]
+                else:
+                    raise FileNotFoundError(
+                        f"No anatomical image found for template {template_name} in {template_path}"
+                    )
+
+            # Convert TemplateFlow metadata to our format
+            converted_info = {
+                "name": template_name,
+                "description": info.get("Description", "TemplateFlow template"),
+                "resolution": info.get("Resolution", "Unknown"),
+                "anatomical_image": anat_file.name,
+                "atlases": info.get("atlases", []),
+                "_templateflow": True,
+                "_template_dir": str(template_path),
+            }
+
+        elif legacy_info.exists():
+            # Load legacy YAML metadata
             try:
                 import yaml
 
-                with open(info_file) as f:
-                    info = yaml.safe_load(f)
+                with open(legacy_info) as f:
+                    converted_info = yaml.safe_load(f)
+                converted_info["_templateflow"] = False
+                converted_info["_template_dir"] = str(template_path)
             except ImportError:
-                raise ImportError("PyYAML is required to load template metadata")
+                raise ImportError("PyYAML is required to load legacy template metadata")
         else:
-            raise FileNotFoundError(f"Template info file not found: {info_file}")
+            raise FileNotFoundError(
+                f"No template metadata found. Expected either "
+                f"{templateflow_info} or {legacy_info}"
+            )
 
         # Load anatomical image
-        anat_file = template_path / info["anatomical_image"]
+        anat_file = template_path / converted_info["anatomical_image"]
         if not anat_file.exists():
             raise FileNotFoundError(f"Anatomical image not found: {anat_file}")
 
         anatomical_image = ZarrNii.from_nifti(str(anat_file))
 
-        # Store directory path in metadata for atlas loading
-        info["_template_dir"] = str(template_path)
-
         return cls(
-            name=info["name"],
-            description=info["description"],
+            name=converted_info["name"],
+            description=converted_info["description"],
             anatomical_image=anatomical_image,
-            resolution=info.get("resolution", "Unknown"),
-            dimensions=tuple(info.get("dimensions", anatomical_image.shape)),
-            metadata=info,
+            resolution=converted_info.get("resolution", "Unknown"),
+            dimensions=tuple(converted_info.get("dimensions", anatomical_image.shape)),
+            metadata=converted_info,
         )
 
     def list_available_atlases(self) -> List[Dict[str, Any]]:
@@ -129,10 +194,17 @@ class Template:
             )
 
         # Construct paths relative to template directory
-        # This assumes the template was loaded from a directory
         template_dir = Path(self.metadata.get("_template_dir", "."))
-        dseg_path = template_dir / atlas_info["dseg_file"]
-        labels_path = template_dir / atlas_info["labels_file"]
+        
+        # Handle both TemplateFlow and legacy naming
+        if self.metadata.get("_templateflow", False):
+            # TemplateFlow naming: tpl-{template}_atlas-{atlas}_dseg.{nii.gz,tsv}
+            dseg_path = template_dir / f"tpl-{self.name}_atlas-{atlas_name}_dseg.nii.gz"
+            labels_path = template_dir / f"tpl-{self.name}_atlas-{atlas_name}_dseg.tsv"
+        else:
+            # Legacy naming: use metadata
+            dseg_path = template_dir / atlas_info["dseg_file"]
+            labels_path = template_dir / atlas_info["labels_file"]
 
         return Atlas.from_files(dseg_path, labels_path)
 
@@ -838,9 +910,107 @@ def get_builtin_template(name: str = "placeholder") -> Template:
             f"Template '{name}' not found. Available built-in templates: {available_templates}"
         )
 
-    # Load template from packaged data
-    template_path = Path(__file__).parent / "data" / "templates" / name
+    # Load template from packaged data (TemplateFlow naming)
+    template_path = Path(__file__).parent / "data" / "templates" / f"tpl-{name}"
     return Template.from_directory(template_path)
+
+
+def get_templateflow_template(template: str, suffix: str = "SPIM") -> Template:
+    """Get a template from TemplateFlow.
+    
+    This function uses the TemplateFlow API to download and access templates
+    from the official TemplateFlow repository.
+    
+    Args:
+        template: Template identifier (e.g., 'MNI152NLin2009cAsym', 'ABA')
+        suffix: Image suffix/modality (e.g., 'SPIM', 'T1w', 'T2w')
+        
+    Returns:
+        Template instance loaded from TemplateFlow
+        
+    Raises:
+        ImportError: If templateflow package is not available
+        ValueError: If template is not found in TemplateFlow
+        
+    Examples:
+        >>> # Get MNI152 template
+        >>> template = get_templateflow_template("MNI152NLin2009cAsym", "T1w")
+        
+        >>> # Get Allen Brain Atlas template  
+        >>> template = get_templateflow_template("ABA", "SPIM")
+    """
+    try:
+        from templateflow import api as tflow
+    except ImportError:
+        raise ImportError(
+            "templateflow is required for TemplateFlow integration. "
+            "Install with: pip install zarrnii[templateflow] or pip install templateflow"
+        )
+    
+    try:
+        # Get template file from TemplateFlow
+        template_file = tflow.get(template, suffix=suffix, extension=".nii.gz")
+        
+        # Create a temporary template directory structure
+        import tempfile
+        temp_dir = Path(tempfile.mkdtemp(prefix=f"tpl-{template}_"))
+        
+        # Copy template file with TemplateFlow naming
+        template_path = temp_dir / f"tpl-{template}_{suffix}.nii.gz"
+        import shutil
+        shutil.copy2(template_file, template_path)
+        
+        # Create minimal template_description.json
+        template_info = {
+            "Name": template,
+            "BIDSVersion": "1.8.0", 
+            "TemplateFlowVersion": "0.8.0",
+            "Description": f"Template {template} from TemplateFlow",
+            "Authors": ["TemplateFlow"],
+            "License": "Various",
+            "ReferencesAndLinks": ["https://templateflow.org"],
+            "Resolution": "Unknown",
+            "SpatialReference": {
+                "VoxelSizes": [1.0, 1.0, 1.0],
+                "Units": "mm",
+                "Origin": "center"
+            },
+            "atlases": []  # Could be expanded to query TemplateFlow for atlases
+        }
+        
+        import json
+        with open(temp_dir / "template_description.json", "w") as f:
+            json.dump(template_info, f, indent=2)
+        
+        # Load template
+        return Template.from_directory(temp_dir)
+        
+    except Exception as e:
+        raise ValueError(f"Failed to load template '{template}' from TemplateFlow: {e}")
+
+
+def list_templateflow_templates() -> List[str]:
+    """List available templates from TemplateFlow.
+    
+    Returns:
+        List of template identifiers available in TemplateFlow
+        
+    Raises:
+        ImportError: If templateflow package is not available
+        
+    Examples:
+        >>> templates = list_templateflow_templates()
+        >>> print("Available TemplateFlow templates:", templates)
+    """
+    try:
+        from templateflow import api as tflow
+    except ImportError:
+        raise ImportError(
+            "templateflow is required for TemplateFlow integration. "
+            "Install with: pip install zarrnii[templateflow] or pip install templateflow"
+        )
+    
+    return list(tflow.templates())
 
 
 def list_builtin_templates() -> List[Dict[str, str]]:

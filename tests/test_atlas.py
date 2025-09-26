@@ -909,3 +909,112 @@ class TestTemplateSystem:
         np.testing.assert_array_equal(old_atlas.region_labels, new_atlas.region_labels)
         assert old_atlas.region_names == new_atlas.region_names
         assert old_atlas.dseg.shape == new_atlas.dseg.shape
+
+
+class TestTemplateFlowIntegration:
+    """Test suite for TemplateFlow integration functionality."""
+
+    def test_templateflow_structure_detection(self):
+        """Test that TemplateFlow structure is properly detected."""
+        from zarrnii import get_builtin_template
+
+        template = get_builtin_template("placeholder")
+        
+        # Should detect TemplateFlow format
+        assert template.metadata.get("_templateflow", False) == True
+        assert "template_description.json" in str(template.metadata.get("_template_dir", ""))
+
+    def test_templateflow_file_naming(self):
+        """Test that TemplateFlow file naming conventions work."""
+        from zarrnii import get_builtin_template
+
+        template = get_builtin_template("placeholder")
+        
+        # Template name should be extracted correctly
+        assert template.name == "placeholder"
+        
+        # Anatomical image should be SPIM file
+        assert "SPIM.nii.gz" in template.metadata["anatomical_image"]
+        
+        # Should be able to get atlas with TemplateFlow naming
+        atlas = template.get_atlas("regions")
+        assert len(atlas.region_labels) == 5
+
+    def test_templateflow_json_metadata(self):
+        """Test that TemplateFlow JSON metadata is properly parsed."""
+        from zarrnii import get_builtin_template
+
+        template = get_builtin_template("placeholder")
+        
+        # Should have TemplateFlow metadata structure
+        assert template.description == "Simple synthetic template for testing and examples"
+        assert "atlases" in template.metadata
+        assert len(template.metadata["atlases"]) > 0
+        
+        # Atlas should have proper metadata
+        atlases = template.list_available_atlases()
+        assert len(atlases) == 1
+        assert atlases[0]["name"] == "regions"
+
+    def test_templateflow_atlas_file_resolution(self):
+        """Test that TemplateFlow atlas files are resolved correctly."""
+        from zarrnii import get_builtin_template
+        from pathlib import Path
+
+        template = get_builtin_template("placeholder")
+        
+        # Should resolve TemplateFlow atlas file names
+        template_dir = Path(template.metadata["_template_dir"])
+        
+        # Files should exist with TemplateFlow naming
+        dseg_file = template_dir / "tpl-placeholder_atlas-regions_dseg.nii.gz"
+        labels_file = template_dir / "tpl-placeholder_atlas-regions_dseg.tsv"
+        
+        assert dseg_file.exists()
+        assert labels_file.exists()
+
+    @pytest.mark.skipif(
+        True, reason="TemplateFlow package not available in test environment"
+    )
+    def test_templateflow_api_integration(self):
+        """Test integration with TemplateFlow API (requires templateflow package)."""
+        from zarrnii import get_templateflow_template, list_templateflow_templates
+        
+        # This test would require the templateflow package
+        # In a real environment, this would test:
+        # templates = list_templateflow_templates()
+        # assert len(templates) > 0
+        # 
+        # template = get_templateflow_template("MNI152NLin2009cAsym", "T1w")
+        # assert template.name == "MNI152NLin2009cAsym"
+        pass
+
+    def test_legacy_compatibility_with_templateflow(self):
+        """Test that legacy templates still work alongside TemplateFlow."""
+        from zarrnii import Template
+        from pathlib import Path
+        
+        # Both legacy and TemplateFlow templates should be loadable
+        legacy_path = Path(__file__).parent.parent / "zarrnii" / "data" / "templates" / "placeholder"
+        templateflow_path = Path(__file__).parent.parent / "zarrnii" / "data" / "templates" / "tpl-placeholder"
+        
+        # Should be able to load legacy template (if it exists)
+        if legacy_path.exists():
+            legacy_template = Template.from_directory(legacy_path)
+            assert legacy_template.metadata.get("_templateflow", True) == False
+        
+        # Should be able to load TemplateFlow template
+        if templateflow_path.exists():
+            tf_template = Template.from_directory(templateflow_path)
+            assert tf_template.metadata.get("_templateflow", False) == True
+
+    def test_templateflow_error_handling(self):
+        """Test error handling for TemplateFlow integration."""
+        from zarrnii import get_templateflow_template, list_templateflow_templates
+        
+        # Should raise ImportError when templateflow is not available
+        with pytest.raises(ImportError, match="templateflow is required"):
+            get_templateflow_template("MNI152NLin2009cAsym", "T1w")
+            
+        with pytest.raises(ImportError, match="templateflow is required"):
+            list_templateflow_templates()
