@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 import dask.array as da
-
 import numpy as np
 
 from .base import ScaledProcessingPlugin
