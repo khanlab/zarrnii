@@ -6,9 +6,9 @@ algorithms are run at low resolution and applied to full resolution data.
 """
 
 from .base import ScaledProcessingPlugin
-from .bias_field import BiasFieldCorrection
+from .gaussian_biasfield import GaussianBiasFieldCorrection
 
 __all__ = [
     "ScaledProcessingPlugin",
-    "BiasFieldCorrection",
+    "GaussianBiasFieldCorrection",
 ]
