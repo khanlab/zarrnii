@@ -114,6 +114,7 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
         if work_array.ndim == 2:
             # For 2D data
             ants_img = ants.from_numpy(work_array)
+            self.spline_param = [2, 2]
             # Use return_bias_field=True to get the bias field
             bias_result = ants.n4_bias_field_correction(
                 ants_img,
