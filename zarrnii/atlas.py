@@ -877,11 +877,71 @@ def _create_synthetic_placeholder_atlas() -> Atlas:
     return Atlas(dseg=dseg, labels_df=labels_df)
 
 
+def _install_template_to_templateflow(template_name: str) -> bool:
+    """Install a zarrnii built-in template to TEMPLATEFLOW_HOME.
+    
+    This function copies zarrnii's built-in templates to the user's TemplateFlow
+    directory, enabling unified access through the TemplateFlow API.
+    
+    Args:
+        template_name: Name of the template to install
+        
+    Returns:
+        True if template was successfully installed, False otherwise
+    """
+    try:
+        import shutil
+        import os
+        from templateflow import api as tflow
+        
+        # Get paths
+        templateflow_home = Path(os.environ.get('TEMPLATEFLOW_HOME', 
+                                              Path.home() / '.cache' / 'templateflow'))
+        zarrnii_template_dir = Path(__file__).parent / "data" / "templates" / f"tpl-{template_name}"
+        target_dir = templateflow_home / f"tpl-{template_name}"
+        
+        # Only copy if not already present
+        if not target_dir.exists():
+            # Ensure templateflow home exists
+            templateflow_home.mkdir(parents=True, exist_ok=True)
+            
+            # Copy template directory
+            shutil.copytree(zarrnii_template_dir, target_dir)
+            
+            # Verify templateflow can see it
+            try:
+                # Test if TemplateFlow can now access this template
+                tflow.get(template_name, desc=None, raise_empty=True)
+                return True
+            except Exception:
+                # If TemplateFlow can't see it, remove the copied directory
+                shutil.rmtree(target_dir, ignore_errors=True)
+                return False
+        else:
+            # Already exists, check if TemplateFlow can access it
+            try:
+                tflow.get(template_name, desc=None, raise_empty=True)
+                return True
+            except Exception:
+                return False
+                
+    except ImportError:
+        # TemplateFlow not available
+        return False
+    except Exception:
+        # Other errors during installation
+        return False
+
+
 def get_builtin_template(name: str = "placeholder") -> Template:
     """Get a built-in template from the zarrnii package.
 
     This function provides access to templates that are packaged with zarrnii,
     including their anatomical images and associated atlases.
+    
+    When the templateflow extra is installed, this function will lazily copy
+    the template to TEMPLATEFLOW_HOME on first access, enabling unified access
+    through the TemplateFlow API.
 
     Args:
         name: Name of the built-in template to retrieve.
@@ -902,6 +962,10 @@ def get_builtin_template(name: str = "placeholder") -> Template:
 
         >>> # Get an atlas from the template
         >>> atlas = template.get_atlas("regions")
+        
+        >>> # After first call, template is available via TemplateFlow API (if installed)
+        >>> import templateflow.api as tflow
+        >>> # This will work after lazy loading: tflow.get("placeholder", suffix="SPIM")
     """
     available_templates = ["placeholder"]
 
@@ -909,6 +973,9 @@ def get_builtin_template(name: str = "placeholder") -> Template:
         raise ValueError(
             f"Template '{name}' not found. Available built-in templates: {available_templates}"
         )
+
+    # Lazy loading: Install to TemplateFlow if available (only on first access)
+    _install_template_to_templateflow(name)
 
     # Load template from packaged data (TemplateFlow naming)
     template_path = Path(__file__).parent / "data" / "templates" / f"tpl-{name}"
@@ -1011,6 +1078,44 @@ def list_templateflow_templates() -> List[str]:
         )
     
     return list(tflow.templates())
+
+
+def install_zarrnii_templates() -> Dict[str, bool]:
+    """Manually install all zarrnii built-in templates to TEMPLATEFLOW_HOME.
+    
+    This function allows users to explicitly install zarrnii's built-in templates
+    to their TemplateFlow directory for unified access through the TemplateFlow API.
+    
+    Returns:
+        Dictionary mapping template names to installation success status
+        
+    Raises:
+        ImportError: If templateflow package is not available
+        
+    Examples:
+        >>> results = install_zarrnii_templates()
+        >>> print("Installation results:", results)
+        >>> # {'placeholder': True}
+        
+        >>> # After installation, templates are accessible via TemplateFlow
+        >>> import templateflow.api as tflow
+        >>> template_files = tflow.get("placeholder", suffix="SPIM")
+    """
+    try:
+        from templateflow import api as tflow
+    except ImportError:
+        raise ImportError(
+            "templateflow is required for TemplateFlow integration. "
+            "Install with: pip install zarrnii[templateflow] or pip install templateflow"
+        )
+    
+    available_templates = ["placeholder"]  # Add more as they become available
+    results = {}
+    
+    for template_name in available_templates:
+        results[template_name] = _install_template_to_templateflow(template_name)
+    
+    return results
 
 
 def list_builtin_templates() -> List[Dict[str, str]]:

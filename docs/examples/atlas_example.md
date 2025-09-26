@@ -41,23 +41,51 @@ atlas = get_builtin_template_atlas("placeholder", "regions")
 
 ### TemplateFlow Integration
 
-ZarrNii supports the **TemplateFlow standard** for neuroimaging templates:
+ZarrNii supports the **TemplateFlow standard** for neuroimaging templates with **lazy loading** to TEMPLATEFLOW_HOME:
 
 - **TemplateFlow naming**: `tpl-{name}/tpl-{name}_{suffix}.nii.gz`
 - **BIDS-compliant metadata**: `template_description.json` 
 - **Atlas naming**: `tpl-{name}_atlas-{atlas}_dseg.{nii.gz,tsv}`
-- **Future TemplateFlow API integration**: Access remote templates
+- **Lazy loading**: Templates automatically copy to TEMPLATEFLOW_HOME on first use (requires `templateflow` extra)
+- **Unified API**: Access built-in and remote templates through same TemplateFlow interface
 
 ```python
-# TemplateFlow integration (requires templateflow package)
-from zarrnii import get_templateflow_template, list_templateflow_templates
+# Install templateflow extra for lazy loading
+# pip install zarrnii[templateflow]
 
-# List available templates from TemplateFlow
-templates = list_templateflow_templates()  # Requires: pip install templateflow
+# Lazy loading - templates copy to TEMPLATEFLOW_HOME on first access
+from zarrnii import get_builtin_template
+template = get_builtin_template("placeholder")  # Copies to TemplateFlow on first call
 
-# Get template from TemplateFlow repository
-template = get_templateflow_template("MNI152NLin2009cAsym", "T1w")
-anatomical_img = template.anatomical_image
+# After lazy loading, both APIs work identically:
+import templateflow.api as tflow
+zarrnii_template = tflow.get("placeholder", suffix="SPIM")        # zarrnii built-in
+remote_template = tflow.get("MNI152NLin2009cAsym", suffix="T1w")  # remote template
+
+# Manual installation (if preferred over lazy loading)
+from zarrnii import install_zarrnii_templates
+results = install_zarrnii_templates()  # {'placeholder': True}
+```
+
+### Template Installation Behavior
+
+**With `templateflow` extra installed:**
+- ✅ **Lazy loading**: Templates copy to `$TEMPLATEFLOW_HOME` on first `get_builtin_template()` call
+- ✅ **Unified API**: Use TemplateFlow API for both zarrnii and remote templates
+- ✅ **Automatic**: No extra steps needed
+
+**Without `templateflow` extra:**
+- ✅ **Direct access**: `get_builtin_template()` works normally from zarrnii package
+- ❌ **No lazy loading**: Templates stay in zarrnii package only
+- ❌ **No unified API**: TemplateFlow functions unavailable
+
+```python
+# Check installation status
+try:
+    results = install_zarrnii_templates()
+    print("TemplateFlow integration:", results)
+except ImportError:
+    print("TemplateFlow extra not installed - using direct access only")
 ```
 
 ### Backward Compatibility
