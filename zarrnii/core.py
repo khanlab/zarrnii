@@ -2089,6 +2089,188 @@ class ZarrNii:
         else:
             return nifti_img
 
+    def to_tiff_stack(
+        self,
+        filename_pattern: str,
+        channel: Optional[int] = None,
+        timepoint: Optional[int] = None,
+        compress: bool = True,
+    ) -> str:
+        """Save data as a stack of 2D TIFF images.
+
+        Saves the image data as a series of 2D TIFF files, with each Z-slice
+        saved as a separate file. This format is useful for compatibility with
+        tools that don't support OME-Zarr or napari plugins that require
+        individual TIFF files.
+
+        Args:
+            filename_pattern: Output filename pattern. Should contain '{z:04d}' or similar
+                format specifier for the Z-slice number. Examples:
+                - "output_z{z:04d}.tif"
+                - "data/slice_{z:03d}.tiff" 
+                If pattern doesn't contain format specifier, '_{z:04d}' is appended
+                before the extension.
+            channel: Channel index to save (0-based). If None and data has multiple
+                channels, all channels will be saved as separate channel dimensions
+                in each TIFF file (multi-channel TIFFs).
+            timepoint: Timepoint index to save (0-based). If None and data has multiple
+                timepoints, raises ValueError (must select single timepoint).
+            compress: Whether to use LZW compression (default: True)
+
+        Returns:
+            Base directory path where files were saved
+
+        Raises:
+            ValueError: If data has multiple timepoints but none selected,
+                or if selected channel/timepoint is out of range
+            OSError: If unable to write to specified directory
+
+        Examples:
+            >>> # Save all Z-slices for single channel/timepoint data
+            >>> znii.to_tiff_stack("output_z{z:04d}.tif")
+
+            >>> # Save specific channel
+            >>> znii.to_tiff_stack("channel0_z{z:04d}.tif", channel=0)
+
+            >>> # Save with custom pattern and compression
+            >>> znii.to_tiff_stack("data/slice_{z:03d}.tiff", compress=False)
+
+        Warnings:
+            This method loads all data into memory. For large datasets,
+            consider cropping or downsampling first to reduce memory usage.
+            The cellseg3d napari plugin and similar tools work best with
+            cropped regions rather than full-resolution whole-brain images.
+
+        Notes:
+            - Z-dimension becomes the stack (file) dimension
+            - Time and channel dimensions are handled as specified
+            - Spatial transformations are not preserved in TIFF format
+            - For 5D data (T,C,Z,Y,X), you must select a single timepoint
+            - Multi-channel data can be saved as multi-channel TIFFs or selected
+        """
+        try:
+            import tifffile
+        except ImportError:
+            raise ImportError(
+                "tifffile is required for TIFF stack support. "
+                "Install with: pip install tifffile"
+            )
+
+        # Get data and dimensions
+        data = self.data.compute()
+        dims = self.dims
+
+        # Create output directory if needed
+        import os
+        output_dir = os.path.dirname(filename_pattern)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        # Handle dimensional selection and validation
+        # Remove singleton dimensions first, similar to to_nifti
+        squeeze_axes = []
+        remaining_dims = []
+        time_dim_size = 1
+        channel_dim_size = 1
+
+        for i, dim in enumerate(dims):
+            if dim == "t":
+                time_dim_size = data.shape[i]
+                if data.shape[i] == 1:
+                    squeeze_axes.append(i)
+                elif timepoint is None:
+                    raise ValueError(
+                        f"Data has {data.shape[i]} timepoints. "
+                        f"Must specify 'timepoint' parameter to select a single timepoint."
+                    )
+                elif timepoint >= data.shape[i]:
+                    raise ValueError(
+                        f"Timepoint {timepoint} is out of range (data has {data.shape[i]} timepoints)"
+                    )
+                else:
+                    remaining_dims.append(dim)
+            elif dim == "c":
+                channel_dim_size = data.shape[i]
+                if data.shape[i] == 1:
+                    squeeze_axes.append(i)
+                elif channel is not None:
+                    if channel >= data.shape[i]:
+                        raise ValueError(
+                            f"Channel {channel} is out of range (data has {data.shape[i]} channels)"
+                        )
+                    remaining_dims.append(dim)
+                else:
+                    # Multiple channels, keep all if no specific channel selected
+                    remaining_dims.append(dim)
+            else:
+                remaining_dims.append(dim)
+
+        # Select specific timepoint if needed
+        if time_dim_size > 1 and timepoint is not None:
+            time_axis = dims.index("t")
+            data = np.take(data, timepoint, axis=time_axis)
+            # Update dims list
+            dims = [d for i, d in enumerate(dims) if i != time_axis]
+
+        # Select specific channel if needed
+        if channel_dim_size > 1 and channel is not None:
+            channel_axis = dims.index("c")
+            data = np.take(data, channel, axis=channel_axis)
+            # Update dims list
+            dims = [d for i, d in enumerate(dims) if i != channel_axis]
+
+        # Squeeze singleton dimensions
+        if squeeze_axes:
+            # Recalculate squeeze axes after potential dimension removal
+            current_squeeze_axes = []
+            for axis in squeeze_axes:
+                # Count how many axes were removed before this one
+                removed_before = sum(1 for removed_axis in [
+                    dims.index("t") if time_dim_size > 1 and timepoint is not None else -1,
+                    dims.index("c") if channel_dim_size > 1 and channel is not None else -1
+                ] if removed_axis != -1 and removed_axis < axis)
+                current_squeeze_axes.append(axis - removed_before)
+            
+            data = np.squeeze(data, axis=tuple(current_squeeze_axes))
+            dims = [dim for i, dim in enumerate(dims) if i not in current_squeeze_axes]
+
+        # Find Z dimension for stacking
+        if "z" not in dims:
+            raise ValueError("Data must have a Z dimension for TIFF stack export")
+        
+        z_axis = dims.index("z")
+        z_size = data.shape[z_axis]
+
+        # Check filename pattern contains format specifier
+        if "{z" not in filename_pattern:
+            # Add default z format before extension
+            name, ext = os.path.splitext(filename_pattern)
+            filename_pattern = f"{name}_{{z:04d}}{ext}"
+
+        # Move Z axis to first position for easy iteration
+        axes_order = list(range(data.ndim))
+        axes_order[0], axes_order[z_axis] = axes_order[z_axis], axes_order[0]
+        data = data.transpose(axes_order)
+
+        # Save each Z-slice as a separate TIFF file
+        compression = "lzw" if compress else None
+        saved_files = []
+
+        for z_idx in range(z_size):
+            slice_data = data[z_idx]
+            
+            # Generate filename for this slice
+            filename = filename_pattern.format(z=z_idx)
+            
+            # Save the 2D slice
+            tifffile.imwrite(filename, slice_data, compression=compression)
+            saved_files.append(filename)
+
+        print(f"Saved {len(saved_files)} TIFF files to {output_dir or '.'}")
+        print(f"Files: {os.path.basename(saved_files[0])} ... {os.path.basename(saved_files[-1])}")
+        
+        return output_dir or "."
+
     @classmethod
     def from_imaris(
         cls,
