@@ -61,7 +61,8 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-# No CLI scripts currently
+z2n = "zarrnii.cli:z2n"
+n2z = "zarrnii.cli:n2z"
 
 [tool.hatch.version]
 source = "vcs"

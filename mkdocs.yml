@@ -8,6 +8,7 @@ nav:
       - Getting Started: walkthrough/getting_started.md
       - Basic Tasks: walkthrough/basic_tasks.md
       - Advanced Use Cases: walkthrough/advanced_use_cases.md
+  - Command Line Interface: cli.md
   - API Reference: reference.md
   - Examples:
       - Working with Zarr and NIfTI: examples/zarr_nifti.md
