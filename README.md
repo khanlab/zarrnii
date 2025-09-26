@@ -47,6 +47,40 @@ uv sync --dev
 
 ---
 
+## Advanced Topics
+
+### Orientation Metadata Backwards Compatibility
+
+Starting from version 0.2.0, ZarrNii implements improved orientation metadata handling with backwards compatibility for existing OME-Zarr files:
+
+#### New Format (v0.2.0+)
+- **Metadata Key**: `xyz_orientation`
+- **Axis Order**: Always in XYZ axes order for consistency
+- **Example**: `"RAS"` means Right-to-left, Anterior-to-posterior, Superior-to-inferior in XYZ space
+
+#### Legacy Format (pre-v0.2.0)
+- **Metadata Key**: `orientation` 
+- **Axis Order**: ZYX axes order (reversed from XYZ)
+- **Example**: `"SAR"` in ZYX order is equivalent to `"RAS"` in XYZ order
+
+#### Automatic Conversion
+ZarrNii automatically handles both formats when loading OME-Zarr files:
+
+```python
+# Loading prioritizes xyz_orientation, falls back to orientation (with reversal)
+znimg = ZarrNii.from_ome_zarr("legacy_file.zarr")  # Works with both formats
+
+# New files always use xyz_orientation format
+znimg.to_ome_zarr("new_file.zarr")  # Saves with xyz_orientation
+```
+
+#### Migration Guide
+- **Existing files**: Continue to work without modification
+- **New files**: Use the improved `xyz_orientation` format automatically  
+- **API**: The `orientation` property maintains backwards compatibility
+
+---
+
 ## Segmentation Plugin System
 
 ZarrNii includes a plugin architecture for image segmentation algorithms, starting with Otsu thresholding:
