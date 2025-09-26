@@ -1109,7 +1109,8 @@ class ZarrNii:
             axes_order: Spatial axis order for NIfTI compatibility.
                 Either "ZYX" or "XYZ"
             orientation: Default anatomical orientation if not in metadata.
-                Standard orientations like "RAS", "LPI", etc.
+                Standard orientations like "RAS", "LPI", etc. This is always
+                interpreted in XYZ axes order for consistency.
             downsample_near_isotropic: If True, automatically downsample
                 dimensions with smaller voxel sizes to achieve near-isotropic
                 resolution
@@ -1144,6 +1145,28 @@ class ZarrNii:
             ...     "s3://bucket/data.zarr",
             ...     storage_options={"key": "access_key", "secret": "secret"}
             ... )
+
+        Notes:
+            **Orientation Metadata Backwards Compatibility:**
+            
+            This method implements backwards compatibility for orientation metadata:
+            
+            1. **Priority Order**: Checks for 'xyz_orientation' first (new format), 
+               then falls back to 'orientation' (legacy format)
+               
+            2. **Legacy Fallback**: When only legacy 'orientation' is found, the 
+               orientation string is automatically reversed to convert from ZYX-based 
+               encoding (legacy) to XYZ-based encoding (current standard)
+               
+            3. **Default Fallback**: If no orientation metadata is found, uses the 
+               provided 'orientation' parameter as the default
+               
+            Examples of the conversion:
+            - Legacy 'orientation'='SAR' (ZYX) → 'xyz_orientation'='RAS' (XYZ)
+            - Legacy 'orientation'='IPL' (ZYX) → 'xyz_orientation'='LPI' (XYZ)
+            
+            This ensures consistent orientation handling while maintaining backwards 
+            compatibility with existing OME-Zarr files that use the legacy format.
         """
         # Validate channel and timepoint selection arguments
         if channels is not None and channel_labels is not None:
@@ -1916,7 +1939,8 @@ class ZarrNii:
             - OME-Zarr files are always saved in ZYX axis order
             - Automatic axis reordering if current order is XYZ
             - Spatial transformations and metadata are preserved
-            - Orientation information is stored as custom metadata
+            - Orientation information is stored using the new 'xyz_orientation' 
+              metadata key for consistency and future compatibility
         """
         # Determine the image to save
         if self.axes_order == "XYZ":
