@@ -4,6 +4,7 @@ from .plugins import OtsuSegmentation  # Backward compatibility
 from .plugins import (
     GaussianBiasFieldCorrection,
     LocalOtsuSegmentation,
+    N4BiasFieldCorrection,
     ScaledProcessingPlugin,
     SegmentationPlugin,
     ThresholdSegmentation,
@@ -21,7 +22,8 @@ __all__ = [
     "LocalOtsuSegmentation",
     "ThresholdSegmentation",
     "ScaledProcessingPlugin",
-    "BiasFieldCorrection",
+    "GaussianBiasFieldCorrection",
+    "N4BiasFieldCorrection",
     "compute_histogram",
     "compute_otsu_thresholds",
 ]
