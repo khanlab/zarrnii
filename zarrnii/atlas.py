@@ -882,6 +882,7 @@ def _install_template_to_templateflow(template_name: str) -> bool:
     
     This function copies zarrnii's built-in templates to the user's TemplateFlow
     directory, enabling unified access through the TemplateFlow API.
+    Uses the @requires_layout decorator pattern and TF_HOME for proper setup.
     
     Args:
         template_name: Name of the template to install
@@ -891,39 +892,40 @@ def _install_template_to_templateflow(template_name: str) -> bool:
     """
     try:
         import shutil
-        import os
         from templateflow import api as tflow
+        from templateflow.conf import TF_HOME, requires_layout
         
-        # Get paths
-        templateflow_home = Path(os.environ.get('TEMPLATEFLOW_HOME', 
-                                              Path.home() / '.cache' / 'templateflow'))
-        zarrnii_template_dir = Path(__file__).parent / "data" / "templates" / f"tpl-{template_name}"
-        target_dir = templateflow_home / f"tpl-{template_name}"
+        @requires_layout
+        def _do_install():
+            """Internal function that requires TemplateFlow layout to be set up."""
+            # Get paths using proper TemplateFlow configuration
+            templateflow_home = Path(TF_HOME)
+            zarrnii_template_dir = Path(__file__).parent / "data" / "templates" / f"tpl-{template_name}"
+            target_dir = templateflow_home / f"tpl-{template_name}"
+            
+            # Only copy if not already present
+            if not target_dir.exists():
+                # Copy template directory (TF_HOME should already exist via @requires_layout)
+                shutil.copytree(zarrnii_template_dir, target_dir)
+                
+                # Verify templateflow can see it
+                try:
+                    # Test if TemplateFlow can now access this template
+                    tflow.get(template_name, desc=None, raise_empty=True)
+                    return True
+                except Exception:
+                    # If TemplateFlow can't see it, remove the copied directory
+                    shutil.rmtree(target_dir, ignore_errors=True)
+                    return False
+            else:
+                # Already exists, check if TemplateFlow can access it
+                try:
+                    tflow.get(template_name, desc=None, raise_empty=True)
+                    return True
+                except Exception:
+                    return False
         
-        # Only copy if not already present
-        if not target_dir.exists():
-            # Ensure templateflow home exists
-            templateflow_home.mkdir(parents=True, exist_ok=True)
-            
-            # Copy template directory
-            shutil.copytree(zarrnii_template_dir, target_dir)
-            
-            # Verify templateflow can see it
-            try:
-                # Test if TemplateFlow can now access this template
-                tflow.get(template_name, desc=None, raise_empty=True)
-                return True
-            except Exception:
-                # If TemplateFlow can't see it, remove the copied directory
-                shutil.rmtree(target_dir, ignore_errors=True)
-                return False
-        else:
-            # Already exists, check if TemplateFlow can access it
-            try:
-                tflow.get(template_name, desc=None, raise_empty=True)
-                return True
-            except Exception:
-                return False
+        return _do_install()
                 
     except ImportError:
         # TemplateFlow not available
@@ -1085,6 +1087,7 @@ def install_zarrnii_templates() -> Dict[str, bool]:
     
     This function allows users to explicitly install zarrnii's built-in templates
     to their TemplateFlow directory for unified access through the TemplateFlow API.
+    Uses the @requires_layout decorator to ensure proper TemplateFlow setup.
     
     Returns:
         Dictionary mapping template names to installation success status
@@ -1103,19 +1106,25 @@ def install_zarrnii_templates() -> Dict[str, bool]:
     """
     try:
         from templateflow import api as tflow
+        from templateflow.conf import requires_layout
     except ImportError:
         raise ImportError(
             "templateflow is required for TemplateFlow integration. "
             "Install with: pip install zarrnii[templateflow] or pip install templateflow"
         )
     
-    available_templates = ["placeholder"]  # Add more as they become available
-    results = {}
+    @requires_layout  
+    def _install_all():
+        """Install all templates with proper TemplateFlow layout setup."""
+        available_templates = ["placeholder"]  # Add more as they become available
+        results = {}
+        
+        for template_name in available_templates:
+            results[template_name] = _install_template_to_templateflow(template_name)
+        
+        return results
     
-    for template_name in available_templates:
-        results[template_name] = _install_template_to_templateflow(template_name)
-    
-    return results
+    return _install_all()
 
 
 def list_builtin_templates() -> List[Dict[str, str]]:

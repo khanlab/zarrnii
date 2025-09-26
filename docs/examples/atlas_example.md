@@ -47,6 +47,7 @@ ZarrNii supports the **TemplateFlow standard** for neuroimaging templates with *
 - **BIDS-compliant metadata**: `template_description.json` 
 - **Atlas naming**: `tpl-{name}_atlas-{atlas}_dseg.{nii.gz,tsv}`
 - **Lazy loading**: Templates automatically copy to TEMPLATEFLOW_HOME on first use (requires `templateflow` extra)
+- **Proper setup**: Uses `@requires_layout` decorator to ensure TemplateFlow directory structure
 - **Unified API**: Access built-in and remote templates through same TemplateFlow interface
 
 ```python
@@ -71,6 +72,7 @@ results = install_zarrnii_templates()  # {'placeholder': True}
 
 **With `templateflow` extra installed:**
 - ✅ **Lazy loading**: Templates copy to `$TEMPLATEFLOW_HOME` on first `get_builtin_template()` call
+- ✅ **Proper setup**: Uses TemplateFlow's `@requires_layout` decorator to ensure directory structure
 - ✅ **Unified API**: Use TemplateFlow API for both zarrnii and remote templates
 - ✅ **Automatic**: No extra steps needed
 

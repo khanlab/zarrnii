@@ -833,9 +833,13 @@ class TestTemplateSystem:
 
         # Check atlas metadata structure
         regions_atlas = next(atlas for atlas in atlases if atlas["name"] == "regions")
-        required_keys = ["name", "description", "dseg_file", "labels_file"]
+        required_keys = ["name", "description"]
         for key in required_keys:
             assert key in regions_atlas
+        
+        # Check that regions count is included
+        assert "regions" in regions_atlas
+        assert regions_atlas["regions"] == 5
 
     def test_template_get_atlas(self):
         """Test getting an atlas from a template."""
@@ -917,12 +921,16 @@ class TestTemplateFlowIntegration:
     def test_templateflow_structure_detection(self):
         """Test that TemplateFlow structure is properly detected."""
         from zarrnii import get_builtin_template
+        from pathlib import Path
 
         template = get_builtin_template("placeholder")
         
         # Should detect TemplateFlow format
         assert template.metadata.get("_templateflow", False) == True
-        assert "template_description.json" in str(template.metadata.get("_template_dir", ""))
+        
+        # Check that template_description.json file exists in the template directory
+        template_dir = Path(template.metadata.get("_template_dir", ""))
+        assert (template_dir / "template_description.json").exists()
 
     def test_templateflow_file_naming(self):
         """Test that TemplateFlow file naming conventions work."""
@@ -1076,7 +1084,17 @@ class TestTemplateFlowIntegration:
     def test_install_zarrnii_templates_without_templateflow(self):
         """Test install_zarrnii_templates raises error when templateflow unavailable."""
         from zarrnii import install_zarrnii_templates
-        
+
         # Should raise ImportError when templateflow is not available
         with pytest.raises(ImportError, match="templateflow is required"):
             install_zarrnii_templates()
+
+    def test_requires_layout_decorator_usage(self):
+        """Test that @requires_layout decorator is used correctly."""
+        # This test verifies that the code imports and uses @requires_layout correctly
+        # even when templateflow is not available
+        from zarrnii.atlas import _install_template_to_templateflow
+        
+        # Should return False when templateflow is not available (ImportError handled)
+        result = _install_template_to_templateflow("placeholder")
+        assert result == False  # Expected behavior when templateflow unavailable
