@@ -1036,6 +1036,7 @@ class TestTemplateFlowIntegration:
     def test_templateflow_error_handling(self):
         """Test error handling for TemplateFlow integration."""
         from zarrnii import get_templateflow_template, list_templateflow_templates
+        from zarrnii.atlas import AmbiguousTemplateFlowQueryError
 
         # Should raise ImportError when templateflow is not available
         with pytest.raises(ImportError, match="templateflow is required"):
@@ -1043,6 +1044,14 @@ class TestTemplateFlowIntegration:
 
         with pytest.raises(ImportError, match="templateflow is required"):
             list_templateflow_templates()
+
+        # Test that AmbiguousTemplateFlowQueryError can be created
+        files = ["/path/1.nii.gz", "/path/2.nii.gz"]
+        error = AmbiguousTemplateFlowQueryError("MNI152", "T1w", files)
+        assert "2 files" in str(error)
+        assert error.template == "MNI152"
+        assert error.suffix == "T1w"
+        assert error.matching_files == files
 
     def test_lazy_templateflow_installation(self):
         """Test lazy installation of templates to TemplateFlow."""

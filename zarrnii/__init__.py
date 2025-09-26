@@ -1,5 +1,6 @@
 from .analysis import compute_histogram, compute_otsu_thresholds
 from .atlas import (
+    AmbiguousTemplateFlowQueryError,
     Atlas,
     Template,
     get_builtin_atlas,
@@ -26,6 +27,7 @@ from .plugins import (
 from .transform import AffineTransform, DisplacementTransform, Transform
 
 __all__ = [
+    "AmbiguousTemplateFlowQueryError",
     "Atlas",
     "Template",
     "ZarrNii",

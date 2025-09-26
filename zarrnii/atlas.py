@@ -1025,7 +1025,21 @@ def get_builtin_template(name: str = "placeholder") -> Template:
     return Template.from_directory(template_path)
 
 
-def get_templateflow_template(template: str, suffix: str = "SPIM") -> Template:
+class AmbiguousTemplateFlowQueryError(ValueError):
+    """Raised when TemplateFlow query returns multiple files requiring more specific query."""
+    
+    def __init__(self, template: str, suffix: str, matching_files: List[str]):
+        self.template = template
+        self.suffix = suffix
+        self.matching_files = matching_files
+        super().__init__(
+            f"Query for template '{template}' with suffix '{suffix}' returned {len(matching_files)} files. "
+            f"Please add more qualifiers to make query more specific. "
+            f"Matching files: {matching_files}"
+        )
+
+
+def get_templateflow_template(template: str, suffix: str = "SPIM", **kwargs) -> Template:
     """Get a template from TemplateFlow.
 
     This function uses the TemplateFlow API to download and access templates
@@ -1034,20 +1048,25 @@ def get_templateflow_template(template: str, suffix: str = "SPIM") -> Template:
     Args:
         template: Template identifier (e.g., 'MNI152NLin2009cAsym', 'ABA')
         suffix: Image suffix/modality (e.g., 'SPIM', 'T1w', 'T2w')
+        **kwargs: Additional query parameters for TemplateFlow API (e.g., resolution, cohort)
 
     Returns:
         Template instance loaded from TemplateFlow
 
     Raises:
         ImportError: If templateflow package is not available
-        ValueError: If template is not found in TemplateFlow
+        AmbiguousTemplateFlowQueryError: If query returns multiple files
+        ValueError: If template is not found in TemplateFlow or other errors
 
     Examples:
         >>> # Get MNI152 template
         >>> template = get_templateflow_template("MNI152NLin2009cAsym", "T1w")
 
-        >>> # Get Allen Brain Atlas template
-        >>> template = get_templateflow_template("ABA", "SPIM")
+        >>> # Get Allen Brain Atlas template (be more specific)
+        >>> template = get_templateflow_template("ABA", "SPIM", resolution=1)
+        
+        >>> # Get template with additional qualifiers
+        >>> template = get_templateflow_template("MNI152NLin2009cAsym", "T1w", resolution=1)
     """
     try:
         from templateflow import api as tflow
@@ -1059,7 +1078,23 @@ def get_templateflow_template(template: str, suffix: str = "SPIM") -> Template:
 
     try:
         # Get template file from TemplateFlow
-        template_file = tflow.get(template, suffix=suffix, extension=".nii.gz")
+        template_result = tflow.get(template, suffix=suffix, extension=".nii.gz", **kwargs)
+        
+        # Handle TemplateFlow API behavior: returns list if multiple matches, string if single match
+        if isinstance(template_result, list):
+            if len(template_result) == 0:
+                raise ValueError(f"No template files found for '{template}' with suffix '{suffix}'")
+            elif len(template_result) > 1:
+                raise AmbiguousTemplateFlowQueryError(template, suffix, template_result)
+            else:
+                template_file = template_result[0]
+        else:
+            template_file = template_result
+
+        # Ensure we have a valid file path
+        template_file = Path(template_file)
+        if not template_file.exists():
+            raise ValueError(f"Template file not found: {template_file}")
 
         # Create a temporary template directory structure
         import tempfile
@@ -1098,6 +1133,9 @@ def get_templateflow_template(template: str, suffix: str = "SPIM") -> Template:
         # Load template
         return Template.from_directory(temp_dir)
 
+    except AmbiguousTemplateFlowQueryError:
+        # Re-raise this specific error as-is
+        raise
     except Exception as e:
         raise ValueError(f"Failed to load template '{template}' from TemplateFlow: {e}")
 
