@@ -2107,7 +2107,7 @@ class ZarrNii:
             filename_pattern: Output filename pattern. Should contain '{z:04d}' or similar
                 format specifier for the Z-slice number. Examples:
                 - "output_z{z:04d}.tif"
-                - "data/slice_{z:03d}.tiff" 
+                - "data/slice_{z:03d}.tiff"
                 If pattern doesn't contain format specifier, '_{z:04d}' is appended
                 before the extension.
             channel: Channel index to save (0-based). If None and data has multiple
@@ -2162,6 +2162,7 @@ class ZarrNii:
 
         # Create output directory if needed
         import os
+
         output_dir = os.path.dirname(filename_pattern)
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -2225,19 +2226,31 @@ class ZarrNii:
             current_squeeze_axes = []
             for axis in squeeze_axes:
                 # Count how many axes were removed before this one
-                removed_before = sum(1 for removed_axis in [
-                    dims.index("t") if time_dim_size > 1 and timepoint is not None else -1,
-                    dims.index("c") if channel_dim_size > 1 and channel is not None else -1
-                ] if removed_axis != -1 and removed_axis < axis)
+                removed_before = sum(
+                    1
+                    for removed_axis in [
+                        (
+                            dims.index("t")
+                            if time_dim_size > 1 and timepoint is not None
+                            else -1
+                        ),
+                        (
+                            dims.index("c")
+                            if channel_dim_size > 1 and channel is not None
+                            else -1
+                        ),
+                    ]
+                    if removed_axis != -1 and removed_axis < axis
+                )
                 current_squeeze_axes.append(axis - removed_before)
-            
+
             data = np.squeeze(data, axis=tuple(current_squeeze_axes))
             dims = [dim for i, dim in enumerate(dims) if i not in current_squeeze_axes]
 
         # Find Z dimension for stacking
         if "z" not in dims:
             raise ValueError("Data must have a Z dimension for TIFF stack export")
-        
+
         z_axis = dims.index("z")
         z_size = data.shape[z_axis]
 
@@ -2258,17 +2271,19 @@ class ZarrNii:
 
         for z_idx in range(z_size):
             slice_data = data[z_idx]
-            
+
             # Generate filename for this slice
             filename = filename_pattern.format(z=z_idx)
-            
+
             # Save the 2D slice
             tifffile.imwrite(filename, slice_data, compression=compression)
             saved_files.append(filename)
 
         print(f"Saved {len(saved_files)} TIFF files to {output_dir or '.'}")
-        print(f"Files: {os.path.basename(saved_files[0])} ... {os.path.basename(saved_files[-1])}")
-        
+        print(
+            f"Files: {os.path.basename(saved_files[0])} ... {os.path.basename(saved_files[-1])}"
+        )
+
         return output_dir or "."
 
     @classmethod
