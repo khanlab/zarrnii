@@ -209,7 +209,6 @@ class TestZarrNiiScaledProcessingIntegration:
         znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
 
         plugin = N4BiasFieldCorrection(
-            spline_spacing=200.0,
             convergence={"iters": [10], "tol": 0.01},
             shrink_factor=2,
         )
@@ -230,7 +229,6 @@ class TestZarrNiiScaledProcessingIntegration:
 
         result = znimg.apply_scaled_processing(
             N4BiasFieldCorrection,
-            spline_spacing=100.0,
             convergence={"iters": [5], "tol": 0.01},
             downsample_factor=2,
         )
@@ -351,26 +349,21 @@ class TestN4BiasFieldCorrection:
         from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
 
         plugin = N4BiasFieldCorrection(
-            spline_spacing=100.0,
             convergence={"iters": [25], "tol": 0.002},
             shrink_factor=2,
         )
 
         assert plugin.name == "N4 Bias Field Correction"
         assert "Multi-resolution N4 bias field correction" in plugin.description
-        assert plugin.spline_spacing == 100.0
         assert plugin.convergence == {"iters": [25], "tol": 0.002}
         assert plugin.shrink_factor == 2
-        assert plugin.params["spline_spacing"] == 100.0
 
     @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
     def test_n4_lowres_func_basic(self):
         """Test the N4 lowres_func with basic input."""
         from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
 
-        plugin = N4BiasFieldCorrection(
-            spline_spacing=200.0, convergence={"iters": [10], "tol": 0.01}
-        )
+        plugin = N4BiasFieldCorrection(convergence={"iters": [10], "tol": 0.01})
 
         # Create test data with intensity variation (simulating bias field)
         test_data = np.ones((20, 20), dtype=np.float32) * 100
@@ -468,12 +461,10 @@ class TestN4BiasFieldCorrection:
             )
 
             plugin = N4BiasFieldCorrection(
-                spline_spacing=150.0,
                 convergence={"iters": [30], "tol": 0.005},
                 shrink_factor=3,
             )
             repr_str = repr(plugin)
 
             assert "N4BiasFieldCorrection" in repr_str
-            assert "spline_spacing=150.0" in repr_str
             assert "shrink_factor=3" in repr_str

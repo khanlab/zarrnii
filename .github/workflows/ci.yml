@@ -12,21 +12,21 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
-        
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-        
+
     - name: Install uv
       uses: astral-sh/setup-uv@v4
       with:
         version: "0.8.17"
-        
-    - name: Cache uv dependencies  
+
+    - name: Cache uv dependencies
       uses: actions/cache@v4
       with:
         path: |
@@ -36,32 +36,32 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-uv-${{ matrix.python-version }}-
           ${{ runner.os }}-uv-
-          
+
     - name: Install dependencies
-      run: uv sync --dev
-      
+      run: uv sync --all-extras
+
     - name: Run tests with pytest
       run: uv run pytest -v
-      
+
     - name: Run tests with coverage (Python 3.12 only)
       if: matrix.python-version == '3.12'
       run: uv run pytest --cov=zarrnii --cov-report=term-missing --cov-fail-under=70
-      
+
   quality-checks:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python 3.12
       uses: actions/setup-python@v5
       with:
         python-version: "3.12"
-        
+
     - name: Install uv
       uses: astral-sh/setup-uv@v4
       with:
         version: "0.8.17"
-        
+
     - name: Cache uv dependencies
       uses: actions/cache@v4
       with:
@@ -71,9 +71,9 @@ jobs:
         key: ${{ runner.os }}-quality-uv-${{ hashFiles('**/pyproject.toml', '**/uv.lock') }}
         restore-keys: |
           ${{ runner.os }}-quality-uv-
-          
+
     - name: Install dependencies
       run: uv sync --dev
-      
+
     - name: Run quality checks (same configuration as local development)
       run: ./scripts/quality-check.sh
