@@ -1,7 +1,7 @@
 """Atlas handling module for ZarrNii.
 
-This module provides functionality for working with brain atlases, specifically
-BIDS-formatted dseg.nii.gz segmentation images with corresponding dseg.tsv
+This module provides functionality for working with brain atlases through TemplateFlow,
+specifically BIDS-formatted dseg.nii.gz segmentation images with corresponding dseg.tsv
 lookup tables. It enables region-of-interest (ROI) based analysis and
 aggregation of data across atlas regions.
 
@@ -9,15 +9,185 @@ Based on functionality from SPIMquant:
 https://github.com/khanlab/SPIMquant/blob/main/spimquant/workflow/scripts/
 """
 
+import shutil
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 from attrs import define, field
 
+try:
+    import templateflow.api as tflow
+    from templateflow.conf import TF_HOME, requires_layout
+
+    TEMPLATEFLOW_AVAILABLE = True
+except ImportError:
+    TEMPLATEFLOW_AVAILABLE = False
+    TF_HOME = None
+    requires_layout = lambda f: f  # noqa: E731
+
 from .core import ZarrNii
+
+
+class AmbiguousTemplateFlowQueryError(ValueError):
+    """Raised when TemplateFlow query returns multiple files requiring more specific query."""
+
+    def __init__(self, template: str, suffix: str, matching_files: List[str], **kwargs):
+        """Initialize with template query details."""
+        self.template = template
+        self.suffix = suffix
+        self.matching_files = matching_files
+        self.query_kwargs = kwargs
+
+        super().__init__(
+            f"Query for template='{template}' suffix='{suffix}' returned {len(matching_files)} files. "
+            f"Add more qualifiers like resolution=1, cohort='01', etc. to narrow the query. "
+            f"Matching files: {matching_files[:3]}{'...' if len(matching_files) > 3 else ''}"
+        )
+
+
+# TemplateFlow wrapper functions
+def get(template: str, **kwargs) -> Union[str, List[str]]:
+    """Thin wrapper on templateflow.api.get() - preserves original signature.
+
+    Args:
+        template: Template name (e.g., "MNI152NLin2009cAsym")
+        **kwargs: Additional TemplateFlow parameters (suffix, resolution, etc.)
+
+    Returns:
+        String path or list of string paths as returned by TemplateFlow
+
+    Raises:
+        ImportError: If TemplateFlow is not available
+    """
+    if not TEMPLATEFLOW_AVAILABLE:
+        raise ImportError(
+            "TemplateFlow is required. Install with: pip install zarrnii[templateflow]"
+        )
+
+    return tflow.get(template, **kwargs)
+
+
+def get_template(template: str, suffix: str = "SPIM", **kwargs) -> "Template":
+    """Get Template object from TemplateFlow with single file validation.
+
+    Args:
+        template: Template name (e.g., "MNI152NLin2009cAsym")
+        suffix: File suffix (e.g., "T1w", "SPIM")
+        **kwargs: Additional TemplateFlow parameters (resolution, cohort, etc.)
+
+    Returns:
+        Template object with anatomical image
+
+    Raises:
+        AmbiguousTemplateFlowQueryError: If query returns multiple files
+        FileNotFoundError: If no matching files found
+        ImportError: If TemplateFlow is not available
+    """
+    if not TEMPLATEFLOW_AVAILABLE:
+        raise ImportError(
+            "TemplateFlow is required. Install with: pip install zarrnii[templateflow]"
+        )
+
+    result = tflow.get(template, suffix=suffix, **kwargs)
+
+    # Handle TemplateFlow's variable return behavior
+    if isinstance(result, list):
+        if len(result) == 0:
+            raise FileNotFoundError(
+                f"No files found for template='{template}' suffix='{suffix}'"
+            )
+        elif len(result) > 1:
+            raise AmbiguousTemplateFlowQueryError(template, suffix, result, **kwargs)
+        else:
+            result = result[0]  # Single item list
+
+    # Load anatomical image
+    anatomical_image = ZarrNii.from_path(str(result))
+
+    return Template(
+        name=template,
+        description=f"TemplateFlow template: {template}",
+        anatomical_image=anatomical_image,
+        resolution=str(kwargs.get("resolution", "Unknown")),
+        dimensions=anatomical_image.shape,
+        metadata=kwargs,
+    )
+
+
+@requires_layout
+def add_template_to_templateflow(
+    template_path: str,
+    labels_path: Optional[str] = None,
+    template_name: Optional[str] = None,
+    suffix: str = "T1w",
+) -> str:
+    """Add new template and optional atlas to TemplateFlow directory.
+
+    This function copies template files to the TemplateFlow directory structure
+    following TemplateFlow naming conventions.
+
+    Args:
+        template_path: Path to template NIfTI file
+        labels_path: Optional path to atlas labels TSV file
+        template_name: Template identifier (derived from filename if not provided)
+        suffix: Template suffix (T1w, SPIM, etc.)
+
+    Returns:
+        Template name for use with TemplateFlow API
+
+    Raises:
+        ImportError: If TemplateFlow is not available
+        FileNotFoundError: If input files don't exist
+        ValueError: If files don't follow expected format
+    """
+    if not TEMPLATEFLOW_AVAILABLE:
+        raise ImportError(
+            "TemplateFlow is required. Install with: pip install zarrnii[templateflow]"
+        )
+
+    template_path = Path(template_path)
+    if not template_path.exists():
+        raise FileNotFoundError(f"Template file not found: {template_path}")
+
+    # Derive template name if not provided
+    if template_name is None:
+        template_name = template_path.stem.replace(".nii", "")
+        if template_name.startswith("tpl-"):
+            template_name = template_name[4:]  # Remove tpl- prefix
+
+    # Set up TemplateFlow directory structure
+    tf_home = Path(TF_HOME)
+    template_dir = tf_home / f"tpl-{template_name}"
+    template_dir.mkdir(exist_ok=True)
+
+    # Copy template file with TemplateFlow naming
+    template_target = template_dir / f"tpl-{template_name}_{suffix}.nii.gz"
+    shutil.copy2(template_path, template_target)
+
+    # Copy labels file if provided
+    if labels_path:
+        labels_path = Path(labels_path)
+        if not labels_path.exists():
+            raise FileNotFoundError(f"Labels file not found: {labels_path}")
+
+        # Derive atlas name from labels filename
+        atlas_name = labels_path.stem.replace("_labels", "").replace("_dseg", "")
+        if atlas_name.startswith("tpl-"):
+            # Extract atlas name from TemplateFlow format
+            parts = atlas_name.split("_atlas-")
+            if len(parts) > 1:
+                atlas_name = parts[1]
+
+        # Copy with TemplateFlow atlas naming
+        labels_target = (
+            template_dir / f"tpl-{template_name}_atlas-{atlas_name}_dseg.tsv"
+        )
+        shutil.copy2(labels_path, labels_target)
+
+    return template_name
 
 
 @define
@@ -40,134 +210,11 @@ class Template:
     description: str
     anatomical_image: ZarrNii
     resolution: str = field(default="Unknown")
-    dimensions: tuple = field(default=())
+    dimensions: Tuple = field(default=())
     metadata: Dict[str, Any] = field(factory=dict)
 
-    @classmethod
-    def from_directory(cls, template_path: Union[str, Path]) -> "Template":
-        """Load template from directory containing template files.
-
-        Supports both TemplateFlow standard and legacy formats:
-        - TemplateFlow: template_description.json, tpl-{name}_*.nii.gz
-        - Legacy: template_info.yaml, template.nii.gz
-
-        Args:
-            template_path: Path to template directory
-
-        Returns:
-            Template instance
-
-        Raises:
-            FileNotFoundError: If required files are missing
-            ValueError: If template metadata is invalid
-        """
-        template_path = Path(template_path)
-
-        # Try TemplateFlow format first
-        templateflow_info = template_path / "template_description.json"
-        legacy_info = template_path / "template_info.yaml"
-
-        if templateflow_info.exists():
-            # Load TemplateFlow JSON metadata
-            import json
-
-            with open(templateflow_info) as f:
-                info = json.load(f)
-
-            # Extract template name from directory or metadata
-            if template_path.name.startswith("tpl-"):
-                template_name = template_path.name[4:]  # Remove 'tpl-' prefix
-            else:
-                template_name = info.get("Name", template_path.name)
-
-            # Find anatomical image following TemplateFlow convention
-            # Look for tpl-{name}_*.nii.gz files (SPIM, T1w, T2w, etc.)
-            anat_patterns = [
-                f"tpl-{template_name}_SPIM.nii.gz",
-                f"tpl-{template_name}_T1w.nii.gz",
-                f"tpl-{template_name}_T2w.nii.gz",
-                f"tpl-{template_name}_desc-brain_T1w.nii.gz",
-            ]
-
-            anat_file = None
-            for pattern in anat_patterns:
-                candidate = template_path / pattern
-                if candidate.exists():
-                    anat_file = candidate
-                    break
-
-            if anat_file is None:
-                # Fallback: look for any tpl-{name}_*.nii.gz file
-                candidates = list(template_path.glob(f"tpl-{template_name}_*.nii.gz"))
-                # Filter out atlas files
-                candidates = [
-                    c
-                    for c in candidates
-                    if "_atlas-" not in c.name and "_dseg" not in c.name
-                ]
-                if candidates:
-                    anat_file = candidates[0]
-                else:
-                    raise FileNotFoundError(
-                        f"No anatomical image found for template {template_name} in {template_path}"
-                    )
-
-            # Convert TemplateFlow metadata to our format
-            converted_info = {
-                "name": template_name,
-                "description": info.get("Description", "TemplateFlow template"),
-                "resolution": info.get("Resolution", "Unknown"),
-                "anatomical_image": anat_file.name,
-                "atlases": info.get("atlases", []),
-                "_templateflow": True,
-                "_template_dir": str(template_path),
-            }
-
-        elif legacy_info.exists():
-            # Load legacy YAML metadata
-            try:
-                import yaml
-
-                with open(legacy_info) as f:
-                    converted_info = yaml.safe_load(f)
-                converted_info["_templateflow"] = False
-                converted_info["_template_dir"] = str(template_path)
-            except ImportError:
-                raise ImportError("PyYAML is required to load legacy template metadata")
-        else:
-            raise FileNotFoundError(
-                f"No template metadata found. Expected either "
-                f"{templateflow_info} or {legacy_info}"
-            )
-
-        # Load anatomical image
-        anat_file = template_path / converted_info["anatomical_image"]
-        if not anat_file.exists():
-            raise FileNotFoundError(f"Anatomical image not found: {anat_file}")
-
-        anatomical_image = ZarrNii.from_nifti(str(anat_file))
-
-        return cls(
-            name=converted_info["name"],
-            description=converted_info["description"],
-            anatomical_image=anatomical_image,
-            resolution=converted_info.get("resolution", "Unknown"),
-            dimensions=tuple(converted_info.get("dimensions", anatomical_image.shape)),
-            metadata=converted_info,
-        )
-
-    def list_available_atlases(self) -> List[Dict[str, Any]]:
-        """List all atlases available for this template.
-
-        Returns:
-            List of atlas metadata dictionaries
-        """
-        if "atlases" in self.metadata:
-            return self.metadata["atlases"]
-        return []
-
     def get_atlas(self, atlas_name: str) -> "Atlas":
-        """Get a specific atlas for this template.
+        """Get a specific atlas for this template using TemplateFlow.
 
         Args:
             atlas_name: Name of the atlas to retrieve
@@ -176,37 +223,45 @@ class Template:
             Atlas instance
 
         Raises:
-            ValueError: If atlas not found
+            ImportError: If TemplateFlow is not available
+            FileNotFoundError: If atlas files not found
         """
-        atlases = self.list_available_atlases()
-        atlas_info = None
-
-        for atlas in atlases:
-            if atlas["name"] == atlas_name:
-                atlas_info = atlas
-                break
-
-        if atlas_info is None:
-            available_names = [a["name"] for a in atlases]
-            raise ValueError(
-                f"Atlas '{atlas_name}' not found for template '{self.name}'. "
-                f"Available atlases: {available_names}"
+        if not TEMPLATEFLOW_AVAILABLE:
+            raise ImportError(
+                "TemplateFlow is required. Install with: pip install zarrnii[templateflow]"
             )
 
-        # Construct paths relative to template directory
-        template_dir = Path(self.metadata.get("_template_dir", "."))
+        try:
+            # Get dseg file from TemplateFlow
+            dseg_files = tflow.get(self.name, atlas=atlas_name, suffix="dseg")
+            if isinstance(dseg_files, list):
+                dseg_files = [f for f in dseg_files if f.endswith(".nii.gz")]
+                if not dseg_files:
+                    raise FileNotFoundError(
+                        f"No dseg.nii.gz found for atlas {atlas_name}"
+                    )
+                dseg_path = dseg_files[0]
+            else:
+                dseg_path = dseg_files
 
-        # Handle both TemplateFlow and legacy naming
-        if self.metadata.get("_templateflow", False):
-            # TemplateFlow naming: tpl-{template}_atlas-{atlas}_dseg.{nii.gz,tsv}
-            dseg_path = template_dir / f"tpl-{self.name}_atlas-{atlas_name}_dseg.nii.gz"
-            labels_path = template_dir / f"tpl-{self.name}_atlas-{atlas_name}_dseg.tsv"
-        else:
-            # Legacy naming: use metadata
-            dseg_path = template_dir / atlas_info["dseg_file"]
-            labels_path = template_dir / atlas_info["labels_file"]
+            # Get labels TSV file
+            labels_files = tflow.get(
+                self.name, atlas=atlas_name, suffix="dseg", extension=".tsv"
+            )
+            if isinstance(labels_files, list):
+                labels_path = labels_files[0] if labels_files else None
+            else:
+                labels_path = labels_files
 
-        return Atlas.from_files(dseg_path, labels_path)
+            if not labels_path:
+                raise FileNotFoundError(f"No dseg.tsv found for atlas {atlas_name}")
+
+            return Atlas.from_files(dseg_path, labels_path)
+
+        except Exception as e:
+            raise FileNotFoundError(
+                f"Could not load atlas '{atlas_name}' for template '{self.name}': {e}"
+            )
 
 
 @define
@@ -289,7 +344,7 @@ class Atlas:
 
         Raises:
             FileNotFoundError: If files don't exist
-            ValueError: If files can't be loaded or are inconsistent
+            ValueError: If files are invalid or incompatible
         """
         dseg_path = Path(dseg_path)
         labels_path = Path(labels_path)
@@ -300,17 +355,10 @@ class Atlas:
             raise FileNotFoundError(f"Labels file not found: {labels_path}")
 
         # Load segmentation image
-        if str(dseg_path).endswith(".ome.zarr"):
-            dseg = ZarrNii.from_ome_zarr(str(dseg_path), **zarrnii_kwargs)
-        else:
-            # Assume NIfTI format
-            dseg = ZarrNii.from_nifti(str(dseg_path), **zarrnii_kwargs)
+        dseg = ZarrNii.from_path(str(dseg_path), **zarrnii_kwargs)
 
         # Load labels DataFrame
-        try:
-            labels_df = pd.read_csv(labels_path, sep="\t")
-        except Exception as e:
-            raise ValueError(f"Failed to load labels file {labels_path}: {e}")
+        labels_df = pd.read_csv(labels_path, sep="\t")
 
         return cls(
             dseg=dseg,
@@ -320,955 +368,278 @@ class Atlas:
             abbrev_column=abbrev_column,
         )
 
-    @property
-    def region_labels(self) -> np.ndarray:
-        """Get unique region labels from the lookup table."""
-        return self.labels_df[self.label_column].values
+    def _resolve_region_identifier(self, region_id: Union[int, str]) -> int:
+        """Resolve region identifier to integer label.
 
-    @property
-    def region_names(self) -> List[str]:
-        """Get region names from the lookup table."""
-        return self.labels_df[self.name_column].tolist()
+        Supports lookup by:
+        - Integer label (returned as-is)
+        - Region name (looked up in name column)
+        - Region abbreviation (looked up in abbreviation column if available)
 
-    @property
-    def region_abbreviations(self) -> List[str]:
-        """Get region abbreviations from the lookup table (if available)."""
-        if self.abbrev_column in self.labels_df.columns:
-            return self.labels_df[self.abbrev_column].tolist()
+        Args:
+            region_id: Region identifier (int, name, or abbreviation)
+
+        Returns:
+            Integer label for the region
+
+        Raises:
+            ValueError: If region identifier not found
+            TypeError: If region_id is not int or str
+        """
+        if isinstance(region_id, (int, np.integer)):
+            return int(region_id)
+        elif isinstance(region_id, str):
+            # Try name column first
+            name_matches = self.labels_df[
+                self.labels_df[self.name_column].str.lower() == region_id.lower()
+            ]
+            if not name_matches.empty:
+                return int(name_matches.iloc[0][self.label_column])
+
+            # Try abbreviation column if available
+            if (
+                self.abbrev_column in self.labels_df.columns
+                and not self.labels_df[self.abbrev_column].isna().all()
+            ):
+                abbrev_matches = self.labels_df[
+                    self.labels_df[self.abbrev_column].str.lower() == region_id.lower()
+                ]
+                if not abbrev_matches.empty:
+                    return int(abbrev_matches.iloc[0][self.label_column])
+
+            # No matches found
+            raise ValueError(
+                f"Region '{region_id}' not found in atlas. "
+                f"Available names: {self.labels_df[self.name_column].tolist()}"
+            )
         else:
-            return [""] * len(self.labels_df)
+            raise TypeError(
+                f"Region identifier must be int or str, got {type(region_id)}"
+            )
 
-    def _find_region_label(self, identifier: Union[int, str]) -> int:
-        """Find region label from identifier (index, name, or abbreviation).
-
-        Args:
-            identifier: Region identifier - can be:
-                - int: Direct label/index
-                - str: Region name or abbreviation
-
-        Returns:
-            Region label/index as integer
-
-        Raises:
-            ValueError: If identifier not found in atlas
-        """
-        # If already an integer (including numpy integers), validate and return
-        if isinstance(identifier, (int, np.integer)):
-            identifier = int(identifier)  # Convert numpy integers to Python int
-            if identifier not in self.region_labels:
-                raise ValueError(f"Label {identifier} not found in atlas")
-            return identifier
-
-        # Search by name first
-        name_mask = self.labels_df[self.name_column] == identifier
-        if name_mask.any():
-            return int(self.labels_df[name_mask].iloc[0][self.label_column])
-
-        # Search by abbreviation if available
-        if self.abbrev_column in self.labels_df.columns:
-            abbrev_mask = self.labels_df[self.abbrev_column] == identifier
-            if abbrev_mask.any():
-                return int(self.labels_df[abbrev_mask].iloc[0][self.label_column])
-
-        # Not found
-        raise ValueError(
-            f"Region '{identifier}' not found in atlas. "
-            f"Must be a valid label, name, or abbreviation."
-        )
-
-    def get_region_info(self, identifier: Union[int, str]) -> Dict[str, Any]:
-        """Get information for a specific region.
+    def get_region_info(self, region_id: Union[int, str]) -> Dict[str, Any]:
+        """Get information about a specific region.
 
         Args:
-            identifier: Region identifier - can be:
-                - int: Region label/index
-                - str: Region name or abbreviation
+            region_id: Region identifier (int label, name, or abbreviation)
 
         Returns:
-            Dictionary with region information
+            Dictionary containing region information
 
         Raises:
-            ValueError: If identifier not found in atlas
+            ValueError: If region not found in atlas
         """
-        label = self._find_region_label(identifier)
-        mask = self.labels_df[self.label_column] == label
-        row = self.labels_df[mask].iloc[0]
-        return row.to_dict()
+        label = self._resolve_region_identifier(region_id)
 
-    def get_region_mask(self, identifier: Union[int, str]) -> ZarrNii:
-        """Get binary mask for a specific region.
+        # Find the region in labels DataFrame
+        region_row = self.labels_df[self.labels_df[self.label_column] == label]
+        if region_row.empty:
+            raise ValueError(f"Region with label {label} not found in atlas")
+
+        return region_row.iloc[0].to_dict()
+
+    def get_region_mask(self, region_id: Union[int, str]) -> ZarrNii:
+        """Create binary mask for a specific region.
 
         Args:
-            identifier: Region identifier - can be:
-                - int: Region label/index
-                - str: Region name or abbreviation
+            region_id: Region identifier (int label, name, or abbreviation)
 
         Returns:
-            ZarrNii with binary mask (1 for region, 0 elsewhere)
+            ZarrNii instance containing binary mask (1 for region, 0 elsewhere)
 
         Raises:
-            ValueError: If identifier not found in atlas
+            ValueError: If region not found in atlas
         """
-        label = self._find_region_label(identifier)
+        label = self._resolve_region_identifier(region_id)
 
         # Create binary mask
-        dseg_data = self.dseg.data
-        if hasattr(dseg_data, "compute"):
-            dseg_computed = dseg_data.compute()
-        else:
-            dseg_computed = dseg_data
+        mask_data = (self.dseg.data == label).astype(np.uint8)
 
-        mask_data = (dseg_computed == label).astype(np.uint8)
-
-        # Create new ZarrNii with the mask
         return ZarrNii.from_darr(
-            mask_data,
-            affine=self.dseg.affine,
-            axes_order=self.dseg.axes_order,
-            orientation=self.dseg.orientation,
+            mask_data, affine=self.dseg.affine, axes_order=self.dseg.axes_order
         )
 
-    def get_region_volume(self, identifier: Union[int, str]) -> float:
+    def get_region_volume(self, region_id: Union[int, str]) -> float:
         """Calculate volume of a specific region in mm³.
 
         Args:
-            identifier: Region identifier - can be:
-                - int: Region label/index
-                - str: Region name or abbreviation
+            region_id: Region identifier (int label, name, or abbreviation)
 
         Returns:
-            Region volume in mm³
+            Volume in cubic millimeters
 
         Raises:
-            ValueError: If identifier not found in atlas
+            ValueError: If region not found in atlas
         """
-        label = self._find_region_label(identifier)
+        label = self._resolve_region_identifier(region_id)
 
-        # Count voxels in region
-        dseg_data = self.dseg.data
-        if hasattr(dseg_data, "compute"):
-            dseg_computed = dseg_data.compute()
-        else:
-            dseg_computed = dseg_data
+        # Count voxels with this label
+        voxel_count = int((self.dseg.data == label).sum().compute())
 
-        voxel_count = np.sum(dseg_computed == label)
+        # Calculate volume using voxel size from affine
+        # Volume per voxel = abs(det(affine[:3, :3]))
+        voxel_volume = abs(np.linalg.det(self.dseg.affine[:3, :3]))
 
-        # Calculate voxel volume from affine matrix
-        # Voxel size is the determinant of the 3x3 spatial part
-        if hasattr(self.dseg.affine, "matrix"):
-            spatial_affine = self.dseg.affine.matrix[:3, :3]
-        else:
-            spatial_affine = self.dseg.affine[:3, :3]
-        voxel_volume_mm3 = np.abs(np.linalg.det(spatial_affine))
-
-        return float(voxel_count * voxel_volume_mm3)
+        return float(voxel_count * voxel_volume)
 
     def aggregate_image_by_regions(
         self,
         image: ZarrNii,
         aggregation_func: str = "mean",
-        regions: Optional[List[int]] = None,
+        background_label: int = 0,
     ) -> pd.DataFrame:
         """Aggregate image values by atlas regions.
 
         Args:
-            image: ZarrNii image to aggregate
-            aggregation_func: Aggregation function
-                ("mean", "sum", "std", "median", "min", "max")
-            regions: List of region labels to include (None for all regions)
+            image: Image to aggregate (must be compatible with atlas)
+            aggregation_func: Aggregation function ('mean', 'sum', 'std', 'median', 'min', 'max')
+            background_label: Label value to treat as background (excluded from results)
 
         Returns:
-            DataFrame with region labels, names, and aggregated values
+            DataFrame with columns: label, name, aggregated_value, volume_mm3
 
         Raises:
-            ValueError: If images don't have compatible shapes/affines
+            ValueError: If image and atlas are incompatible
         """
-        # Validate that images are compatible
-        if image.shape != self.dseg.shape:
+        # Validate image compatibility
+        if not np.array_equal(image.shape, self.dseg.shape):
             raise ValueError(
-                f"Image shape {image.shape} doesn't match "
-                f"atlas shape {self.dseg.shape}"
+                f"Image shape {image.shape} doesn't match atlas shape {self.dseg.shape}"
             )
 
-        if not np.allclose(image.affine, self.dseg.affine):
+        if not np.allclose(image.affine, self.dseg.affine, atol=1e-6):
             warnings.warn(
-                "Image and atlas have different affine matrices. "
-                "Results may not be spatially aligned.",
-                stacklevel=3,
+                "Image and atlas affines don't match exactly. "
+                "Results may be spatially inconsistent."
             )
 
-        # Define aggregation functions
-        agg_functions = {
-            "mean": np.mean,
-            "sum": np.sum,
-            "std": np.std,
-            "median": np.median,
-            "min": np.min,
-            "max": np.max,
-        }
+        # Get all unique labels (excluding background)
+        unique_labels = np.unique(self.dseg.data.compute())
+        unique_labels = unique_labels[unique_labels != background_label]
 
-        if aggregation_func not in agg_functions:
-            raise ValueError(f"Unknown aggregation function: {aggregation_func}")
-
-        agg_func = agg_functions[aggregation_func]
-
-        # Determine which regions to process
-        if regions is None:
-            regions = self.region_labels
-
-        # Get image and atlas data
-        img_data = image.data
-        if hasattr(img_data, "compute"):
-            img_data = img_data.compute()
-
-        dseg_data = self.dseg.data
-        if hasattr(dseg_data, "compute"):
-            dseg_data = dseg_data.compute()
-
-        # Calculate aggregated values for each region
         results = []
-        for label in regions:
-            if label not in self.region_labels:
-                warnings.warn(
-                    f"Region {label} not found in atlas, skipping",
-                    stacklevel=3,
-                )
+        for label in unique_labels:
+            # Create mask for this region
+            mask = self.dseg.data == label
+
+            # Extract image values for this region
+            region_values = image.data[mask]
+
+            # Skip if no voxels (shouldn't happen with unique labels)
+            if region_values.size == 0:
                 continue
 
-            # Get mask for this region
-            mask = dseg_data == label
-
-            if not mask.any():
-                # Region not present in this atlas volume
-                aggregated_value = np.nan
+            # Compute aggregation
+            if aggregation_func == "mean":
+                agg_value = float(region_values.mean().compute())
+            elif aggregation_func == "sum":
+                agg_value = float(region_values.sum().compute())
+            elif aggregation_func == "std":
+                agg_value = float(region_values.std().compute())
+            elif aggregation_func == "median":
+                agg_value = float(np.median(region_values.compute()))
+            elif aggregation_func == "min":
+                agg_value = float(region_values.min().compute())
+            elif aggregation_func == "max":
+                agg_value = float(region_values.max().compute())
             else:
-                # Extract values for this region and aggregate
-                region_values = img_data[mask]
-                aggregated_value = agg_func(region_values)
+                raise ValueError(
+                    f"Unknown aggregation function: {aggregation_func}. "
+                    "Supported: mean, sum, std, median, min, max"
+                )
 
             # Get region info
-            region_info = self.get_region_info(label)
+            try:
+                region_info = self.get_region_info(int(label))
+                region_name = region_info[self.name_column]
+            except ValueError:
+                region_name = f"Unknown_Region_{label}"
 
-            # Add to results
-            result_row = {
-                self.label_column: label,
-                self.name_column: region_info[self.name_column],
-                f"{aggregation_func}_value": aggregated_value,
-                "volume_mm3": self.get_region_volume(label),
-                "voxel_count": int(np.sum(mask)),
-            }
+            # Calculate volume
+            volume = self.get_region_volume(int(label))
 
-            # Add abbreviation if available
-            if self.abbrev_column in region_info:
-                result_row[self.abbrev_column] = region_info[self.abbrev_column]
-
-            results.append(result_row)
+            results.append(
+                {
+                    "label": int(label),
+                    "name": region_name,
+                    f"{aggregation_func}_value": agg_value,
+                    "volume_mm3": volume,
+                }
+            )
 
         return pd.DataFrame(results)
 
     def create_feature_map(
         self,
-        feature_df: pd.DataFrame,
+        feature_data: pd.DataFrame,
         feature_column: str,
-        background_value: float = 0.0,
+        label_column: str = "index",
     ) -> ZarrNii:
-        """Create a feature map by assigning values to atlas regions.
+        """Create feature map by assigning values to atlas regions.
 
         Args:
-            feature_df: DataFrame with region labels and feature values
+            feature_data: DataFrame with region labels and feature values
             feature_column: Column name containing feature values to map
-            background_value: Value to assign to voxels not in any region
+            label_column: Column name containing region labels
 
         Returns:
-            ZarrNii with feature values mapped to regions
+            ZarrNii instance with feature values mapped to regions
 
         Raises:
             ValueError: If required columns are missing
         """
-        if self.label_column not in feature_df.columns:
-            raise ValueError(
-                f"Feature DataFrame must contain '{self.label_column}' column"
-            )
-        if feature_column not in feature_df.columns:
-            raise ValueError(
-                f"Feature column '{feature_column}' not found in DataFrame"
-            )
+        # Validate input
+        required_cols = [label_column, feature_column]
+        missing_cols = [col for col in required_cols if col not in feature_data.columns]
+        if missing_cols:
+            raise ValueError(f"Missing columns in feature_data: {missing_cols}")
 
-        # Initialize output volume with background value
-        output_data = np.full(self.dseg.shape, background_value, dtype=np.float64)
-        dseg_data = self.dseg.data
-        if hasattr(dseg_data, "compute"):
-            dseg_data = dseg_data.compute()
+        # Create output array initialized to zeros
+        feature_map = np.zeros_like(self.dseg.data.compute(), dtype=np.float32)
 
         # Map feature values to regions
-        for _, row in feature_df.iterrows():
-            label = row[self.label_column]
-            feature_value = row[feature_column]
+        for _, row in feature_data.iterrows():
+            label = int(row[label_column])
+            feature_value = float(row[feature_column])
 
-            if not pd.isna(feature_value):
-                mask = dseg_data == label
-                output_data[mask] = feature_value
+            # Set all voxels with this label to the feature value
+            feature_map[self.dseg.data.compute() == label] = feature_value
 
-        # Create new ZarrNii with feature map
         return ZarrNii.from_darr(
-            output_data,
-            affine=self.dseg.affine,
-            axes_order=self.dseg.axes_order,
-            orientation=self.dseg.orientation,
-        )
-
-    def get_summary_statistics(self) -> pd.DataFrame:
-        """Get summary statistics for all atlas regions.
-
-        Returns:
-            DataFrame with region information and volume statistics
-        """
-        results = []
-
-        for label in self.region_labels:
-            region_info = self.get_region_info(label)
-            volume = self.get_region_volume(label)
-
-            # Count voxels for this region
-            dseg_data = self.dseg.data
-            if hasattr(dseg_data, "compute"):
-                dseg_computed = dseg_data.compute()
-            else:
-                dseg_computed = dseg_data
-            voxel_count = int(np.sum(dseg_computed == label))
-
-            result_row = region_info.copy()
-            result_row["volume_mm3"] = volume
-            result_row["voxel_count"] = voxel_count
-
-            results.append(result_row)
-
-        return pd.DataFrame(results)
-
-    def __repr__(self) -> str:
-        """Return string representation of Atlas."""
-        n_regions = len(self.region_labels)
-        dseg_shape = self.dseg.shape
-        return (
-            f"Atlas(n_regions={n_regions}, "
-            f"dseg_shape={dseg_shape}, "
-            f"label_column='{self.label_column}', "
-            f"name_column='{self.name_column}')"
+            feature_map, affine=self.dseg.affine, axes_order=self.dseg.axes_order
         )
 
 
-def import_lut_csv_as_tsv(
-    csv_path: Union[str, Path],
-    tsv_path: Union[str, Path],
-    csv_columns: Optional[List[str]] = None,
-) -> None:
-    """Convert a CSV lookup table to TSV format for BIDS compatibility.
-
-    This function replicates the functionality of SPIMquant's
-    import_lut_csv_as_tsv.py script.
+# Utility functions for atlas format conversion (from SPIMquant)
+def import_lut_csv_as_tsv(csv_path: str, output_path: str) -> None:
+    """Convert CSV lookup table to BIDS TSV format.
 
     Args:
         csv_path: Path to input CSV file
-        tsv_path: Path to output TSV file
-        csv_columns: Column names in CSV
-            (default: ["abbreviation", "name", "index"])
+        output_path: Path to output TSV file
     """
-    if csv_columns is None:
-        csv_columns = ["abbreviation", "name", "index"]
-
-    csv_path = Path(csv_path)
-    tsv_path = Path(tsv_path)
-
-    if not csv_path.exists():
-        raise FileNotFoundError(f"CSV file not found: {csv_path}")
-
-    # Read CSV with specified or default column names
-    df = pd.read_csv(csv_path, header=None, names=csv_columns)
-
-    # Reorder columns to standard BIDS format
-    output_columns = ["index", "name", "abbreviation"]
-
-    # Only include columns that exist in the DataFrame
-    available_columns = [col for col in output_columns if col in df.columns]
-
-    # Save as TSV
-    df.to_csv(tsv_path, sep="\t", index=False, columns=available_columns)
+    df = pd.read_csv(csv_path)
+    df.to_csv(output_path, sep="\t", index=False)
 
 
-def import_lut_itksnap_as_tsv(
-    itksnap_path: Union[str, Path], tsv_path: Union[str, Path]
-) -> None:
-    """Convert ITK-SNAP label file to TSV format for BIDS compatibility.
-
-    This function replicates the functionality of SPIMquant's
-    import_lut_itksnap_as_tsv.py script.
+def import_lut_itksnap_as_tsv(itksnap_path: str, output_path: str) -> None:
+    """Convert ITK-SNAP label file to BIDS TSV format.
 
     Args:
         itksnap_path: Path to ITK-SNAP label file
-        tsv_path: Path to output TSV file
+        output_path: Path to output TSV file
     """
-    itksnap_path = Path(itksnap_path)
-    tsv_path = Path(tsv_path)
-
-    if not itksnap_path.exists():
-        raise FileNotFoundError(f"ITK-SNAP file not found: {itksnap_path}")
-
-    # Parse ITK-SNAP format
-    # ITK-SNAP format: # IDX   -R-  -G-  -B-  -A--  VIS MSH  LABEL
-    # Example: 1    255    0    0   255    1   1   "Region 1"
-
-    labels = []
-    with open(itksnap_path, "r") as f:
+    # Parse ITK-SNAP format (simplified version)
+    data = []
+    with open(itksnap_path) as f:
         for line in f:
-            line = line.strip()
-
-            # Skip comments and empty lines
-            if line.startswith("#") or not line:
-                continue
-
-            # Parse line
-            parts = line.split()
-            if len(parts) >= 8:
-                try:
+            if line.strip() and not line.startswith("#"):
+                parts = line.strip().split()
+                if len(parts) >= 6:
                     index = int(parts[0])
-                    # Extract label name (everything after 7th column, remove quotes)
-                    label_name = " ".join(parts[7:]).strip("\"'")
-
-                    labels.append(
-                        {
-                            "index": index,
-                            "name": label_name,
-                            # Generate abbreviation
-                            "abbreviation": f"R{index:03d}",
-                        }
-                    )
-                except ValueError:
-                    # Skip malformed lines
-                    continue
-
-    # Create DataFrame and save as TSV
-    df = pd.DataFrame(labels)
-    df.to_csv(tsv_path, sep="\t", index=False)
-
-
-def get_builtin_atlas(name: str = "placeholder") -> Atlas:
-    """Get a built-in atlas from the zarrnii package.
-
-    This function provides access to atlases that are packaged with zarrnii,
-    useful for testing, examples, and basic analysis workflows.
-
-    Args:
-        name: Name of the built-in atlas to retrieve.
-            Available atlases:
-            - "placeholder": A simple 4-region atlas for testing/examples
-
-    Returns:
-        Atlas instance loaded from built-in data
-
-    Raises:
-        ValueError: If the requested atlas name is not available
-
-    Examples:
-        >>> # Get the placeholder atlas
-        >>> atlas = get_builtin_atlas("placeholder")
-        >>> print(f"Atlas has {len(atlas.region_labels)} regions")
-
-        >>> # Use in analysis workflows
-        >>> atlas = get_builtin_atlas()  # defaults to "placeholder"
-        >>> mask = atlas.get_region_mask("Region_A")
-    """
-    available_atlases = ["placeholder"]
-
-    if name not in available_atlases:
-        raise ValueError(
-            f"Atlas '{name}' not found. Available built-in atlases: {available_atlases}"
-        )
-
-    if name == "placeholder":
-        return _create_placeholder_atlas()
-
-    # This should never be reached given the validation above
-    raise ValueError(f"Atlas '{name}' not implemented")
-
-
-def list_builtin_atlases() -> List[Dict[str, str]]:
-    """List all available built-in atlases.
-
-    Returns:
-        List of dictionaries containing atlas information with keys:
-        - 'name': Atlas identifier for use with get_builtin_atlas()
-        - 'description': Brief description of the atlas
-        - 'regions': Number of regions (approximate)
-        - 'resolution': Spatial resolution information
-
-    Examples:
-        >>> atlases = list_builtin_atlases()
-        >>> for atlas_info in atlases:
-        ...     print(f"{atlas_info['name']}: {atlas_info['description']}")
-    """
-    return [
-        {
-            "name": "placeholder",
-            "description": "Simple 4-region atlas for testing and examples",
-            "regions": "5 (including background)",
-            "resolution": "32x32x32 voxels, 1mm isotropic",
-        }
-    ]
-
-
-def _create_placeholder_atlas() -> Atlas:
-    """Load the placeholder atlas from the template system.
-
-    Returns:
-        Atlas instance with a simple 4-region segmentation
-    """
-    try:
-        # Use the new template-based approach
-        return get_builtin_template_atlas("placeholder", "regions")
-    except Exception:
-        # Fallback to synthetic data if template system fails
-        warnings.warn(
-            "Template system failed, creating synthetic placeholder atlas.",
-            stacklevel=3,
-        )
-        return _create_synthetic_placeholder_atlas()
-
-
-def _create_synthetic_placeholder_atlas() -> Atlas:
-    """Fallback function to create synthetic placeholder atlas.
-
-    This is used when the packaged atlas files are not available.
-
-    Returns:
-        Atlas instance with synthetic data
-    """
-    # Create synthetic segmentation data (same as before)
-    shape = (32, 32, 32)
-    dseg_data = np.zeros(shape, dtype=np.int32)
-
-    # Create 4 distinct regions in a simple pattern
-    # Region 1: Left half
-    dseg_data[:, :, :16] = 1
-
-    # Region 2: Right-front quarter
-    dseg_data[:16, :16, 16:] = 2
-
-    # Region 3: Right-back-top eighth
-    dseg_data[:8, 16:, 16:] = 3
-
-    # Region 4: Right-back-bottom eighth
-    dseg_data[8:16, 16:, 16:] = 4
-
-    # Create ZarrNii from synthetic data
-    from .transform import AffineTransform
-
-    affine = AffineTransform.identity()  # 1mm isotropic
-    dseg = ZarrNii.from_darr(dseg_data, affine=affine)
-
-    # Create labels DataFrame
-    labels_df = pd.DataFrame(
-        {
-            "index": [0, 1, 2, 3, 4],
-            "name": ["Background", "Region_A", "Region_B", "Region_C", "Region_D"],
-            "abbreviation": ["BG", "RA", "RB", "RC", "RD"],
-        }
-    )
-
-    return Atlas(dseg=dseg, labels_df=labels_df)
-
-
-def _reload_templateflow_api() -> None:
-    """Reload the TemplateFlow API to recognize newly installed templates.
-
-    This function handles the necessary reloading of TemplateFlow's internal
-    layout and API modules to ensure that newly installed templates are
-    properly recognized by the TemplateFlow system.
-    """
-    try:
-        import importlib
-
-        from templateflow import api as tflow
-        from templateflow.conf import init_layout
-
-        # Initialize/refresh the TemplateFlow layout
-        init_layout()
-
-        # Reload the API module to pick up new templates
-        importlib.reload(tflow)
-
-    except ImportError:
-        # TemplateFlow not available - this is expected in some environments
-        pass
-    except Exception:
-        # Other errors during reload - log but don't fail
-        import warnings
-
-        warnings.warn(
-            "Failed to reload TemplateFlow API. "
-            "Newly installed templates may not be immediately accessible.",
-            stacklevel=3,
-        )
-
-
-def _install_template_to_templateflow(template_name: str) -> bool:
-    """Install a zarrnii built-in template to TEMPLATEFLOW_HOME.
-
-    This function copies zarrnii's built-in templates to the user's TemplateFlow
-    directory, enabling unified access through the TemplateFlow API.
-    Uses the @requires_layout decorator pattern and TF_HOME for proper setup.
-
-    Args:
-        template_name: Name of the template to install
-
-    Returns:
-        True if template was successfully installed, False otherwise
-    """
-    try:
-        import shutil
-
-        from templateflow import api as tflow
-        from templateflow.conf import TF_HOME, init_layout, requires_layout
-
-        @requires_layout
-        def _do_install():
-            """Internal function that requires TemplateFlow layout to be set up."""
-            # Get paths using proper TemplateFlow configuration
-            templateflow_home = Path(TF_HOME)
-            zarrnii_template_dir = (
-                Path(__file__).parent / "data" / "templates" / f"tpl-{template_name}"
-            )
-            target_dir = templateflow_home / f"tpl-{template_name}"
-
-            # Only copy if not already present
-            if not target_dir.exists():
-                # Copy template directory (TF_HOME should already exist via @requires_layout)
-                shutil.copytree(zarrnii_template_dir, target_dir)
-
-                # Reload TemplateFlow to recognize new templates
-                _reload_templateflow_api()
-
-                # Verify templateflow can see it
-                try:
-
-                    # Test if TemplateFlow can now access this template
-                    tflow.get(template_name, desc=None, raise_empty=True)
-
-                    return True
-                except Exception:
-                    # If TemplateFlow can't see it, remove the copied directory
-                    shutil.rmtree(target_dir, ignore_errors=True)
-                    return False
-            else:
-                # Already exists, check if TemplateFlow can access it
-                try:
-                    tflow.get(template_name, desc=None, raise_empty=True)
-                    return True
-                except Exception:
-                    return False
-
-        return _do_install()
-
-    except ImportError:
-        # TemplateFlow not available
-        return False
-    except Exception:
-        # Other errors during installation
-        return False
-
-
-def get_builtin_template(name: str = "placeholder") -> Template:
-    """Get a built-in template from the zarrnii package.
-
-    This function provides access to templates that are packaged with zarrnii,
-    including their anatomical images and associated atlases.
-
-    When the templateflow extra is installed, this function will lazily copy
-    the template to TEMPLATEFLOW_HOME on first access, enabling unified access
-    through the TemplateFlow API.
-
-    Args:
-        name: Name of the built-in template to retrieve.
-            Available templates:
-            - "placeholder": A simple synthetic template for testing/examples
-
-    Returns:
-        Template instance loaded from built-in data
-
-    Raises:
-        ValueError: If the requested template name is not available
-
-    Examples:
-        >>> # Get the placeholder template
-        >>> template = get_builtin_template("placeholder")
-        >>> print(f"Template: {template.name}")
-        >>> print(f"Available atlases: {[a['name'] for a in template.list_available_atlases()]}")
-
-        >>> # Get an atlas from the template
-        >>> atlas = template.get_atlas("regions")
-
-        >>> # After first call, template is available via TemplateFlow API (if installed)
-        >>> import templateflow.api as tflow
-        >>> # This will work after lazy loading: tflow.get("placeholder", suffix="SPIM")
-    """
-    available_templates = ["placeholder"]
-
-    if name not in available_templates:
-        raise ValueError(
-            f"Template '{name}' not found. Available built-in templates: {available_templates}"
-        )
-
-    # Lazy loading: Install to TemplateFlow if available (only on first access)
-    _install_template_to_templateflow(name)
-
-    # Load template from packaged data (TemplateFlow naming)
-    template_path = Path(__file__).parent / "data" / "templates" / f"tpl-{name}"
-    return Template.from_directory(template_path)
-
-
-class AmbiguousTemplateFlowQueryError(ValueError):
-    """Raised when TemplateFlow query returns multiple files requiring more specific query."""
-    
-    def __init__(self, template: str, suffix: str, matching_files: List[str]):
-        self.template = template
-        self.suffix = suffix
-        self.matching_files = matching_files
-        super().__init__(
-            f"Query for template '{template}' with suffix '{suffix}' returned {len(matching_files)} files. "
-            f"Please add more qualifiers to make query more specific. "
-            f"Matching files: {matching_files}"
-        )
-
-
-def get_templateflow_template(template: str, suffix: str = "SPIM", **kwargs) -> Template:
-    """Get a template from TemplateFlow.
-
-    This function uses the TemplateFlow API to download and access templates
-    from the official TemplateFlow repository.
-
-    Args:
-        template: Template identifier (e.g., 'MNI152NLin2009cAsym', 'ABA')
-        suffix: Image suffix/modality (e.g., 'SPIM', 'T1w', 'T2w')
-        **kwargs: Additional query parameters for TemplateFlow API (e.g., resolution, cohort)
-
-    Returns:
-        Template instance loaded from TemplateFlow
-
-    Raises:
-        ImportError: If templateflow package is not available
-        AmbiguousTemplateFlowQueryError: If query returns multiple files
-        ValueError: If template is not found in TemplateFlow or other errors
-
-    Examples:
-        >>> # Get MNI152 template
-        >>> template = get_templateflow_template("MNI152NLin2009cAsym", "T1w")
-
-        >>> # Get Allen Brain Atlas template (be more specific)
-        >>> template = get_templateflow_template("ABA", "SPIM", resolution=1)
-        
-        >>> # Get template with additional qualifiers
-        >>> template = get_templateflow_template("MNI152NLin2009cAsym", "T1w", resolution=1)
-    """
-    try:
-        from templateflow import api as tflow
-    except ImportError:
-        raise ImportError(
-            "templateflow is required for TemplateFlow integration. "
-            "Install with: pip install zarrnii[templateflow] or pip install templateflow"
-        )
-
-    try:
-        # Get template file from TemplateFlow
-        template_result = tflow.get(template, suffix=suffix, extension=".nii.gz", **kwargs)
-        
-        # Handle TemplateFlow API behavior: returns list if multiple matches, string if single match
-        if isinstance(template_result, list):
-            if len(template_result) == 0:
-                raise ValueError(f"No template files found for '{template}' with suffix '{suffix}'")
-            elif len(template_result) > 1:
-                raise AmbiguousTemplateFlowQueryError(template, suffix, template_result)
-            else:
-                template_file = template_result[0]
-        else:
-            template_file = template_result
-
-        # Ensure we have a valid file path
-        template_file = Path(template_file)
-        if not template_file.exists():
-            raise ValueError(f"Template file not found: {template_file}")
-
-        # Create a temporary template directory structure
-        import tempfile
-
-        temp_dir = Path(tempfile.mkdtemp(prefix=f"tpl-{template}_"))
-
-        # Copy template file with TemplateFlow naming
-        template_path = temp_dir / f"tpl-{template}_{suffix}.nii.gz"
-        import shutil
-
-        shutil.copy2(template_file, template_path)
-
-        # Create minimal template_description.json
-        template_info = {
-            "Name": template,
-            "BIDSVersion": "1.8.0",
-            "TemplateFlowVersion": "0.8.0",
-            "Description": f"Template {template} from TemplateFlow",
-            "Authors": ["TemplateFlow"],
-            "License": "Various",
-            "ReferencesAndLinks": ["https://templateflow.org"],
-            "Resolution": "Unknown",
-            "SpatialReference": {
-                "VoxelSizes": [1.0, 1.0, 1.0],
-                "Units": "mm",
-                "Origin": "center",
-            },
-            "atlases": [],  # Could be expanded to query TemplateFlow for atlases
-        }
-
-        import json
-
-        with open(temp_dir / "template_description.json", "w") as f:
-            json.dump(template_info, f, indent=2)
-
-        # Load template
-        return Template.from_directory(temp_dir)
-
-    except AmbiguousTemplateFlowQueryError:
-        # Re-raise this specific error as-is
-        raise
-    except Exception as e:
-        raise ValueError(f"Failed to load template '{template}' from TemplateFlow: {e}")
-
-
-def list_templateflow_templates() -> List[str]:
-    """List available templates from TemplateFlow.
-
-    Returns:
-        List of template identifiers available in TemplateFlow
-
-    Raises:
-        ImportError: If templateflow package is not available
-
-    Examples:
-        >>> templates = list_templateflow_templates()
-        >>> print("Available TemplateFlow templates:", templates)
-    """
-    try:
-        from templateflow import api as tflow
-    except ImportError:
-        raise ImportError(
-            "templateflow is required for TemplateFlow integration. "
-            "Install with: pip install zarrnii[templateflow] or pip install templateflow"
-        )
-
-    return list(tflow.templates())
-
-
-def install_zarrnii_templates() -> Dict[str, bool]:
-    """Manually install all zarrnii built-in templates to TEMPLATEFLOW_HOME.
-
-    This function allows users to explicitly install zarrnii's built-in templates
-    to their TemplateFlow directory for unified access through the TemplateFlow API.
-    Uses the @requires_layout decorator to ensure proper TemplateFlow setup.
-
-    Returns:
-        Dictionary mapping template names to installation success status
-
-    Raises:
-        ImportError: If templateflow package is not available
-
-    Examples:
-        >>> results = install_zarrnii_templates()
-        >>> print("Installation results:", results)
-        >>> # {'placeholder': True}
-
-        >>> # After installation, templates are accessible via TemplateFlow
-        >>> import templateflow.api as tflow
-        >>> template_files = tflow.get("placeholder", suffix="SPIM")
-    """
-    try:
-        from templateflow import api as tflow
-        from templateflow.conf import requires_layout
-    except ImportError:
-        raise ImportError(
-            "templateflow is required for TemplateFlow integration. "
-            "Install with: pip install zarrnii[templateflow] or pip install templateflow"
-        )
-
-    @requires_layout
-    def _install_all():
-        """Install all templates with proper TemplateFlow layout setup."""
-        available_templates = ["placeholder"]  # Add more as they become available
-        results = {}
-
-        for template_name in available_templates:
-            results[template_name] = _install_template_to_templateflow(template_name)
-
-        return results
-
-    return _install_all()
-
-
-def list_builtin_templates() -> List[Dict[str, str]]:
-    """List all available built-in templates.
-
-    Returns:
-        List of dictionaries containing template information with keys:
-        - 'name': Template identifier for use with get_builtin_template()
-        - 'description': Brief description of the template
-        - 'resolution': Spatial resolution information
-        - 'atlases': Number of available atlases
-
-    Examples:
-        >>> templates = list_builtin_templates()
-        >>> for template_info in templates:
-        ...     print(f"{template_info['name']}: {template_info['description']}")
-    """
-    templates = []
-
-    # Add placeholder template info
-    try:
-        placeholder = get_builtin_template("placeholder")
-        templates.append(
-            {
-                "name": "placeholder",
-                "description": placeholder.description,
-                "resolution": placeholder.resolution,
-                "atlases": str(len(placeholder.list_available_atlases())),
-            }
-        )
-    except Exception:
-        # Fallback if template can't be loaded
-        templates.append(
-            {
-                "name": "placeholder",
-                "description": "Simple synthetic template for testing and examples",
-                "resolution": "32x32x32 voxels, 1mm isotropic",
-                "atlases": "1",
-            }
-        )
-
-    return templates
-
-
-def get_builtin_template_atlas(
-    template_name: str = "placeholder", atlas_name: str = "regions"
-) -> Atlas:
-    """Convenience function to get an atlas from a built-in template.
-
-    Args:
-        template_name: Name of the built-in template
-        atlas_name: Name of the atlas within the template
-
-    Returns:
-        Atlas instance
-
-    Examples:
-        >>> # Get the default atlas from default template
-        >>> atlas = get_builtin_template_atlas()
-
-        >>> # Get specific atlas from specific template
-        >>> atlas = get_builtin_template_atlas("placeholder", "regions")
-    """
-    template = get_builtin_template(template_name)
-    return template.get_atlas(atlas_name)
+                    # Combine remaining parts as name
+                    name = " ".join(parts[6:]) if len(parts) > 6 else f"Region_{index}"
+                    data.append({"index": index, "name": name})
+
+    df = pd.DataFrame(data)
+    df.to_csv(output_path, sep="\t", index=False)
