@@ -2285,52 +2285,61 @@ class ZarrNii:
 
         # Handle data type conversion and rescaling
         supported_dtypes = {
-            'uint8': np.uint8,
-            'uint16': np.uint16, 
-            'int16': np.int16,
-            'float32': np.float32
+            "uint8": np.uint8,
+            "uint16": np.uint16,
+            "int16": np.int16,
+            "float32": np.float32,
         }
-        
+
         if dtype not in supported_dtypes:
-            raise ValueError(f"Unsupported dtype '{dtype}'. Supported types: {list(supported_dtypes.keys())}")
-        
+            raise ValueError(
+                f"Unsupported dtype '{dtype}'. Supported types: {list(supported_dtypes.keys())}"
+            )
+
         target_dtype = supported_dtypes[dtype]
-        
-        if rescale and dtype != 'float32':
+
+        if rescale and dtype != "float32":
             # Get the data range
             data_min = np.min(data)
             data_max = np.max(data)
-            
+
             if data_min == data_max:
                 # Handle constant data case
                 data_scaled = np.zeros_like(data, dtype=target_dtype)
             else:
                 # Get target range for the dtype
-                if dtype == 'uint8':
+                if dtype == "uint8":
                     target_min, target_max = 0, 255
-                elif dtype == 'uint16':
+                elif dtype == "uint16":
                     target_min, target_max = 0, 65535
-                elif dtype == 'int16':
+                elif dtype == "int16":
                     target_min, target_max = -32768, 32767
-                
+
                 # Linear rescaling: new_value = (value - data_min) * (target_max - target_min) / (data_max - data_min) + target_min
-                data_scaled = ((data - data_min) * (target_max - target_min) / (data_max - data_min) + target_min).astype(target_dtype)
-            
-            print(f"Rescaled data from [{data_min:.3f}, {data_max:.3f}] to {dtype} range")
+                data_scaled = (
+                    (data - data_min)
+                    * (target_max - target_min)
+                    / (data_max - data_min)
+                    + target_min
+                ).astype(target_dtype)
+
+            print(
+                f"Rescaled data from [{data_min:.3f}, {data_max:.3f}] to {dtype} range"
+            )
         else:
             # No rescaling - just clip and convert
-            if dtype == 'uint8':
+            if dtype == "uint8":
                 data_scaled = np.clip(data, 0, 255).astype(target_dtype)
-            elif dtype == 'uint16':
+            elif dtype == "uint16":
                 data_scaled = np.clip(data, 0, 65535).astype(target_dtype)
-            elif dtype == 'int16':
+            elif dtype == "int16":
                 data_scaled = np.clip(data, -32768, 32767).astype(target_dtype)
             else:  # float32
                 data_scaled = data.astype(target_dtype)
-            
-            if dtype != 'float32':
+
+            if dtype != "float32":
                 print(f"Converted data to {dtype} with clipping (no rescaling)")
-        
+
         data = data_scaled
 
         # Save each Z-slice as a separate TIFF file
