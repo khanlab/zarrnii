@@ -11,18 +11,36 @@ pip install zarrnii
 ```
 
 After installation, you'll have access to two console commands:
-- `z2n` - Convert OME-Zarr to NIfTI
+- `z2n` - Convert OME-Zarr to NIfTI or TIFF stack format
 - `n2z` - Convert NIfTI to OME-Zarr
 
-## z2n: OME-Zarr to NIfTI Conversion
+## z2n: OME-Zarr to NIfTI/TIFF Conversion
 
-The `z2n` script converts OME-Zarr datasets to NIfTI format. It's a wrapper around `ZarrNii.from_ome_zarr().to_nifti()`.
+The `z2n` script converts OME-Zarr datasets to NIfTI format or TIFF stack format. TIFF stack export is particularly useful for compatibility with napari plugins like cellseg3d that don't support OME-Zarr multiscale data.
 
 ### Basic Usage
 
 ```bash
+# NIfTI output
 z2n input.ome.zarr output.nii.gz
+
+# TIFF stack output (auto-detected by pattern)
+z2n input.ome.zarr output_z{z:04d}.tif
 ```
+
+### Output Format Selection
+
+The output format is automatically detected based on the output filename:
+- `.nii` or `.nii.gz` extensions → NIfTI format
+- `.tif` or `.tiff` extensions with `{z}` pattern → TIFF stack format
+- Other extensions default to NIfTI format
+
+**TIFF Stack Format**: Each Z-slice is saved as a separate 2D TIFF file. This format is useful for:
+- Napari plugins that don't support OME-Zarr (e.g., cellseg3d)
+- Tools that expect individual image files
+- Visual inspection of individual slices
+
+⚠️ **Performance Note**: TIFF stack export loads all data into memory. Consider cropping or downsampling large datasets first.
 
 ### Options
 
@@ -76,6 +94,16 @@ z2n input.ome.zarr output.nii.gz --channels 0,2 --axes-order ZYX
 
 # Change orientation and apply near-isotropic downsampling
 z2n input.ome.zarr output.nii.gz --orientation LPI --downsample-near-isotropic
+
+# TIFF Stack Export
+# Save each Z-slice as a separate TIFF file for compatibility with napari plugins
+z2n input.ome.zarr output_z{z:04d}.tif --tiff-channel 0
+
+# Export to TIFF stack with custom pattern and settings
+z2n input.ome.zarr slices/brain_{z:03d}.tiff --tiff-timepoint 0 --tiff-no-compress
+
+# Export multi-channel data as multi-channel TIFFs (no channel selection)
+z2n input.ome.zarr multichannel_z{z:04d}.tif
 
 # Load specific timepoints
 z2n input.ome.zarr output.nii.gz --timepoints 0,5,10

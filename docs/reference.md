@@ -15,6 +15,7 @@ The `ZarrNii` class provides tools for reading, writing, and transforming datase
 - [`from_imaris`](#from_imaris): Load data from an Imaris (.ims) file.
 - [`to_ome_zarr`](#to_ome_zarr): Save data as OME-Zarr.
 - [`to_nifti`](#to_nifti): Save data as a NIfTI file.
+- [`to_tiff_stack`](#to_tiff_stack): Save data as a stack of 2D TIFF files.
 - [`to_imaris`](#to_imaris): Save data as an Imaris (.ims) file.
 - [`crop`](#crop): Extract a region from the dataset.
 - [`downsample`](#downsample): Reduce resolution of datasets.
@@ -43,6 +44,9 @@ The `ZarrNii` class provides tools for reading, writing, and transforming datase
 
 ### `to_nifti`
 ::: zarrnii.ZarrNii.to_nifti
+
+### `to_tiff_stack`
+::: zarrnii.ZarrNii.to_tiff_stack
 
 ### `to_imaris`
 ::: zarrnii.ZarrNii.to_imaris

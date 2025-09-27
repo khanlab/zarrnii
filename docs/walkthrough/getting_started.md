@@ -226,6 +226,11 @@ downsampled.to_nifti("processed_timeseries.nii")
 # Or save as OME-Zarr with metadata preservation
 downsampled.to_ome_zarr("processed_timeseries.ome.zarr")
 
+# Save as TIFF stack for compatibility with napari plugins like cellseg3d
+# (Crop first for better performance with large datasets)
+cropped_small = znimg.crop((10, 10, 10), (50, 50, 50))
+cropped_small.to_tiff_stack("tiff_stack/slice_{z:03d}.tif")
+
 
 # Apply segmentation to the original image
 segmented = znimg.segment_otsu(nbins=256)
