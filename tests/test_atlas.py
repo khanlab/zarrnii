@@ -9,8 +9,8 @@ import pandas as pd
 import pytest
 
 from zarrnii import (
-    AmbiguousTemplateFlowQueryError,
     AffineTransform,
+    AmbiguousTemplateFlowQueryError,
     Atlas,
     ZarrNii,
     add_template_to_templateflow,
@@ -357,7 +357,7 @@ class TestAmbiguousTemplateFlowQueryError:
         # Test that AmbiguousTemplateFlowQueryError can be created
         files = ["/path/1.nii.gz", "/path/2.nii.gz"]
         error = AmbiguousTemplateFlowQueryError("MNI152", "T1w", files)
-        
+
         assert "2 files" in str(error)
         assert error.template == "MNI152"
         assert error.suffix == "T1w"
@@ -369,11 +369,11 @@ class TestAmbiguousTemplateFlowQueryError:
         error = AmbiguousTemplateFlowQueryError(
             "MNI152", "T1w", files, resolution=1, cohort="01"
         )
-        
+
         assert error.template == "MNI152"
         assert error.suffix == "T1w"
         assert error.matching_files == files
         assert error.query_kwargs == {"resolution": 1, "cohort": "01"}
-        
+
         # Check error message truncation for many files
         assert "..." in str(error)  # Should truncate file list
