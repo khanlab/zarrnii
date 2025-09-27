@@ -82,11 +82,6 @@ version-file = "zarrnii/_version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["zarrnii"]
 
-[tool.hatch.build.targets.wheel.sources]
-"zarrnii" = "zarrnii"
-
-[tool.hatch.build.targets.wheel.force-include]
-"zarrnii/data" = "zarrnii/data"
 
 [project.urls]
 Homepage = "https://github.com/khanlab/zarrnii"
