@@ -1015,8 +1015,19 @@ class ZarrNii:
                 scale = {"x": spacing[0], "y": spacing[1], "z": spacing[2]}
                 translation = {"x": origin[0], "y": origin[1], "z": origin[2]}
 
+        # Create dimensions based on data shape after dimension adjustments
+        final_ndim = len(darr.shape)
+        if final_ndim == 4:
+            # 4D: (c, z, y, x) or (c, x, y, z) - standard case
+            dims = ["c"] + list(axes_order.lower())
+        elif final_ndim == 5:
+            # 5D: (t, c, z, y, x) or (t, c, x, y, z) - time dimension included
+            dims = ["t", "c"] + list(axes_order.lower())
+        else:
+            # Fallback for other cases
+            dims = ["c"] + list(axes_order.lower())
+
         # Create NgffImage
-        dims = ["c", "z", "y", "x"] if axes_order == "ZYX" else ["c", "x", "y", "z"]
         ngff_image = nz.NgffImage(
             data=darr, dims=dims, scale=scale, translation=translation, name=name
         )
@@ -2088,6 +2099,282 @@ class ZarrNii:
             return filename
         else:
             return nifti_img
+
+    def to_tiff_stack(
+        self,
+        filename_pattern: str,
+        channel: Optional[int] = None,
+        timepoint: Optional[int] = None,
+        compress: bool = True,
+        dtype: Optional[str] = "uint16",
+        rescale: bool = True,
+    ) -> str:
+        """Save data as a stack of 2D TIFF images.
+
+        Saves the image data as a series of 2D TIFF files, with each Z-slice
+        saved as a separate file. This format is useful for compatibility with
+        tools that don't support OME-Zarr or napari plugins that require
+        individual TIFF files.
+
+        Args:
+            filename_pattern: Output filename pattern. Should contain '{z:04d}' or similar
+                format specifier for the Z-slice number. Examples:
+                - "output_z{z:04d}.tif"
+                - "data/slice_{z:03d}.tiff"
+                If pattern doesn't contain format specifier, '_{z:04d}' is appended
+                before the extension.
+            channel: Channel index to save (0-based). If None and data has multiple
+                channels, all channels will be saved as separate channel dimensions
+                in each TIFF file (multi-channel TIFFs).
+            timepoint: Timepoint index to save (0-based). If None and data has multiple
+                timepoints, raises ValueError (must select single timepoint).
+            compress: Whether to use LZW compression (default: True)
+            dtype: Output data type for TIFF files. Options:
+                - 'uint8': 8-bit unsigned integer (0-255)
+                - 'uint16': 16-bit unsigned integer (0-65535) [default]
+                - 'int16': 16-bit signed integer (-32768 to 32767)
+                - 'float32': 32-bit float (preserves original data)
+                Default 'uint16' provides good range and compatibility.
+            rescale: Whether to rescale data to fit the output dtype range.
+                If True, data is linearly scaled from [min, max] to the full
+                range of the output dtype. If False, data is clipped to the
+                output dtype range. Default: True
+
+        Returns:
+            Base directory path where files were saved
+
+        Raises:
+            ValueError: If data has multiple timepoints but none selected,
+                or if selected channel/timepoint is out of range,
+                or if dtype is not supported
+            OSError: If unable to write to specified directory
+
+        Examples:
+            >>> # Save as 16-bit with auto-rescaling (default, recommended)
+            >>> znii.to_tiff_stack("output_z{z:04d}.tif")
+
+            >>> # Save as 8-bit for smaller file sizes
+            >>> znii.to_tiff_stack("output_z{z:04d}.tif", dtype='uint8')
+
+            >>> # Save specific channel without rescaling
+            >>> znii.to_tiff_stack("channel0_z{z:04d}.tif", channel=0, rescale=False)
+
+            >>> # Save as float32 to preserve original precision
+            >>> znii.to_tiff_stack("precise_z{z:04d}.tif", dtype='float32')
+
+        Warnings:
+            This method loads all data into memory. For large datasets,
+            consider cropping or downsampling first to reduce memory usage.
+            The cellseg3d napari plugin and similar tools work best with
+            cropped regions rather than full-resolution whole-brain images.
+
+        Notes:
+            - Z-dimension becomes the stack (file) dimension
+            - Time and channel dimensions are handled as specified
+            - Spatial transformations are not preserved in TIFF format
+            - For 5D data (T,C,Z,Y,X), you must select a single timepoint
+            - Multi-channel data can be saved as multi-channel TIFFs or selected
+            - Data type conversion helps ensure compatibility with analysis tools
+            - uint16 is recommended for most scientific applications (good range + compatibility)
+        """
+        try:
+            import tifffile
+        except ImportError:
+            raise ImportError(
+                "tifffile is required for TIFF stack support. "
+                "Install with: pip install tifffile"
+            )
+
+        # Get data and dimensions
+        data = self.data.compute()
+        dims = self.dims
+
+        # Create output directory if needed
+        import os
+
+        output_dir = os.path.dirname(filename_pattern)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        # Handle dimensional selection and validation
+        # Remove singleton dimensions first, similar to to_nifti
+        squeeze_axes = []
+        remaining_dims = []
+        time_dim_size = 1
+        channel_dim_size = 1
+
+        for i, dim in enumerate(dims):
+            if dim == "t":
+                time_dim_size = data.shape[i]
+                if data.shape[i] == 1:
+                    squeeze_axes.append(i)
+                elif timepoint is None:
+                    raise ValueError(
+                        f"Data has {data.shape[i]} timepoints. "
+                        f"Must specify 'timepoint' parameter to select a single timepoint."
+                    )
+                elif timepoint >= data.shape[i]:
+                    raise ValueError(
+                        f"Timepoint {timepoint} is out of range (data has {data.shape[i]} timepoints)"
+                    )
+                else:
+                    remaining_dims.append(dim)
+            elif dim == "c":
+                channel_dim_size = data.shape[i]
+                if data.shape[i] == 1:
+                    squeeze_axes.append(i)
+                elif channel is None:
+                    raise ValueError(
+                        f"Data has {data.shape[i]} channels. "
+                        f"Must specify 'channel' parameter to select a single channel."
+                    )
+                elif channel >= data.shape[i]:
+                    raise ValueError(
+                        f"Channel {channel} is out of range (data has {data.shape[i]} channels)"
+                    )
+                else:
+                    remaining_dims.append(dim)
+            else:
+                remaining_dims.append(dim)
+
+        # Select specific timepoint if needed
+        if time_dim_size > 1 and timepoint is not None:
+            time_axis = dims.index("t")
+            data = np.take(data, timepoint, axis=time_axis)
+            # Update dims list
+            dims = [d for i, d in enumerate(dims) if i != time_axis]
+
+        # Select specific channel if needed
+        if channel_dim_size > 1 and channel is not None:
+            channel_axis = dims.index("c")
+            data = np.take(data, channel, axis=channel_axis)
+            # Update dims list
+            dims = [d for i, d in enumerate(dims) if i != channel_axis]
+
+        # Squeeze singleton dimensions
+        if squeeze_axes:
+            # Recalculate squeeze axes after potential dimension removal
+            current_squeeze_axes = []
+            for axis in squeeze_axes:
+                # Count how many axes were removed before this one
+                removed_before = sum(
+                    1
+                    for removed_axis in [
+                        (
+                            dims.index("t")
+                            if time_dim_size > 1 and timepoint is not None
+                            else -1
+                        ),
+                        (
+                            dims.index("c")
+                            if channel_dim_size > 1 and channel is not None
+                            else -1
+                        ),
+                    ]
+                    if removed_axis != -1 and removed_axis < axis
+                )
+                current_squeeze_axes.append(axis - removed_before)
+
+            data = np.squeeze(data, axis=tuple(current_squeeze_axes))
+            dims = [dim for i, dim in enumerate(dims) if i not in current_squeeze_axes]
+
+        # Find Z dimension for stacking
+        if "z" not in dims:
+            raise ValueError("Data must have a Z dimension for TIFF stack export")
+
+        z_axis = dims.index("z")
+        z_size = data.shape[z_axis]
+
+        # Check filename pattern contains format specifier
+        if "{z" not in filename_pattern:
+            # Add default z format before extension
+            name, ext = os.path.splitext(filename_pattern)
+            filename_pattern = f"{name}_{{z:04d}}{ext}"
+
+        # Move Z axis to first position for easy iteration
+        axes_order = list(range(data.ndim))
+        axes_order[0], axes_order[z_axis] = axes_order[z_axis], axes_order[0]
+        data = data.transpose(axes_order)
+
+        # Handle data type conversion and rescaling
+        supported_dtypes = {
+            "uint8": np.uint8,
+            "uint16": np.uint16,
+            "int16": np.int16,
+            "float32": np.float32,
+        }
+
+        if dtype not in supported_dtypes:
+            raise ValueError(
+                f"Unsupported dtype '{dtype}'. Supported types: {list(supported_dtypes.keys())}"
+            )
+
+        target_dtype = supported_dtypes[dtype]
+
+        if rescale and dtype != "float32":
+            # Get the data range
+            data_min = np.min(data)
+            data_max = np.max(data)
+
+            if data_min == data_max:
+                # Handle constant data case
+                data_scaled = np.zeros_like(data, dtype=target_dtype)
+            else:
+                # Get target range for the dtype
+                if dtype == "uint8":
+                    target_min, target_max = 0, 255
+                elif dtype == "uint16":
+                    target_min, target_max = 0, 65535
+                elif dtype == "int16":
+                    target_min, target_max = -32768, 32767
+
+                # Linear rescaling: new_value = (value - data_min) * (target_max - target_min) / (data_max - data_min) + target_min
+                data_scaled = (
+                    (data - data_min)
+                    * (target_max - target_min)
+                    / (data_max - data_min)
+                    + target_min
+                ).astype(target_dtype)
+
+            print(
+                f"Rescaled data from [{data_min:.3f}, {data_max:.3f}] to {dtype} range"
+            )
+        else:
+            # No rescaling - just clip and convert
+            if dtype == "uint8":
+                data_scaled = np.clip(data, 0, 255).astype(target_dtype)
+            elif dtype == "uint16":
+                data_scaled = np.clip(data, 0, 65535).astype(target_dtype)
+            elif dtype == "int16":
+                data_scaled = np.clip(data, -32768, 32767).astype(target_dtype)
+            else:  # float32
+                data_scaled = data.astype(target_dtype)
+
+            if dtype != "float32":
+                print(f"Converted data to {dtype} with clipping (no rescaling)")
+
+        data = data_scaled
+
+        # Save each Z-slice as a separate TIFF file
+        compression = "lzw" if compress else None
+        saved_files = []
+
+        for z_idx in range(z_size):
+            slice_data = data[z_idx]
+
+            # Generate filename for this slice
+            filename = filename_pattern.format(z=z_idx)
+
+            # Save the 2D slice
+            tifffile.imwrite(filename, slice_data, compression=compression)
+            saved_files.append(filename)
+
+        print(f"Saved {len(saved_files)} TIFF files to {output_dir or '.'}")
+        print(
+            f"Files: {os.path.basename(saved_files[0])} ... {os.path.basename(saved_files[-1])}"
+        )
+
+        return output_dir or "."
 
     @classmethod
     def from_imaris(

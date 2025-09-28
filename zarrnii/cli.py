@@ -50,12 +50,20 @@ Examples:
   z2n input.ome.zarr output.nii.gz
   z2n input.ome.zarr.zip output.nii.gz --level 1
   z2n input.ome.zarr output.nii.gz --channels 0,2 --axes-order ZYX
+  
+  # TIFF stack export
+  z2n input.ome.zarr output_z{z:04d}.tif --tiff-channel 0
+  z2n input.ome.zarr slices/brain_{z:03d}.tiff --tiff-timepoint 0 --tiff-no-compress
+  z2n input.ome.zarr output_z{z:04d}.tif --tiff-dtype uint8 --tiff-no-rescale
         """,
     )
 
     # Positional arguments
     parser.add_argument("input", help="Input OME-Zarr path or store")
-    parser.add_argument("output", help="Output NIfTI file (.nii or .nii.gz)")
+    parser.add_argument(
+        "output",
+        help="Output file path. Use .nii/.nii.gz for NIfTI or pattern with {z} for TIFF stack (e.g., 'output_z{z:04d}.tif')",
+    )
 
     # from_ome_zarr parameters
     parser.add_argument(
@@ -109,6 +117,37 @@ Examples:
     )
     parser.add_argument("--rechunk", action="store_true", help="Rechunk data arrays")
 
+    # TIFF stack specific options
+    parser.add_argument(
+        "--tiff-channel",
+        type=int,
+        default=None,
+        help="Channel index to export for TIFF stack (0-based). If not specified, saves multi-channel TIFFs",
+    )
+    parser.add_argument(
+        "--tiff-timepoint",
+        type=int,
+        default=None,
+        help="Timepoint index to export for TIFF stack (0-based). Required for multi-timepoint data",
+    )
+    parser.add_argument(
+        "--tiff-no-compress",
+        action="store_true",
+        help="Disable LZW compression for TIFF files (default: compressed)",
+    )
+    parser.add_argument(
+        "--tiff-dtype",
+        type=str,
+        default="uint16",
+        choices=["uint8", "uint16", "int16", "float32"],
+        help="Output data type for TIFF files (default: uint16)",
+    )
+    parser.add_argument(
+        "--tiff-no-rescale",
+        action="store_true",
+        help="Disable rescaling data to fit output dtype range (default: rescale enabled)",
+    )
+
     args = parser.parse_args()
 
     # Validate input/output paths
@@ -119,12 +158,25 @@ Examples:
         print(f"Error: Input path '{input_path}' does not exist", file=sys.stderr)
         sys.exit(1)
 
-    # Validate output extension
-    if output_path.suffix not in [".nii", ".gz"]:
-        if not str(output_path).endswith(".nii.gz"):
-            print(
-                f"Warning: Output '{output_path}' doesn't have .nii or .nii.gz extension"
-            )
+    # Validate output format and path
+    output_format = None
+    if output_path.suffix in [".nii", ".gz"] or str(output_path).endswith(".nii.gz"):
+        output_format = "nifti"
+    elif "{z" in str(output_path) and (output_path.suffix in [".tif", ".tiff"]):
+        output_format = "tiff_stack"
+    elif output_path.suffix in [".tif", ".tiff"]:
+        print(
+            f"Warning: TIFF output '{output_path}' should contain {{z}} format specifier for stack export (e.g., 'output_z{{z:04d}}.tif')"
+        )
+        output_format = "tiff_stack"
+    else:
+        # Default to NIfTI if uncertain
+        output_format = "nifti"
+        if output_path.suffix not in [".nii", ".gz"]:
+            if not str(output_path).endswith(".nii.gz"):
+                print(
+                    f"Warning: Output '{output_path}' doesn't have .nii/.nii.gz/.tif/.tiff extension, assuming NIfTI"
+                )
 
     try:
         # Process chunks argument
@@ -152,9 +204,21 @@ Examples:
 
         print(f"Loaded image with shape: {znimg.darr.shape}")
 
-        # Save to NIfTI
-        print(f"Saving to NIfTI: {output_path}")
-        znimg.to_nifti(str(output_path))
+        # Save based on detected output format
+        if output_format == "tiff_stack":
+            print(f"Saving to TIFF stack: {output_path}")
+            znimg.to_tiff_stack(
+                str(output_path),
+                channel=args.tiff_channel,
+                timepoint=args.tiff_timepoint,
+                compress=not args.tiff_no_compress,
+                dtype=args.tiff_dtype,
+                rescale=not args.tiff_no_rescale,
+            )
+        else:
+            # Default to NIfTI
+            print(f"Saving to NIfTI: {output_path}")
+            znimg.to_nifti(str(output_path))
 
         print("Conversion completed successfully!")
 
