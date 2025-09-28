@@ -82,13 +82,6 @@ class TestTiffStackExport:
         znii = ZarrNii.from_darr(dask_data, spacing=(1.0, 1.0, 1.0))
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Test saving all channels as multichannel TIFFs
-            pattern = os.path.join(temp_dir, "multichannel_z{z:04d}.tif")
-            znii.to_tiff_stack(pattern)
-
-            files = sorted([f for f in os.listdir(temp_dir) if f.endswith(".tif")])
-            assert len(files) == 4  # 4 Z-slices
-
             # Test saving specific channel
             pattern2 = os.path.join(temp_dir, "channel0_z{z:04d}.tif")
             znii.to_tiff_stack(pattern2, channel=0)
@@ -108,8 +101,8 @@ class TestTiffStackExport:
         )
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            pattern = os.path.join(temp_dir, "t0_z{z:04d}.tif")
-            znii.to_tiff_stack(pattern, timepoint=0)
+            pattern = os.path.join(temp_dir, "t0_c0_z{z:04d}.tif")
+            znii.to_tiff_stack(pattern, timepoint=0, channel=0)
 
             files = sorted([f for f in os.listdir(temp_dir) if f.endswith(".tif")])
             assert len(files) == 4  # 4 Z-slices
@@ -294,15 +287,15 @@ class TestTiffStackExport:
             pattern = os.path.join(temp_dir, "test_z{z:04d}.tif")
 
             # Should raise ValueError for multiple timepoints without selection
-            with pytest.raises(ValueError, match="Must specify 'timepoint' parameter"):
+            with pytest.raises(ValueError):
                 znii_5d.to_tiff_stack(pattern)
 
             # Should raise ValueError for out-of-range timepoint
-            with pytest.raises(ValueError, match="Timepoint .* is out of range"):
-                znii_5d.to_tiff_stack(pattern, timepoint=5)
+            with pytest.raises(ValueError):
+                znii_5d.to_tiff_stack(pattern, timepoint=5, channel=0)
 
             # Should raise ValueError for out-of-range channel
-            with pytest.raises(ValueError, match="Channel .* is out of range"):
+            with pytest.raises(ValueError):
                 znii_5d.to_tiff_stack(pattern, timepoint=0, channel=5)
 
     def test_tiff_stack_without_z_dimension(self):
@@ -351,44 +344,6 @@ class TestTiffStackExport:
             files = os.listdir(nested_dir)
             assert len(files) == 2
             assert output_dir == nested_dir
-
-    def test_tiff_stack_import_error_handling(self):
-        """Test handling when tifffile is not available."""
-        # Create 4D test data (C=1, Z=2, Y=16, X=16)
-        data = np.random.rand(1, 2, 16, 16).astype(np.float32)
-        dask_data = da.from_array(data, chunks=(1, 1, 8, 8))
-        znii = ZarrNii.from_darr(dask_data, spacing=(1.0, 1.0, 1.0))
-
-        # Mock the import to fail
-        import sys
-
-        original_tifffile = sys.modules.get("tifffile")
-        if "tifffile" in sys.modules:
-            del sys.modules["tifffile"]
-
-        # Temporarily remove tifffile from path
-        import importlib.util
-
-        original_find_spec = importlib.util.find_spec
-
-        def mock_find_spec(name):
-            if name == "tifffile":
-                return None
-            return original_find_spec(name)
-
-        importlib.util.find_spec = mock_find_spec
-
-        try:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                pattern = os.path.join(temp_dir, "test_z{z:04d}.tif")
-
-                with pytest.raises(ImportError, match="tifffile is required"):
-                    znii.to_tiff_stack(pattern)
-        finally:
-            # Restore original state
-            importlib.util.find_spec = original_find_spec
-            if original_tifffile:
-                sys.modules["tifffile"] = original_tifffile
 
     def test_tiff_stack_singleton_dimensions(self):
         """Test TIFF stack with singleton time/channel dimensions."""

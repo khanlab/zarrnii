@@ -1015,8 +1015,19 @@ class ZarrNii:
                 scale = {"x": spacing[0], "y": spacing[1], "z": spacing[2]}
                 translation = {"x": origin[0], "y": origin[1], "z": origin[2]}
 
+        # Create dimensions based on data shape after dimension adjustments
+        final_ndim = len(darr.shape)
+        if final_ndim == 4:
+            # 4D: (c, z, y, x) or (c, x, y, z) - standard case
+            dims = ["c"] + list(axes_order.lower())
+        elif final_ndim == 5:
+            # 5D: (t, c, z, y, x) or (t, c, x, y, z) - time dimension included
+            dims = ["t", "c"] + list(axes_order.lower())
+        else:
+            # Fallback for other cases
+            dims = ["c"] + list(axes_order.lower())
+
         # Create NgffImage
-        dims = ["c", "z", "y", "x"] if axes_order == "ZYX" else ["c", "x", "y", "z"]
         ngff_image = nz.NgffImage(
             data=darr, dims=dims, scale=scale, translation=translation, name=name
         )
@@ -2212,14 +2223,16 @@ class ZarrNii:
                 channel_dim_size = data.shape[i]
                 if data.shape[i] == 1:
                     squeeze_axes.append(i)
-                elif channel is not None:
-                    if channel >= data.shape[i]:
-                        raise ValueError(
-                            f"Channel {channel} is out of range (data has {data.shape[i]} channels)"
-                        )
-                    remaining_dims.append(dim)
+                elif channel is None:
+                    raise ValueError(
+                        f"Data has {data.shape[i]} channels. "
+                        f"Must specify 'channel' parameter to select a single channel."
+                    )
+                elif channel >= data.shape[i]:
+                    raise ValueError(
+                        f"Channel {channel} is out of range (data has {data.shape[i]} channels)"
+                    )
                 else:
-                    # Multiple channels, keep all if no specific channel selected
                     remaining_dims.append(dim)
             else:
                 remaining_dims.append(dim)
