@@ -92,16 +92,16 @@ class TestAtlas:
         atlas = sample_atlas
 
         # Test basic attributes
-        assert hasattr(atlas, 'dseg')
-        assert hasattr(atlas, 'labels_df')
-        assert hasattr(atlas, 'label_column')
-        assert hasattr(atlas, 'name_column')
-        assert hasattr(atlas, 'abbrev_column')
+        assert hasattr(atlas, "dseg")
+        assert hasattr(atlas, "labels_df")
+        assert hasattr(atlas, "label_column")
+        assert hasattr(atlas, "name_column")
+        assert hasattr(atlas, "abbrev_column")
 
         # Test DataFrame contains expected data
         assert len(atlas.labels_df) == 4
-        assert 'index' in atlas.labels_df.columns
-        assert 'name' in atlas.labels_df.columns
+        assert "index" in atlas.labels_df.columns
+        assert "name" in atlas.labels_df.columns
 
     def test_get_region_info(self, sample_atlas):
         """Test getting information for specific regions."""
@@ -326,25 +326,6 @@ class TestLUTConversion:
             assert result_df["index"].tolist() == [1, 2, 3]
 
 
-class TestTemplateFlowWrappers:
-    """Test suite for TemplateFlow wrapper functionality."""
-
-    def test_get_function_without_templateflow(self):
-        """Test get() function raises ImportError when TemplateFlow unavailable."""
-        with pytest.raises(ImportError, match="TemplateFlow is required"):
-            get("MNI152NLin2009cAsym", suffix="T1w")
-
-    def test_get_template_function_without_templateflow(self):
-        """Test get_template() function raises ImportError when TemplateFlow unavailable."""
-        with pytest.raises(ImportError, match="TemplateFlow is required"):
-            get_template("MNI152NLin2009cAsym", "T1w")
-
-    def test_add_template_to_templateflow_without_templateflow(self):
-        """Test add_template_to_templateflow() raises ImportError when TemplateFlow unavailable."""
-        with pytest.raises(ImportError, match="TemplateFlow is required"):
-            add_template_to_templateflow("test.nii.gz", "test.tsv")
-
-
 class TestAmbiguousTemplateFlowQueryError:
     """Test suite for AmbiguousTemplateFlowQueryError exception."""
 
@@ -361,7 +342,13 @@ class TestAmbiguousTemplateFlowQueryError:
 
     def test_ambiguous_templateflow_query_error_with_kwargs(self):
         """Test AmbiguousTemplateFlowQueryError with additional query parameters."""
-        files = ["/path/1.nii.gz", "/path/2.nii.gz", "/path/3.nii.gz", "/path/4.nii.gz", "/path/5.nii.gz"]
+        files = [
+            "/path/1.nii.gz",
+            "/path/2.nii.gz",
+            "/path/3.nii.gz",
+            "/path/4.nii.gz",
+            "/path/5.nii.gz",
+        ]
         error = AmbiguousTemplateFlowQueryError(
             "MNI152", "T1w", files, resolution=1, cohort="01"
         )

@@ -106,9 +106,9 @@ def get_template(template: str, suffix: str = "SPIM", **kwargs) -> "Template":
 
     # Load anatomical image - determine format from file extension
     result_path = Path(str(result))
-    if result_path.suffix.lower() in ['.nii', '.gz']:
+    if result_path.suffix.lower() in [".nii", ".gz"]:
         anatomical_image = ZarrNii.from_nifti(str(result))
-    elif result_path.suffix.lower() == '.zarr' or 'ome.zarr' in str(result_path):
+    elif result_path.suffix.lower() == ".zarr" or "ome.zarr" in str(result_path):
         anatomical_image = ZarrNii.from_ome_zarr(str(result))
     else:
         # Default to NIfTI for unknown extensions
@@ -362,9 +362,9 @@ class Atlas:
             raise FileNotFoundError(f"Labels file not found: {labels_path}")
 
         # Load segmentation image - determine format from file extension
-        if dseg_path.suffix.lower() in ['.nii', '.gz']:
+        if dseg_path.suffix.lower() in [".nii", ".gz"]:
             dseg = ZarrNii.from_nifti(str(dseg_path), **zarrnii_kwargs)
-        elif dseg_path.suffix.lower() == '.zarr' or 'ome.zarr' in str(dseg_path):
+        elif dseg_path.suffix.lower() == ".zarr" or "ome.zarr" in str(dseg_path):
             dseg = ZarrNii.from_ome_zarr(str(dseg_path), **zarrnii_kwargs)
         else:
             # Default to NIfTI for unknown extensions
@@ -688,11 +688,17 @@ def import_lut_itksnap_as_tsv(itksnap_path: str, output_path: str) -> None:
                     # Extract label from quoted string at the end
                     label_start = line.find('"')
                     label_end = line.rfind('"')
-                    if label_start != -1 and label_end != -1 and label_start < label_end:
-                        name = line[label_start+1:label_end]
+                    if (
+                        label_start != -1
+                        and label_end != -1
+                        and label_start < label_end
+                    ):
+                        name = line[label_start + 1 : label_end]
                         # Create abbreviation from name (first letters of words)
-                        abbrev = ''.join([word[0].upper() for word in name.split()[:2]])
-                        data.append({"index": index, "name": name, "abbreviation": abbrev})
+                        abbrev = "".join([word[0].upper() for word in name.split()[:2]])
+                        data.append(
+                            {"index": index, "name": name, "abbreviation": abbrev}
+                        )
 
     df = pd.DataFrame(data)
     df.to_csv(output_path, sep="\t", index=False)
