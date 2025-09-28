@@ -416,9 +416,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#z2n-ome-zarr-to-nifti-conversion" class="md-nav__link">
+  <a href="#z2n-ome-zarr-to-niftitiff-conversion" class="md-nav__link">
     <span class="md-ellipsis">
-      z2n: OME-Zarr to NIfTI Conversion
+      z2n: OME-Zarr to NIfTI/TIFF Conversion
     </span>
   </a>
   
@@ -798,9 +798,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#z2n-ome-zarr-to-nifti-conversion" class="md-nav__link">
+  <a href="#z2n-ome-zarr-to-niftitiff-conversion" class="md-nav__link">
     <span class="md-ellipsis">
-      z2n: OME-Zarr to NIfTI Conversion
+      z2n: OME-Zarr to NIfTI/TIFF Conversion
     </span>
   </a>
   
@@ -865,13 +865,27 @@
 <pre><code class="language-bash">pip install zarrnii
 </code></pre>
 <p>After installation, you'll have access to two console commands:
-- <code>z2n</code> - Convert OME-Zarr to NIfTI
+- <code>z2n</code> - Convert OME-Zarr to NIfTI or TIFF stack format
 - <code>n2z</code> - Convert NIfTI to OME-Zarr</p>
-<h2 id="z2n-ome-zarr-to-nifti-conversion">z2n: OME-Zarr to NIfTI Conversion</h2>
-<p>The <code>z2n</code> script converts OME-Zarr datasets to NIfTI format. It's a wrapper around <code>ZarrNii.from_ome_zarr().to_nifti()</code>.</p>
+<h2 id="z2n-ome-zarr-to-niftitiff-conversion">z2n: OME-Zarr to NIfTI/TIFF Conversion</h2>
+<p>The <code>z2n</code> script converts OME-Zarr datasets to NIfTI format or TIFF stack format. TIFF stack export is particularly useful for compatibility with napari plugins like cellseg3d that don't support OME-Zarr multiscale data.</p>
 <h3 id="basic-usage">Basic Usage</h3>
-<pre><code class="language-bash">z2n input.ome.zarr output.nii.gz
+<pre><code class="language-bash"># NIfTI output
+z2n input.ome.zarr output.nii.gz
+
+# TIFF stack output (auto-detected by pattern)
+z2n input.ome.zarr output_z{z:04d}.tif
 </code></pre>
+<h3 id="output-format-selection">Output Format Selection</h3>
+<p>The output format is automatically detected based on the output filename:
+- <code>.nii</code> or <code>.nii.gz</code> extensions → NIfTI format
+- <code>.tif</code> or <code>.tiff</code> extensions with <code>{z}</code> pattern → TIFF stack format
+- Other extensions default to NIfTI format</p>
+<p><strong>TIFF Stack Format</strong>: Each Z-slice is saved as a separate 2D TIFF file. This format is useful for:
+- Napari plugins that don't support OME-Zarr (e.g., cellseg3d)
+- Tools that expect individual image files
+- Visual inspection of individual slices</p>
+<p>⚠️ <strong>Performance Note</strong>: TIFF stack export loads all data into memory. Consider cropping or downsampling large datasets first.</p>
 <h3 id="options">Options</h3>
 <pre><code class="language-bash">z2n --help
 </code></pre>
@@ -917,6 +931,16 @@ z2n input.ome.zarr output.nii.gz --channels 0,2 --axes-order ZYX
 
 # Change orientation and apply near-isotropic downsampling
 z2n input.ome.zarr output.nii.gz --orientation LPI --downsample-near-isotropic
+
+# TIFF Stack Export
+# Save each Z-slice as a separate TIFF file for compatibility with napari plugins
+z2n input.ome.zarr output_z{z:04d}.tif --tiff-channel 0
+
+# Export to TIFF stack with custom pattern and settings
+z2n input.ome.zarr slices/brain_{z:03d}.tiff --tiff-timepoint 0 --tiff-no-compress
+
+# Export multi-channel data as multi-channel TIFFs (no channel selection)
+z2n input.ome.zarr multichannel_z{z:04d}.tif
 
 # Load specific timepoints
 z2n input.ome.zarr output.nii.gz --timepoints 0,5,10
