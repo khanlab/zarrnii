@@ -104,8 +104,15 @@ def get_template(template: str, suffix: str = "SPIM", **kwargs) -> "Template":
         else:
             result = result[0]  # Single item list
 
-    # Load anatomical image
-    anatomical_image = ZarrNii.from_path(str(result))
+    # Load anatomical image - determine format from file extension
+    result_path = Path(str(result))
+    if result_path.suffix.lower() in ['.nii', '.gz']:
+        anatomical_image = ZarrNii.from_nifti(str(result))
+    elif result_path.suffix.lower() == '.zarr' or 'ome.zarr' in str(result_path):
+        anatomical_image = ZarrNii.from_ome_zarr(str(result))
+    else:
+        # Default to NIfTI for unknown extensions
+        anatomical_image = ZarrNii.from_nifti(str(result))
 
     return Template(
         name=template,
@@ -354,8 +361,14 @@ class Atlas:
         if not labels_path.exists():
             raise FileNotFoundError(f"Labels file not found: {labels_path}")
 
-        # Load segmentation image
-        dseg = ZarrNii.from_path(str(dseg_path), **zarrnii_kwargs)
+        # Load segmentation image - determine format from file extension
+        if dseg_path.suffix.lower() in ['.nii', '.gz']:
+            dseg = ZarrNii.from_nifti(str(dseg_path), **zarrnii_kwargs)
+        elif dseg_path.suffix.lower() == '.zarr' or 'ome.zarr' in str(dseg_path):
+            dseg = ZarrNii.from_ome_zarr(str(dseg_path), **zarrnii_kwargs)
+        else:
+            # Default to NIfTI for unknown extensions
+            dseg = ZarrNii.from_nifti(str(dseg_path), **zarrnii_kwargs)
 
         # Load labels DataFrame
         labels_df = pd.read_csv(labels_path, sep="\t")
@@ -452,6 +465,10 @@ class Atlas:
         """
         label = self._resolve_region_identifier(region_id)
 
+        # Validate that the region exists in our labels_df
+        if not (self.labels_df[self.label_column] == label).any():
+            raise ValueError(f"Region with label {label} not found in atlas")
+
         # Create binary mask
         mask_data = (self.dseg.data == label).astype(np.uint8)
 
@@ -474,7 +491,11 @@ class Atlas:
         label = self._resolve_region_identifier(region_id)
 
         # Count voxels with this label
-        voxel_count = int((self.dseg.data == label).sum().compute())
+        dseg_data = self.dseg.data
+        if hasattr(dseg_data, "compute"):
+            voxel_count = int((dseg_data == label).sum().compute())
+        else:
+            voxel_count = int((dseg_data == label).sum())
 
         # Calculate volume using voxel size from affine
         # Volume per voxel = abs(det(affine[:3, :3]))
@@ -514,7 +535,10 @@ class Atlas:
             )
 
         # Get all unique labels (excluding background)
-        unique_labels = np.unique(self.dseg.data.compute())
+        dseg_data = self.dseg.data
+        if hasattr(dseg_data, "compute"):
+            dseg_data = dseg_data.compute()
+        unique_labels = np.unique(dseg_data)
         unique_labels = unique_labels[unique_labels != background_label]
 
         results = []
@@ -530,23 +554,44 @@ class Atlas:
                 continue
 
             # Compute aggregation
-            if aggregation_func == "mean":
-                agg_value = float(region_values.mean().compute())
-            elif aggregation_func == "sum":
-                agg_value = float(region_values.sum().compute())
-            elif aggregation_func == "std":
-                agg_value = float(region_values.std().compute())
-            elif aggregation_func == "median":
-                agg_value = float(np.median(region_values.compute()))
-            elif aggregation_func == "min":
-                agg_value = float(region_values.min().compute())
-            elif aggregation_func == "max":
-                agg_value = float(region_values.max().compute())
+            if hasattr(region_values, "compute"):
+                # Dask array - need to compute
+                if aggregation_func == "mean":
+                    agg_value = float(region_values.mean().compute())
+                elif aggregation_func == "sum":
+                    agg_value = float(region_values.sum().compute())
+                elif aggregation_func == "std":
+                    agg_value = float(region_values.std().compute())
+                elif aggregation_func == "median":
+                    agg_value = float(np.median(region_values.compute()))
+                elif aggregation_func == "min":
+                    agg_value = float(region_values.min().compute())
+                elif aggregation_func == "max":
+                    agg_value = float(region_values.max().compute())
+                else:
+                    raise ValueError(
+                        f"Unknown aggregation function: {aggregation_func}. "
+                        "Supported: mean, sum, std, median, min, max"
+                    )
             else:
-                raise ValueError(
-                    f"Unknown aggregation function: {aggregation_func}. "
-                    "Supported: mean, sum, std, median, min, max"
-                )
+                # NumPy array - direct computation
+                if aggregation_func == "mean":
+                    agg_value = float(region_values.mean())
+                elif aggregation_func == "sum":
+                    agg_value = float(region_values.sum())
+                elif aggregation_func == "std":
+                    agg_value = float(region_values.std())
+                elif aggregation_func == "median":
+                    agg_value = float(np.median(region_values))
+                elif aggregation_func == "min":
+                    agg_value = float(region_values.min())
+                elif aggregation_func == "max":
+                    agg_value = float(region_values.max())
+                else:
+                    raise ValueError(
+                        f"Unknown aggregation function: {aggregation_func}. "
+                        "Supported: mean, sum, std, median, min, max"
+                    )
 
             # Get region info
             try:
@@ -595,7 +640,10 @@ class Atlas:
             raise ValueError(f"Missing columns in feature_data: {missing_cols}")
 
         # Create output array initialized to zeros
-        feature_map = np.zeros_like(self.dseg.data.compute(), dtype=np.float32)
+        dseg_data = self.dseg.data
+        if hasattr(dseg_data, "compute"):
+            dseg_data = dseg_data.compute()
+        feature_map = np.zeros_like(dseg_data, dtype=np.float32)
 
         # Map feature values to regions
         for _, row in feature_data.iterrows():
@@ -603,7 +651,7 @@ class Atlas:
             feature_value = float(row[feature_column])
 
             # Set all voxels with this label to the feature value
-            feature_map[self.dseg.data.compute() == label] = feature_value
+            feature_map[dseg_data == label] = feature_value
 
         return ZarrNii.from_darr(
             feature_map, affine=self.dseg.affine, axes_order=self.dseg.axes_order
@@ -635,11 +683,16 @@ def import_lut_itksnap_as_tsv(itksnap_path: str, output_path: str) -> None:
         for line in f:
             if line.strip() and not line.startswith("#"):
                 parts = line.strip().split()
-                if len(parts) >= 6:
+                if len(parts) >= 7:  # Should have index, R, G, B, A, VIS, MSH, "LABEL"
                     index = int(parts[0])
-                    # Combine remaining parts as name
-                    name = " ".join(parts[6:]) if len(parts) > 6 else f"Region_{index}"
-                    data.append({"index": index, "name": name})
+                    # Extract label from quoted string at the end
+                    label_start = line.find('"')
+                    label_end = line.rfind('"')
+                    if label_start != -1 and label_end != -1 and label_start < label_end:
+                        name = line[label_start+1:label_end]
+                        # Create abbreviation from name (first letters of words)
+                        abbrev = ''.join([word[0].upper() for word in name.split()[:2]])
+                        data.append({"index": index, "name": name, "abbreviation": abbrev})
 
     df = pd.DataFrame(data)
     df.to_csv(output_path, sep="\t", index=False)
