@@ -124,6 +124,80 @@ def get_template(template: str, suffix: str = "SPIM", **kwargs) -> "Template":
     )
 
 
+def get_atlas(template: str, atlas: str, **kwargs) -> "Atlas":
+    """Load atlas directly from TemplateFlow by template and atlas name.
+    
+    Args:
+        template: Template name (e.g., 'MNI152NLin2009cAsym') 
+        atlas: Atlas name (e.g., 'DKT', 'Harvard-Oxford')
+        **kwargs: Additional TemplateFlow query parameters
+        
+    Returns:
+        Atlas object loaded from TemplateFlow
+        
+    Raises:
+        ImportError: If templateflow is not available
+        FileNotFoundError: If atlas files not found
+    """
+    if not TEMPLATEFLOW_AVAILABLE:
+        raise ImportError(
+            "TemplateFlow is required. Install with: pip install zarrnii[templateflow]"
+        )
+    
+    # Get dseg file  
+    dseg_result = tflow.get(template, suffix="dseg", atlas=atlas, **kwargs)
+    if isinstance(dseg_result, list):
+        if len(dseg_result) == 0:
+            raise FileNotFoundError(f"No dseg files found for template '{template}' atlas '{atlas}'")
+        dseg_file = dseg_result[0]  # Take first match
+    else:
+        dseg_file = dseg_result
+        
+    # Get corresponding TSV file
+    tsv_result = tflow.get(template, suffix="dseg", atlas=atlas, extension=".tsv", **kwargs)
+    if isinstance(tsv_result, list):
+        if len(tsv_result) == 0:
+            raise FileNotFoundError(f"No TSV files found for template '{template}' atlas '{atlas}'")
+        tsv_file = tsv_result[0]  # Take first match
+    else:
+        tsv_file = tsv_result
+        
+    return Atlas.from_files(dseg_file, tsv_file)
+
+
+def save_atlas_to_templateflow(atlas: "Atlas", template_name: str, atlas_name: str) -> str:
+    """Save atlas to TemplateFlow directory as BIDS-compliant files.
+    
+    Args:
+        atlas: Atlas object to save
+        template_name: Template name (e.g., 'MyTemplate')
+        atlas_name: Atlas name (e.g., 'MyAtlas')
+        
+    Returns:
+        Path to created template directory
+        
+    Raises:
+        ImportError: If templateflow is not available
+    """
+    if not TEMPLATEFLOW_AVAILABLE:
+        raise ImportError(
+            "TemplateFlow is required. Install with: pip install zarrnii[templateflow]"
+        )
+    
+    template_dir = Path(TF_HOME) / f"tpl-{template_name}"
+    template_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save dseg.nii.gz file
+    dseg_file = template_dir / f"tpl-{template_name}_atlas-{atlas_name}_dseg.nii.gz"
+    atlas.image.to_nifti(str(dseg_file))
+    
+    # Save dseg.tsv file  
+    tsv_file = template_dir / f"tpl-{template_name}_atlas-{atlas_name}_dseg.tsv"
+    atlas.lookup_table.to_csv(str(tsv_file), sep='\t', index=False)
+    
+    return str(template_dir)
+
+
 @requires_layout
 def add_template_to_templateflow(
     template_path: str,

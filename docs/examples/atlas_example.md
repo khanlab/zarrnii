@@ -2,52 +2,55 @@
 
 This example demonstrates how to use the atlas functionality in ZarrNii for working with brain atlases and performing region-of-interest (ROI) analysis.
 
-## Basic Atlas Usage
+## Atlas-Focused Functionality
 
-### Using Built-in Templates and Atlases
+ZarrNii functionality is **solely for atlases** (dseg.nii.gz + dseg.tsv files), providing:
+- **Loading atlases** from local files or TemplateFlow
+- **Region analysis** by index, name, or abbreviation
+- **ROI aggregation** with multiple statistical functions
+- **Feature mapping** to assign values back to regions
+- **Format conversion** utilities (CSV, ITK-SNAP to TSV)
 
-ZarrNii now uses a **TemplateFlow-compliant** template/atlas architecture where:
-- **Templates** are anatomical reference spaces (e.g., MNI152, ABA) with anatomical images
-- **Atlases** are segmentation+lookup table pairs registered to a template
-- One template can have multiple atlases (different parcellations)
-- **File naming** follows TemplateFlow standard: `tpl-{name}_*.nii.gz` and `template_description.json`
+### Loading Atlases from Files
 
 ```python
-from zarrnii import get_builtin_template, list_builtin_templates, get_builtin_template_atlas
+from zarrnii import Atlas
 
-# List all available built-in templates
-templates = list_builtin_templates()
-for template_info in templates:
-    print(f"{template_info['name']}: {template_info['description']}")
-    print(f"  Resolution: {template_info['resolution']}")
-    print(f"  Available atlases: {template_info['atlases']}")
+# Load atlas from BIDS-format files
+atlas = Atlas.from_files(
+    dseg_path="atlas_dseg.nii.gz",
+    labels_path="atlas_dseg.tsv"
+)
 
-# Get a template (includes anatomical image)
-template = get_builtin_template("placeholder")
-print(f"Template: {template.name}")
-print(f"Anatomical image shape: {template.anatomical_image.shape}")
-
-# List atlases available for this template
-atlases = template.list_available_atlases()
-for atlas in atlases:
-    print(f"  {atlas['name']}: {atlas['description']}")
-
-# Get an atlas from the template
-atlas = template.get_atlas("regions")
-
-# Convenience function (equivalent to above)
-atlas = get_builtin_template_atlas("placeholder", "regions")
+# Get basic atlas information
+print(f"Atlas shape: {atlas.image.shape}")
+print(f"Number of regions: {len(atlas.lookup_table)}")
+print(f"Region labels: {atlas.lookup_table['label'].values}")
 ```
 
-### TemplateFlow Integration
+### Loading Atlases from TemplateFlow
 
-ZarrNii supports the **TemplateFlow standard** for neuroimaging templates with **lazy loading** to TEMPLATEFLOW_HOME:
+```python
+from zarrnii import get_atlas, get_template
 
-- **TemplateFlow naming**: `tpl-{name}/tpl-{name}_{suffix}.nii.gz`
-- **BIDS-compliant metadata**: `template_description.json` 
-- **Atlas naming**: `tpl-{name}_atlas-{atlas}_dseg.{nii.gz,tsv}`
-- **Lazy loading**: Templates automatically copy to TEMPLATEFLOW_HOME on first use (requires `templateflow` extra)
-- **Proper setup**: Uses `@requires_layout` decorator to ensure TemplateFlow directory structure
+# Load atlas directly from TemplateFlow
+atlas = get_atlas("MNI152NLin2009cAsym", "DKT", resolution=1)
+
+# Or load template first, then get atlas
+template = get_template("MNI152NLin2009cAsym", "T1w", resolution=1) 
+# Note: get_template loads anatomical images, get_atlas loads segmentation+labels
+```
+
+### Saving Atlases to TemplateFlow
+
+```python
+from zarrnii import save_atlas_to_templateflow
+
+# Save atlas to TemplateFlow directory as BIDS-compliant files
+template_dir = save_atlas_to_templateflow(atlas, "MyTemplate", "MyAtlas")
+print(f"Atlas saved to: {template_dir}")
+# Creates: tpl-MyTemplate_atlas-MyAtlas_dseg.nii.gz and .tsv files
+```
 - **Unified API**: Access built-in and remote templates through same TemplateFlow interface
 
 ```python
