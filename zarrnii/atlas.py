@@ -168,7 +168,7 @@ def get_atlas(template: str, atlas: str, **kwargs) -> "Atlas":
     else:
         tsv_file = tsv_result
 
-    return Atlas.from_files(dseg_file, tsv_file)
+    return ZarrNiiAtlas.from_files(dseg_file, tsv_file)
 
 
 def save_atlas_to_templateflow(
@@ -204,79 +204,6 @@ def save_atlas_to_templateflow(
     atlas.lookup_table.to_csv(str(tsv_file), sep="\t", index=False)
 
     return str(template_dir)
-
-
-@requires_layout
-def add_template_to_templateflow(
-    template_path: str,
-    labels_path: Optional[str] = None,
-    template_name: Optional[str] = None,
-    suffix: str = "T1w",
-) -> str:
-    """Add new template and optional atlas to TemplateFlow directory.
-
-    This function copies template files to the TemplateFlow directory structure
-    following TemplateFlow naming conventions.
-
-    Args:
-        template_path: Path to template NIfTI file
-        labels_path: Optional path to atlas labels TSV file
-        template_name: Template identifier (derived from filename if not provided)
-        suffix: Template suffix (T1w, SPIM, etc.)
-
-    Returns:
-        Template name for use with TemplateFlow API
-
-    Raises:
-        ImportError: If TemplateFlow is not available
-        FileNotFoundError: If input files don't exist
-        ValueError: If files don't follow expected format
-    """
-    if not TEMPLATEFLOW_AVAILABLE:
-        raise ImportError(
-            "TemplateFlow is required. Install with: pip install zarrnii[templateflow]"
-        )
-
-    template_path = Path(template_path)
-    if not template_path.exists():
-        raise FileNotFoundError(f"Template file not found: {template_path}")
-
-    # Derive template name if not provided
-    if template_name is None:
-        template_name = template_path.stem.replace(".nii", "")
-        if template_name.startswith("tpl-"):
-            template_name = template_name[4:]  # Remove tpl- prefix
-
-    # Set up TemplateFlow directory structure
-    tf_home = Path(TF_HOME)
-    template_dir = tf_home / f"tpl-{template_name}"
-    template_dir.mkdir(exist_ok=True)
-
-    # Copy template file with TemplateFlow naming
-    template_target = template_dir / f"tpl-{template_name}_{suffix}.nii.gz"
-    shutil.copy2(template_path, template_target)
-
-    # Copy labels file if provided
-    if labels_path:
-        labels_path = Path(labels_path)
-        if not labels_path.exists():
-            raise FileNotFoundError(f"Labels file not found: {labels_path}")
-
-        # Derive atlas name from labels filename
-        atlas_name = labels_path.stem.replace("_labels", "").replace("_dseg", "")
-        if atlas_name.startswith("tpl-"):
-            # Extract atlas name from TemplateFlow format
-            parts = atlas_name.split("_atlas-")
-            if len(parts) > 1:
-                atlas_name = parts[1]
-
-        # Copy with TemplateFlow atlas naming
-        labels_target = (
-            template_dir / f"tpl-{template_name}_atlas-{atlas_name}_dseg.tsv"
-        )
-        shutil.copy2(labels_path, labels_target)
-
-    return template_name
 
 
 @define
@@ -354,26 +281,164 @@ class Template:
 
 
 @define
-class Atlas:
+class ZarrNiiAtlas(ZarrNii):
     """Brain atlas with segmentation image and region lookup table.
 
     Represents a brain atlas consisting of a segmentation image (dseg) that
     assigns integer labels to brain regions, and a lookup table (tsv) that
     maps these labels to region names and other metadata.
 
-    Attributes:
-        dseg (ZarrNii): Segmentation image with integer labels for each region
-        labels_df (pd.DataFrame): Lookup table mapping labels to region info
-        label_column (str): Column name containing region labels/indices
-        name_column (str): Column name containing region names
-        abbrev_column (str): Column name containing region abbreviations
+
+    Extension of ZarrNii to support atlas label tables.
+
+    Inherits all functionality from ZarrNii and adds support for
+    storing region/label metadata in a pandas DataFrame.
+
+    Attributes
+    ----------
+    labels_df : pandas.DataFrame
+        DataFrame containing label information for the atlas.
+
     """
 
-    dseg: ZarrNii
-    labels_df: pd.DataFrame
-    label_column: str = field(default="index")
-    name_column: str = field(default="name")
-    abbrev_column: str = field(default="abbreviation")
+    labels_df: pd.DataFrame = None
+
+    @staticmethod
+    def _import_csv_lut(csv_path: str, **kwargs_read_csv) -> pd.DataFrame:
+        """import CSV lookup table
+
+        Args:
+            csv_path: Path to input CSV file
+            kwargs_read_csv: options to pandas read_csv
+        """
+        return pd.read_csv(csv_path, **kwargs_read_csv)
+
+    @staticmethod
+    def _import_tsv_lut(csv_path: str) -> pd.DataFrame:
+        """import TSV lookup table
+
+        Args:
+            tsv_path: Path to input CSV file
+            kwargs_read_tsv: options to pandas read_tsv
+        """
+        return pd.read_csv(tsv_path, sep="\t")
+
+    @staticmethod
+    def _import_labelmapper_lut(
+        labelmapper_json: str,
+        in_cols=["index", "color", "abbreviation", "name"],
+        keep_cols=["name", "abbreviation", "color"],
+    ) -> pd.DataFrame:
+        """Import labelmapper json label lut
+
+        Args:
+            labelmapper_json: Path to the input json file
+        """
+
+        with open(labelmapper_json) as fp:
+            lut = json.load(fp)
+
+        return pd.DataFrame(lut, columns=in_cols).set_index("index")[keep_cols]
+
+    @staticmethod
+    def _import_itksnap_lut(itksnap_txt_path: str) -> pd.DataFrame:
+        """Import ITK-SNAP label file
+
+        Args:
+            itksnap_path: Path to ITK-SNAP label file
+        """
+
+        # Function to convert 8‐bit R, G, B values to a hex string (e.g., "ff0000")
+        def rgb_to_hex(r, g, b):
+            return "{:02x}{:02x}{:02x}".format(int(r), int(g), int(b))
+
+        # Read the ITK‐Snap LUT file.
+        # The ITK‐Snap LUT contains a header (all lines starting with "#")
+        # so we use the "comment" argument to skip those lines.
+        # The data columns are (in order):
+        #   index, R, G, B, A, VIS, MSH, LABEL
+        columns = ["index", "R", "G", "B", "A", "VIS", "MSH", "LABEL"]
+        df = pd.read_csv(
+            itksnap_txt_path, sep=r"\s+", comment="#", header=None, names=columns
+        )
+
+        # Remove the surrounding quotes from the LABEL column to get the ROI name.
+        df["name"] = df["LABEL"].str.strip('"')
+
+        # Create the BIDS color column by converting the R, G, B values to a hex string.
+        df["color"] = df.apply(
+            lambda row: rgb_to_hex(row["R"], row["G"], row["B"]), axis=1
+        )
+
+        # For the BIDS LUT, we only need the columns "index", "name", and "color"
+        return df[["index", "name", "color"]]
+
+    def __init__(self, *args, labels_df=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.labels_df = labels_df
+
+    # ---- New constructors for different LUT formats ----
+
+    @classmethod
+    def from_itksnap_lut(cls, path, lut_path, **kwargs):
+        """
+        Construct from itksnap lut file.
+        """
+        znii = super().from_file(path, **kwargs)
+        labels_df = cls._import_itksnap_lut(lut_path)
+        print(labels_df)
+        return cls(
+            ngff_image=znii.ngff_image,
+            axes_order=znii.axes_order,
+            xyz_orientation=znii.xyz_orientation,
+            labels_df=labels_df,
+            _omero=getattr(znii, "_omero", None),
+        )
+
+    @classmethod
+    def from_csv_lut(cls, path, lut_path, **kwargs):
+        """
+        Construct from csv lut file.
+        """
+        znii = super().from_file(path, **kwargs)
+        labels_df = cls._import_csv_lut(lut_path)
+        return cls(
+            ngff_image=znii.ngff_image,
+            axes_order=znii.axes_order,
+            xyz_orientation=znii.xyz_orientation,
+            labels_df=labels_df,
+            _omero=getattr(znii, "_omero", None),
+        )
+
+    @classmethod
+    def from_tsv_lut(cls, path, lut_path, **kwargs):
+        """
+        Construct from tsv lut file.
+        """
+        znii = super().from_file(path, **kwargs)
+        labels_df = cls._import_tsv_lut(lut_path)
+        return cls(
+            ngff_image=znii.ngff_image,
+            axes_order=znii.axes_order,
+            xyz_orientation=znii.xyz_orientation,
+            labels_df=labels_df,
+            _omero=getattr(znii, "_omero", None),
+        )
+
+    @classmethod
+    def from_labelmapper_lut(cls, path, lut_path, **kwargs):
+        """
+        Construct from labelmapper lut file.
+        """
+        znii = super().from_file(path, **kwargs)
+        labels_df = cls._import_labelmapper_lut(lut_path)
+        return cls(
+            ngff_image=znii.ngff_image,
+            axes_order=znii.axes_order,
+            xyz_orientation=znii.xyz_orientation,
+            labels_df=labels_df,
+            _omero=getattr(znii, "_omero", None),
+        )
 
     def __attrs_post_init__(self):
         """Validate atlas consistency after initialization."""
@@ -407,61 +472,6 @@ class Atlas:
         if duplicates.any():
             dup_labels = self.labels_df[duplicates][self.label_column].tolist()
             raise ValueError(f"Duplicate labels found in atlas: {dup_labels}")
-
-    @classmethod
-    def from_files(
-        cls,
-        dseg_path: Union[str, Path],
-        labels_path: Union[str, Path],
-        label_column: str = "index",
-        name_column: str = "name",
-        abbrev_column: str = "abbreviation",
-        **zarrnii_kwargs,
-    ) -> "Atlas":
-        """Load atlas from dseg image and labels TSV files.
-
-        Args:
-            dseg_path: Path to segmentation image (dseg.nii.gz or .ome.zarr)
-            labels_path: Path to labels TSV file (dseg.tsv)
-            label_column: Column name for region labels/indices
-            name_column: Column name for region names
-            abbrev_column: Column name for region abbreviations
-            **zarrnii_kwargs: Additional arguments passed to ZarrNii.from_path()
-
-        Returns:
-            Atlas instance
-
-        Raises:
-            FileNotFoundError: If files don't exist
-            ValueError: If files are invalid or incompatible
-        """
-        dseg_path = Path(dseg_path)
-        labels_path = Path(labels_path)
-
-        if not dseg_path.exists():
-            raise FileNotFoundError(f"Segmentation file not found: {dseg_path}")
-        if not labels_path.exists():
-            raise FileNotFoundError(f"Labels file not found: {labels_path}")
-
-        # Load segmentation image - determine format from file extension
-        if dseg_path.suffix.lower() in [".nii", ".gz"]:
-            dseg = ZarrNii.from_nifti(str(dseg_path), **zarrnii_kwargs)
-        elif dseg_path.suffix.lower() == ".zarr" or "ome.zarr" in str(dseg_path):
-            dseg = ZarrNii.from_ome_zarr(str(dseg_path), **zarrnii_kwargs)
-        else:
-            # Default to NIfTI for unknown extensions
-            dseg = ZarrNii.from_nifti(str(dseg_path), **zarrnii_kwargs)
-
-        # Load labels DataFrame
-        labels_df = pd.read_csv(labels_path, sep="\t")
-
-        return cls(
-            dseg=dseg,
-            labels_df=labels_df,
-            label_column=label_column,
-            name_column=name_column,
-            abbrev_column=abbrev_column,
-        )
 
     def _resolve_region_identifier(self, region_id: Union[int, str]) -> int:
         """Resolve region identifier to integer label.
@@ -738,49 +748,3 @@ class Atlas:
         return ZarrNii.from_darr(
             feature_map, affine=self.dseg.affine, axes_order=self.dseg.axes_order
         )
-
-
-# Utility functions for atlas format conversion (from SPIMquant)
-def import_lut_csv_as_tsv(csv_path: str, output_path: str) -> None:
-    """Convert CSV lookup table to BIDS TSV format.
-
-    Args:
-        csv_path: Path to input CSV file
-        output_path: Path to output TSV file
-    """
-    df = pd.read_csv(csv_path)
-    df.to_csv(output_path, sep="\t", index=False)
-
-
-def import_lut_itksnap_as_tsv(itksnap_path: str, output_path: str) -> None:
-    """Convert ITK-SNAP label file to BIDS TSV format.
-
-    Args:
-        itksnap_path: Path to ITK-SNAP label file
-        output_path: Path to output TSV file
-    """
-    # Parse ITK-SNAP format (simplified version)
-    data = []
-    with open(itksnap_path) as f:
-        for line in f:
-            if line.strip() and not line.startswith("#"):
-                parts = line.strip().split()
-                if len(parts) >= 7:  # Should have index, R, G, B, A, VIS, MSH, "LABEL"
-                    index = int(parts[0])
-                    # Extract label from quoted string at the end
-                    label_start = line.find('"')
-                    label_end = line.rfind('"')
-                    if (
-                        label_start != -1
-                        and label_end != -1
-                        and label_start < label_end
-                    ):
-                        name = line[label_start + 1 : label_end]
-                        # Create abbreviation from name (first letters of words)
-                        abbrev = "".join([word[0].upper() for word in name.split()[:2]])
-                        data.append(
-                            {"index": index, "name": name, "abbreviation": abbrev}
-                        )
-
-    df = pd.DataFrame(data)
-    df.to_csv(output_path, sep="\t", index=False)

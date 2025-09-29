@@ -11,18 +11,15 @@ import pytest
 from zarrnii import (
     AffineTransform,
     AmbiguousTemplateFlowQueryError,
-    Atlas,
     ZarrNii,
-    add_template_to_templateflow,
+    ZarrNiiAtlas,
     get,
     get_template,
-    import_lut_csv_as_tsv,
-    import_lut_itksnap_as_tsv,
 )
 
 
-class TestAtlas:
-    """Test suite for Atlas class."""
+class TestZarrNiiAtlas:
+    """Test suite for ZarrNiiAtlas class."""
 
     @pytest.fixture
     def sample_atlas_data(self):
@@ -57,14 +54,14 @@ class TestAtlas:
 
     @pytest.fixture
     def sample_atlas(self, sample_atlas_data):
-        """Create Atlas instance from sample data."""
+        """Create ZarrNiiAtlas instance from sample data."""
         dseg, labels_df = sample_atlas_data
-        return Atlas(dseg=dseg, labels_df=labels_df)
+        return ZarrNiiAtlas(dseg=dseg, labels_df=labels_df)
 
     def test_atlas_creation(self, sample_atlas_data):
-        """Test basic Atlas creation."""
+        """Test basic ZarrNiiAtlas creation."""
         dseg, labels_df = sample_atlas_data
-        atlas = Atlas(dseg=dseg, labels_df=labels_df)
+        atlas = ZarrNiiAtlas(dseg=dseg, labels_df=labels_df)
 
         assert atlas.dseg is dseg
         assert atlas.labels_df is labels_df
@@ -79,16 +76,16 @@ class TestAtlas:
         # Test missing required column
         bad_df = labels_df.drop(columns=["name"])
         with pytest.raises(ValueError, match="Missing required columns"):
-            Atlas(dseg=dseg, labels_df=bad_df)
+            ZarrNiiAtlas(dseg=dseg, labels_df=bad_df)
 
         # Test duplicate labels
         dup_df = labels_df.copy()
         dup_df.loc[len(dup_df)] = [1, "Duplicate", "DUP"]  # Duplicate index 1
         with pytest.raises(ValueError, match="Duplicate labels found"):
-            Atlas(dseg=dseg, labels_df=dup_df)
+            ZarrNiiAtlas(dseg=dseg, labels_df=dup_df)
 
     def test_atlas_properties(self, sample_atlas):
-        """Test Atlas basic properties."""
+        """Test ZarrNiiAtlas basic properties."""
         atlas = sample_atlas
 
         # Test basic attributes
@@ -230,11 +227,11 @@ class TestAtlas:
         assert np.all(map_data[dseg_data == 0] == 0.0)  # Background value
 
 
-class TestAtlasFileIO:
-    """Test suite for Atlas file I/O operations."""
+class TestZarrNiiAtlasFileIO:
+    """Test suite for ZarrNiiAtlas file I/O operations."""
 
     def test_from_files(self):
-        """Test loading Atlas from files."""
+        """Test loading ZarrNiiAtlas from files."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
 
@@ -259,10 +256,10 @@ class TestAtlasFileIO:
             )
             labels_df.to_csv(labels_path, sep="\t", index=False)
 
-            # Load Atlas
-            atlas = Atlas.from_files(dseg_path, labels_path)
+            # Load ZarrNiiAtlas
+            atlas = ZarrNiiAtlas.from_files(dseg_path, labels_path)
 
-            assert isinstance(atlas, Atlas)
+            assert isinstance(atlas, ZarrNiiAtlas)
             # ZarrNii from NIfTI may add a channel dimension
             expected_shapes = [shape, (1,) + shape]
             assert atlas.dseg.shape in expected_shapes
