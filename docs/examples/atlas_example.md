@@ -14,18 +14,18 @@ ZarrNii functionality is **solely for atlases** (dseg.nii.gz + dseg.tsv files), 
 ### Loading Atlases from Files
 
 ```python
-from zarrnii import Atlas
+from zarrnii import ZarrNiiAtlas
 
 # Load atlas from BIDS-format files
-atlas = Atlas.from_files(
+atlas = ZarrNiiAtlas.from_files(
     dseg_path="atlas_dseg.nii.gz",
     labels_path="atlas_dseg.tsv"
 )
 
 # Get basic atlas information
-print(f"Atlas shape: {atlas.image.shape}")
-print(f"Number of regions: {len(atlas.lookup_table)}")
-print(f"Region labels: {atlas.lookup_table['label'].values}")
+print(f"Atlas shape: {atlas.dseg.shape}")
+print(f"Number of regions: {len(atlas.labels_df)}")
+print(f"Region labels: {atlas.labels_df[atlas.label_column].values}")
 ```
 
 ### Loading Atlases from TemplateFlow
@@ -33,12 +33,12 @@ print(f"Region labels: {atlas.lookup_table['label'].values}")
 ```python
 from zarrnii import get_atlas, get_template
 
-# Load atlas directly from TemplateFlow
-atlas = get_atlas("MNI152NLin2009cAsym", "DKT", resolution=1)
+# Load atlas directly from TemplateFlow (if available)
+# atlas = get_atlas("MNI152NLin2009cAsym", "DKT", resolution=1)
 
-# Or load template first, then get atlas
-template = get_template("MNI152NLin2009cAsym", "T1w", resolution=1) 
-# Note: get_template loads anatomical images, get_atlas loads segmentation+labels
+# Or load template first
+# template = get_template("MNI152NLin2009cAsym", "T1w", resolution=1)
+# Note: These functions require templateflow to be installed
 ```
 
 ### Saving Atlases to TemplateFlow
@@ -47,7 +47,8 @@ template = get_template("MNI152NLin2009cAsym", "T1w", resolution=1)
 from zarrnii import save_atlas_to_templateflow
 
 # Save atlas to TemplateFlow directory as BIDS-compliant files
-template_dir = save_atlas_to_templateflow(atlas, "MyTemplate", "MyAtlas")
+# Requires templateflow to be installed
+# template_dir = save_atlas_to_templateflow(atlas, "MyTemplate", "MyAtlas")
 print(f"Atlas saved to: {template_dir}")
 # Creates: tpl-MyTemplate_atlas-MyAtlas_dseg.nii.gz and .tsv files
 ```
@@ -108,25 +109,26 @@ atlas = get_builtin_atlas("placeholder")  # Gets default atlas from default temp
 ### Loading an Atlas from Files
 
 ```python
-from zarrnii import Atlas
+from zarrnii import ZarrNiiAtlas
 import numpy as np
 
 # Load atlas from BIDS format files
-atlas = Atlas.from_files(
+atlas = ZarrNiiAtlas.from_files(
     dseg_path="path/to/atlas_dseg.nii.gz",
     labels_path="path/to/atlas_dseg.tsv"
 )
 
 print(f"Atlas loaded: {atlas}")
-print(f"Number of regions: {len(atlas.region_labels)}")
-print(f"Region names: {atlas.region_names[:5]}...")  # First 5 regions
+print(f"Number of regions: {len(atlas.labels_df)}")
+print(f"Region names: {atlas.labels_df[atlas.name_column].tolist()[:5]}...")  # First 5 regions
 ```
 
 ### Creating an Atlas from Existing Data
 
 ```python
-from zarrnii import ZarrNii, Atlas, AffineTransform
+from zarrnii import ZarrNii, ZarrNiiAtlas, AffineTransform
 import pandas as pd
+import numpy as np
 
 # Create a simple segmentation image
 shape = (64, 64, 64)
@@ -141,7 +143,7 @@ labels_df = pd.DataFrame({
 })
 
 # Create Atlas
-atlas = Atlas(dseg=dseg, labels_df=labels_df)
+atlas = ZarrNiiAtlas.create_from_dseg(dseg, labels_df)
 ```
 
 ## Region Analysis
@@ -191,13 +193,16 @@ hippocampus_mask.to_nifti("hippocampus_mask.nii.gz")
 ```python
 # Calculate volume for all regions
 volumes = {}
-for label in atlas.region_labels:
+for _, row in atlas.labels_df.iterrows():
+    label = row[atlas.label_column]
+    if label == 0:  # Skip background
+        continue
     volume = atlas.get_region_volume(label)
-    name = atlas.get_region_info(label)['name']
+    name = row[atlas.name_column]
     volumes[name] = volume
     print(f"{name}: {volume:.2f} mm³")
 
-# NEW: Calculate volume by name or abbreviation
+# Calculate volume by name or abbreviation
 cortex_volume = atlas.get_region_volume("Cortex")
 hippocampus_volume = atlas.get_region_volume("HIP")  # By abbreviation
 print(f"Cortex volume: {cortex_volume:.2f} mm³")
@@ -237,8 +242,8 @@ stats = {}
 for func in ["mean", "std", "min", "max"]:
     stats[func] = atlas.aggregate_image_by_regions(image, aggregation_func=func)
 
-# Combine results
-combined_results = stats["mean"][["index", "name", "abbreviation"]].copy()
+# Combine results (note: results have 'label' and 'name' columns by default)
+combined_results = stats["mean"][["label", "name"]].copy()
 for func in ["mean", "std", "min", "max"]:
     combined_results[f"{func}_value"] = stats[func][f"{func}_value"]
 
@@ -248,13 +253,11 @@ print(combined_results.head())
 ### Analyzing Specific Regions Only
 
 ```python
-# Analyze only cortical regions (assuming labels 1-3 are cortical)
-cortical_regions = [1, 2, 3]
-cortical_results = atlas.aggregate_image_by_regions(
-    image, 
-    aggregation_func="mean",
-    regions=cortical_regions
-)
+# Get results for all regions, then filter
+all_results = atlas.aggregate_image_by_regions(image, aggregation_func="mean")
+
+# Filter to specific regions (e.g., cortical regions with labels 1-3)
+cortical_results = all_results[all_results["label"].isin([1, 2, 3])]
 
 print("Cortical region analysis:")
 print(cortical_results)
@@ -290,19 +293,29 @@ activation_map.to_nifti("activation_map.nii.gz")
 p_value_map.to_nifti("p_value_map.nii.gz")
 ```
 
-## Summary Statistics
+## Atlas Summary Information
 
 ### Getting Atlas Overview
 
 ```python
-# Get summary statistics for all regions
-summary = atlas.get_summary_statistics()
+# Get information about all regions
 print("Atlas Summary:")
-print(summary[['name', 'volume_mm3', 'voxel_count']].head())
+print(f"Total regions: {len(atlas.labels_df)}")
+print(f"\nRegion list:")
+for _, row in atlas.labels_df.iterrows():
+    label = row[atlas.label_column]
+    name = row[atlas.name_column]
+    if label != 0:  # Skip background
+        volume = atlas.get_region_volume(label)
+        print(f"  {label}: {name} - {volume:.2f} mm³")
 
-# Total brain volume (excluding background)
-total_volume = summary[summary['index'] != 0]['volume_mm3'].sum()
-print(f"Total brain volume: {total_volume:.2f} mm³")
+# Calculate total brain volume (excluding background)
+total_volume = sum(
+    atlas.get_region_volume(row[atlas.label_column])
+    for _, row in atlas.labels_df.iterrows()
+    if row[atlas.label_column] != 0
+)
+print(f"\nTotal brain volume: {total_volume:.2f} mm³")
 ```
 
 ## Lookup Table Conversion Utilities
@@ -337,8 +350,8 @@ import_lut_itksnap_as_tsv(
 ### Working with Multi-Resolution Data
 
 ```python
-# Load atlas at different resolution levels
-atlas = Atlas.from_files(
+# Load atlas at different resolution levels (if using OME-Zarr format)
+atlas = ZarrNiiAtlas.from_files(
     dseg_path="atlas.ome.zarr",
     labels_path="atlas_dseg.tsv",
     level=2  # Use downsampled level
@@ -350,10 +363,15 @@ atlas = Atlas.from_files(
 ### Custom Column Names
 
 ```python
-# Work with custom column naming conventions
-atlas = Atlas.from_files(
-    dseg_path="custom_atlas.nii.gz",
-    labels_path="custom_labels.tsv",
+# Create atlas with custom column naming conventions
+# First load the data
+dseg = ZarrNii.from_nifti("custom_atlas.nii.gz")
+labels_df = pd.read_csv("custom_labels.tsv", sep="\t")
+
+# Create atlas with custom column names
+atlas = ZarrNiiAtlas.create_from_dseg(
+    dseg, 
+    labels_df,
     label_column="region_id",
     name_column="region_name",
     abbrev_column="short_name"
@@ -364,7 +382,7 @@ atlas = Atlas.from_files(
 
 ```python
 try:
-    atlas = Atlas.from_files("nonexistent.nii.gz", "nonexistent.tsv")
+    atlas = ZarrNiiAtlas.from_files("nonexistent.nii.gz", "nonexistent.tsv")
 except FileNotFoundError as e:
     print(f"Atlas files not found: {e}")
 
@@ -378,14 +396,14 @@ except ValueError as e:
 
 ```python
 # Complete workflow: load, transform, analyze
-from zarrnii import ZarrNii, Transform
+from zarrnii import ZarrNii, ZarrNiiAtlas, AffineTransform
 
 # Load atlas and image
-atlas = Atlas.from_files("atlas_dseg.nii.gz", "atlas_dseg.tsv")
+atlas = ZarrNiiAtlas.from_files("atlas_dseg.nii.gz", "atlas_dseg.tsv")
 image = ZarrNii.from_ome_zarr("microscopy_data.ome.zarr", level=1)
 
 # Apply spatial transformation to align image to atlas
-transform = Transform.affine_ras_from_txt("subject_to_atlas.txt")
+transform = AffineTransform.from_txt("subject_to_atlas.txt")
 aligned_image = image.apply_transform(transform, ref_znimg=atlas.dseg)
 
 # Perform ROI analysis

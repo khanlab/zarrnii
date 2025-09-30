@@ -13,8 +13,8 @@ from zarrnii import (
     AmbiguousTemplateFlowQueryError,
     ZarrNii,
     ZarrNiiAtlas,
-    get,
-    get_template,
+    import_lut_csv_as_tsv,
+    import_lut_itksnap_as_tsv,
 )
 
 
@@ -56,14 +56,14 @@ class TestZarrNiiAtlas:
     def sample_atlas(self, sample_atlas_data):
         """Create ZarrNiiAtlas instance from sample data."""
         dseg, labels_df = sample_atlas_data
-        return ZarrNiiAtlas(dseg=dseg, labels_df=labels_df)
+        return ZarrNiiAtlas.create_from_dseg(dseg, labels_df)
 
     def test_atlas_creation(self, sample_atlas_data):
         """Test basic ZarrNiiAtlas creation."""
         dseg, labels_df = sample_atlas_data
-        atlas = ZarrNiiAtlas(dseg=dseg, labels_df=labels_df)
+        atlas = ZarrNiiAtlas.create_from_dseg(dseg, labels_df)
 
-        assert atlas.dseg is dseg
+        assert atlas.dseg is atlas  # dseg property returns self
         assert atlas.labels_df is labels_df
         assert atlas.label_column == "index"
         assert atlas.name_column == "name"
@@ -76,13 +76,13 @@ class TestZarrNiiAtlas:
         # Test missing required column
         bad_df = labels_df.drop(columns=["name"])
         with pytest.raises(ValueError, match="Missing required columns"):
-            ZarrNiiAtlas(dseg=dseg, labels_df=bad_df)
+            ZarrNiiAtlas.create_from_dseg(dseg, bad_df)
 
         # Test duplicate labels
         dup_df = labels_df.copy()
         dup_df.loc[len(dup_df)] = [1, "Duplicate", "DUP"]  # Duplicate index 1
         with pytest.raises(ValueError, match="Duplicate labels found"):
-            ZarrNiiAtlas(dseg=dseg, labels_df=dup_df)
+            ZarrNiiAtlas.create_from_dseg(dseg, dup_df)
 
     def test_atlas_properties(self, sample_atlas):
         """Test ZarrNiiAtlas basic properties."""
