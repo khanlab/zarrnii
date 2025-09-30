@@ -209,6 +209,131 @@ print(f"Cortex volume: {cortex_volume:.2f} mm³")
 print(f"Hippocampus volume: {hippocampus_volume:.2f} mm³")
 ```
 
+## Region-Based Cropping
+
+### Getting Bounding Boxes for Regions
+
+The `get_region_bounding_box` method allows you to extract the spatial extents of one or more atlas regions in physical coordinates, which can then be used to crop images to focus on specific anatomical structures.
+
+```python
+from zarrnii import ZarrNiiAtlas
+
+# Load an atlas
+atlas = ZarrNiiAtlas.from_files("atlas_dseg.nii.gz", "atlas_dseg.tsv")
+
+# Get bounding box for a single region by name
+bbox_min, bbox_max = atlas.get_region_bounding_box("Hippocampus")
+print(f"Hippocampus extends from {bbox_min} to {bbox_max} mm in physical space")
+
+# Get bounding box for multiple regions
+bbox_min, bbox_max = atlas.get_region_bounding_box(["Hippocampus", "Amygdala"])
+print(f"Combined bounding box: {bbox_min} to {bbox_max}")
+
+# Use regex to select regions
+bbox_min, bbox_max = atlas.get_region_bounding_box(regex="Hippocampus.*")
+print(f"All hippocampal subfields: {bbox_min} to {bbox_max}")
+```
+
+### Cropping Images to Regions
+
+The bounding boxes returned by `get_region_bounding_box` are in physical coordinates and can be used directly with the `crop` method:
+
+```python
+from zarrnii import ZarrNii
+
+# Load a brain image
+image = ZarrNii.from_nifti("brain_image.nii.gz")
+
+# Get bounding box for hippocampus
+bbox_min, bbox_max = atlas.get_region_bounding_box("Hippocampus")
+
+# Crop the image to the hippocampus region
+cropped_image = image.crop(bbox_min, bbox_max, physical_coords=True)
+
+# Save the cropped region
+cropped_image.to_nifti("hippocampus_cropped.nii.gz")
+```
+
+### Example: Cropping and Saving as TIFF Stack
+
+Here's a complete example showing how to crop around the hippocampus and save as a z-stack of TIFF images:
+
+```python
+from zarrnii import ZarrNii, ZarrNiiAtlas
+import numpy as np
+from PIL import Image
+from pathlib import Path
+
+# Load atlas and image
+atlas = ZarrNiiAtlas.from_files("atlas_dseg.nii.gz", "atlas_dseg.tsv")
+brain_image = ZarrNii.from_nifti("brain_mri.nii.gz")
+
+# Get bounding box for hippocampus (or use regex for bilateral hippocampi)
+bbox_min, bbox_max = atlas.get_region_bounding_box(regex="[Hh]ippocampus.*")
+
+# Crop both the atlas and the image
+cropped_atlas = atlas.crop(bbox_min, bbox_max, physical_coords=True)
+cropped_image = brain_image.crop(bbox_min, bbox_max, physical_coords=True)
+
+# Get the data (compute if dask array)
+image_data = cropped_image.data
+if hasattr(image_data, "compute"):
+    image_data = image_data.compute()
+
+# Create output directory
+output_dir = Path("hippocampus_slices")
+output_dir.mkdir(exist_ok=True)
+
+# Save each z-slice as a TIFF
+# Handle different axes orders (CZYX or CXYZ)
+if cropped_image.axes_order == "ZYX":
+    # Data is (C, Z, Y, X)
+    channel_idx = 0 if image_data.ndim == 4 else None
+    for z_idx in range(image_data.shape[1] if channel_idx is not None else image_data.shape[0]):
+        if channel_idx is not None:
+            slice_data = image_data[channel_idx, z_idx, :, :]
+        else:
+            slice_data = image_data[z_idx, :, :]
+        
+        # Normalize to 0-255 for TIFF
+        slice_normalized = ((slice_data - slice_data.min()) / 
+                           (slice_data.max() - slice_data.min()) * 255).astype(np.uint8)
+        
+        # Save as TIFF
+        img = Image.fromarray(slice_normalized)
+        img.save(output_dir / f"hippocampus_z{z_idx:03d}.tif")
+
+print(f"Saved {image_data.shape[1 if channel_idx is not None else 0]} slices to {output_dir}")
+```
+
+### Cropping Multiple Regions
+
+You can easily create crops for multiple regions of interest:
+
+```python
+# Define regions of interest
+regions_of_interest = {
+    "hippocampus": "Hippocampus",
+    "amygdala": "Amygdala",
+    "cortical": "cortex.*",  # regex pattern
+}
+
+# Crop and save each region
+for region_name, region_pattern in regions_of_interest.items():
+    # Get bounding box (use regex if pattern contains special characters)
+    if any(char in region_pattern for char in ["*", ".", "[", "]"]):
+        bbox_min, bbox_max = atlas.get_region_bounding_box(regex=region_pattern)
+    else:
+        bbox_min, bbox_max = atlas.get_region_bounding_box(region_pattern)
+    
+    # Crop image
+    cropped = brain_image.crop(bbox_min, bbox_max, physical_coords=True)
+    
+    # Save
+    cropped.to_nifti(f"{region_name}_cropped.nii.gz")
+    print(f"Saved {region_name} crop: shape={cropped.shape}")
+```
+
 ## Image Analysis with Atlas
 
 ### Aggregating Image Values by Regions
