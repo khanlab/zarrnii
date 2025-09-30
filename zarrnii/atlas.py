@@ -10,7 +10,6 @@ https://github.com/khanlab/SPIMquant/blob/main/spimquant/workflow/scripts/
 """
 
 import json
-import shutil
 import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -125,7 +124,7 @@ def get_template(template: str, suffix: str = "SPIM", **kwargs) -> "Template":
     )
 
 
-def get_atlas(template: str, atlas: str, **kwargs) -> "Atlas":
+def get_atlas(template: str, atlas: str, **kwargs) -> "ZarrNiiAtlas":
     """Load atlas directly from TemplateFlow by template and atlas name.
 
     Args:
@@ -173,7 +172,7 @@ def get_atlas(template: str, atlas: str, **kwargs) -> "Atlas":
 
 
 def save_atlas_to_templateflow(
-    atlas: "Atlas", template_name: str, atlas_name: str
+    atlas: "ZarrNiiAtlas", template_name: str, atlas_name: str
 ) -> str:
     """Save atlas to TemplateFlow directory as BIDS-compliant files.
 
@@ -230,7 +229,7 @@ class Template:
     dimensions: Tuple = field(default=())
     metadata: Dict[str, Any] = field(factory=dict)
 
-    def get_atlas(self, atlas_name: str) -> "Atlas":
+    def get_atlas(self, atlas_name: str) -> "ZarrNiiAtlas":
         """Get a specific atlas for this template using TemplateFlow.
 
         Args:
@@ -273,7 +272,7 @@ class Template:
             if not labels_path:
                 raise FileNotFoundError(f"No dseg.tsv found for atlas {atlas_name}")
 
-            return Atlas.from_files(dseg_path, labels_path)
+            return ZarrNiiAtlas.from_files(dseg_path, labels_path)
 
         except Exception as e:
             raise FileNotFoundError(
@@ -321,18 +320,18 @@ class ZarrNiiAtlas(ZarrNii):
     @classmethod
     def create_from_dseg(cls, dseg: ZarrNii, labels_df: pd.DataFrame, **kwargs):
         """Create ZarrNiiAtlas from a dseg ZarrNii and labels DataFrame.
-        
+
         Args:
             dseg: ZarrNii segmentation image
             labels_df: DataFrame containing label information
             **kwargs: Additional keyword arguments for label/name/abbrev columns
-            
+
         Returns:
             ZarrNiiAtlas instance
         """
         if not isinstance(dseg, ZarrNii):
             raise TypeError(f"dseg must be a ZarrNii instance, got {type(dseg)}")
-        
+
         # Note: attrs strips leading underscore from _omero in __init__ signature
         # so we pass it as 'omero' instead of '_omero'
         return cls(
@@ -341,7 +340,7 @@ class ZarrNiiAtlas(ZarrNii):
             xyz_orientation=dseg.xyz_orientation,
             omero=getattr(dseg, "_omero", None),
             labels_df=labels_df,
-            **kwargs
+            **kwargs,
         )
 
     @staticmethod
@@ -355,12 +354,11 @@ class ZarrNiiAtlas(ZarrNii):
         return pd.read_csv(csv_path, **kwargs_read_csv)
 
     @staticmethod
-    def _import_tsv_lut(csv_path: str) -> pd.DataFrame:
+    def _import_tsv_lut(tsv_path: str) -> pd.DataFrame:
         """import TSV lookup table
 
         Args:
-            tsv_path: Path to input CSV file
-            kwargs_read_tsv: options to pandas read_tsv
+            tsv_path: Path to input TSV file
         """
         return pd.read_csv(tsv_path, sep="\t")
 
@@ -417,23 +415,25 @@ class ZarrNiiAtlas(ZarrNii):
     # ---- New constructors for different LUT formats ----
 
     @classmethod
-    def from_files(cls, dseg_path: Union[str, Path], labels_path: Union[str, Path], **kwargs):
+    def from_files(
+        cls, dseg_path: Union[str, Path], labels_path: Union[str, Path], **kwargs
+    ):
         """Load ZarrNiiAtlas from dseg image and labels TSV files.
-        
+
         Args:
             dseg_path: Path to segmentation image (NIfTI or OME-Zarr)
             labels_path: Path to labels TSV file
             **kwargs: Additional arguments passed to ZarrNii.from_file()
-            
+
         Returns:
             ZarrNiiAtlas instance
         """
         # Load segmentation image
         dseg = ZarrNii.from_file(str(dseg_path), **kwargs)
-        
+
         # Load labels dataframe
         labels_df = pd.read_csv(str(labels_path), sep="\t")
-        
+
         # Create atlas instance using create_from_dseg
         return cls.create_from_dseg(dseg, labels_df)
 
@@ -508,7 +508,7 @@ class ZarrNiiAtlas(ZarrNii):
         """Validate that atlas components are consistent."""
         if self.labels_df is None:
             return  # Nothing to validate
-            
+
         # Check that required columns exist
         required_cols = [self.label_column, self.name_column]
         missing_cols = [
@@ -815,12 +815,12 @@ class ZarrNiiAtlas(ZarrNii):
 
 # Utility functions for LUT conversion
 def import_lut_csv_as_tsv(
-    csv_path: Union[str, Path], 
+    csv_path: Union[str, Path],
     tsv_path: Union[str, Path],
-    csv_columns: Optional[List[str]] = None
+    csv_columns: Optional[List[str]] = None,
 ) -> None:
     """Convert CSV lookup table to BIDS-compatible TSV format.
-    
+
     Args:
         csv_path: Path to input CSV file
         tsv_path: Path to output TSV file
@@ -828,35 +828,32 @@ def import_lut_csv_as_tsv(
     """
     # Read CSV
     df = pd.read_csv(csv_path)
-    
+
     # Reorder columns if specified
     if csv_columns is not None:
         df = df[csv_columns]
-    
+
     # Write as TSV
     df.to_csv(tsv_path, sep="\t", index=False)
 
 
 def import_lut_itksnap_as_tsv(
-    itksnap_path: Union[str, Path],
-    tsv_path: Union[str, Path]
+    itksnap_path: Union[str, Path], tsv_path: Union[str, Path]
 ) -> None:
     """Convert ITK-SNAP label file to BIDS-compatible TSV format.
-    
+
     Args:
         itksnap_path: Path to ITK-SNAP label file
         tsv_path: Path to output TSV file
     """
     # Use the static method from ZarrNiiAtlas
     df = ZarrNiiAtlas._import_itksnap_lut(str(itksnap_path))
-    
+
     # Add abbreviation column (empty) for BIDS compatibility
     df["abbreviation"] = ""
-    
+
     # Reorder columns to match BIDS standard: index, name, abbreviation (drop color)
     df = df[["index", "name", "abbreviation"]]
-    
+
     # Write as TSV
     df.to_csv(tsv_path, sep="\t", index=False)
-
-

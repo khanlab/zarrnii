@@ -13,8 +13,6 @@ from zarrnii import (
     AmbiguousTemplateFlowQueryError,
     ZarrNii,
     ZarrNiiAtlas,
-    get,
-    get_template,
     import_lut_csv_as_tsv,
     import_lut_itksnap_as_tsv,
 )
