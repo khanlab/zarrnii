@@ -1,0 +1,1178 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/examples/atlas_example/">
+      
+      
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.20">
+    
+    
+      
+        <title>Atlas Module Example - ZarrNii Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.e53b48f4.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#atlas-module-example" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ZarrNii Documentation" class="md-header__button md-logo" aria-label="ZarrNii Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZarrNii Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Atlas Module Example
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ZarrNii Documentation" class="md-nav__button md-logo" aria-label="ZarrNii Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZarrNii Documentation
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Walkthrough
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Walkthrough
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../walkthrough/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../walkthrough/getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Getting Started
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../walkthrough/basic_tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Basic Tasks
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../walkthrough/advanced_use_cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Advanced Use Cases
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Command Line Interface
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    API Reference
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Examples
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Examples
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zarr_nifti/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Working with Zarr and NIfTI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../imaris_usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Working with Imaris Files
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../transformations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Transformations
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../downsampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Downsampling and Upsampling
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../near_isotropic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Near-Isotropic Downsampling
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multiscale/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Multiscale OME-Zarr
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../segmentation_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Segmentation Plugins
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    FAQ
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Changelog
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Contributing
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#atlas-focused-functionality" class="md-nav__link">
+    <span class="md-ellipsis">
+      Atlas-Focused Functionality
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#region-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      Region Analysis
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#image-analysis-with-atlas" class="md-nav__link">
+    <span class="md-ellipsis">
+      Image Analysis with Atlas
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-feature-maps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Creating Feature Maps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#atlas-summary-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      Atlas Summary Information
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lookup-table-conversion-utilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      Lookup Table Conversion Utilities
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Advanced Usage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-existing-zarrnii-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Integration with Existing ZarrNii Workflows
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="atlas-module-example">Atlas Module Example</h1>
+<p>This example demonstrates how to use the atlas functionality in ZarrNii for working with brain atlases and performing region-of-interest (ROI) analysis.</p>
+<h2 id="atlas-focused-functionality">Atlas-Focused Functionality</h2>
+<p>ZarrNii functionality is <strong>solely for atlases</strong> (dseg.nii.gz + dseg.tsv files), providing:
+- <strong>Loading atlases</strong> from local files or TemplateFlow
+- <strong>Region analysis</strong> by index, name, or abbreviation
+- <strong>ROI aggregation</strong> with multiple statistical functions
+- <strong>Feature mapping</strong> to assign values back to regions
+- <strong>Format conversion</strong> utilities (CSV, ITK-SNAP to TSV)</p>
+<h3 id="loading-atlases-from-files">Loading Atlases from Files</h3>
+<pre><code class="language-python">from zarrnii import ZarrNiiAtlas
+
+# Load atlas from BIDS-format files
+atlas = ZarrNiiAtlas.from_files(
+    dseg_path=&quot;atlas_dseg.nii.gz&quot;,
+    labels_path=&quot;atlas_dseg.tsv&quot;
+)
+
+# Get basic atlas information
+print(f&quot;Atlas shape: {atlas.dseg.shape}&quot;)
+print(f&quot;Number of regions: {len(atlas.labels_df)}&quot;)
+print(f&quot;Region labels: {atlas.labels_df[atlas.label_column].values}&quot;)
+</code></pre>
+<h3 id="loading-atlases-from-templateflow">Loading Atlases from TemplateFlow</h3>
+<pre><code class="language-python">from zarrnii import get_atlas, get_template
+
+# Load atlas directly from TemplateFlow (if available)
+# atlas = get_atlas(&quot;MNI152NLin2009cAsym&quot;, &quot;DKT&quot;, resolution=1)
+
+# Or load template first
+# template = get_template(&quot;MNI152NLin2009cAsym&quot;, &quot;T1w&quot;, resolution=1)
+# Note: These functions require templateflow to be installed
+</code></pre>
+<h3 id="saving-atlases-to-templateflow">Saving Atlases to TemplateFlow</h3>
+<pre><code class="language-python">from zarrnii import save_atlas_to_templateflow
+
+# Save atlas to TemplateFlow directory as BIDS-compliant files
+# Requires templateflow to be installed
+# template_dir = save_atlas_to_templateflow(atlas, &quot;MyTemplate&quot;, &quot;MyAtlas&quot;)
+print(f&quot;Atlas saved to: {template_dir}&quot;)
+# Creates: tpl-MyTemplate_atlas-MyAtlas_dseg.nii.gz and .tsv files
+</code></pre>
+<ul>
+<li><strong>Unified API</strong>: Access built-in and remote templates through same TemplateFlow interface</li>
+</ul>
+<pre><code class="language-python"># Install templateflow extra for lazy loading
+# pip install zarrnii[templateflow]
+
+# Lazy loading - templates copy to TEMPLATEFLOW_HOME on first access
+from zarrnii import get_builtin_template
+template = get_builtin_template(&quot;placeholder&quot;)  # Copies to TemplateFlow on first call
+
+# After lazy loading, both APIs work identically:
+import templateflow.api as tflow
+zarrnii_template = tflow.get(&quot;placeholder&quot;, suffix=&quot;SPIM&quot;)        # zarrnii built-in
+remote_template = tflow.get(&quot;MNI152NLin2009cAsym&quot;, suffix=&quot;T1w&quot;)  # remote template
+
+# Manual installation (if preferred over lazy loading)
+from zarrnii import install_zarrnii_templates
+results = install_zarrnii_templates()  # {'placeholder': True}
+</code></pre>
+<h3 id="template-installation-behavior">Template Installation Behavior</h3>
+<p><strong>With <code>templateflow</code> extra installed:</strong>
+- ✅ <strong>Lazy loading</strong>: Templates copy to <code>$TEMPLATEFLOW_HOME</code> on first <code>get_builtin_template()</code> call
+- ✅ <strong>Proper setup</strong>: Uses TemplateFlow's <code>@requires_layout</code> decorator to ensure directory structure
+- ✅ <strong>Unified API</strong>: Use TemplateFlow API for both zarrnii and remote templates
+- ✅ <strong>Automatic</strong>: No extra steps needed</p>
+<p><strong>Without <code>templateflow</code> extra:</strong>
+- ✅ <strong>Direct access</strong>: <code>get_builtin_template()</code> works normally from zarrnii package
+- ❌ <strong>No lazy loading</strong>: Templates stay in zarrnii package only
+- ❌ <strong>No unified API</strong>: TemplateFlow functions unavailable</p>
+<pre><code class="language-python"># Check installation status
+try:
+    results = install_zarrnii_templates()
+    print(&quot;TemplateFlow integration:&quot;, results)
+except ImportError:
+    print(&quot;TemplateFlow extra not installed - using direct access only&quot;)
+</code></pre>
+<h3 id="backward-compatibility">Backward Compatibility</h3>
+<p>The old atlas functions still work for convenience:</p>
+<pre><code class="language-python">from zarrnii import get_builtin_atlas, list_builtin_atlases
+
+# These still work (equivalent to template system)
+atlases = list_builtin_atlases() 
+atlas = get_builtin_atlas(&quot;placeholder&quot;)  # Gets default atlas from default template
+</code></pre>
+<h3 id="loading-an-atlas-from-files">Loading an Atlas from Files</h3>
+<pre><code class="language-python">from zarrnii import ZarrNiiAtlas
+import numpy as np
+
+# Load atlas from BIDS format files
+atlas = ZarrNiiAtlas.from_files(
+    dseg_path=&quot;path/to/atlas_dseg.nii.gz&quot;,
+    labels_path=&quot;path/to/atlas_dseg.tsv&quot;
+)
+
+print(f&quot;Atlas loaded: {atlas}&quot;)
+print(f&quot;Number of regions: {len(atlas.labels_df)}&quot;)
+print(f&quot;Region names: {atlas.labels_df[atlas.name_column].tolist()[:5]}...&quot;)  # First 5 regions
+</code></pre>
+<h3 id="creating-an-atlas-from-existing-data">Creating an Atlas from Existing Data</h3>
+<pre><code class="language-python">from zarrnii import ZarrNii, ZarrNiiAtlas, AffineTransform
+import pandas as pd
+import numpy as np
+
+# Create a simple segmentation image
+shape = (64, 64, 64)
+dseg_data = np.random.randint(0, 5, shape, dtype=np.int32)
+dseg = ZarrNii.from_darr(dseg_data, affine=AffineTransform.identity())
+
+# Create lookup table
+labels_df = pd.DataFrame({
+    'index': [0, 1, 2, 3, 4],
+    'name': ['Background', 'Cortex', 'Hippocampus', 'Thalamus', 'Cerebellum'],
+    'abbreviation': ['BG', 'CTX', 'HIP', 'THA', 'CB']
+})
+
+# Create Atlas
+atlas = ZarrNiiAtlas.create_from_dseg(dseg, labels_df)
+</code></pre>
+<h2 id="region-analysis">Region Analysis</h2>
+<h3 id="getting-region-information">Getting Region Information</h3>
+<pre><code class="language-python"># Get information about a specific region by index (traditional way)
+region_info = atlas.get_region_info(2)  # Hippocampus
+print(f&quot;Region: {region_info['name']}&quot;)
+print(f&quot;Abbreviation: {region_info['abbreviation']}&quot;)
+
+# NEW: Get information by region name
+region_info = atlas.get_region_info(&quot;Hippocampus&quot;)
+print(f&quot;Hippocampus index: {region_info['index']}&quot;)
+
+# NEW: Get information by abbreviation
+region_info = atlas.get_region_info(&quot;HIP&quot;)
+print(f&quot;HIP full name: {region_info['name']}&quot;)
+
+# Get all region names and labels
+for label, name in zip(atlas.region_labels, atlas.region_names):
+    print(f&quot;Label {label}: {name}&quot;)
+</code></pre>
+<h3 id="creating-region-masks">Creating Region Masks</h3>
+<pre><code class="language-python"># Get binary mask for hippocampus by index
+hippocampus_mask = atlas.get_region_mask(2)
+print(f&quot;Hippocampus mask shape: {hippocampus_mask.shape}&quot;)
+
+# NEW: Get mask by region name
+hippocampus_mask = atlas.get_region_mask(&quot;Hippocampus&quot;)
+print(f&quot;Hippocampus mask shape: {hippocampus_mask.shape}&quot;)
+
+# NEW: Get mask by abbreviation
+hippocampus_mask = atlas.get_region_mask(&quot;HIP&quot;)
+print(f&quot;Hippocampus mask shape: {hippocampus_mask.shape}&quot;)
+
+# Save mask as NIfTI
+hippocampus_mask.to_nifti(&quot;hippocampus_mask.nii.gz&quot;)
+</code></pre>
+<h3 id="calculating-region-volumes">Calculating Region Volumes</h3>
+<pre><code class="language-python"># Calculate volume for all regions
+volumes = {}
+for _, row in atlas.labels_df.iterrows():
+    label = row[atlas.label_column]
+    if label == 0:  # Skip background
+        continue
+    volume = atlas.get_region_volume(label)
+    name = row[atlas.name_column]
+    volumes[name] = volume
+    print(f&quot;{name}: {volume:.2f} mm³&quot;)
+
+# Calculate volume by name or abbreviation
+cortex_volume = atlas.get_region_volume(&quot;Cortex&quot;)
+hippocampus_volume = atlas.get_region_volume(&quot;HIP&quot;)  # By abbreviation
+print(f&quot;Cortex volume: {cortex_volume:.2f} mm³&quot;)
+print(f&quot;Hippocampus volume: {hippocampus_volume:.2f} mm³&quot;)
+</code></pre>
+<h2 id="image-analysis-with-atlas">Image Analysis with Atlas</h2>
+<h3 id="aggregating-image-values-by-regions">Aggregating Image Values by Regions</h3>
+<pre><code class="language-python"># Load an image for analysis (e.g., a functional or structural image)
+image = ZarrNii.from_nifti(&quot;functional_image.nii.gz&quot;)
+
+# Make sure image and atlas have the same shape and alignment
+# (In practice, you might need to resample/register the image to atlas space)
+
+# Aggregate image values by atlas regions
+results = atlas.aggregate_image_by_regions(
+    image, 
+    aggregation_func=&quot;mean&quot;  # Can be &quot;mean&quot;, &quot;sum&quot;, &quot;std&quot;, &quot;median&quot;, &quot;min&quot;, &quot;max&quot;
+)
+
+print(&quot;Mean signal by region:&quot;)
+for _, row in results.iterrows():
+    print(f&quot;{row['name']}: {row['mean_value']:.3f}&quot;)
+
+# Save results to CSV
+results.to_csv(&quot;roi_analysis_results.csv&quot;, index=False)
+</code></pre>
+<h3 id="different-aggregation-functions">Different Aggregation Functions</h3>
+<pre><code class="language-python"># Calculate multiple statistics
+stats = {}
+for func in [&quot;mean&quot;, &quot;std&quot;, &quot;min&quot;, &quot;max&quot;]:
+    stats[func] = atlas.aggregate_image_by_regions(image, aggregation_func=func)
+
+# Combine results (note: results have 'label' and 'name' columns by default)
+combined_results = stats[&quot;mean&quot;][[&quot;label&quot;, &quot;name&quot;]].copy()
+for func in [&quot;mean&quot;, &quot;std&quot;, &quot;min&quot;, &quot;max&quot;]:
+    combined_results[f&quot;{func}_value&quot;] = stats[func][f&quot;{func}_value&quot;]
+
+print(combined_results.head())
+</code></pre>
+<h3 id="analyzing-specific-regions-only">Analyzing Specific Regions Only</h3>
+<pre><code class="language-python"># Get results for all regions, then filter
+all_results = atlas.aggregate_image_by_regions(image, aggregation_func=&quot;mean&quot;)
+
+# Filter to specific regions (e.g., cortical regions with labels 1-3)
+cortical_results = all_results[all_results[&quot;label&quot;].isin([1, 2, 3])]
+
+print(&quot;Cortical region analysis:&quot;)
+print(cortical_results)
+</code></pre>
+<h2 id="creating-feature-maps">Creating Feature Maps</h2>
+<h3 id="mapping-statistical-values-back-to-image-space">Mapping Statistical Values Back to Image Space</h3>
+<pre><code class="language-python"># Create a feature DataFrame (e.g., from previous analysis)
+feature_data = pd.DataFrame({
+    'index': [1, 2, 3, 4],
+    'activation_score': [2.5, 3.1, 1.8, 2.9],
+    'p_value': [0.001, 0.0001, 0.05, 0.002]
+})
+
+# Create feature maps
+activation_map = atlas.create_feature_map(
+    feature_data, 
+    feature_column='activation_score',
+    background_value=0.0
+)
+
+p_value_map = atlas.create_feature_map(
+    feature_data, 
+    feature_column='p_value',
+    background_value=1.0  # Non-significant p-value for background
+)
+
+# Save feature maps
+activation_map.to_nifti(&quot;activation_map.nii.gz&quot;)
+p_value_map.to_nifti(&quot;p_value_map.nii.gz&quot;)
+</code></pre>
+<h2 id="atlas-summary-information">Atlas Summary Information</h2>
+<h3 id="getting-atlas-overview">Getting Atlas Overview</h3>
+<pre><code class="language-python"># Get information about all regions
+print(&quot;Atlas Summary:&quot;)
+print(f&quot;Total regions: {len(atlas.labels_df)}&quot;)
+print(f&quot;\nRegion list:&quot;)
+for _, row in atlas.labels_df.iterrows():
+    label = row[atlas.label_column]
+    name = row[atlas.name_column]
+    if label != 0:  # Skip background
+        volume = atlas.get_region_volume(label)
+        print(f&quot;  {label}: {name} - {volume:.2f} mm³&quot;)
+
+# Calculate total brain volume (excluding background)
+total_volume = sum(
+    atlas.get_region_volume(row[atlas.label_column])
+    for _, row in atlas.labels_df.iterrows()
+    if row[atlas.label_column] != 0
+)
+print(f&quot;\nTotal brain volume: {total_volume:.2f} mm³&quot;)
+</code></pre>
+<h2 id="lookup-table-conversion-utilities">Lookup Table Conversion Utilities</h2>
+<h3 id="convert-csv-to-bids-tsv-format">Convert CSV to BIDS TSV Format</h3>
+<pre><code class="language-python">from zarrnii import import_lut_csv_as_tsv
+
+# Convert a CSV lookup table to BIDS-compatible TSV
+import_lut_csv_as_tsv(
+    csv_path=&quot;atlas_lookup.csv&quot;,
+    tsv_path=&quot;atlas_dseg.tsv&quot;,
+    csv_columns=[&quot;abbreviation&quot;, &quot;name&quot;, &quot;index&quot;]  # Specify column order
+)
+</code></pre>
+<h3 id="convert-itk-snap-label-file-to-tsv">Convert ITK-SNAP Label File to TSV</h3>
+<pre><code class="language-python">from zarrnii import import_lut_itksnap_as_tsv
+
+# Convert ITK-SNAP format to BIDS TSV
+import_lut_itksnap_as_tsv(
+    itksnap_path=&quot;atlas.txt&quot;,
+    tsv_path=&quot;atlas_dseg.tsv&quot;
+)
+</code></pre>
+<h2 id="advanced-usage">Advanced Usage</h2>
+<h3 id="working-with-multi-resolution-data">Working with Multi-Resolution Data</h3>
+<pre><code class="language-python"># Load atlas at different resolution levels (if using OME-Zarr format)
+atlas = ZarrNiiAtlas.from_files(
+    dseg_path=&quot;atlas.ome.zarr&quot;,
+    labels_path=&quot;atlas_dseg.tsv&quot;,
+    level=2  # Use downsampled level
+)
+
+# This allows processing at different scales for efficiency
+</code></pre>
+<h3 id="custom-column-names">Custom Column Names</h3>
+<pre><code class="language-python"># Create atlas with custom column naming conventions
+# First load the data
+dseg = ZarrNii.from_nifti(&quot;custom_atlas.nii.gz&quot;)
+labels_df = pd.read_csv(&quot;custom_labels.tsv&quot;, sep=&quot;\t&quot;)
+
+# Create atlas with custom column names
+atlas = ZarrNiiAtlas.create_from_dseg(
+    dseg, 
+    labels_df,
+    label_column=&quot;region_id&quot;,
+    name_column=&quot;region_name&quot;,
+    abbrev_column=&quot;short_name&quot;
+)
+</code></pre>
+<h3 id="error-handling">Error Handling</h3>
+<pre><code class="language-python">try:
+    atlas = ZarrNiiAtlas.from_files(&quot;nonexistent.nii.gz&quot;, &quot;nonexistent.tsv&quot;)
+except FileNotFoundError as e:
+    print(f&quot;Atlas files not found: {e}&quot;)
+
+try:
+    results = atlas.aggregate_image_by_regions(wrong_sized_image)
+except ValueError as e:
+    print(f&quot;Shape mismatch: {e}&quot;)
+</code></pre>
+<h2 id="integration-with-existing-zarrnii-workflows">Integration with Existing ZarrNii Workflows</h2>
+<pre><code class="language-python"># Complete workflow: load, transform, analyze
+from zarrnii import ZarrNii, ZarrNiiAtlas, AffineTransform
+
+# Load atlas and image
+atlas = ZarrNiiAtlas.from_files(&quot;atlas_dseg.nii.gz&quot;, &quot;atlas_dseg.tsv&quot;)
+image = ZarrNii.from_ome_zarr(&quot;microscopy_data.ome.zarr&quot;, level=1)
+
+# Apply spatial transformation to align image to atlas
+transform = AffineTransform.from_txt(&quot;subject_to_atlas.txt&quot;)
+aligned_image = image.apply_transform(transform, ref_znimg=atlas.dseg)
+
+# Perform ROI analysis
+results = atlas.aggregate_image_by_regions(aligned_image, aggregation_func=&quot;mean&quot;)
+
+# Save results
+results.to_csv(&quot;roi_quantification.csv&quot;, index=False)
+
+# Create and save feature map
+feature_map = atlas.create_feature_map(results, &quot;mean_value&quot;)
+feature_map.to_ome_zarr(&quot;quantification_map.ome.zarr&quot;)
+</code></pre>
+<p>This atlas functionality provides a complete toolkit for working with brain atlases in the ZarrNii ecosystem, enabling sophisticated region-based analysis workflows that can scale from microscopy data to MRI volumes.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>
