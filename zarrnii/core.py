@@ -925,6 +925,15 @@ class ZarrNii:
 
     # Constructor methods
     @classmethod
+    def from_file(cls, path, **kwargs):
+        if path.endswith((".nii", ".nii.gz")):
+            return cls.from_nifti(path, **kwargs)
+        elif path.endswith(".zarr") or path.endswith(".zip"):
+            return cls.from_ome_zarr(path, **kwargs)
+        else:
+            raise ValueError(f"Unknown file extension: {path}")
+
+    @classmethod
     def from_ngff_image(
         cls,
         ngff_image: nz.NgffImage,

@@ -1,4 +1,13 @@
 from .analysis import compute_histogram, compute_otsu_thresholds
+from .atlas import (
+    AmbiguousTemplateFlowQueryError,
+    Template,
+    ZarrNiiAtlas,
+    get,
+    get_template,
+    import_lut_csv_as_tsv,
+    import_lut_itksnap_as_tsv,
+)
 from .core import ZarrNii, affine_to_orientation
 from .plugins import OtsuSegmentation  # Backward compatibility
 from .plugins import (
@@ -12,7 +21,10 @@ from .plugins import (
 from .transform import AffineTransform, DisplacementTransform, Transform
 
 __all__ = [
+    "AmbiguousTemplateFlowQueryError",
+    "Template",
     "ZarrNii",
+    "ZarrNiiAtlas",
     "Transform",
     "AffineTransform",
     "DisplacementTransform",
@@ -26,4 +38,8 @@ __all__ = [
     "N4BiasFieldCorrection",
     "compute_histogram",
     "compute_otsu_thresholds",
+    "get",
+    "get_template",
+    "import_lut_csv_as_tsv",
+    "import_lut_itksnap_as_tsv",
 ]

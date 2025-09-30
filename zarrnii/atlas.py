@@ -1,0 +1,859 @@
+"""Atlas handling module for ZarrNii.
+
+This module provides functionality for working with brain atlases through TemplateFlow,
+specifically BIDS-formatted dseg.nii.gz segmentation images with corresponding dseg.tsv
+lookup tables. It enables region-of-interest (ROI) based analysis and
+aggregation of data across atlas regions.
+
+Based on functionality from SPIMquant:
+https://github.com/khanlab/SPIMquant/blob/main/spimquant/workflow/scripts/
+"""
+
+import json
+import warnings
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import pandas as pd
+from attrs import define, field
+
+try:
+    import templateflow.api as tflow
+    from templateflow.conf import TF_HOME, requires_layout
+
+    TEMPLATEFLOW_AVAILABLE = True
+except ImportError:
+    TEMPLATEFLOW_AVAILABLE = False
+    TF_HOME = None
+    requires_layout = lambda f: f  # noqa: E731
+
+from .core import ZarrNii
+
+
+class AmbiguousTemplateFlowQueryError(ValueError):
+    """Raised when TemplateFlow query returns multiple files requiring more specific query."""
+
+    def __init__(self, template: str, suffix: str, matching_files: List[str], **kwargs):
+        """Initialize with template query details."""
+        self.template = template
+        self.suffix = suffix
+        self.matching_files = matching_files
+        self.query_kwargs = kwargs
+
+        super().__init__(
+            f"Query for template='{template}' suffix='{suffix}' returned {len(matching_files)} files. "
+            f"Add more qualifiers like resolution=1, cohort='01', etc. to narrow the query. "
+            f"Matching files: {matching_files[:3]}{'...' if len(matching_files) > 3 else ''}"
+        )
+
+
+# TemplateFlow wrapper functions
+def get(template: str, **kwargs) -> Union[str, List[str]]:
+    """Thin wrapper on templateflow.api.get() - preserves original signature.
+
+    Args:
+        template: Template name (e.g., "MNI152NLin2009cAsym")
+        **kwargs: Additional TemplateFlow parameters (suffix, resolution, etc.)
+
+    Returns:
+        String path or list of string paths as returned by TemplateFlow
+
+    Raises:
+        ImportError: If TemplateFlow is not available
+    """
+    if not TEMPLATEFLOW_AVAILABLE:
+        raise ImportError(
+            "TemplateFlow is required. Install with: pip install zarrnii[templateflow]"
+        )
+
+    return tflow.get(template, **kwargs)
+
+
+def get_template(template: str, suffix: str = "SPIM", **kwargs) -> "Template":
+    """Get Template object from TemplateFlow with single file validation.
+
+    Args:
+        template: Template name (e.g., "MNI152NLin2009cAsym")
+        suffix: File suffix (e.g., "T1w", "SPIM")
+        **kwargs: Additional TemplateFlow parameters (resolution, cohort, etc.)
+
+    Returns:
+        Template object with anatomical image
+
+    Raises:
+        AmbiguousTemplateFlowQueryError: If query returns multiple files
+        FileNotFoundError: If no matching files found
+        ImportError: If TemplateFlow is not available
+    """
+    if not TEMPLATEFLOW_AVAILABLE:
+        raise ImportError(
+            "TemplateFlow is required. Install with: pip install zarrnii[templateflow]"
+        )
+
+    result = tflow.get(template, suffix=suffix, **kwargs)
+
+    # Handle TemplateFlow's variable return behavior
+    if isinstance(result, list):
+        if len(result) == 0:
+            raise FileNotFoundError(
+                f"No files found for template='{template}' suffix='{suffix}'"
+            )
+        elif len(result) > 1:
+            raise AmbiguousTemplateFlowQueryError(template, suffix, result, **kwargs)
+        else:
+            result = result[0]  # Single item list
+
+    # Load anatomical image - determine format from file extension
+    result_path = Path(str(result))
+    if result_path.suffix.lower() in [".nii", ".gz"]:
+        anatomical_image = ZarrNii.from_nifti(str(result))
+    elif result_path.suffix.lower() == ".zarr" or "ome.zarr" in str(result_path):
+        anatomical_image = ZarrNii.from_ome_zarr(str(result))
+    else:
+        # Default to NIfTI for unknown extensions
+        anatomical_image = ZarrNii.from_nifti(str(result))
+
+    return Template(
+        name=template,
+        description=f"TemplateFlow template: {template}",
+        anatomical_image=anatomical_image,
+        resolution=str(kwargs.get("resolution", "Unknown")),
+        dimensions=anatomical_image.shape,
+        metadata=kwargs,
+    )
+
+
+def get_atlas(template: str, atlas: str, **kwargs) -> "ZarrNiiAtlas":
+    """Load atlas directly from TemplateFlow by template and atlas name.
+
+    Args:
+        template: Template name (e.g., 'MNI152NLin2009cAsym')
+        atlas: Atlas name (e.g., 'DKT', 'Harvard-Oxford')
+        **kwargs: Additional TemplateFlow query parameters
+
+    Returns:
+        Atlas object loaded from TemplateFlow
+
+    Raises:
+        ImportError: If templateflow is not available
+        FileNotFoundError: If atlas files not found
+    """
+    if not TEMPLATEFLOW_AVAILABLE:
+        raise ImportError(
+            "TemplateFlow is required. Install with: pip install zarrnii[templateflow]"
+        )
+
+    # Get dseg file
+    dseg_result = tflow.get(template, suffix="dseg", atlas=atlas, **kwargs)
+    if isinstance(dseg_result, list):
+        if len(dseg_result) == 0:
+            raise FileNotFoundError(
+                f"No dseg files found for template '{template}' atlas '{atlas}'"
+            )
+        dseg_file = dseg_result[0]  # Take first match
+    else:
+        dseg_file = dseg_result
+
+    # Get corresponding TSV file
+    tsv_result = tflow.get(
+        template, suffix="dseg", atlas=atlas, extension=".tsv", **kwargs
+    )
+    if isinstance(tsv_result, list):
+        if len(tsv_result) == 0:
+            raise FileNotFoundError(
+                f"No TSV files found for template '{template}' atlas '{atlas}'"
+            )
+        tsv_file = tsv_result[0]  # Take first match
+    else:
+        tsv_file = tsv_result
+
+    return ZarrNiiAtlas.from_files(dseg_file, tsv_file)
+
+
+def save_atlas_to_templateflow(
+    atlas: "ZarrNiiAtlas", template_name: str, atlas_name: str
+) -> str:
+    """Save atlas to TemplateFlow directory as BIDS-compliant files.
+
+    Args:
+        atlas: Atlas object to save
+        template_name: Template name (e.g., 'MyTemplate')
+        atlas_name: Atlas name (e.g., 'MyAtlas')
+
+    Returns:
+        Path to created template directory
+
+    Raises:
+        ImportError: If templateflow is not available
+    """
+    if not TEMPLATEFLOW_AVAILABLE:
+        raise ImportError(
+            "TemplateFlow is required. Install with: pip install zarrnii[templateflow]"
+        )
+
+    template_dir = Path(TF_HOME) / f"tpl-{template_name}"
+    template_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save dseg.nii.gz file
+    dseg_file = template_dir / f"tpl-{template_name}_atlas-{atlas_name}_dseg.nii.gz"
+    atlas.image.to_nifti(str(dseg_file))
+
+    # Save dseg.tsv file
+    tsv_file = template_dir / f"tpl-{template_name}_atlas-{atlas_name}_dseg.tsv"
+    atlas.lookup_table.to_csv(str(tsv_file), sep="\t", index=False)
+
+    return str(template_dir)
+
+
+@define
+class Template:
+    """Brain template with anatomical image and associated atlases.
+
+    A template represents an anatomical reference space (e.g., MNI152, ABA)
+    with an anatomical image and multiple atlases that can be registered to it.
+
+    Attributes:
+        name (str): Template name/identifier
+        description (str): Human-readable description
+        anatomical_image (ZarrNii): Template anatomical image
+        resolution (str): Spatial resolution description
+        dimensions (tuple): Image dimensions
+        metadata (Dict[str, Any]): Additional template metadata
+    """
+
+    name: str
+    description: str
+    anatomical_image: ZarrNii
+    resolution: str = field(default="Unknown")
+    dimensions: Tuple = field(default=())
+    metadata: Dict[str, Any] = field(factory=dict)
+
+    def get_atlas(self, atlas_name: str) -> "ZarrNiiAtlas":
+        """Get a specific atlas for this template using TemplateFlow.
+
+        Args:
+            atlas_name: Name of the atlas to retrieve
+
+        Returns:
+            Atlas instance
+
+        Raises:
+            ImportError: If TemplateFlow is not available
+            FileNotFoundError: If atlas files not found
+        """
+        if not TEMPLATEFLOW_AVAILABLE:
+            raise ImportError(
+                "TemplateFlow is required. Install with: pip install zarrnii[templateflow]"
+            )
+
+        try:
+            # Get dseg file from TemplateFlow
+            dseg_files = tflow.get(self.name, atlas=atlas_name, suffix="dseg")
+            if isinstance(dseg_files, list):
+                dseg_files = [f for f in dseg_files if f.endswith(".nii.gz")]
+                if not dseg_files:
+                    raise FileNotFoundError(
+                        f"No dseg.nii.gz found for atlas {atlas_name}"
+                    )
+                dseg_path = dseg_files[0]
+            else:
+                dseg_path = dseg_files
+
+            # Get labels TSV file
+            labels_files = tflow.get(
+                self.name, atlas=atlas_name, suffix="dseg", extension=".tsv"
+            )
+            if isinstance(labels_files, list):
+                labels_path = labels_files[0] if labels_files else None
+            else:
+                labels_path = labels_files
+
+            if not labels_path:
+                raise FileNotFoundError(f"No dseg.tsv found for atlas {atlas_name}")
+
+            return ZarrNiiAtlas.from_files(dseg_path, labels_path)
+
+        except Exception as e:
+            raise FileNotFoundError(
+                f"Could not load atlas '{atlas_name}' for template '{self.name}': {e}"
+            )
+
+
+@define
+class ZarrNiiAtlas(ZarrNii):
+    """Brain atlas with segmentation image and region lookup table.
+
+    Represents a brain atlas consisting of a segmentation image (dseg) that
+    assigns integer labels to brain regions, and a lookup table (tsv) that
+    maps these labels to region names and other metadata.
+
+
+    Extension of ZarrNii to support atlas label tables.
+
+    Inherits all functionality from ZarrNii and adds support for
+    storing region/label metadata in a pandas DataFrame.
+
+    Attributes
+    ----------
+    labels_df : pandas.DataFrame
+        DataFrame containing label information for the atlas.
+    label_column : str
+        Name of the column in labels_df containing label indices.
+    name_column : str
+        Name of the column in labels_df containing region names.
+    abbrev_column : str
+        Name of the column in labels_df containing region abbreviations.
+
+    """
+
+    labels_df: pd.DataFrame = field(default=None)
+    label_column: str = field(default="index")
+    name_column: str = field(default="name")
+    abbrev_column: str = field(default="abbreviation")
+
+    @property
+    def dseg(self) -> "ZarrNii":
+        """Return self as the segmentation image (for compatibility with API)."""
+        return self
+
+    @classmethod
+    def create_from_dseg(cls, dseg: ZarrNii, labels_df: pd.DataFrame, **kwargs):
+        """Create ZarrNiiAtlas from a dseg ZarrNii and labels DataFrame.
+
+        Args:
+            dseg: ZarrNii segmentation image
+            labels_df: DataFrame containing label information
+            **kwargs: Additional keyword arguments for label/name/abbrev columns
+
+        Returns:
+            ZarrNiiAtlas instance
+        """
+        if not isinstance(dseg, ZarrNii):
+            raise TypeError(f"dseg must be a ZarrNii instance, got {type(dseg)}")
+
+        # Note: attrs strips leading underscore from _omero in __init__ signature
+        # so we pass it as 'omero' instead of '_omero'
+        return cls(
+            ngff_image=dseg.ngff_image,
+            axes_order=dseg.axes_order,
+            xyz_orientation=dseg.xyz_orientation,
+            omero=getattr(dseg, "_omero", None),
+            labels_df=labels_df,
+            **kwargs,
+        )
+
+    @staticmethod
+    def _import_csv_lut(csv_path: str, **kwargs_read_csv) -> pd.DataFrame:
+        """import CSV lookup table
+
+        Args:
+            csv_path: Path to input CSV file
+            kwargs_read_csv: options to pandas read_csv
+        """
+        return pd.read_csv(csv_path, **kwargs_read_csv)
+
+    @staticmethod
+    def _import_tsv_lut(tsv_path: str) -> pd.DataFrame:
+        """import TSV lookup table
+
+        Args:
+            tsv_path: Path to input TSV file
+        """
+        return pd.read_csv(tsv_path, sep="\t")
+
+    @staticmethod
+    def _import_labelmapper_lut(
+        labelmapper_json: str,
+        in_cols=["index", "color", "abbreviation", "name"],
+        keep_cols=["name", "abbreviation", "color"],
+    ) -> pd.DataFrame:
+        """Import labelmapper json label lut
+
+        Args:
+            labelmapper_json: Path to the input json file
+        """
+
+        with open(labelmapper_json) as fp:
+            lut = json.load(fp)
+
+        return pd.DataFrame(lut, columns=in_cols).set_index("index")[keep_cols]
+
+    @staticmethod
+    def _import_itksnap_lut(itksnap_txt_path: str) -> pd.DataFrame:
+        """Import ITK-SNAP label file
+
+        Args:
+            itksnap_path: Path to ITK-SNAP label file
+        """
+
+        # Function to convert 8‐bit R, G, B values to a hex string (e.g., "ff0000")
+        def rgb_to_hex(r, g, b):
+            return "{:02x}{:02x}{:02x}".format(int(r), int(g), int(b))
+
+        # Read the ITK‐Snap LUT file.
+        # The ITK‐Snap LUT contains a header (all lines starting with "#")
+        # so we use the "comment" argument to skip those lines.
+        # The data columns are (in order):
+        #   index, R, G, B, A, VIS, MSH, LABEL
+        columns = ["index", "R", "G", "B", "A", "VIS", "MSH", "LABEL"]
+        df = pd.read_csv(
+            itksnap_txt_path, sep=r"\s+", comment="#", header=None, names=columns
+        )
+
+        # Remove the surrounding quotes from the LABEL column to get the ROI name.
+        df["name"] = df["LABEL"].str.strip('"')
+
+        # Create the BIDS color column by converting the R, G, B values to a hex string.
+        df["color"] = df.apply(
+            lambda row: rgb_to_hex(row["R"], row["G"], row["B"]), axis=1
+        )
+
+        # For the BIDS LUT, we only need the columns "index", "name", and "color"
+        return df[["index", "name", "color"]]
+
+    # ---- New constructors for different LUT formats ----
+
+    @classmethod
+    def from_files(
+        cls, dseg_path: Union[str, Path], labels_path: Union[str, Path], **kwargs
+    ):
+        """Load ZarrNiiAtlas from dseg image and labels TSV files.
+
+        Args:
+            dseg_path: Path to segmentation image (NIfTI or OME-Zarr)
+            labels_path: Path to labels TSV file
+            **kwargs: Additional arguments passed to ZarrNii.from_file()
+
+        Returns:
+            ZarrNiiAtlas instance
+        """
+        # Load segmentation image
+        dseg = ZarrNii.from_file(str(dseg_path), **kwargs)
+
+        # Load labels dataframe
+        labels_df = pd.read_csv(str(labels_path), sep="\t")
+
+        # Create atlas instance using create_from_dseg
+        return cls.create_from_dseg(dseg, labels_df)
+
+    @classmethod
+    def from_itksnap_lut(cls, path, lut_path, **kwargs):
+        """
+        Construct from itksnap lut file.
+        """
+        znii = super().from_file(path, **kwargs)
+        labels_df = cls._import_itksnap_lut(lut_path)
+        print(labels_df)
+        return cls(
+            ngff_image=znii.ngff_image,
+            axes_order=znii.axes_order,
+            xyz_orientation=znii.xyz_orientation,
+            labels_df=labels_df,
+            omero=getattr(znii, "_omero", None),
+        )
+
+    @classmethod
+    def from_csv_lut(cls, path, lut_path, **kwargs):
+        """
+        Construct from csv lut file.
+        """
+        znii = super().from_file(path, **kwargs)
+        labels_df = cls._import_csv_lut(lut_path)
+        return cls(
+            ngff_image=znii.ngff_image,
+            axes_order=znii.axes_order,
+            xyz_orientation=znii.xyz_orientation,
+            labels_df=labels_df,
+            omero=getattr(znii, "_omero", None),
+        )
+
+    @classmethod
+    def from_tsv_lut(cls, path, lut_path, **kwargs):
+        """
+        Construct from tsv lut file.
+        """
+        znii = super().from_file(path, **kwargs)
+        labels_df = cls._import_tsv_lut(lut_path)
+        return cls(
+            ngff_image=znii.ngff_image,
+            axes_order=znii.axes_order,
+            xyz_orientation=znii.xyz_orientation,
+            labels_df=labels_df,
+            omero=getattr(znii, "_omero", None),
+        )
+
+    @classmethod
+    def from_labelmapper_lut(cls, path, lut_path, **kwargs):
+        """
+        Construct from labelmapper lut file.
+        """
+        znii = super().from_file(path, **kwargs)
+        labels_df = cls._import_labelmapper_lut(lut_path)
+        return cls(
+            ngff_image=znii.ngff_image,
+            axes_order=znii.axes_order,
+            xyz_orientation=znii.xyz_orientation,
+            labels_df=labels_df,
+            omero=getattr(znii, "_omero", None),
+        )
+
+    def __attrs_post_init__(self):
+        """Validate atlas consistency after initialization."""
+        # Only validate if we have labels_df
+        if self.labels_df is not None:
+            self._validate_atlas()
+
+    def _validate_atlas(self):
+        """Validate that atlas components are consistent."""
+        if self.labels_df is None:
+            return  # Nothing to validate
+
+        # Check that required columns exist
+        required_cols = [self.label_column, self.name_column]
+        missing_cols = [
+            col for col in required_cols if col not in self.labels_df.columns
+        ]
+        if missing_cols:
+            raise ValueError(
+                f"Missing required columns in labels DataFrame: {missing_cols}"
+            )
+
+        # Check that label column contains integers
+        if not pd.api.types.is_integer_dtype(self.labels_df[self.label_column]):
+            warnings.warn(
+                f"Label column '{self.label_column}' should contain integers. "
+                "Converting to int.",
+                stacklevel=3,
+            )
+            self.labels_df[self.label_column] = self.labels_df[
+                self.label_column
+            ].astype(int)
+
+        # Check for duplicate labels
+        duplicates = self.labels_df[self.label_column].duplicated()
+        if duplicates.any():
+            dup_labels = self.labels_df[duplicates][self.label_column].tolist()
+            raise ValueError(f"Duplicate labels found in atlas: {dup_labels}")
+
+    def _resolve_region_identifier(self, region_id: Union[int, str]) -> int:
+        """Resolve region identifier to integer label.
+
+        Supports lookup by:
+        - Integer label (returned as-is)
+        - Region name (looked up in name column)
+        - Region abbreviation (looked up in abbreviation column if available)
+
+        Args:
+            region_id: Region identifier (int, name, or abbreviation)
+
+        Returns:
+            Integer label for the region
+
+        Raises:
+            ValueError: If region identifier not found
+            TypeError: If region_id is not int or str
+        """
+        if isinstance(region_id, (int, np.integer)):
+            return int(region_id)
+        elif isinstance(region_id, str):
+            # Try name column first
+            name_matches = self.labels_df[
+                self.labels_df[self.name_column].str.lower() == region_id.lower()
+            ]
+            if not name_matches.empty:
+                return int(name_matches.iloc[0][self.label_column])
+
+            # Try abbreviation column if available
+            if (
+                self.abbrev_column in self.labels_df.columns
+                and not self.labels_df[self.abbrev_column].isna().all()
+            ):
+                abbrev_matches = self.labels_df[
+                    self.labels_df[self.abbrev_column].str.lower() == region_id.lower()
+                ]
+                if not abbrev_matches.empty:
+                    return int(abbrev_matches.iloc[0][self.label_column])
+
+            # No matches found
+            raise ValueError(
+                f"Region '{region_id}' not found in atlas. "
+                f"Available names: {self.labels_df[self.name_column].tolist()}"
+            )
+        else:
+            raise TypeError(
+                f"Region identifier must be int or str, got {type(region_id)}"
+            )
+
+    def get_region_info(self, region_id: Union[int, str]) -> Dict[str, Any]:
+        """Get information about a specific region.
+
+        Args:
+            region_id: Region identifier (int label, name, or abbreviation)
+
+        Returns:
+            Dictionary containing region information
+
+        Raises:
+            ValueError: If region not found in atlas
+        """
+        label = self._resolve_region_identifier(region_id)
+
+        # Find the region in labels DataFrame
+        region_row = self.labels_df[self.labels_df[self.label_column] == label]
+        if region_row.empty:
+            raise ValueError(f"Region with label {label} not found in atlas")
+
+        return region_row.iloc[0].to_dict()
+
+    def get_region_mask(self, region_id: Union[int, str]) -> ZarrNii:
+        """Create binary mask for a specific region.
+
+        Args:
+            region_id: Region identifier (int label, name, or abbreviation)
+
+        Returns:
+            ZarrNii instance containing binary mask (1 for region, 0 elsewhere)
+
+        Raises:
+            ValueError: If region not found in atlas
+        """
+        label = self._resolve_region_identifier(region_id)
+
+        # Validate that the region exists in our labels_df
+        if not (self.labels_df[self.label_column] == label).any():
+            raise ValueError(f"Region with label {label} not found in atlas")
+
+        # Create binary mask
+        mask_data = (self.dseg.data == label).astype(np.uint8)
+
+        return ZarrNii.from_darr(
+            mask_data, affine=self.dseg.affine, axes_order=self.dseg.axes_order
+        )
+
+    def get_region_volume(self, region_id: Union[int, str]) -> float:
+        """Calculate volume of a specific region in mm³.
+
+        Args:
+            region_id: Region identifier (int label, name, or abbreviation)
+
+        Returns:
+            Volume in cubic millimeters
+
+        Raises:
+            ValueError: If region not found in atlas
+        """
+        label = self._resolve_region_identifier(region_id)
+
+        # Count voxels with this label
+        dseg_data = self.dseg.data
+        if hasattr(dseg_data, "compute"):
+            voxel_count = int((dseg_data == label).sum().compute())
+        else:
+            voxel_count = int((dseg_data == label).sum())
+
+        # Calculate volume using voxel size from affine
+        # Volume per voxel = abs(det(affine[:3, :3]))
+        voxel_volume = abs(np.linalg.det(self.dseg.affine[:3, :3]))
+
+        return float(voxel_count * voxel_volume)
+
+    def aggregate_image_by_regions(
+        self,
+        image: ZarrNii,
+        aggregation_func: str = "mean",
+        background_label: int = 0,
+    ) -> pd.DataFrame:
+        """Aggregate image values by atlas regions.
+
+        Args:
+            image: Image to aggregate (must be compatible with atlas)
+            aggregation_func: Aggregation function ('mean', 'sum', 'std', 'median', 'min', 'max')
+            background_label: Label value to treat as background (excluded from results)
+
+        Returns:
+            DataFrame with columns: label, name, aggregated_value, volume_mm3
+
+        Raises:
+            ValueError: If image and atlas are incompatible
+        """
+        # Validate image compatibility
+        if not np.array_equal(image.shape, self.dseg.shape):
+            raise ValueError(
+                f"Image shape {image.shape} doesn't match atlas shape {self.dseg.shape}"
+            )
+
+        if not np.allclose(image.affine, self.dseg.affine, atol=1e-6):
+            warnings.warn(
+                "Image and atlas affines don't match exactly. "
+                "Results may be spatially inconsistent."
+            )
+
+        # Get all unique labels (excluding background)
+        dseg_data = self.dseg.data
+        if hasattr(dseg_data, "compute"):
+            dseg_data = dseg_data.compute()
+        unique_labels = np.unique(dseg_data)
+        unique_labels = unique_labels[unique_labels != background_label]
+
+        results = []
+        for label in unique_labels:
+            # Create mask for this region
+            mask = self.dseg.data == label
+
+            # Extract image values for this region
+            region_values = image.data[mask]
+
+            # Skip if no voxels (shouldn't happen with unique labels)
+            if region_values.size == 0:
+                continue
+
+            # Compute aggregation
+            if hasattr(region_values, "compute"):
+                # Dask array - need to compute
+                if aggregation_func == "mean":
+                    agg_value = float(region_values.mean().compute())
+                elif aggregation_func == "sum":
+                    agg_value = float(region_values.sum().compute())
+                elif aggregation_func == "std":
+                    agg_value = float(region_values.std().compute())
+                elif aggregation_func == "median":
+                    agg_value = float(np.median(region_values.compute()))
+                elif aggregation_func == "min":
+                    agg_value = float(region_values.min().compute())
+                elif aggregation_func == "max":
+                    agg_value = float(region_values.max().compute())
+                else:
+                    raise ValueError(
+                        f"Unknown aggregation function: {aggregation_func}. "
+                        "Supported: mean, sum, std, median, min, max"
+                    )
+            else:
+                # NumPy array - direct computation
+                if aggregation_func == "mean":
+                    agg_value = float(region_values.mean())
+                elif aggregation_func == "sum":
+                    agg_value = float(region_values.sum())
+                elif aggregation_func == "std":
+                    agg_value = float(region_values.std())
+                elif aggregation_func == "median":
+                    agg_value = float(np.median(region_values))
+                elif aggregation_func == "min":
+                    agg_value = float(region_values.min())
+                elif aggregation_func == "max":
+                    agg_value = float(region_values.max())
+                else:
+                    raise ValueError(
+                        f"Unknown aggregation function: {aggregation_func}. "
+                        "Supported: mean, sum, std, median, min, max"
+                    )
+
+            # Get region info
+            try:
+                region_info = self.get_region_info(int(label))
+                region_name = region_info[self.name_column]
+            except ValueError:
+                region_name = f"Unknown_Region_{label}"
+
+            # Calculate volume
+            volume = self.get_region_volume(int(label))
+
+            results.append(
+                {
+                    "label": int(label),
+                    "name": region_name,
+                    f"{aggregation_func}_value": agg_value,
+                    "volume_mm3": volume,
+                }
+            )
+
+        return pd.DataFrame(results)
+
+    def create_feature_map(
+        self,
+        feature_data: pd.DataFrame,
+        feature_column: str,
+        label_column: str = "index",
+    ) -> ZarrNii:
+        """Create feature map by assigning values to atlas regions.
+
+        Args:
+            feature_data: DataFrame with region labels and feature values
+            feature_column: Column name containing feature values to map
+            label_column: Column name containing region labels
+
+        Returns:
+            ZarrNii instance with feature values mapped to regions
+
+        Raises:
+            ValueError: If required columns are missing
+        """
+        # Validate input
+        required_cols = [label_column, feature_column]
+        missing_cols = [col for col in required_cols if col not in feature_data.columns]
+        if missing_cols:
+            raise ValueError(f"Missing columns in feature_data: {missing_cols}")
+
+        # Create output array initialized to zeros
+        dseg_data = self.dseg.data
+        if hasattr(dseg_data, "compute"):
+            dseg_data = dseg_data.compute()
+        feature_map = np.zeros_like(dseg_data, dtype=np.float32)
+
+        # Map feature values to regions
+        for _, row in feature_data.iterrows():
+            label = int(row[label_column])
+            feature_value = float(row[feature_column])
+
+            # Set all voxels with this label to the feature value
+            feature_map[dseg_data == label] = feature_value
+
+        return ZarrNii.from_darr(
+            feature_map, affine=self.dseg.affine, axes_order=self.dseg.axes_order
+        )
+
+
+# Utility functions for LUT conversion
+def import_lut_csv_as_tsv(
+    csv_path: Union[str, Path],
+    tsv_path: Union[str, Path],
+    csv_columns: Optional[List[str]] = None,
+) -> None:
+    """Convert CSV lookup table to BIDS-compatible TSV format.
+
+    Args:
+        csv_path: Path to input CSV file
+        tsv_path: Path to output TSV file
+        csv_columns: Optional list of column names to reorder/select
+    """
+    # Read CSV
+    df = pd.read_csv(csv_path)
+
+    # Reorder columns if specified
+    if csv_columns is not None:
+        df = df[csv_columns]
+
+    # Write as TSV
+    df.to_csv(tsv_path, sep="\t", index=False)
+
+
+def import_lut_itksnap_as_tsv(
+    itksnap_path: Union[str, Path], tsv_path: Union[str, Path]
+) -> None:
+    """Convert ITK-SNAP label file to BIDS-compatible TSV format.
+
+    Args:
+        itksnap_path: Path to ITK-SNAP label file
+        tsv_path: Path to output TSV file
+    """
+    # Use the static method from ZarrNiiAtlas
+    df = ZarrNiiAtlas._import_itksnap_lut(str(itksnap_path))
+
+    # Add abbreviation column (empty) for BIDS compatibility
+    df["abbreviation"] = ""
+
+    # Reorder columns to match BIDS standard: index, name, abbreviation (drop color)
+    df = df[["index", "name", "abbreviation"]]
+
+    # Write as TSV
+    df.to_csv(tsv_path, sep="\t", index=False)
