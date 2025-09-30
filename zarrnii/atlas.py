@@ -9,6 +9,7 @@ Based on functionality from SPIMquant:
 https://github.com/khanlab/SPIMquant/blob/main/spimquant/workflow/scripts/
 """
 
+import json
 import shutil
 import warnings
 from pathlib import Path
@@ -298,10 +299,50 @@ class ZarrNiiAtlas(ZarrNii):
     ----------
     labels_df : pandas.DataFrame
         DataFrame containing label information for the atlas.
+    label_column : str
+        Name of the column in labels_df containing label indices.
+    name_column : str
+        Name of the column in labels_df containing region names.
+    abbrev_column : str
+        Name of the column in labels_df containing region abbreviations.
 
     """
 
-    labels_df: pd.DataFrame = None
+    labels_df: pd.DataFrame = field(default=None)
+    label_column: str = field(default="index")
+    name_column: str = field(default="name")
+    abbrev_column: str = field(default="abbreviation")
+
+    @property
+    def dseg(self) -> "ZarrNii":
+        """Return self as the segmentation image (for compatibility with API)."""
+        return self
+
+    @classmethod
+    def create_from_dseg(cls, dseg: ZarrNii, labels_df: pd.DataFrame, **kwargs):
+        """Create ZarrNiiAtlas from a dseg ZarrNii and labels DataFrame.
+        
+        Args:
+            dseg: ZarrNii segmentation image
+            labels_df: DataFrame containing label information
+            **kwargs: Additional keyword arguments for label/name/abbrev columns
+            
+        Returns:
+            ZarrNiiAtlas instance
+        """
+        if not isinstance(dseg, ZarrNii):
+            raise TypeError(f"dseg must be a ZarrNii instance, got {type(dseg)}")
+        
+        # Note: attrs strips leading underscore from _omero in __init__ signature
+        # so we pass it as 'omero' instead of '_omero'
+        return cls(
+            ngff_image=dseg.ngff_image,
+            axes_order=dseg.axes_order,
+            xyz_orientation=dseg.xyz_orientation,
+            omero=getattr(dseg, "_omero", None),
+            labels_df=labels_df,
+            **kwargs
+        )
 
     @staticmethod
     def _import_csv_lut(csv_path: str, **kwargs_read_csv) -> pd.DataFrame:
@@ -373,11 +414,28 @@ class ZarrNiiAtlas(ZarrNii):
         # For the BIDS LUT, we only need the columns "index", "name", and "color"
         return df[["index", "name", "color"]]
 
-    def __init__(self, *args, labels_df=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.labels_df = labels_df
-
     # ---- New constructors for different LUT formats ----
+
+    @classmethod
+    def from_files(cls, dseg_path: Union[str, Path], labels_path: Union[str, Path], **kwargs):
+        """Load ZarrNiiAtlas from dseg image and labels TSV files.
+        
+        Args:
+            dseg_path: Path to segmentation image (NIfTI or OME-Zarr)
+            labels_path: Path to labels TSV file
+            **kwargs: Additional arguments passed to ZarrNii.from_file()
+            
+        Returns:
+            ZarrNiiAtlas instance
+        """
+        # Load segmentation image
+        dseg = ZarrNii.from_file(str(dseg_path), **kwargs)
+        
+        # Load labels dataframe
+        labels_df = pd.read_csv(str(labels_path), sep="\t")
+        
+        # Create atlas instance using create_from_dseg
+        return cls.create_from_dseg(dseg, labels_df)
 
     @classmethod
     def from_itksnap_lut(cls, path, lut_path, **kwargs):
@@ -392,7 +450,7 @@ class ZarrNiiAtlas(ZarrNii):
             axes_order=znii.axes_order,
             xyz_orientation=znii.xyz_orientation,
             labels_df=labels_df,
-            _omero=getattr(znii, "_omero", None),
+            omero=getattr(znii, "_omero", None),
         )
 
     @classmethod
@@ -407,7 +465,7 @@ class ZarrNiiAtlas(ZarrNii):
             axes_order=znii.axes_order,
             xyz_orientation=znii.xyz_orientation,
             labels_df=labels_df,
-            _omero=getattr(znii, "_omero", None),
+            omero=getattr(znii, "_omero", None),
         )
 
     @classmethod
@@ -422,7 +480,7 @@ class ZarrNiiAtlas(ZarrNii):
             axes_order=znii.axes_order,
             xyz_orientation=znii.xyz_orientation,
             labels_df=labels_df,
-            _omero=getattr(znii, "_omero", None),
+            omero=getattr(znii, "_omero", None),
         )
 
     @classmethod
@@ -437,15 +495,20 @@ class ZarrNiiAtlas(ZarrNii):
             axes_order=znii.axes_order,
             xyz_orientation=znii.xyz_orientation,
             labels_df=labels_df,
-            _omero=getattr(znii, "_omero", None),
+            omero=getattr(znii, "_omero", None),
         )
 
     def __attrs_post_init__(self):
         """Validate atlas consistency after initialization."""
-        self._validate_atlas()
+        # Only validate if we have labels_df
+        if self.labels_df is not None:
+            self._validate_atlas()
 
     def _validate_atlas(self):
         """Validate that atlas components are consistent."""
+        if self.labels_df is None:
+            return  # Nothing to validate
+            
         # Check that required columns exist
         required_cols = [self.label_column, self.name_column]
         missing_cols = [
@@ -748,3 +811,52 @@ class ZarrNiiAtlas(ZarrNii):
         return ZarrNii.from_darr(
             feature_map, affine=self.dseg.affine, axes_order=self.dseg.axes_order
         )
+
+
+# Utility functions for LUT conversion
+def import_lut_csv_as_tsv(
+    csv_path: Union[str, Path], 
+    tsv_path: Union[str, Path],
+    csv_columns: Optional[List[str]] = None
+) -> None:
+    """Convert CSV lookup table to BIDS-compatible TSV format.
+    
+    Args:
+        csv_path: Path to input CSV file
+        tsv_path: Path to output TSV file
+        csv_columns: Optional list of column names to reorder/select
+    """
+    # Read CSV
+    df = pd.read_csv(csv_path)
+    
+    # Reorder columns if specified
+    if csv_columns is not None:
+        df = df[csv_columns]
+    
+    # Write as TSV
+    df.to_csv(tsv_path, sep="\t", index=False)
+
+
+def import_lut_itksnap_as_tsv(
+    itksnap_path: Union[str, Path],
+    tsv_path: Union[str, Path]
+) -> None:
+    """Convert ITK-SNAP label file to BIDS-compatible TSV format.
+    
+    Args:
+        itksnap_path: Path to ITK-SNAP label file
+        tsv_path: Path to output TSV file
+    """
+    # Use the static method from ZarrNiiAtlas
+    df = ZarrNiiAtlas._import_itksnap_lut(str(itksnap_path))
+    
+    # Add abbreviation column (empty) for BIDS compatibility
+    df["abbreviation"] = ""
+    
+    # Reorder columns to match BIDS standard: index, name, abbreviation (drop color)
+    df = df[["index", "name", "abbreviation"]]
+    
+    # Write as TSV
+    df.to_csv(tsv_path, sep="\t", index=False)
+
+
