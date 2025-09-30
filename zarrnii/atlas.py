@@ -812,6 +812,166 @@ class ZarrNiiAtlas(ZarrNii):
             feature_map, affine=self.dseg.affine, axes_order=self.dseg.axes_order
         )
 
+    def get_region_bounding_box(
+        self,
+        region_ids: Union[int, str, List[Union[int, str]]] = None,
+        regex: Optional[str] = None,
+    ) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+        """Get bounding box in physical coordinates for selected regions.
+
+        This method computes the spatial extents (bounding box) of one or more
+        atlas regions in physical/world coordinates. The returned bounding box
+        can be used directly with the crop method to extract a subvolume
+        containing the selected regions.
+
+        Args:
+            region_ids: Region identifier(s) to include in bounding box. Can be:
+                - Single int: label index
+                - Single str: region name or abbreviation
+                - List[int/str]: multiple regions by index, name, or abbreviation
+                - None: use regex parameter instead
+            regex: Regular expression to match region names. If provided,
+                region_ids must be None. Case-insensitive matching.
+
+        Returns:
+            Tuple of (bbox_min, bbox_max) where each is a tuple of (x, y, z)
+            coordinates in physical/world space (mm). These can be passed
+            directly to ZarrNii.crop() method with physical_coords=True.
+
+        Raises:
+            ValueError: If no regions match the selection criteria, or if both
+                region_ids and regex are provided/omitted
+            TypeError: If region_ids contains invalid types
+
+        Examples:
+            >>> # Get bounding box for single region
+            >>> bbox_min, bbox_max = atlas.get_region_bounding_box("Hippocampus")
+            >>> cropped = image.crop(bbox_min, bbox_max, physical_coords=True)
+            >>>
+            >>> # Get bounding box for multiple regions
+            >>> bbox_min, bbox_max = atlas.get_region_bounding_box(["Hippocampus", "Amygdala"])
+            >>>
+            >>> # Use regex to select regions
+            >>> bbox_min, bbox_max = atlas.get_region_bounding_box(regex="Hip.*")
+            >>>
+            >>> # Crop atlas itself to region
+            >>> cropped_atlas = atlas.crop(bbox_min, bbox_max, physical_coords=True)
+
+        Notes:
+            - Bounding box is in physical coordinates (mm), not voxel indices
+            - The bounding box is the union of all selected regions
+            - Physical coordinates are in RAS orientation (Right-Anterior-Superior)
+            - Use the returned values with crop(physical_coords=True)
+        """
+        import re
+
+        import dask.array as da
+
+        # Validate input parameters
+        if region_ids is None and regex is None:
+            raise ValueError("Must provide either region_ids or regex parameter")
+        if region_ids is not None and regex is not None:
+            raise ValueError("Cannot provide both region_ids and regex parameters")
+
+        # Determine which labels to include
+        selected_labels = []
+
+        if regex is not None:
+            # Match regions using regex
+            pattern = re.compile(regex, re.IGNORECASE)
+            for _, row in self.labels_df.iterrows():
+                region_name = str(row[self.name_column])
+                if pattern.search(region_name):
+                    selected_labels.append(int(row[self.label_column]))
+
+            if not selected_labels:
+                raise ValueError(f"No regions matched regex pattern: {regex}")
+        else:
+            # Convert region_ids to list if single value
+            if not isinstance(region_ids, list):
+                region_ids = [region_ids]
+
+            # Resolve each region identifier to label
+            for region_id in region_ids:
+                label = self._resolve_region_identifier(region_id)
+                selected_labels.append(label)
+
+        # Create union mask of all selected regions
+        dseg_data = self.dseg.data
+        mask = None
+        for label in selected_labels:
+            region_mask = dseg_data == label
+            if mask is None:
+                mask = region_mask
+            else:
+                mask = mask | region_mask
+
+        # Find voxel coordinates where mask is True
+        # da.where returns tuple of arrays (one per dimension in data array)
+        indices = da.where(mask)
+
+        # Compute the indices to get actual coordinates
+        indices_computed = [idx.compute() for idx in indices]
+
+        # Check if any voxels were found
+        if any(idx.size == 0 for idx in indices_computed):
+            raise ValueError(f"No voxels found for selected regions: {selected_labels}")
+
+        # Get the spatial dimensions from dims (skip non-spatial like 'c', 't')
+        spatial_dims_lower = [d.lower() for d in ["x", "y", "z"]]
+        spatial_indices = []
+        for i, dim in enumerate(self.dseg.dims):
+            if dim.lower() in spatial_dims_lower:
+                spatial_indices.append(i)
+
+        # Extract spatial coordinates from indices
+        # indices_computed has one array per dimension in data
+        voxel_coords = []
+        for spatial_idx in spatial_indices:
+            voxel_coords.append(indices_computed[spatial_idx])
+
+        # Get min and max for each spatial dimension
+        voxel_mins = [int(coords.min()) for coords in voxel_coords]
+        voxel_maxs = [
+            int(coords.max()) + 1 for coords in voxel_coords
+        ]  # +1 for inclusive max
+
+        # Now we have voxel coordinates in the order they appear in dims
+        # We need to convert to (x, y, z) order for physical coordinates
+        dim_to_voxel_range = {}
+        for i, spatial_idx in enumerate(spatial_indices):
+            dim_name = self.dseg.dims[spatial_idx].lower()
+            dim_to_voxel_range[dim_name] = (voxel_mins[i], voxel_maxs[i])
+
+        # Build voxel coordinates in (x, y, z) order
+        voxel_min_xyz = np.array(
+            [
+                dim_to_voxel_range["x"][0],
+                dim_to_voxel_range["y"][0],
+                dim_to_voxel_range["z"][0],
+                1.0,
+            ]
+        )
+        voxel_max_xyz = np.array(
+            [
+                dim_to_voxel_range["x"][1],
+                dim_to_voxel_range["y"][1],
+                dim_to_voxel_range["z"][1],
+                1.0,
+            ]
+        )
+
+        # Transform to physical coordinates using affine
+        affine_matrix = self.dseg.affine.matrix
+        physical_min = affine_matrix @ voxel_min_xyz
+        physical_max = affine_matrix @ voxel_max_xyz
+
+        # Return as tuples of (x, y, z) in physical space
+        bbox_min = tuple(physical_min[:3].tolist())
+        bbox_max = tuple(physical_max[:3].tolist())
+
+        return bbox_min, bbox_max
+
 
 # Utility functions for LUT conversion
 def import_lut_csv_as_tsv(

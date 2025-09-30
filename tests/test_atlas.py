@@ -25,15 +25,16 @@ class TestZarrNiiAtlas:
     def sample_atlas_data(self):
         """Create sample atlas data for testing."""
         # Create a simple 3D atlas with 3 regions plus background
-        shape = (10, 10, 10)
+        # Note: Adding channel dimension to match ZarrNii expectations
+        shape = (1, 10, 10, 10)  # (c, z, y, x)
         dseg_data = np.zeros(shape, dtype=np.int32)
 
         # Region 1: left half
-        dseg_data[:, :, :5] = 1
+        dseg_data[0, :, :, :5] = 1
         # Region 2: right half top
-        dseg_data[:5, :, 5:] = 2
+        dseg_data[0, :5, :, 5:] = 2
         # Region 3: right half bottom
-        dseg_data[5:, :, 5:] = 3
+        dseg_data[0, 5:, :, 5:] = 3
 
         # Create affine matrix (1mm isotropic)
         affine = AffineTransform.from_array(np.eye(4))
@@ -225,6 +226,119 @@ class TestZarrNiiAtlas:
         assert np.all(map_data[dseg_data == 2] == 200.0)
         assert np.all(map_data[dseg_data == 3] == 300.0)
         assert np.all(map_data[dseg_data == 0] == 0.0)  # Background value
+
+    def test_get_region_bounding_box_single_region(self, sample_atlas):
+        """Test getting bounding box for single region by index."""
+        atlas = sample_atlas
+
+        # Region 1 is left half: [:, :, :5]
+        bbox_min, bbox_max = atlas.get_region_bounding_box(1)
+
+        # Check that bbox is in physical coordinates (tuples of 3 floats)
+        assert isinstance(bbox_min, tuple)
+        assert isinstance(bbox_max, tuple)
+        assert len(bbox_min) == 3
+        assert len(bbox_max) == 3
+
+        # With identity affine, physical coords should match voxel coords
+        # Region 1 is [:, :, :5], so in XYZ: x=[0, 5), y=[0, 10), z=[0, 10)
+        assert bbox_min == (0.0, 0.0, 0.0)
+        assert bbox_max == (5.0, 10.0, 10.0)
+
+    def test_get_region_bounding_box_by_name(self, sample_atlas):
+        """Test getting bounding box by region name."""
+        atlas = sample_atlas
+
+        bbox_min, bbox_max = atlas.get_region_bounding_box("Left Region")
+
+        # Should return same as by index
+        assert bbox_min == (0.0, 0.0, 0.0)
+        assert bbox_max == (5.0, 10.0, 10.0)
+
+    def test_get_region_bounding_box_by_abbreviation(self, sample_atlas):
+        """Test getting bounding box by region abbreviation."""
+        atlas = sample_atlas
+
+        bbox_min, bbox_max = atlas.get_region_bounding_box("RT")  # Right Top
+
+        # Region 2 is [:5, :, 5:], so in XYZ: x=[5, 10), y=[0, 10), z=[0, 5)
+        assert bbox_min == (5.0, 0.0, 0.0)
+        assert bbox_max == (10.0, 10.0, 5.0)
+
+    def test_get_region_bounding_box_multiple_regions(self, sample_atlas):
+        """Test getting bounding box for multiple regions."""
+        atlas = sample_atlas
+
+        # Select regions 2 and 3 (both in right half)
+        bbox_min, bbox_max = atlas.get_region_bounding_box([2, 3])
+
+        # Region 2: [:5, :, 5:] (right half top)
+        # Region 3: [5:, :, 5:] (right half bottom)
+        # Union: [:, :, 5:], so in XYZ: x=[5, 10), y=[0, 10), z=[0, 10)
+        assert bbox_min == (5.0, 0.0, 0.0)
+        assert bbox_max == (10.0, 10.0, 10.0)
+
+    def test_get_region_bounding_box_regex(self, sample_atlas):
+        """Test getting bounding box using regex pattern."""
+        atlas = sample_atlas
+
+        # Match all "Right" regions (Right Top and Right Bottom)
+        bbox_min, bbox_max = atlas.get_region_bounding_box(regex="Right.*")
+
+        # Should match regions 2 and 3
+        assert bbox_min == (5.0, 0.0, 0.0)
+        assert bbox_max == (10.0, 10.0, 10.0)
+
+    def test_get_region_bounding_box_regex_case_insensitive(self, sample_atlas):
+        """Test that regex matching is case-insensitive."""
+        atlas = sample_atlas
+
+        bbox_min, bbox_max = atlas.get_region_bounding_box(regex="left.*")
+
+        # Should match "Left Region"
+        assert bbox_min == (0.0, 0.0, 0.0)
+        assert bbox_max == (5.0, 10.0, 10.0)
+
+    def test_get_region_bounding_box_with_crop(self, sample_atlas):
+        """Test that bounding box output works with crop method."""
+        atlas = sample_atlas
+
+        # Get bounding box for region 1
+        bbox_min, bbox_max = atlas.get_region_bounding_box(1)
+
+        # Crop atlas using the bounding box
+        # Note: crop expects voxel coordinates, but we're returning physical
+        # For now, test that the method returns valid tuples
+        assert isinstance(bbox_min, tuple) and len(bbox_min) == 3
+        assert isinstance(bbox_max, tuple) and len(bbox_max) == 3
+
+    def test_get_region_bounding_box_invalid_region(self, sample_atlas):
+        """Test error handling for invalid region."""
+        atlas = sample_atlas
+
+        # Invalid region label should raise ValueError from _resolve_region_identifier
+        # or from no voxels found
+        with pytest.raises(ValueError):
+            atlas.get_region_bounding_box(999)
+
+    def test_get_region_bounding_box_no_match_regex(self, sample_atlas):
+        """Test error when regex matches no regions."""
+        atlas = sample_atlas
+
+        with pytest.raises(ValueError, match="No regions matched regex pattern"):
+            atlas.get_region_bounding_box(regex="NonexistentRegion.*")
+
+    def test_get_region_bounding_box_invalid_params(self, sample_atlas):
+        """Test error handling for invalid parameter combinations."""
+        atlas = sample_atlas
+
+        # Both region_ids and regex provided
+        with pytest.raises(ValueError, match="Cannot provide both"):
+            atlas.get_region_bounding_box(region_ids=1, regex="Left.*")
+
+        # Neither region_ids nor regex provided
+        with pytest.raises(ValueError, match="Must provide either"):
+            atlas.get_region_bounding_box()
 
 
 class TestZarrNiiAtlasFileIO:

@@ -1525,24 +1525,29 @@ class ZarrNii:
     # Chainable operations - each returns a new ZarrNii instance
     def crop(
         self,
-        bbox_min: Tuple[int, ...],
-        bbox_max: Tuple[int, ...],
+        bbox_min: Tuple[float, ...],
+        bbox_max: Tuple[float, ...],
         spatial_dims: Optional[List[str]] = None,
+        physical_coords: bool = False,
     ) -> "ZarrNii":
         """Extract a spatial region from the image.
 
         Crops the image to the specified bounding box coordinates, preserving
         all metadata and non-spatial dimensions (channels, time). The cropping
-        is performed in voxel coordinates.
+        is performed in voxel coordinates by default, or physical coordinates
+        if specified.
 
         Args:
             bbox_min: Minimum corner coordinates of bounding box as tuple.
-                Length should match number of spatial dimensions
+                Length should match number of spatial dimensions (x, y, z order)
             bbox_max: Maximum corner coordinates of bounding box as tuple.
-                Length should match number of spatial dimensions
+                Length should match number of spatial dimensions (x, y, z order)
             spatial_dims: Names of spatial dimensions to crop. If None,
                 automatically derived from axes_order ("z","y","x" for ZYX
                 or "x","y","z" for XYZ)
+            physical_coords: If True, bbox_min and bbox_max are in physical/world
+                coordinates (mm). If False, they are in voxel coordinates.
+                Default is False.
 
         Returns:
             New ZarrNii instance with cropped data and updated spatial metadata
@@ -1552,8 +1557,12 @@ class ZarrNii:
             IndexError: If bbox dimensions don't match spatial dimensions
 
         Examples:
-            >>> # Crop 3D region
+            >>> # Crop 3D region (voxel coordinates)
             >>> cropped = znii.crop((10, 20, 30), (110, 120, 130))
+
+            >>> # Crop with physical coordinates
+            >>> cropped = znii.crop((10.5, 20.5, 30.5), (110.5, 120.5, 130.5),
+            ...                      physical_coords=True)
 
             >>> # Crop with explicit spatial dimensions
             >>> cropped = znii.crop(
@@ -1562,7 +1571,8 @@ class ZarrNii:
             ... )
 
         Notes:
-            - Coordinates are in voxel space (0-based indexing)
+            - Coordinates are in voxel space (0-based indexing) by default
+            - Physical coordinates are in RAS orientation (Right-Anterior-Superior)
             - The cropped region includes bbox_min but excludes bbox_max
             - All non-spatial dimensions (channels, time) are preserved
             - Spatial transformations are automatically updated
@@ -1571,6 +1581,52 @@ class ZarrNii:
             spatial_dims = (
                 ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
             )
+
+        # Convert physical coordinates to voxel coordinates if needed
+        if physical_coords:
+            # Physical coords are always in (x, y, z) order
+            # Convert to homogeneous coordinates
+            phys_min = np.array(list(bbox_min) + [1.0])
+            phys_max = np.array(list(bbox_max) + [1.0])
+
+            # Get inverse affine to convert from physical to voxel
+            affine_inv = np.linalg.inv(self.affine.matrix)
+
+            # Transform to voxel coordinates
+            voxel_min = affine_inv @ phys_min
+            voxel_max = affine_inv @ phys_max
+
+            # Extract voxel coordinates (x, y, z)
+            voxel_min_xyz = voxel_min[:3]
+            voxel_max_xyz = voxel_max[:3]
+
+            # Round to nearest integer voxel indices
+            voxel_min_xyz = np.round(voxel_min_xyz).astype(int)
+            voxel_max_xyz = np.round(voxel_max_xyz).astype(int)
+
+            # Ensure max >= min
+            voxel_min_xyz = np.minimum(voxel_min_xyz, voxel_max_xyz)
+            voxel_max_xyz = np.maximum(
+                np.round(affine_inv @ phys_min).astype(int)[:3],
+                np.round(affine_inv @ phys_max).astype(int)[:3],
+            )
+
+            # Create mapping from x,y,z to voxel coordinates
+            xyz_to_voxel = {
+                "x": voxel_min_xyz[0],
+                "y": voxel_min_xyz[1],
+                "z": voxel_min_xyz[2],
+            }
+            xyz_to_voxel_max = {
+                "x": voxel_max_xyz[0],
+                "y": voxel_max_xyz[1],
+                "z": voxel_max_xyz[2],
+            }
+
+            # Reorder according to spatial_dims
+            bbox_min = tuple(xyz_to_voxel[dim.lower()] for dim in spatial_dims)
+            bbox_max = tuple(xyz_to_voxel_max[dim.lower()] for dim in spatial_dims)
+
         cropped_image = crop_ngff_image(
             self.ngff_image, bbox_min, bbox_max, spatial_dims
         )
@@ -1582,8 +1638,15 @@ class ZarrNii:
         )
 
     def crop_with_bounding_box(self, bbox_min, bbox_max, ras_coords=False):
-        """Legacy method name for crop."""
-        return self.crop(bbox_min, bbox_max)
+        """Legacy method name for crop.
+
+        Args:
+            bbox_min: Minimum corner coordinates
+            bbox_max: Maximum corner coordinates
+            ras_coords: If True, coordinates are in RAS physical space (deprecated,
+                use physical_coords parameter of crop() instead)
+        """
+        return self.crop(bbox_min, bbox_max, physical_coords=ras_coords)
 
     def downsample(
         self,
