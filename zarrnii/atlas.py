@@ -1147,9 +1147,9 @@ class ZarrNiiAtlas(ZarrNii):
             # patch_size is already in mm
             patch_size_mm = np.array(patch_size)
         else:
-            # Convert voxel size to physical size using affine
-            # Extract voxel sizes from affine diagonal (absolute values)
-            voxel_sizes = np.abs(np.diag(affine_matrix[:3, :3]))
+            # Convert voxel size to physical size using voxel spacing from metadata
+            # Get voxel sizes in (x, y, z) order
+            voxel_sizes = self.dseg.get_zooms(axes_order="XYZ")
             patch_size_mm = np.array(patch_size) * voxel_sizes
 
         # Generate bounding boxes
