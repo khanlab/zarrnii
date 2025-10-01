@@ -1596,7 +1596,16 @@ class ZarrNii:
               physical_coords settings
         """
         # Check if this is batch cropping (list of bounding boxes)
-        if isinstance(bbox_min, list):
+        # A batch crop is a list of (bbox_min, bbox_max) tuples
+        # Each element should be a tuple/list of two elements
+        is_batch_crop = (
+            isinstance(bbox_min, list)
+            and len(bbox_min) > 0
+            and isinstance(bbox_min[0], (tuple, list))
+            and len(bbox_min[0]) == 2
+        )
+
+        if is_batch_crop:
             if bbox_max is not None:
                 raise ValueError(
                     "bbox_max should be None when bbox_min is a list of bounding boxes"
