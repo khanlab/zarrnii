@@ -11,6 +11,10 @@
         <link rel="canonical" href="http://www.khanlab.ca/zarrnii/examples/scaled_processing/">
       
       
+        <link rel="prev" href="../segmentation_example/">
+      
+      
+        <link rel="next" href="../../faq/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -18,7 +22,7 @@
     
     
       
-        <title>Multi-Resolution Plugin Architecture - ZarrNii Documentation</title>
+        <title>Scaled Processing Plugins - ZarrNii Documentation</title>
       
     
     
@@ -98,7 +102,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Multi-Resolution Plugin Architecture
+              Scaled Processing Plugins
             
           </span>
         </div>
@@ -394,18 +398,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
@@ -421,7 +427,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Examples
@@ -550,6 +556,29 @@
   
   
     <li class="md-nav__item">
+      <a href="../atlas_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Atlases
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../multiscale/" class="md-nav__link">
         
   
@@ -584,6 +613,152 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Scaled Processing Plugins
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Scaled Processing Plugins
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      Plugin Interface
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basic-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Basic Usage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      Built-in Plugins
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-custom-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      Creating Custom Plugins
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Advanced Usage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance Considerations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-other-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Integration with Other Operations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      See Also
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -791,7 +966,7 @@
 <p>The scaled processing plugin architecture in ZarrNii allows for efficient multi-resolution operations. This is particularly useful for algorithms that can be computed efficiently at lower resolution and then applied to the full-resolution data. Common use cases include:</p>
 <ul>
 <li>Bias field correction</li>
-<li>Background estimation  </li>
+<li>Background estimation</li>
 <li>Denoising operations</li>
 <li>Global intensity normalization</li>
 </ul>
@@ -889,7 +1064,7 @@ class CustomPlugin(ScaledProcessingPlugin):
     def name(self) -&gt; str:
         return &quot;Custom Plugin&quot;
 
-    @property  
+    @property
     def description(self) -&gt; str:
         return &quot;A custom multi-resolution processing plugin&quot;
 
@@ -900,7 +1075,7 @@ result = znimg.apply_scaled_processing(CustomPlugin(param1=2.0))
 <h3 id="custom-downsampling-factors">Custom Downsampling Factors</h3>
 <pre><code class="language-python"># Use different downsampling factors
 result = znimg.apply_scaled_processing(
-    GaussianBiasFieldCorrection(), 
+    GaussianBiasFieldCorrection(),
     downsample_factor=8  # 8x downsampling
 )
 </code></pre>
@@ -956,7 +1131,7 @@ result.to_ome_zarr(&quot;processed.ome.zarr&quot;)
 </code></pre>
 <h2 id="see-also">See Also</h2>
 <ul>
-<li><a href="segmentation.md">Segmentation Plugins</a> for other plugin architectures</li>
+<li><a href="../segmentation_example/">Segmentation Plugins</a> for other plugin architectures</li>
 <li><a href="../downsampling/">Downsampling and Upsampling</a> for resolution operations</li>
 <li><a href="../../reference/">API Reference</a> for detailed method documentation</li>
 </ul>
