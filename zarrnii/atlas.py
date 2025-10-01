@@ -972,6 +972,217 @@ class ZarrNiiAtlas(ZarrNii):
 
         return bbox_min, bbox_max
 
+    def sample_region_patches(
+        self,
+        n_patches: int,
+        patch_size: Tuple[float, float, float],
+        region_ids: Union[int, str, List[Union[int, str]]] = None,
+        regex: Optional[str] = None,
+        physical_size: bool = True,
+        level: int = 0,
+        seed: Optional[int] = None,
+    ) -> List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]]:
+        """Sample fixed-size patches centered at random voxels within regions.
+
+        This method generates a list of bounding boxes for patches of a specified
+        size, with each patch centered at a random voxel within the selected
+        atlas regions. This is useful for generating training data for machine
+        learning models or for interactive segmentation workflows.
+
+        Args:
+            n_patches: Number of patches to sample
+            patch_size: Size of each patch as (x, y, z) tuple. If physical_size
+                is True, values are in millimeters. If False, values are in voxels.
+            region_ids: Region identifier(s) to sample from. Can be:
+                - Single int: label index
+                - Single str: region name or abbreviation
+                - List[int/str]: multiple regions by index, name, or abbreviation
+                - None: use regex parameter instead
+            regex: Regular expression to match region names. If provided,
+                region_ids must be None. Case-insensitive matching.
+            physical_size: If True (default), patch_size is in physical/world
+                coordinates (mm). If False, patch_size is in voxels at the
+                specified level.
+            level: Downsampling level to use when physical_size is False.
+                Ignored if physical_size is True.
+            seed: Random seed for reproducibility. If None, patches are sampled
+                randomly each time.
+
+        Returns:
+            List of (bbox_min, bbox_max) tuples where each tuple contains
+            (x, y, z) coordinates in physical/world space (mm). Each bounding
+            box can be passed to ZarrNii.crop() method with physical_coords=True.
+
+        Raises:
+            ValueError: If no regions match the selection criteria, if both
+                region_ids and regex are provided/omitted, or if n_patches is
+                less than 1
+            TypeError: If region_ids contains invalid types
+
+        Examples:
+            >>> # Sample 10 patches of 1x1x1mm from hippocampus for ML training
+            >>> patches = atlas.sample_region_patches(
+            ...     n_patches=10,
+            ...     patch_size=(1.0, 1.0, 1.0),
+            ...     region_ids="Hippocampus",
+            ...     physical_size=True
+            ... )
+            >>> cropped_patches = image.crop(patches, physical_coords=True)
+            >>>
+            >>> # Sample 5 patches of 64x64x64 voxels from brain mask
+            >>> patches = atlas.sample_region_patches(
+            ...     n_patches=5,
+            ...     patch_size=(64, 64, 64),
+            ...     regex=".*mask.*",
+            ...     physical_size=False,
+            ...     level=0
+            ... )
+            >>>
+            >>> # Sample with reproducible random seed
+            >>> patches = atlas.sample_region_patches(
+            ...     n_patches=20,
+            ...     patch_size=(2.0, 2.0, 2.0),
+            ...     region_ids=[1, 2, 3],
+            ...     seed=42
+            ... )
+
+        Notes:
+            - Bounding boxes are in physical coordinates (mm), not voxel indices
+            - Patches are sampled uniformly from voxels within selected regions
+            - If a patch would extend beyond image boundaries, it is clipped
+            - Use the returned values with crop(physical_coords=True) or pass
+              the list directly to crop() for batch processing
+        """
+        import re
+
+        import dask.array as da
+
+        # Validate input
+        if n_patches < 1:
+            raise ValueError(f"n_patches must be at least 1, got {n_patches}")
+
+        if region_ids is None and regex is None:
+            raise ValueError("Must provide either region_ids or regex parameter")
+        if region_ids is not None and regex is not None:
+            raise ValueError("Cannot provide both region_ids and regex parameters")
+
+        # Set random seed if provided
+        if seed is not None:
+            np.random.seed(seed)
+
+        # Determine which labels to include (reuse logic from get_region_bounding_box)
+        selected_labels = []
+
+        if regex is not None:
+            # Match regions using regex
+            pattern = re.compile(regex, re.IGNORECASE)
+            for _, row in self.labels_df.iterrows():
+                region_name = str(row[self.name_column])
+                if pattern.search(region_name):
+                    selected_labels.append(int(row[self.label_column]))
+
+            if not selected_labels:
+                raise ValueError(f"No regions matched regex pattern: {regex}")
+        else:
+            # Convert region_ids to list if single value
+            if not isinstance(region_ids, list):
+                region_ids = [region_ids]
+
+            # Resolve each region identifier to label
+            for region_id in region_ids:
+                label = self._resolve_region_identifier(region_id)
+                selected_labels.append(label)
+
+        # Create union mask of all selected regions
+        dseg_data = self.dseg.data
+        mask = None
+        for label in selected_labels:
+            region_mask = dseg_data == label
+            if mask is None:
+                mask = region_mask
+            else:
+                mask = mask | region_mask
+
+        # Find voxel coordinates where mask is True
+        indices = da.where(mask)
+
+        # Compute the indices to get actual coordinates
+        indices_computed = [idx.compute() for idx in indices]
+
+        # Check if any voxels were found
+        if any(idx.size == 0 for idx in indices_computed):
+            raise ValueError(f"No voxels found for selected regions: {selected_labels}")
+
+        # Get number of valid voxels
+        n_voxels = indices_computed[0].size
+
+        # Sample random voxels
+        # If n_patches > n_voxels, sample with replacement
+        replace = n_patches > n_voxels
+        sampled_indices = np.random.choice(n_voxels, size=n_patches, replace=replace)
+
+        # Get spatial dimensions (skip non-spatial like 'c', 't')
+        spatial_dims_lower = [d.lower() for d in ["x", "y", "z"]]
+        spatial_indices = []
+        for i, dim in enumerate(self.dseg.dims):
+            if dim.lower() in spatial_dims_lower:
+                spatial_indices.append(i)
+
+        # Build voxel coordinates for sampled centers
+        sampled_coords = []
+        for spatial_idx in spatial_indices:
+            sampled_coords.append(indices_computed[spatial_idx][sampled_indices])
+
+        # Map to x, y, z order
+        dim_to_coords = {}
+        for i, spatial_idx in enumerate(spatial_indices):
+            dim_name = self.dseg.dims[spatial_idx].lower()
+            dim_to_coords[dim_name] = sampled_coords[i]
+
+        # Get affine matrix
+        affine_matrix = self.dseg.affine.matrix
+
+        # Convert patch size to physical coordinates if needed
+        if physical_size:
+            # patch_size is already in mm
+            patch_size_mm = np.array(patch_size)
+        else:
+            # Convert voxel size to physical size using voxel spacing from metadata
+            # Get voxel sizes in (x, y, z) order
+            voxel_sizes = self.dseg.get_zooms(axes_order="XYZ")
+            patch_size_mm = np.array(patch_size) * voxel_sizes
+
+        # Generate bounding boxes
+        bboxes = []
+        half_patch = patch_size_mm / 2.0
+
+        for i in range(n_patches):
+            # Get center voxel coordinates in (x, y, z) order
+            center_voxel_xyz = np.array(
+                [
+                    dim_to_coords["x"][i],
+                    dim_to_coords["y"][i],
+                    dim_to_coords["z"][i],
+                    1.0,
+                ]
+            )
+
+            # Transform to physical coordinates
+            center_physical = affine_matrix @ center_voxel_xyz
+            center_xyz = center_physical[:3]
+
+            # Calculate bounding box corners
+            bbox_min = center_xyz - half_patch
+            bbox_max = center_xyz + half_patch
+
+            # Convert to tuples
+            bbox_min = tuple(bbox_min.tolist())
+            bbox_max = tuple(bbox_max.tolist())
+
+            bboxes.append((bbox_min, bbox_max))
+
+        return bboxes
+
 
 # Utility functions for LUT conversion
 def import_lut_csv_as_tsv(

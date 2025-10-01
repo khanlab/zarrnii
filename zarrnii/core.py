@@ -1525,23 +1525,30 @@ class ZarrNii:
     # Chainable operations - each returns a new ZarrNii instance
     def crop(
         self,
-        bbox_min: Tuple[float, ...],
-        bbox_max: Tuple[float, ...],
+        bbox_min: Union[
+            Tuple[float, ...], List[Tuple[Tuple[float, ...], Tuple[float, ...]]]
+        ],
+        bbox_max: Optional[Tuple[float, ...]] = None,
         spatial_dims: Optional[List[str]] = None,
         physical_coords: bool = False,
-    ) -> "ZarrNii":
-        """Extract a spatial region from the image.
+    ) -> Union["ZarrNii", List["ZarrNii"]]:
+        """Extract a spatial region or multiple regions from the image.
 
         Crops the image to the specified bounding box coordinates, preserving
         all metadata and non-spatial dimensions (channels, time). The cropping
         is performed in voxel coordinates by default, or physical coordinates
-        if specified.
+        if specified. Can crop a single region or multiple regions at once.
 
         Args:
-            bbox_min: Minimum corner coordinates of bounding box as tuple.
-                Length should match number of spatial dimensions (x, y, z order)
+            bbox_min: Either:
+                - Minimum corner coordinates of bounding box as tuple
+                  (when bbox_max is provided). Length should match number of
+                  spatial dimensions (x, y, z order)
+                - List of (bbox_min, bbox_max) tuples for batch cropping
+                  (when bbox_max is None)
             bbox_max: Maximum corner coordinates of bounding box as tuple.
-                Length should match number of spatial dimensions (x, y, z order)
+                Length should match number of spatial dimensions (x, y, z order).
+                Should be None when bbox_min is a list of bounding boxes.
             spatial_dims: Names of spatial dimensions to crop. If None,
                 automatically derived from axes_order ("z","y","x" for ZYX
                 or "x","y","z" for XYZ)
@@ -1550,10 +1557,12 @@ class ZarrNii:
                 Default is False.
 
         Returns:
-            New ZarrNii instance with cropped data and updated spatial metadata
+            New ZarrNii instance with cropped data (single crop) or list of
+            ZarrNii instances (batch crop) with updated spatial metadata
 
         Raises:
-            ValueError: If bbox coordinates are invalid or out of bounds
+            ValueError: If bbox coordinates are invalid or out of bounds, or
+                if both list and bbox_max are provided
             IndexError: If bbox dimensions don't match spatial dimensions
 
         Examples:
@@ -1570,13 +1579,47 @@ class ZarrNii:
             ...     spatial_dims=["x", "y", "z"]
             ... )
 
+            >>> # Batch crop multiple regions
+            >>> bboxes = [
+            ...     ((10, 20, 30), (60, 70, 80)),
+            ...     ((100, 110, 120), (150, 160, 170))
+            ... ]
+            >>> cropped_list = znii.crop(bboxes, physical_coords=True)
+
         Notes:
             - Coordinates are in voxel space (0-based indexing) by default
             - Physical coordinates are in RAS orientation (Right-Anterior-Superior)
             - The cropped region includes bbox_min but excludes bbox_max
             - All non-spatial dimensions (channels, time) are preserved
             - Spatial transformations are automatically updated
+            - When batch cropping, all patches share the same spatial_dims and
+              physical_coords settings
         """
+        # Check if this is batch cropping (list of bounding boxes)
+        # A batch crop is a list of (bbox_min, bbox_max) tuples
+        # Each element should be a tuple/list of two elements
+        is_batch_crop = (
+            isinstance(bbox_min, list)
+            and len(bbox_min) > 0
+            and isinstance(bbox_min[0], (tuple, list))
+            and len(bbox_min[0]) == 2
+        )
+
+        if is_batch_crop:
+            if bbox_max is not None:
+                raise ValueError(
+                    "bbox_max should be None when bbox_min is a list of bounding boxes"
+                )
+            # Batch crop: recursively call crop for each bounding box
+            return [
+                self.crop(bmin, bmax, spatial_dims, physical_coords)
+                for bmin, bmax in bbox_min
+            ]
+
+        # Single crop: original implementation
+        if bbox_max is None:
+            raise ValueError("bbox_max is required when bbox_min is not a list")
+
         if spatial_dims is None:
             spatial_dims = (
                 ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
