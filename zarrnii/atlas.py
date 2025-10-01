@@ -663,7 +663,7 @@ class ZarrNiiAtlas(ZarrNii):
         image: ZarrNii,
         aggregation_func: str = "mean",
         background_label: int = 0,
-        column_suffix: str | None = None,
+        column_suffix: str = "value",
     ) -> pd.DataFrame:
         """Aggregate image values by atlas regions.
 
@@ -671,9 +671,9 @@ class ZarrNiiAtlas(ZarrNii):
             image: Image to aggregate (must be compatible with atlas)
             aggregation_func: Aggregation function ('mean', 'sum', 'std', 'median', 'min', 'max')
             background_label: Label value to treat as background (excluded from results)
-            column_suffix: String suffix to append to column name. Name will be {agg_func}_{col_suffix}, or {agg_func} if None.
+            column_suffix: String suffix to append to column name. Name will be {agg_func}_{col_suffix}.
         Returns:
-            DataFrame with columns: index, name, {agg_func}[_{col_suffix}], volume_mm3
+            DataFrame with columns: index, name, mean_value, volume_mm3
 
         Raises:
             ValueError: If image and atlas are incompatible

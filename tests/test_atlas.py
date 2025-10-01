@@ -3,6 +3,7 @@
 import tempfile
 from pathlib import Path
 
+import dask.array as da
 import nibabel as nib
 import numpy as np
 import pandas as pd
@@ -27,7 +28,7 @@ class TestZarrNiiAtlas:
         # Create a simple 3D atlas with 3 regions plus background
         # Note: Adding channel dimension to match ZarrNii expectations
         shape = (1, 10, 10, 10)  # (c, z, y, x)
-        dseg_data = np.zeros(shape, dtype=np.int32)
+        dseg_data = da.zeros(shape, dtype=np.int32)
 
         # Region 1: left half
         dseg_data[0, :, :, :5] = 1
@@ -195,7 +196,7 @@ class TestZarrNiiAtlas:
         assert "volume_mm3" in result.columns
 
         # Check values for specific regions
-        left_row = result[result["label"] == 1].iloc[0]
+        left_row = result[result["index"] == 1].iloc[0]
         assert left_row["mean_value"] == 10.0
 
     def test_create_feature_map(self, sample_atlas):
