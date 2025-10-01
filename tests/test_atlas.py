@@ -340,6 +340,223 @@ class TestZarrNiiAtlas:
         with pytest.raises(ValueError, match="Must provide either"):
             atlas.get_region_bounding_box()
 
+    def test_sample_region_patches_basic(self, sample_atlas):
+        """Test basic patch sampling with physical size."""
+        atlas = sample_atlas
+
+        # Sample 5 patches of 1x1x1mm from region 1
+        patches = atlas.sample_region_patches(
+            n_patches=5,
+            patch_size=(1.0, 1.0, 1.0),
+            region_ids=1,
+            physical_size=True,
+            seed=42,
+        )
+
+        # Check return type and length
+        assert isinstance(patches, list)
+        assert len(patches) == 5
+
+        # Check each patch is a tuple of two tuples
+        for bbox_min, bbox_max in patches:
+            assert isinstance(bbox_min, tuple)
+            assert isinstance(bbox_max, tuple)
+            assert len(bbox_min) == 3
+            assert len(bbox_max) == 3
+
+            # Check that bbox_max > bbox_min for all dimensions
+            assert all(bmax > bmin for bmin, bmax in zip(bbox_min, bbox_max))
+
+            # Check patch size is approximately correct (1mm +/- floating point error)
+            for i in range(3):
+                patch_dim = bbox_max[i] - bbox_min[i]
+                assert abs(patch_dim - 1.0) < 1e-6
+
+    def test_sample_region_patches_by_name(self, sample_atlas):
+        """Test patch sampling using region name."""
+        atlas = sample_atlas
+
+        patches = atlas.sample_region_patches(
+            n_patches=3,
+            patch_size=(0.5, 0.5, 0.5),
+            region_ids="Left Region",
+            physical_size=True,
+            seed=42,
+        )
+
+        assert len(patches) == 3
+        # All patches should be within region 1 bounds (x=[0, 5))
+        for bbox_min, bbox_max in patches:
+            # Check that patch centers are roughly in region 1
+            center_x = (bbox_min[0] + bbox_max[0]) / 2
+            assert 0 <= center_x < 5.0
+
+    def test_sample_region_patches_regex(self, sample_atlas):
+        """Test patch sampling using regex pattern."""
+        atlas = sample_atlas
+
+        # Sample from all "Right" regions (2 and 3)
+        patches = atlas.sample_region_patches(
+            n_patches=4,
+            patch_size=(1.0, 1.0, 1.0),
+            regex="Right.*",
+            physical_size=True,
+            seed=42,
+        )
+
+        assert len(patches) == 4
+
+    def test_sample_region_patches_voxel_size(self, sample_atlas):
+        """Test patch sampling with voxel size instead of physical size."""
+        atlas = sample_atlas
+
+        # Sample 2x2x2 voxel patches
+        patches = atlas.sample_region_patches(
+            n_patches=3,
+            patch_size=(2, 2, 2),
+            region_ids=1,
+            physical_size=False,
+            level=0,
+            seed=42,
+        )
+
+        assert len(patches) == 3
+
+        # With identity affine, 2 voxels = 2mm
+        for bbox_min, bbox_max in patches:
+            for i in range(3):
+                patch_dim = bbox_max[i] - bbox_min[i]
+                # Should be approximately 2.0mm
+                assert abs(patch_dim - 2.0) < 1e-6
+
+    def test_sample_region_patches_multiple_regions(self, sample_atlas):
+        """Test patch sampling from multiple regions."""
+        atlas = sample_atlas
+
+        patches = atlas.sample_region_patches(
+            n_patches=6,
+            patch_size=(0.5, 0.5, 0.5),
+            region_ids=[2, 3],
+            physical_size=True,
+            seed=42,
+        )
+
+        assert len(patches) == 6
+
+    def test_sample_region_patches_reproducibility(self, sample_atlas):
+        """Test that seed produces reproducible results."""
+        atlas = sample_atlas
+
+        patches1 = atlas.sample_region_patches(
+            n_patches=5,
+            patch_size=(1.0, 1.0, 1.0),
+            region_ids=1,
+            seed=123,
+        )
+
+        patches2 = atlas.sample_region_patches(
+            n_patches=5,
+            patch_size=(1.0, 1.0, 1.0),
+            region_ids=1,
+            seed=123,
+        )
+
+        # Should be identical
+        assert patches1 == patches2
+
+    def test_sample_region_patches_invalid_n_patches(self, sample_atlas):
+        """Test error handling for invalid n_patches."""
+        atlas = sample_atlas
+
+        with pytest.raises(ValueError, match="n_patches must be at least 1"):
+            atlas.sample_region_patches(
+                n_patches=0,
+                patch_size=(1.0, 1.0, 1.0),
+                region_ids=1,
+            )
+
+    def test_sample_region_patches_invalid_region(self, sample_atlas):
+        """Test error handling for invalid region."""
+        atlas = sample_atlas
+
+        with pytest.raises(ValueError):
+            atlas.sample_region_patches(
+                n_patches=5,
+                patch_size=(1.0, 1.0, 1.0),
+                region_ids=999,
+            )
+
+    def test_sample_region_patches_no_matching_regex(self, sample_atlas):
+        """Test error handling when regex matches no regions."""
+        atlas = sample_atlas
+
+        with pytest.raises(ValueError, match="No regions matched regex pattern"):
+            atlas.sample_region_patches(
+                n_patches=5,
+                patch_size=(1.0, 1.0, 1.0),
+                regex="NonexistentPattern.*",
+            )
+
+    def test_sample_region_patches_invalid_params(self, sample_atlas):
+        """Test error handling for invalid parameter combinations."""
+        atlas = sample_atlas
+
+        # Both region_ids and regex provided
+        with pytest.raises(ValueError, match="Cannot provide both"):
+            atlas.sample_region_patches(
+                n_patches=5,
+                patch_size=(1.0, 1.0, 1.0),
+                region_ids=1,
+                regex="Left.*",
+            )
+
+        # Neither region_ids nor regex provided
+        with pytest.raises(ValueError, match="Must provide either"):
+            atlas.sample_region_patches(
+                n_patches=5,
+                patch_size=(1.0, 1.0, 1.0),
+            )
+
+    def test_crop_with_patch_list(self, sample_atlas):
+        """Test that crop works with list of bounding boxes from sample_region_patches."""
+        atlas = sample_atlas
+
+        # Sample some patches
+        patches = atlas.sample_region_patches(
+            n_patches=3,
+            patch_size=(1.0, 1.0, 1.0),
+            region_ids=1,
+            physical_size=True,
+            seed=42,
+        )
+
+        # Crop using the patch list
+        cropped_list = atlas.crop(patches, physical_coords=True)
+
+        # Check return type
+        assert isinstance(cropped_list, list)
+        assert len(cropped_list) == 3
+
+        # Check each cropped result is a ZarrNii
+        for cropped in cropped_list:
+            assert isinstance(cropped, ZarrNii)
+            # Cropped regions should be small (approximately 1mm cubed)
+            # With identity affine and channel dim, shape should be (1, ~1, ~1, ~1)
+            assert cropped.shape[0] == 1  # channel dimension
+
+    def test_crop_batch_invalid_params(self, sample_atlas):
+        """Test that crop rejects invalid parameter combinations for batch mode."""
+        atlas = sample_atlas
+
+        patches = [
+            ((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
+            ((2.0, 2.0, 2.0), (3.0, 3.0, 3.0)),
+        ]
+
+        # Providing both list and bbox_max should raise error
+        with pytest.raises(ValueError, match="bbox_max should be None"):
+            atlas.crop(patches, bbox_max=(10.0, 10.0, 10.0))
+
 
 class TestZarrNiiAtlasFileIO:
     """Test suite for ZarrNiiAtlas file I/O operations."""
