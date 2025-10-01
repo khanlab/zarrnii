@@ -16,8 +16,10 @@ nav:
       - Transformations: examples/transformations.md
       - Downsampling and Upsampling: examples/downsampling.md
       - Near-Isotropic Downsampling: examples/near_isotropic.md
+      - Atlases: examples/atlas_example.md
       - Multiscale OME-Zarr: examples/multiscale.md
       - Segmentation Plugins: examples/segmentation_example.md
+      - Scaled Processing Plugins: examples/scaled_processing.md
   - FAQ: faq.md
   - Changelog: changelog.md
   - Contributing: contributing.md
@@ -35,4 +37,3 @@ plugins:
           options:
             show_source: true
             merge_init_into_class: true
-
