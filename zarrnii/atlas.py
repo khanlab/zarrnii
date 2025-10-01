@@ -663,6 +663,7 @@ class ZarrNiiAtlas(ZarrNii):
         image: ZarrNii,
         aggregation_func: str = "mean",
         background_label: int = 0,
+        column_suffix: str | None = None,
     ) -> pd.DataFrame:
         """Aggregate image values by atlas regions.
 
@@ -670,9 +671,9 @@ class ZarrNiiAtlas(ZarrNii):
             image: Image to aggregate (must be compatible with atlas)
             aggregation_func: Aggregation function ('mean', 'sum', 'std', 'median', 'min', 'max')
             background_label: Label value to treat as background (excluded from results)
-
+            column_suffix: String suffix to append to column name. Name will be {agg_func}_{col_suffix}, or {agg_func} if None.
         Returns:
-            DataFrame with columns: label, name, aggregated_value, volume_mm3
+            DataFrame with columns: index, name, {agg_func}[_{col_suffix}], volume_mm3
 
         Raises:
             ValueError: If image and atlas are incompatible
@@ -748,6 +749,12 @@ class ZarrNiiAtlas(ZarrNii):
                         "Supported: mean, sum, std, median, min, max"
                     )
 
+            column_name = (
+                aggregation_func
+                if column_suffix is None
+                else f"{aggregation_func}_{column_suffix}"
+            )
+
             # Get region info
             try:
                 region_info = self.get_region_info(int(label))
@@ -760,9 +767,9 @@ class ZarrNiiAtlas(ZarrNii):
 
             results.append(
                 {
-                    "label": int(label),
-                    "name": region_name,
-                    f"{aggregation_func}_value": agg_value,
+                    self.label_column: int(label),
+                    self.name_column: region_name,
+                    column_name: agg_value,
                     "volume_mm3": volume,
                 }
             )
@@ -794,19 +801,17 @@ class ZarrNiiAtlas(ZarrNii):
         if missing_cols:
             raise ValueError(f"Missing columns in feature_data: {missing_cols}")
 
-        # Create output array initialized to zeros
-        dseg_data = self.dseg.data
-        if hasattr(dseg_data, "compute"):
-            dseg_data = dseg_data.compute()
-        feature_map = np.zeros_like(dseg_data, dtype=np.float32)
+        dseg_data = self.dseg.data.astype("int")  # dask array of labels
 
-        # Map feature values to regions
-        for _, row in feature_data.iterrows():
-            label = int(row[label_column])
-            feature_value = float(row[feature_column])
+        # make a dense lookup array
+        max_label = int(feature_data[label_column].max())
+        lut = np.zeros(max_label + 1, dtype=np.float32)
+        lut[feature_data[label_column].to_numpy(dtype=int)] = feature_data[
+            feature_column
+        ].to_numpy(dtype=float)
 
-            # Set all voxels with this label to the feature value
-            feature_map[dseg_data == label] = feature_value
+        # broadcast the mapping in one go
+        feature_map = dseg_data.map_blocks(lambda block: lut[block], dtype=np.float32)
 
         return ZarrNii.from_darr(
             feature_map, affine=self.dseg.affine, axes_order=self.dseg.axes_order
