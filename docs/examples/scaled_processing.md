@@ -7,7 +7,7 @@ This section covers the multi-resolution plugin architecture that enables effici
 The scaled processing plugin architecture in ZarrNii allows for efficient multi-resolution operations. This is particularly useful for algorithms that can be computed efficiently at lower resolution and then applied to the full-resolution data. Common use cases include:
 
 - Bias field correction
-- Background estimation  
+- Background estimation
 - Denoising operations
 - Global intensity normalization
 
@@ -110,27 +110,27 @@ class CustomPlugin(ScaledProcessingPlugin):
     def __init__(self, param1=1.0, **kwargs):
         super().__init__(param1=param1, **kwargs)
         self.param1 = param1
-    
+
     def lowres_func(self, lowres_array: np.ndarray) -> np.ndarray:
         # Your low-resolution algorithm here
         # Example: compute some correction map
         correction_map = np.ones_like(lowres_array) * self.param1
         return correction_map
-    
+
     def highres_func(self, fullres_array: da.Array, upsampled_output: da.Array) -> da.Array:
         # The upsampling is handled internally by apply_scaled_processing
         # This example shows a simple multiplication operation
-        
+
         # Apply correction directly (both arrays are same size)
         result = fullres_array * upsampled_output
-        
+
         return result
-    
+
     @property
     def name(self) -> str:
         return "Custom Plugin"
-    
-    @property  
+
+    @property
     def description(self) -> str:
         return "A custom multi-resolution processing plugin"
 
@@ -145,7 +145,7 @@ result = znimg.apply_scaled_processing(CustomPlugin(param1=2.0))
 ```python
 # Use different downsampling factors
 result = znimg.apply_scaled_processing(
-    GaussianBiasFieldCorrection(), 
+    GaussianBiasFieldCorrection(),
     downsample_factor=8  # 8x downsampling
 )
 ```
@@ -216,6 +216,6 @@ result.to_ome_zarr("processed.ome.zarr")
 
 ## See Also
 
-- [Segmentation Plugins](segmentation.md) for other plugin architectures
+- [Segmentation Plugins](segmentation_example.md) for other plugin architectures
 - [Downsampling and Upsampling](downsampling.md) for resolution operations
 - [API Reference](../reference.md) for detailed method documentation
