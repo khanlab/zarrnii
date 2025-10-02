@@ -673,7 +673,8 @@ class ZarrNiiAtlas(ZarrNii):
             background_label: Label value to treat as background (excluded from results)
             column_suffix: String suffix to append to column name. Name will be {agg_func}_{col_suffix}.
         Returns:
-            DataFrame with columns: index, name, mean_value, volume_mm3
+            DataFrame with columns: index, name, {aggregation_func}_{column_suffix}, volume_mm3
+            (e.g., with defaults: index, name, mean_value, volume_mm3)
 
         Raises:
             ValueError: If image and atlas are incompatible
