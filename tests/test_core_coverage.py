@@ -13,7 +13,6 @@ from zarrnii.core import (
     _extract_channel_labels_from_omero,
     affine_to_orientation,
     align_affine_to_input_orientation,
-    construct_affine_with_orientation,
     orientation_to_affine,
 )
 
@@ -99,20 +98,6 @@ def test_align_affine_to_input_orientation():
     # This function should not crash
     aligned = align_affine_to_input_orientation(affine, "LPI")
     assert aligned.shape == (4, 4)
-
-
-def test_construct_affine_with_orientation():
-    """Test construct_affine_with_orientation function."""
-    # Mock coordinate transformations (minimal structure)
-    coordinate_transformations = []
-
-    # This function should handle empty transformations
-    try:
-        affine = construct_affine_with_orientation(coordinate_transformations, "RAS")
-        assert affine.shape == (4, 4)
-    except (IndexError, AttributeError):
-        # If it fails due to empty transformations, that's expected
-        pass
 
 
 def test_zarrnii_property_getters():

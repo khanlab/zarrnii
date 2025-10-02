@@ -1451,6 +1451,9 @@ class ZarrNii:
         shape = nifti_img.header.get_data_shape()
         affine_matrix = nifti_img.affine.copy()
 
+        # infer orientation from the affine
+        orientation = affine_to_orientation(affine_matrix)
+
         # Adjust shape and affine if zooms are provided
         if zooms is not None:
             in_zooms = np.sqrt(
@@ -1520,7 +1523,9 @@ class ZarrNii:
             data=darr, dims=dims, scale=scale, translation=translation, name=name
         )
 
-        return cls(ngff_image=ngff_image, axes_order=axes_order)
+        return cls(
+            ngff_image=ngff_image, axes_order=axes_order, xyz_orientation=orientation
+        )
 
     # Chainable operations - each returns a new ZarrNii instance
     def crop(
@@ -3787,35 +3792,3 @@ def align_affine_to_input_orientation(affine, orientation):
     reordered_affine[3, :] = affine[3, :]
 
     return reordered_affine
-
-
-def construct_affine_with_orientation(coordinate_transformations, orientation):
-    """
-    Build affine matrix from coordinate transformations and align to orientation.
-
-    Parameters:
-        coordinate_transformations (list): Coordinate transformations from OME-Zarr metadata.
-        orientation (str): Input orientation (e.g., 'RAS').
-
-    Returns:
-        np.ndarray: A 4x4 affine matrix.
-    """
-    # Initialize affine as an identity matrix
-    affine = np.eye(4)
-
-    # Extract scales and translations from coordinate transformations
-    scales = [1.0, 1.0, 1.0]  # Default scales
-    translations = [0.0, 0.0, 0.0]  # Default translations
-
-    for transform in coordinate_transformations:
-        if transform["type"] == "scale":
-            scales = transform["scale"][-3:]  # Take the last 3 (spatial)
-        elif transform["type"] == "translation":
-            translations = transform["translation"][-3:]  # Take the last 3 (spatial)
-
-    # Populate the affine matrix
-    affine[:3, :3] = np.diag(scales)  # Set scaling
-    affine[:3, 3] = translations  # Set translation
-
-    # Reorder the affine matrix for the input orientation
-    return align_affine_to_input_orientation(affine, orientation)
