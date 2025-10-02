@@ -1696,6 +1696,139 @@ class ZarrNii:
         """
         return self.crop(bbox_min, bbox_max, physical_coords=ras_coords)
 
+    def crop_centered(
+        self,
+        centers: Union[Tuple[float, float, float], List[Tuple[float, float, float]]],
+        patch_size: Tuple[int, int, int],
+        spatial_dims: Optional[List[str]] = None,
+    ) -> Union["ZarrNii", List["ZarrNii"]]:
+        """Extract fixed-size patches centered at specified coordinates.
+
+        Crops the image to extract patches of a fixed size (in voxels) centered
+        at the given physical coordinates. This is particularly useful for machine
+        learning workflows where training patches must have consistent dimensions.
+        The method can process a single center or multiple centers at once.
+
+        Args:
+            centers: Either:
+                - Single center coordinate as (x, y, z) tuple in physical space (mm)
+                - List of center coordinates for batch processing
+            patch_size: Size of the patch in voxels as (x, y, z) tuple.
+                This defines the dimensions of each cropped region in voxel space.
+            spatial_dims: Names of spatial dimensions to crop. If None,
+                automatically derived from axes_order ("z","y","x" for ZYX
+                or "x","y","z" for XYZ). Default is None.
+
+        Returns:
+            Single ZarrNii instance (when centers is a single tuple) or list of
+            ZarrNii instances (when centers is a list) with cropped data and
+            updated spatial metadata.
+
+        Raises:
+            ValueError: If patch extends beyond image boundaries or if
+                coordinates/dimensions are invalid
+            IndexError: If patch_size dimensions don't match spatial dimensions
+
+        Examples:
+            >>> # Extract single 256x256x256 voxel patch at a coordinate
+            >>> center = (50.0, 60.0, 70.0)  # physical coordinates in mm
+            >>> patch = znii.crop_centered(center, patch_size=(256, 256, 256))
+            >>>
+            >>> # Extract multiple patches for ML training
+            >>> centers = [
+            ...     (50.0, 60.0, 70.0),
+            ...     (100.0, 110.0, 120.0),
+            ...     (150.0, 160.0, 170.0)
+            ... ]
+            >>> patches = znii.crop_centered(centers, patch_size=(128, 128, 128))
+            >>> # Returns list of 3 ZarrNii instances
+            >>>
+            >>> # Use with atlas sampling for ML training workflow
+            >>> centers = atlas.sample_region_patches(
+            ...     n_patches=100,
+            ...     region_ids="cortex",
+            ...     seed=42
+            ... )
+            >>> patches = image.crop_centered(centers, patch_size=(256, 256, 256))
+
+        Notes:
+            - Centers are in physical/world coordinates (mm), always in (x, y, z) order
+            - patch_size is in voxels, in (x, y, z) order
+            - The patch is centered at the given coordinate, extending ±patch_size/2
+            - If patch_size is odd, the center voxel is included
+            - Useful for ML training where fixed patch sizes are required
+            - Coordinates from atlas.sample_region_patches() can be used directly
+        """
+        # Check if this is batch processing (list of centers)
+        is_batch = isinstance(centers, list)
+
+        if is_batch:
+            # Batch processing: recursively call crop_centered for each center
+            return [
+                self.crop_centered(center, patch_size, spatial_dims)
+                for center in centers
+            ]
+
+        # Single center processing
+        if spatial_dims is None:
+            spatial_dims = (
+                ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
+            )
+
+        # Convert center from physical to voxel coordinates
+        # Centers are always in (x, y, z) order
+        center_phys = np.array(list(centers) + [1.0])
+
+        # Get inverse affine to convert from physical to voxel
+        affine_inv = np.linalg.inv(self.affine.matrix)
+
+        # Transform to voxel coordinates
+        center_voxel = affine_inv @ center_phys
+        center_voxel_xyz = center_voxel[:3]
+
+        # patch_size is in voxels, in (x, y, z) order
+        patch_size_np = np.array(patch_size)
+        half_patch = patch_size_np / 2.0
+
+        # Calculate bounding box in voxel coordinates
+        voxel_min_xyz = center_voxel_xyz - half_patch
+        voxel_max_xyz = center_voxel_xyz + half_patch
+
+        # Round to nearest integer voxel indices
+        voxel_min_xyz = np.round(voxel_min_xyz).astype(int)
+        voxel_max_xyz = np.round(voxel_max_xyz).astype(int)
+
+        # Ensure max >= min
+        voxel_min_xyz = np.minimum(voxel_min_xyz, voxel_max_xyz)
+        voxel_max_xyz = np.maximum(voxel_min_xyz, voxel_max_xyz)
+
+        # Create mapping from x,y,z to voxel coordinates
+        xyz_to_voxel = {
+            "x": voxel_min_xyz[0],
+            "y": voxel_min_xyz[1],
+            "z": voxel_min_xyz[2],
+        }
+        xyz_to_voxel_max = {
+            "x": voxel_max_xyz[0],
+            "y": voxel_max_xyz[1],
+            "z": voxel_max_xyz[2],
+        }
+
+        # Reorder according to spatial_dims
+        bbox_min = tuple(xyz_to_voxel[dim.lower()] for dim in spatial_dims)
+        bbox_max = tuple(xyz_to_voxel_max[dim.lower()] for dim in spatial_dims)
+
+        # Use the existing crop function with voxel coordinates
+        cropped_image = crop_ngff_image(
+            self.ngff_image, bbox_min, bbox_max, spatial_dims
+        )
+        return ZarrNii(
+            ngff_image=cropped_image,
+            axes_order=self.axes_order,
+            xyz_orientation=self.xyz_orientation,
+            _omero=self._omero,
+        )
+
     def downsample(
         self,
         factors: Optional[Union[int, List[int]]] = None,
