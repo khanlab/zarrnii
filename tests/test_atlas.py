@@ -529,6 +529,77 @@ class TestZarrNiiAtlas:
         with pytest.raises(ValueError, match="bbox_max should be None"):
             atlas.crop(bboxes, bbox_max=(10.0, 10.0, 10.0))
 
+    def test_crop_centered_fixed_size(self, sample_atlas):
+        """Test that crop_centered always returns the prescribed patch size."""
+        atlas = sample_atlas
+
+        # Test various centers including near edges
+        test_cases = [
+            ("Center", (5.0, 5.0, 5.0)),
+            ("Near left edge", (0.5, 5.0, 5.0)),
+            ("Near right edge", (9.5, 5.0, 5.0)),
+            ("At corner (0,0,0)", (0.0, 0.0, 0.0)),
+            ("At corner (9,9,9)", (9.0, 9.0, 9.0)),
+        ]
+
+        patch_size = (6, 6, 6)
+        expected_shape = (1, patch_size[2], patch_size[1], patch_size[0])
+
+        for name, center in test_cases:
+            patch = atlas.crop_centered(center, patch_size=patch_size)
+            assert (
+                patch.shape == expected_shape
+            ), f"{name}: Expected {expected_shape}, got {patch.shape}"
+
+    def test_crop_centered_padding_values(self, sample_atlas):
+        """Test that padding uses the correct fill value."""
+        atlas = sample_atlas
+
+        # Sample at edge where padding will be needed
+        center = (0.0, 5.0, 5.0)  # At x=0 edge
+        patch_size = (6, 6, 6)
+
+        # Test with default fill value (0)
+        patch_default = atlas.crop_centered(center, patch_size=patch_size)
+        data_default = patch_default.data.compute()
+
+        # Test with custom fill value
+        patch_custom = atlas.crop_centered(
+            center, patch_size=patch_size, fill_value=-999.0
+        )
+        data_custom = patch_custom.data.compute()
+
+        # Check shapes
+        assert patch_default.shape == (1, 6, 6, 6)
+        assert patch_custom.shape == (1, 6, 6, 6)
+
+        # The custom fill value should appear in the padded region
+        # (at the left edge of x dimension)
+        assert np.any(
+            data_custom == -999.0
+        ), "Custom fill value not found in padded region"
+
+    def test_crop_centered_batch_fixed_size(self, sample_atlas):
+        """Test that batch crop_centered returns consistent sizes."""
+        atlas = sample_atlas
+
+        # Centers at various positions including edges
+        centers = [
+            (5.0, 5.0, 5.0),  # Center
+            (0.5, 5.0, 5.0),  # Near edge
+            (9.5, 9.0, 9.0),  # Near corner
+        ]
+
+        patch_size = (4, 4, 4)
+        patches = atlas.crop_centered(centers, patch_size=patch_size)
+
+        # All patches should have exactly the same size
+        expected_shape = (1, patch_size[2], patch_size[1], patch_size[0])
+        for i, patch in enumerate(patches):
+            assert (
+                patch.shape == expected_shape
+            ), f"Patch {i}: Expected {expected_shape}, got {patch.shape}"
+
 
 class TestZarrNiiAtlasFileIO:
     """Test suite for ZarrNiiAtlas file I/O operations."""
