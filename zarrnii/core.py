@@ -1833,9 +1833,79 @@ class ZarrNii:
         crop_min_xyz = np.maximum(voxel_min_xyz, 0)
         crop_max_xyz = np.minimum(voxel_max_xyz, image_shape_xyz)
 
+        # Ensure crop_max >= crop_min to avoid empty arrays
+        crop_max_xyz = np.maximum(crop_min_xyz, crop_max_xyz)
+
         # Calculate padding needed on each side
         pad_before_xyz = crop_min_xyz - voxel_min_xyz  # How much we're clipped at start
         pad_after_xyz = voxel_max_xyz - crop_max_xyz  # How much we're clipped at end
+
+        # Check if the entire patch is outside the image bounds
+        # This happens when crop_min >= crop_max in any dimension after clipping
+        is_completely_outside = np.any(crop_min_xyz >= crop_max_xyz)
+
+        if is_completely_outside:
+            # The entire patch is outside the image bounds
+            # Create a completely padded array with the fill value
+            import dask.array as da
+
+            # Build the full patch shape
+            full_shape = []
+            spatial_idx = 0
+            for dim in self.ngff_image.dims:
+                if dim.lower() in [d.lower() for d in spatial_dims]:
+                    full_shape.append(patch_size_np[spatial_idx])
+                    spatial_idx += 1
+                else:
+                    # Non-spatial dimension - keep original size
+                    dim_idx = self.ngff_image.dims.index(dim)
+                    full_shape.append(self.ngff_image.data.shape[dim_idx])
+
+            # Create array filled with fill_value
+            padded_data = da.full(
+                tuple(full_shape),
+                fill_value,
+                dtype=self.ngff_image.data.dtype,
+                chunks=self.ngff_image.data.chunksize,
+            )
+
+            # Calculate translation for the patch center
+            # The translation should be at voxel_min_xyz (the desired start of patch)
+            new_translation = {}
+            for dim in self.ngff_image.dims:
+                if dim.lower() in [d.lower() for d in spatial_dims]:
+                    dim_lower = dim.lower()
+                    if dim_lower == "x":
+                        voxel_start = voxel_min_xyz[0]
+                    elif dim_lower == "y":
+                        voxel_start = voxel_min_xyz[1]
+                    elif dim_lower == "z":
+                        voxel_start = voxel_min_xyz[2]
+                    else:
+                        voxel_start = 0
+
+                    # Translation is voxel_start * scale + original translation
+                    new_translation[dim] = voxel_start * self.ngff_image.scale.get(
+                        dim, 1.0
+                    ) + self.ngff_image.translation.get(dim, 0.0)
+                elif dim in self.ngff_image.translation:
+                    new_translation[dim] = self.ngff_image.translation[dim]
+
+            # Create NgffImage with the padded data
+            padded_image = nz.NgffImage(
+                data=padded_data,
+                dims=self.ngff_image.dims,
+                scale=self.ngff_image.scale.copy(),
+                translation=new_translation,
+                name=self.ngff_image.name,
+            )
+
+            return ZarrNii(
+                ngff_image=padded_image,
+                axes_order=self.axes_order,
+                xyz_orientation=self.xyz_orientation,
+                _omero=self._omero,
+            )
 
         # Create mapping from x,y,z to voxel coordinates for cropping
         xyz_to_voxel = {

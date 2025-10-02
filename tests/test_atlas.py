@@ -600,6 +600,35 @@ class TestZarrNiiAtlas:
                 patch.shape == expected_shape
             ), f"Patch {i}: Expected {expected_shape}, got {patch.shape}"
 
+    def test_crop_centered_completely_outside(self, sample_atlas):
+        """Test that crop_centered handles centers completely outside image bounds."""
+        atlas = sample_atlas
+
+        # Test centers that are completely outside the image bounds
+        # Atlas is 10x10x10, so these are well outside
+        test_cases = [
+            ("Far left", (-20.0, 5.0, 5.0)),
+            ("Far right", (30.0, 5.0, 5.0)),
+            ("Far below", (5.0, -20.0, 5.0)),
+            ("Far above", (5.0, 30.0, 5.0)),
+        ]
+
+        patch_size = (6, 6, 6)
+        expected_shape = (1, patch_size[2], patch_size[1], patch_size[0])
+
+        for name, center in test_cases:
+            patch = atlas.crop_centered(center, patch_size=patch_size)
+            assert (
+                patch.shape == expected_shape
+            ), f"{name}: Expected {expected_shape}, got {patch.shape}"
+
+            # The patch should be entirely filled with the fill value (0)
+            data = patch.data.compute()
+            # Since we're completely outside, all data should be the fill value
+            assert np.all(
+                data == 0.0
+            ), f"{name}: Patch should be entirely filled with fill_value"
+
 
 class TestZarrNiiAtlasFileIO:
     """Test suite for ZarrNiiAtlas file I/O operations."""
