@@ -981,24 +981,19 @@ class ZarrNiiAtlas(ZarrNii):
     def sample_region_patches(
         self,
         n_patches: int,
-        patch_size: Tuple[float, float, float],
         region_ids: Union[int, str, List[Union[int, str]]] = None,
         regex: Optional[str] = None,
-        physical_size: bool = True,
-        level: int = 0,
         seed: Optional[int] = None,
-    ) -> List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]]:
-        """Sample fixed-size patches centered at random voxels within regions.
+    ) -> List[Tuple[float, float, float]]:
+        """Sample random coordinates (centers) within atlas regions.
 
-        This method generates a list of bounding boxes for patches of a specified
-        size, with each patch centered at a random voxel within the selected
-        atlas regions. This is useful for generating training data for machine
-        learning models or for interactive segmentation workflows.
+        This method generates a list of center coordinates by randomly sampling
+        voxels within the selected atlas regions. The returned coordinates are
+        in physical/world space (mm) and can be used with crop_centered() to
+        extract fixed-size patches for machine learning training or other workflows.
 
         Args:
-            n_patches: Number of patches to sample
-            patch_size: Size of each patch as (x, y, z) tuple. If physical_size
-                is True, values are in millimeters. If False, values are in voxels.
+            n_patches: Number of patch centers to sample
             region_ids: Region identifier(s) to sample from. Can be:
                 - Single int: label index
                 - Single str: region name or abbreviation
@@ -1006,18 +1001,13 @@ class ZarrNiiAtlas(ZarrNii):
                 - None: use regex parameter instead
             regex: Regular expression to match region names. If provided,
                 region_ids must be None. Case-insensitive matching.
-            physical_size: If True (default), patch_size is in physical/world
-                coordinates (mm). If False, patch_size is in voxels at the
-                specified level.
-            level: Downsampling level to use when physical_size is False.
-                Ignored if physical_size is True.
             seed: Random seed for reproducibility. If None, patches are sampled
                 randomly each time.
 
         Returns:
-            List of (bbox_min, bbox_max) tuples where each tuple contains
-            (x, y, z) coordinates in physical/world space (mm). Each bounding
-            box can be passed to ZarrNii.crop() method with physical_coords=True.
+            List of (x, y, z) coordinates in physical/world space (mm).
+            Each coordinate represents the center of a potential patch and
+            can be used with crop_centered() to extract fixed-size regions.
 
         Raises:
             ValueError: If no regions match the selection criteria, if both
@@ -1026,38 +1016,35 @@ class ZarrNiiAtlas(ZarrNii):
             TypeError: If region_ids contains invalid types
 
         Examples:
-            >>> # Sample 10 patches of 1x1x1mm from hippocampus for ML training
-            >>> patches = atlas.sample_region_patches(
+            >>> # Sample 10 patch centers from hippocampus
+            >>> centers = atlas.sample_region_patches(
             ...     n_patches=10,
-            ...     patch_size=(1.0, 1.0, 1.0),
             ...     region_ids="Hippocampus",
-            ...     physical_size=True
+            ...     seed=42
             ... )
-            >>> cropped_patches = image.crop(patches, physical_coords=True)
+            >>> # Extract 256x256x256 voxel patches at each center
+            >>> patches = image.crop_centered(centers, patch_size=(256, 256, 256))
             >>>
-            >>> # Sample 5 patches of 64x64x64 voxels from brain mask
-            >>> patches = atlas.sample_region_patches(
-            ...     n_patches=5,
-            ...     patch_size=(64, 64, 64),
-            ...     regex=".*mask.*",
-            ...     physical_size=False,
-            ...     level=0
-            ... )
-            >>>
-            >>> # Sample with reproducible random seed
-            >>> patches = atlas.sample_region_patches(
+            >>> # Sample from multiple regions using list
+            >>> centers = atlas.sample_region_patches(
             ...     n_patches=20,
-            ...     patch_size=(2.0, 2.0, 2.0),
             ...     region_ids=[1, 2, 3],
             ...     seed=42
             ... )
+            >>>
+            >>> # Sample using regex pattern
+            >>> centers = atlas.sample_region_patches(
+            ...     n_patches=5,
+            ...     regex=".*cortex.*",
+            ... )
 
         Notes:
-            - Bounding boxes are in physical coordinates (mm), not voxel indices
-            - Patches are sampled uniformly from voxels within selected regions
-            - If a patch would extend beyond image boundaries, it is clipped
-            - Use the returned values with crop(physical_coords=True) or pass
-              the list directly to crop() for batch processing
+            - Coordinates are in physical space (mm), not voxel indices
+            - Centers are sampled uniformly from voxels within selected regions
+            - Use crop_centered() to extract fixed-size patches around these centers
+            - For ML training with fixed patch sizes (e.g., 256x256x256 voxels),
+              use a lower-resolution atlas to define masks, then crop at higher
+              resolution using physical coordinates
         """
         import re
 
@@ -1148,20 +1135,8 @@ class ZarrNiiAtlas(ZarrNii):
         # Get affine matrix
         affine_matrix = self.dseg.affine.matrix
 
-        # Convert patch size to physical coordinates if needed
-        if physical_size:
-            # patch_size is already in mm
-            patch_size_mm = np.array(patch_size)
-        else:
-            # Convert voxel size to physical size using voxel spacing from metadata
-            # Get voxel sizes in (x, y, z) order
-            voxel_sizes = self.dseg.get_zooms(axes_order="XYZ")
-            patch_size_mm = np.array(patch_size) * voxel_sizes
-
-        # Generate bounding boxes
-        bboxes = []
-        half_patch = patch_size_mm / 2.0
-
+        # Generate center coordinates in physical space
+        centers = []
         for i in range(n_patches):
             # Get center voxel coordinates in (x, y, z) order
             center_voxel_xyz = np.array(
@@ -1177,17 +1152,11 @@ class ZarrNiiAtlas(ZarrNii):
             center_physical = affine_matrix @ center_voxel_xyz
             center_xyz = center_physical[:3]
 
-            # Calculate bounding box corners
-            bbox_min = center_xyz - half_patch
-            bbox_max = center_xyz + half_patch
+            # Convert to tuple
+            center = tuple(center_xyz.tolist())
+            centers.append(center)
 
-            # Convert to tuples
-            bbox_min = tuple(bbox_min.tolist())
-            bbox_max = tuple(bbox_max.tolist())
-
-            bboxes.append((bbox_min, bbox_max))
-
-        return bboxes
+        return centers
 
 
 # Utility functions for LUT conversion

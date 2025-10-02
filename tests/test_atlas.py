@@ -342,128 +342,90 @@ class TestZarrNiiAtlas:
             atlas.get_region_bounding_box()
 
     def test_sample_region_patches_basic(self, sample_atlas):
-        """Test basic patch sampling with physical size."""
+        """Test basic patch sampling returning centers."""
         atlas = sample_atlas
 
-        # Sample 5 patches of 1x1x1mm from region 1
-        patches = atlas.sample_region_patches(
+        # Sample 5 patch centers from region 1
+        centers = atlas.sample_region_patches(
             n_patches=5,
-            patch_size=(1.0, 1.0, 1.0),
             region_ids=1,
-            physical_size=True,
             seed=42,
         )
 
         # Check return type and length
-        assert isinstance(patches, list)
-        assert len(patches) == 5
+        assert isinstance(centers, list)
+        assert len(centers) == 5
 
-        # Check each patch is a tuple of two tuples
-        for bbox_min, bbox_max in patches:
-            assert isinstance(bbox_min, tuple)
-            assert isinstance(bbox_max, tuple)
-            assert len(bbox_min) == 3
-            assert len(bbox_max) == 3
+        # Check each center is a tuple of 3 floats (x, y, z)
+        for center in centers:
+            assert isinstance(center, tuple)
+            assert len(center) == 3
+            # All values should be floats
+            assert all(isinstance(c, float) for c in center)
 
-            # Check that bbox_max > bbox_min for all dimensions
-            assert all(bmax > bmin for bmin, bmax in zip(bbox_min, bbox_max))
-
-            # Check patch size is approximately correct (1mm +/- floating point error)
-            for i in range(3):
-                patch_dim = bbox_max[i] - bbox_min[i]
-                assert abs(patch_dim - 1.0) < 1e-6
+            # With identity affine, centers should be within region 1 bounds (x=[0, 5))
+            # Check that x coordinate is roughly in region 1
+            assert 0 <= center[0] < 5.0
 
     def test_sample_region_patches_by_name(self, sample_atlas):
         """Test patch sampling using region name."""
         atlas = sample_atlas
 
-        patches = atlas.sample_region_patches(
+        centers = atlas.sample_region_patches(
             n_patches=3,
-            patch_size=(0.5, 0.5, 0.5),
             region_ids="Left Region",
-            physical_size=True,
             seed=42,
         )
 
-        assert len(patches) == 3
-        # All patches should be within region 1 bounds (x=[0, 5))
-        for bbox_min, bbox_max in patches:
-            # Check that patch centers are roughly in region 1
-            center_x = (bbox_min[0] + bbox_max[0]) / 2
-            assert 0 <= center_x < 5.0
+        assert len(centers) == 3
+        # All centers should be within region 1 bounds (x=[0, 5))
+        for center in centers:
+            # Check that center x coordinate is in region 1
+            assert 0 <= center[0] < 5.0
 
     def test_sample_region_patches_regex(self, sample_atlas):
         """Test patch sampling using regex pattern."""
         atlas = sample_atlas
 
         # Sample from all "Right" regions (2 and 3)
-        patches = atlas.sample_region_patches(
+        centers = atlas.sample_region_patches(
             n_patches=4,
-            patch_size=(1.0, 1.0, 1.0),
             regex="Right.*",
-            physical_size=True,
             seed=42,
         )
 
-        assert len(patches) == 4
-
-    def test_sample_region_patches_voxel_size(self, sample_atlas):
-        """Test patch sampling with voxel size instead of physical size."""
-        atlas = sample_atlas
-
-        # Sample 2x2x2 voxel patches
-        patches = atlas.sample_region_patches(
-            n_patches=3,
-            patch_size=(2, 2, 2),
-            region_ids=1,
-            physical_size=False,
-            level=0,
-            seed=42,
-        )
-
-        assert len(patches) == 3
-
-        # With identity affine, 2 voxels = 2mm
-        for bbox_min, bbox_max in patches:
-            for i in range(3):
-                patch_dim = bbox_max[i] - bbox_min[i]
-                # Should be approximately 2.0mm
-                assert abs(patch_dim - 2.0) < 1e-6
+        assert len(centers) == 4
 
     def test_sample_region_patches_multiple_regions(self, sample_atlas):
         """Test patch sampling from multiple regions."""
         atlas = sample_atlas
 
-        patches = atlas.sample_region_patches(
+        centers = atlas.sample_region_patches(
             n_patches=6,
-            patch_size=(0.5, 0.5, 0.5),
             region_ids=[2, 3],
-            physical_size=True,
             seed=42,
         )
 
-        assert len(patches) == 6
+        assert len(centers) == 6
 
     def test_sample_region_patches_reproducibility(self, sample_atlas):
         """Test that seed produces reproducible results."""
         atlas = sample_atlas
 
-        patches1 = atlas.sample_region_patches(
+        centers1 = atlas.sample_region_patches(
             n_patches=5,
-            patch_size=(1.0, 1.0, 1.0),
             region_ids=1,
             seed=123,
         )
 
-        patches2 = atlas.sample_region_patches(
+        centers2 = atlas.sample_region_patches(
             n_patches=5,
-            patch_size=(1.0, 1.0, 1.0),
             region_ids=1,
             seed=123,
         )
 
         # Should be identical
-        assert patches1 == patches2
+        assert centers1 == centers2
 
     def test_sample_region_patches_invalid_n_patches(self, sample_atlas):
         """Test error handling for invalid n_patches."""
@@ -472,7 +434,6 @@ class TestZarrNiiAtlas:
         with pytest.raises(ValueError, match="n_patches must be at least 1"):
             atlas.sample_region_patches(
                 n_patches=0,
-                patch_size=(1.0, 1.0, 1.0),
                 region_ids=1,
             )
 
@@ -483,7 +444,6 @@ class TestZarrNiiAtlas:
         with pytest.raises(ValueError):
             atlas.sample_region_patches(
                 n_patches=5,
-                patch_size=(1.0, 1.0, 1.0),
                 region_ids=999,
             )
 
@@ -494,7 +454,6 @@ class TestZarrNiiAtlas:
         with pytest.raises(ValueError, match="No regions matched regex pattern"):
             atlas.sample_region_patches(
                 n_patches=5,
-                patch_size=(1.0, 1.0, 1.0),
                 regex="NonexistentPattern.*",
             )
 
@@ -506,7 +465,6 @@ class TestZarrNiiAtlas:
         with pytest.raises(ValueError, match="Cannot provide both"):
             atlas.sample_region_patches(
                 n_patches=5,
-                patch_size=(1.0, 1.0, 1.0),
                 region_ids=1,
                 regex="Left.*",
             )
@@ -515,24 +473,21 @@ class TestZarrNiiAtlas:
         with pytest.raises(ValueError, match="Must provide either"):
             atlas.sample_region_patches(
                 n_patches=5,
-                patch_size=(1.0, 1.0, 1.0),
             )
 
-    def test_crop_with_patch_list(self, sample_atlas):
-        """Test that crop works with list of bounding boxes from sample_region_patches."""
+    def test_crop_centered_with_sampled_centers(self, sample_atlas):
+        """Test that crop_centered works with centers from sample_region_patches."""
         atlas = sample_atlas
 
-        # Sample some patches
-        patches = atlas.sample_region_patches(
+        # Sample some patch centers
+        centers = atlas.sample_region_patches(
             n_patches=3,
-            patch_size=(1.0, 1.0, 1.0),
             region_ids=1,
-            physical_size=True,
             seed=42,
         )
 
-        # Crop using the patch list
-        cropped_list = atlas.crop(patches, physical_coords=True)
+        # Crop using the centers with a fixed patch size
+        cropped_list = atlas.crop_centered(centers, patch_size=(2, 2, 2))
 
         # Check return type
         assert isinstance(cropped_list, list)
@@ -541,22 +496,138 @@ class TestZarrNiiAtlas:
         # Check each cropped result is a ZarrNii
         for cropped in cropped_list:
             assert isinstance(cropped, ZarrNii)
-            # Cropped regions should be small (approximately 1mm cubed)
-            # With identity affine and channel dim, shape should be (1, ~1, ~1, ~1)
+            # Cropped regions should have approximately 2x2x2 voxels
+            # With channel dim, shape should be (1, 2, 2, 2)
             assert cropped.shape[0] == 1  # channel dimension
+            # Note: exact size might vary slightly due to rounding
+
+    def test_crop_centered_single(self, sample_atlas):
+        """Test crop_centered with a single center coordinate."""
+        atlas = sample_atlas
+
+        # Use a center in the middle of the atlas
+        center = (2.5, 5.0, 5.0)  # x, y, z in physical coords
+
+        # Crop a 2x2x2 patch
+        cropped = atlas.crop_centered(center, patch_size=(2, 2, 2))
+
+        # Check return type is single ZarrNii (not a list)
+        assert isinstance(cropped, ZarrNii)
+        assert not isinstance(cropped, list)
+        assert cropped.shape[0] == 1  # channel dimension
 
     def test_crop_batch_invalid_params(self, sample_atlas):
         """Test that crop rejects invalid parameter combinations for batch mode."""
         atlas = sample_atlas
 
-        patches = [
+        bboxes = [
             ((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
             ((2.0, 2.0, 2.0), (3.0, 3.0, 3.0)),
         ]
 
         # Providing both list and bbox_max should raise error
         with pytest.raises(ValueError, match="bbox_max should be None"):
-            atlas.crop(patches, bbox_max=(10.0, 10.0, 10.0))
+            atlas.crop(bboxes, bbox_max=(10.0, 10.0, 10.0))
+
+    def test_crop_centered_fixed_size(self, sample_atlas):
+        """Test that crop_centered always returns the prescribed patch size."""
+        atlas = sample_atlas
+
+        # Test various centers including near edges
+        test_cases = [
+            ("Center", (5.0, 5.0, 5.0)),
+            ("Near left edge", (0.5, 5.0, 5.0)),
+            ("Near right edge", (9.5, 5.0, 5.0)),
+            ("At corner (0,0,0)", (0.0, 0.0, 0.0)),
+            ("At corner (9,9,9)", (9.0, 9.0, 9.0)),
+        ]
+
+        patch_size = (6, 6, 6)
+        expected_shape = (1, patch_size[2], patch_size[1], patch_size[0])
+
+        for name, center in test_cases:
+            patch = atlas.crop_centered(center, patch_size=patch_size)
+            assert (
+                patch.shape == expected_shape
+            ), f"{name}: Expected {expected_shape}, got {patch.shape}"
+
+    def test_crop_centered_padding_values(self, sample_atlas):
+        """Test that padding uses the correct fill value."""
+        atlas = sample_atlas
+
+        # Sample at edge where padding will be needed
+        center = (0.0, 5.0, 5.0)  # At x=0 edge
+        patch_size = (6, 6, 6)
+
+        # Test with default fill value (0)
+        patch_default = atlas.crop_centered(center, patch_size=patch_size)
+        data_default = patch_default.data.compute()
+
+        # Test with custom fill value
+        patch_custom = atlas.crop_centered(
+            center, patch_size=patch_size, fill_value=-999.0
+        )
+        data_custom = patch_custom.data.compute()
+
+        # Check shapes
+        assert patch_default.shape == (1, 6, 6, 6)
+        assert patch_custom.shape == (1, 6, 6, 6)
+
+        # The custom fill value should appear in the padded region
+        # (at the left edge of x dimension)
+        assert np.any(
+            data_custom == -999.0
+        ), "Custom fill value not found in padded region"
+
+    def test_crop_centered_batch_fixed_size(self, sample_atlas):
+        """Test that batch crop_centered returns consistent sizes."""
+        atlas = sample_atlas
+
+        # Centers at various positions including edges
+        centers = [
+            (5.0, 5.0, 5.0),  # Center
+            (0.5, 5.0, 5.0),  # Near edge
+            (9.5, 9.0, 9.0),  # Near corner
+        ]
+
+        patch_size = (4, 4, 4)
+        patches = atlas.crop_centered(centers, patch_size=patch_size)
+
+        # All patches should have exactly the same size
+        expected_shape = (1, patch_size[2], patch_size[1], patch_size[0])
+        for i, patch in enumerate(patches):
+            assert (
+                patch.shape == expected_shape
+            ), f"Patch {i}: Expected {expected_shape}, got {patch.shape}"
+
+    def test_crop_centered_completely_outside(self, sample_atlas):
+        """Test that crop_centered handles centers completely outside image bounds."""
+        atlas = sample_atlas
+
+        # Test centers that are completely outside the image bounds
+        # Atlas is 10x10x10, so these are well outside
+        test_cases = [
+            ("Far left", (-20.0, 5.0, 5.0)),
+            ("Far right", (30.0, 5.0, 5.0)),
+            ("Far below", (5.0, -20.0, 5.0)),
+            ("Far above", (5.0, 30.0, 5.0)),
+        ]
+
+        patch_size = (6, 6, 6)
+        expected_shape = (1, patch_size[2], patch_size[1], patch_size[0])
+
+        for name, center in test_cases:
+            patch = atlas.crop_centered(center, patch_size=patch_size)
+            assert (
+                patch.shape == expected_shape
+            ), f"{name}: Expected {expected_shape}, got {patch.shape}"
+
+            # The patch should be entirely filled with the fill value (0)
+            data = patch.data.compute()
+            # Since we're completely outside, all data should be the fill value
+            assert np.all(
+                data == 0.0
+            ), f"{name}: Patch should be entirely filled with fill_value"
 
 
 class TestZarrNiiAtlasFileIO:

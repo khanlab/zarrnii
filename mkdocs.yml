@@ -17,6 +17,7 @@ nav:
       - Downsampling and Upsampling: examples/downsampling.md
       - Near-Isotropic Downsampling: examples/near_isotropic.md
       - Atlases: examples/atlas_example.md
+      - ML Training - Patch Sampling: examples/ml_patch_sampling.md
       - Multiscale OME-Zarr: examples/multiscale.md
       - Segmentation Plugins: examples/segmentation_example.md
       - Scaled Processing Plugins: examples/scaled_processing.md

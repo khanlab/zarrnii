@@ -1696,6 +1696,307 @@ class ZarrNii:
         """
         return self.crop(bbox_min, bbox_max, physical_coords=ras_coords)
 
+    def crop_centered(
+        self,
+        centers: Union[Tuple[float, float, float], List[Tuple[float, float, float]]],
+        patch_size: Tuple[int, int, int],
+        spatial_dims: Optional[List[str]] = None,
+        fill_value: float = 0.0,
+    ) -> Union["ZarrNii", List["ZarrNii"]]:
+        """Extract fixed-size patches centered at specified coordinates.
+
+        Crops the image to extract patches of a fixed size (in voxels) centered
+        at the given physical coordinates. This is particularly useful for machine
+        learning workflows where training patches must have consistent dimensions.
+        The method can process a single center or multiple centers at once.
+
+        Patches that extend beyond image boundaries are padded with the fill_value
+        to ensure all patches have exactly the requested size.
+
+        Args:
+            centers: Either:
+                - Single center coordinate as (x, y, z) tuple in physical space (mm)
+                - List of center coordinates for batch processing
+            patch_size: Size of the patch in voxels as (x, y, z) tuple.
+                This defines the dimensions of each cropped region in voxel space.
+                All returned patches will have exactly this size.
+            spatial_dims: Names of spatial dimensions to crop. If None,
+                automatically derived from axes_order ("z","y","x" for ZYX
+                or "x","y","z" for XYZ). Default is None.
+            fill_value: Value to use for padding when patches extend beyond
+                image boundaries. Default is 0.0.
+
+        Returns:
+            Single ZarrNii instance (when centers is a single tuple) or list of
+            ZarrNii instances (when centers is a list) with cropped data and
+            updated spatial metadata. All patches will have exactly the shape
+            specified by patch_size (plus any non-spatial dimensions).
+
+        Raises:
+            ValueError: If coordinates/dimensions are invalid
+            IndexError: If patch_size dimensions don't match spatial dimensions
+
+        Examples:
+            >>> # Extract single 256x256x256 voxel patch at a coordinate
+            >>> center = (50.0, 60.0, 70.0)  # physical coordinates in mm
+            >>> patch = znii.crop_centered(center, patch_size=(256, 256, 256))
+            >>>
+            >>> # Extract multiple patches for ML training
+            >>> centers = [
+            ...     (50.0, 60.0, 70.0),
+            ...     (100.0, 110.0, 120.0),
+            ...     (150.0, 160.0, 170.0)
+            ... ]
+            >>> patches = znii.crop_centered(centers, patch_size=(128, 128, 128))
+            >>> # Returns list of 3 ZarrNii instances, all with shape (1, 128, 128, 128)
+            >>>
+            >>> # Use with atlas sampling for ML training workflow
+            >>> centers = atlas.sample_region_patches(
+            ...     n_patches=100,
+            ...     region_ids="cortex",
+            ...     seed=42
+            ... )
+            >>> patches = image.crop_centered(centers, patch_size=(256, 256, 256))
+            >>>
+            >>> # Use custom fill value for padding
+            >>> patch = znii.crop_centered(center, patch_size=(256, 256, 256), fill_value=-1.0)
+
+        Notes:
+            - Centers are in physical/world coordinates (mm), always in (x, y, z) order
+            - patch_size is in voxels, in (x, y, z) order
+            - The patch is centered at the given coordinate, extending ±patch_size/2
+            - If patch_size is odd, the center voxel is included
+            - Patches near boundaries are padded with fill_value to maintain size
+            - All patches are guaranteed to have exactly the requested size
+            - Useful for ML training where fixed patch sizes are required
+            - Coordinates from atlas.sample_region_patches() can be used directly
+        """
+        # Check if this is batch processing (list of centers)
+        is_batch = isinstance(centers, list)
+
+        if is_batch:
+            # Batch processing: recursively call crop_centered for each center
+            return [
+                self.crop_centered(center, patch_size, spatial_dims, fill_value)
+                for center in centers
+            ]
+
+        # Single center processing
+        if spatial_dims is None:
+            spatial_dims = (
+                ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
+            )
+
+        # Convert center from physical to voxel coordinates
+        # Centers are always in (x, y, z) order
+        center_phys = np.array(list(centers) + [1.0])
+
+        # Get inverse affine to convert from physical to voxel
+        affine_inv = np.linalg.inv(self.affine.matrix)
+
+        # Transform to voxel coordinates
+        center_voxel = affine_inv @ center_phys
+        center_voxel_xyz = center_voxel[:3]
+
+        # patch_size is in voxels, in (x, y, z) order
+        patch_size_np = np.array(patch_size)
+        half_patch = patch_size_np / 2.0
+
+        # Calculate desired bounding box in voxel coordinates (may extend beyond image)
+        voxel_min_xyz = center_voxel_xyz - half_patch
+        voxel_max_xyz = center_voxel_xyz + half_patch
+
+        # Round to nearest integer voxel indices
+        voxel_min_xyz = np.round(voxel_min_xyz).astype(int)
+        voxel_max_xyz = np.round(voxel_max_xyz).astype(int)
+
+        # Ensure we get exactly the requested patch size
+        # Adjust max to ensure patch_size is respected
+        voxel_max_xyz = voxel_min_xyz + patch_size_np
+
+        # Get image dimensions in voxel space
+        # Map spatial dims to their indices
+        spatial_dim_indices = {}
+        for i, dim in enumerate(self.ngff_image.dims):
+            if dim.lower() in [d.lower() for d in spatial_dims]:
+                spatial_dim_indices[dim.lower()] = i
+
+        image_shape_xyz = np.array(
+            [
+                self.ngff_image.data.shape[spatial_dim_indices["x"]],
+                self.ngff_image.data.shape[spatial_dim_indices["y"]],
+                self.ngff_image.data.shape[spatial_dim_indices["z"]],
+            ]
+        )
+
+        # Calculate the actual crop region (clipped to image bounds)
+        crop_min_xyz = np.maximum(voxel_min_xyz, 0)
+        crop_max_xyz = np.minimum(voxel_max_xyz, image_shape_xyz)
+
+        # Ensure crop_max >= crop_min to avoid empty arrays
+        crop_max_xyz = np.maximum(crop_min_xyz, crop_max_xyz)
+
+        # Calculate padding needed on each side
+        pad_before_xyz = crop_min_xyz - voxel_min_xyz  # How much we're clipped at start
+        pad_after_xyz = voxel_max_xyz - crop_max_xyz  # How much we're clipped at end
+
+        # Check if the entire patch is outside the image bounds
+        # This happens when crop_min >= crop_max in any dimension after clipping
+        is_completely_outside = np.any(crop_min_xyz >= crop_max_xyz)
+
+        if is_completely_outside:
+            # The entire patch is outside the image bounds
+            # Create a completely padded array with the fill value
+            import dask.array as da
+
+            # Build the full patch shape
+            full_shape = []
+            spatial_idx = 0
+            for dim in self.ngff_image.dims:
+                if dim.lower() in [d.lower() for d in spatial_dims]:
+                    full_shape.append(patch_size_np[spatial_idx])
+                    spatial_idx += 1
+                else:
+                    # Non-spatial dimension - keep original size
+                    dim_idx = self.ngff_image.dims.index(dim)
+                    full_shape.append(self.ngff_image.data.shape[dim_idx])
+
+            # Create array filled with fill_value
+            padded_data = da.full(
+                tuple(full_shape),
+                fill_value,
+                dtype=self.ngff_image.data.dtype,
+                chunks=self.ngff_image.data.chunksize,
+            )
+
+            # Calculate translation for the patch center
+            # The translation should be at voxel_min_xyz (the desired start of patch)
+            new_translation = {}
+            for dim in self.ngff_image.dims:
+                if dim.lower() in [d.lower() for d in spatial_dims]:
+                    dim_lower = dim.lower()
+                    if dim_lower == "x":
+                        voxel_start = voxel_min_xyz[0]
+                    elif dim_lower == "y":
+                        voxel_start = voxel_min_xyz[1]
+                    elif dim_lower == "z":
+                        voxel_start = voxel_min_xyz[2]
+                    else:
+                        voxel_start = 0
+
+                    # Translation is voxel_start * scale + original translation
+                    new_translation[dim] = voxel_start * self.ngff_image.scale.get(
+                        dim, 1.0
+                    ) + self.ngff_image.translation.get(dim, 0.0)
+                elif dim in self.ngff_image.translation:
+                    new_translation[dim] = self.ngff_image.translation[dim]
+
+            # Create NgffImage with the padded data
+            padded_image = nz.NgffImage(
+                data=padded_data,
+                dims=self.ngff_image.dims,
+                scale=self.ngff_image.scale.copy(),
+                translation=new_translation,
+                name=self.ngff_image.name,
+            )
+
+            return ZarrNii(
+                ngff_image=padded_image,
+                axes_order=self.axes_order,
+                xyz_orientation=self.xyz_orientation,
+                _omero=self._omero,
+            )
+
+        # Create mapping from x,y,z to voxel coordinates for cropping
+        xyz_to_voxel = {
+            "x": crop_min_xyz[0],
+            "y": crop_min_xyz[1],
+            "z": crop_min_xyz[2],
+        }
+        xyz_to_voxel_max = {
+            "x": crop_max_xyz[0],
+            "y": crop_max_xyz[1],
+            "z": crop_max_xyz[2],
+        }
+
+        # Reorder according to spatial_dims
+        bbox_min = tuple(xyz_to_voxel[dim.lower()] for dim in spatial_dims)
+        bbox_max = tuple(xyz_to_voxel_max[dim.lower()] for dim in spatial_dims)
+
+        # Crop the actual image data that exists
+        cropped_image = crop_ngff_image(
+            self.ngff_image, bbox_min, bbox_max, spatial_dims
+        )
+
+        # Check if padding is needed
+        needs_padding = np.any(pad_before_xyz > 0) or np.any(pad_after_xyz > 0)
+
+        if needs_padding:
+            # Build padding specification for all dimensions
+            pad_width = []
+            spatial_idx = 0
+
+            for dim in cropped_image.dims:
+                if dim.lower() in [d.lower() for d in spatial_dims]:
+                    # Spatial dimension - may need padding
+                    dim_lower = dim.lower()
+                    if dim_lower == "x":
+                        pad_width.append((pad_before_xyz[0], pad_after_xyz[0]))
+                    elif dim_lower == "y":
+                        pad_width.append((pad_before_xyz[1], pad_after_xyz[1]))
+                    elif dim_lower == "z":
+                        pad_width.append((pad_before_xyz[2], pad_after_xyz[2]))
+                    spatial_idx += 1
+                else:
+                    # Non-spatial dimension - no padding
+                    pad_width.append((0, 0))
+
+            # Apply padding
+            import dask.array as da
+
+            padded_data = da.pad(
+                cropped_image.data,
+                pad_width=pad_width,
+                mode="constant",
+                constant_values=fill_value,
+            )
+
+            # Adjust translation for the padding
+            new_translation = cropped_image.translation.copy()
+            for i, dim in enumerate(cropped_image.dims):
+                if dim.lower() in [d.lower() for d in spatial_dims]:
+                    dim_lower = dim.lower()
+                    if dim_lower == "x":
+                        pad_before = pad_before_xyz[0]
+                    elif dim_lower == "y":
+                        pad_before = pad_before_xyz[1]
+                    elif dim_lower == "z":
+                        pad_before = pad_before_xyz[2]
+                    else:
+                        pad_before = 0
+
+                    if dim in new_translation:
+                        # Adjust translation by the padding offset
+                        new_translation[dim] -= pad_before * cropped_image.scale.get(
+                            dim, 1.0
+                        )
+
+            # Create padded NgffImage
+            cropped_image = nz.NgffImage(
+                data=padded_data,
+                dims=cropped_image.dims,
+                scale=cropped_image.scale,
+                translation=new_translation,
+                name=cropped_image.name,
+            )
+
+        return ZarrNii(
+            ngff_image=cropped_image,
+            axes_order=self.axes_order,
+            xyz_orientation=self.xyz_orientation,
+            _omero=self._omero,
+        )
+
     def downsample(
         self,
         factors: Optional[Union[int, List[int]]] = None,
