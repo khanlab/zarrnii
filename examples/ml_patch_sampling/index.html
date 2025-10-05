@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/examples/near_isotropic/">
+        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/examples/ml_patch_sampling/">
       
       
-        <link rel="prev" href="../downsampling/">
+        <link rel="prev" href="../atlas_example/">
       
       
-        <link rel="next" href="../atlas_example/">
+        <link rel="next" href="../multiscale/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>Near-Isotropic Downsampling - ZarrNii Documentation</title>
+        <title>ML Training - Patch Sampling - ZarrNii Documentation</title>
       
     
     
@@ -66,7 +66,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#near-isotropic-downsampling" class="md-skip">
+        <a href="#ml-training-patch-sampling-and-cropping" class="md-skip">
           Skip to content
         </a>
       
@@ -102,7 +102,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Near-Isotropic Downsampling
+              ML Training - Patch Sampling
             
           </span>
         </div>
@@ -530,32 +530,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Near-Isotropic Downsampling
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../near_isotropic/" class="md-nav__link">
         
   
   
@@ -566,98 +544,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#problem-anisotropic-voxels" class="md-nav__link">
-    <span class="md-ellipsis">
-      Problem: Anisotropic Voxels
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#solution-automatic-downsampling" class="md-nav__link">
-    <span class="md-ellipsis">
-      Solution: Automatic Downsampling
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#how-it-works" class="md-nav__link">
-    <span class="md-ellipsis">
-      How It Works
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#benefits" class="md-nav__link">
-    <span class="md-ellipsis">
-      Benefits
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-use" class="md-nav__link">
-    <span class="md-ellipsis">
-      When to Use
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#manual-control" class="md-nav__link">
-    <span class="md-ellipsis">
-      Manual Control
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#performance-impact" class="md-nav__link">
-    <span class="md-ellipsis">
-      Performance Impact
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      See Also
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -690,10 +576,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../ml_patch_sampling/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    ML Training - Patch Sampling
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -704,6 +612,125 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basic-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Basic Workflow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      Advanced Examples
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#complete-ml-training-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      Complete ML Training Pipeline
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-pytorch-dataloader" class="md-nav__link">
+    <span class="md-ellipsis">
+      Integration with PyTorch DataLoader
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-resolution-training-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Multi-Resolution Training Strategy
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#balanced-sampling-from-multiple-regions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Balanced Sampling from Multiple Regions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quality-control-verify-patch-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quality Control: Verify Patch Coverage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-efficient-processing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory-Efficient Processing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tips-and-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tips and Best Practices
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      See Also
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -878,63 +905,90 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#problem-anisotropic-voxels" class="md-nav__link">
+  <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
-      Problem: Anisotropic Voxels
+      Overview
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#solution-automatic-downsampling" class="md-nav__link">
+  <a href="#basic-workflow" class="md-nav__link">
     <span class="md-ellipsis">
-      Solution: Automatic Downsampling
+      Basic Workflow
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#how-it-works" class="md-nav__link">
+  <a href="#advanced-examples" class="md-nav__link">
     <span class="md-ellipsis">
-      How It Works
+      Advanced Examples
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#benefits" class="md-nav__link">
+  <a href="#complete-ml-training-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
-      Benefits
+      Complete ML Training Pipeline
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use" class="md-nav__link">
+  <a href="#integration-with-pytorch-dataloader" class="md-nav__link">
     <span class="md-ellipsis">
-      When to Use
+      Integration with PyTorch DataLoader
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#manual-control" class="md-nav__link">
+  <a href="#multi-resolution-training-strategy" class="md-nav__link">
     <span class="md-ellipsis">
-      Manual Control
+      Multi-Resolution Training Strategy
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#performance-impact" class="md-nav__link">
+  <a href="#balanced-sampling-from-multiple-regions" class="md-nav__link">
     <span class="md-ellipsis">
-      Performance Impact
+      Balanced Sampling from Multiple Regions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quality-control-verify-patch-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quality Control: Verify Patch Coverage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-efficient-processing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory-Efficient Processing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tips-and-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tips and Best Practices
     </span>
   </a>
   
@@ -965,81 +1019,400 @@
 
 
 
-<h1 id="near-isotropic-downsampling">Near-Isotropic Downsampling</h1>
-<p>This example demonstrates the automatic near-isotropic downsampling feature, which is particularly useful for lightsheet microscopy data where Z resolution is often much finer than X/Y resolution.</p>
-<h2 id="problem-anisotropic-voxels">Problem: Anisotropic Voxels</h2>
-<p>Many biomedical imaging modalities produce datasets with anisotropic voxels where one dimension has much finer resolution than others:</p>
-<pre><code class="language-python">from zarrnii import ZarrNii
+<h1 id="ml-training-patch-sampling-and-cropping">ML Training: Patch Sampling and Cropping</h1>
+<p>This example demonstrates how to use <code>sample_region_patches()</code> and <code>crop_centered()</code> for machine learning workflows where you need to extract fixed-size training patches from anatomical regions defined in an atlas.</p>
+<h2 id="overview">Overview</h2>
+<p>The typical ML training workflow involves:
+1. <strong>Define regions</strong> using a lower-resolution atlas
+2. <strong>Sample center coordinates</strong> from those regions
+3. <strong>Extract fixed-size patches</strong> at those centers from high-resolution data</p>
+<p>This approach is particularly useful when:
+- Your atlas is at a different resolution than your training data
+- You need consistent patch dimensions for ML models (e.g., 256×256×256 voxels)
+- You want to sample from specific anatomical regions</p>
+<h2 id="basic-workflow">Basic Workflow</h2>
+<h3 id="step-1-load-atlas-and-sample-centers">Step 1: Load Atlas and Sample Centers</h3>
+<pre><code class="language-python">from zarrnii import ZarrNiiAtlas
 
-# Load anisotropic lightsheet data
-znimg = ZarrNii.from_ome_zarr(&quot;lightsheet_data.ome.zarr&quot;)
-
-print(&quot;Original scales:&quot;, znimg.scale)
-# Output might show: {'z': 0.25, 'y': 1.0, 'x': 1.0}
-# Z has 4x finer resolution than X/Y
-</code></pre>
-<h2 id="solution-automatic-downsampling">Solution: Automatic Downsampling</h2>
-<p>The <code>downsample_near_isotropic</code> parameter automatically identifies and corrects anisotropic voxels:</p>
-<pre><code class="language-python"># Load with automatic near-isotropic downsampling
-znimg_isotropic = ZarrNii.from_ome_zarr(
-    &quot;lightsheet_data.ome.zarr&quot;, 
-    downsample_near_isotropic=True
+# Load atlas (e.g., at 1mm resolution)
+atlas = ZarrNiiAtlas.from_files(
+    dseg_path=&quot;atlas_dseg.nii.gz&quot;,
+    labels_path=&quot;atlas_dseg.tsv&quot;
 )
 
-print(&quot;Isotropic scales:&quot;, znimg_isotropic.scale)
-# Output: {'z': 1.0, 'y': 1.0, 'x': 1.0}
-# All dimensions now have the same resolution
+# Sample 100 centers from cortical regions
+centers = atlas.sample_region_patches(
+    n_patches=100,
+    region_ids=&quot;Cortex&quot;,
+    seed=42  # For reproducibility
+)
 
-print(&quot;Shape comparison:&quot;)
-print(f&quot;Original:  {znimg.darr.shape}&quot;)
-print(f&quot;Isotropic: {znimg_isotropic.darr.shape}&quot;)
-# Z dimension is reduced by the downsampling factor
+print(f&quot;Sampled {len(centers)} centers&quot;)
+print(f&quot;First center: {centers[0]} mm (physical coordinates)&quot;)
 </code></pre>
-<h2 id="how-it-works">How It Works</h2>
-<p>The algorithm:</p>
-<ol>
-<li><strong>Identifies the coarsest resolution</strong> (largest scale value) among spatial dimensions</li>
-<li><strong>Calculates downsampling factors</strong> as powers of 2 for finer resolution dimensions  </li>
-<li><strong>Applies selective downsampling</strong> using the existing downsample method</li>
-</ol>
-<pre><code class="language-python"># For scales z=0.25, y=1.0, x=1.0:
-# - Max scale = 1.0 (coarsest resolution)
-# - Z ratio = 1.0 / 0.25 = 4.0
-# - Z downsampling factor = 2^2 = 4
-# - Result: z=1.0, y=1.0, x=1.0 (isotropic)
+<p><strong>Output:</strong></p>
+<pre><code>Sampled 100 centers
+First center: (45.2, 67.8, 123.4) mm (physical coordinates)
 </code></pre>
-<h2 id="benefits">Benefits</h2>
+<h3 id="step-2-extract-fixed-size-patches">Step 2: Extract Fixed-Size Patches</h3>
+<pre><code class="language-python">from zarrnii import ZarrNii
+
+# Load high-resolution image (e.g., at 0.1mm resolution)
+highres_image = ZarrNii.from_ome_zarr(&quot;microscopy_data.ome.zarr&quot;, level=0)
+
+# Extract 256x256x256 voxel patches at each center
+patches = highres_image.crop_centered(
+    centers,
+    patch_size=(256, 256, 256)  # Fixed size in voxels
+)
+
+print(f&quot;Created {len(patches)} patches&quot;)
+print(f&quot;First patch shape: {patches[0].shape}&quot;)
+print(f&quot;All patches have consistent spatial dims: {all(p.shape[1:] == patches[0].shape[1:] for p in patches)}&quot;)
+</code></pre>
+<p><strong>Output:</strong></p>
+<pre><code>Created 100 patches
+First patch shape: (1, 256, 256, 256)
+All patches have consistent spatial dims: True
+</code></pre>
+<h2 id="advanced-examples">Advanced Examples</h2>
+<h3 id="multi-region-sampling">Multi-Region Sampling</h3>
+<p>Sample from multiple anatomical regions:</p>
+<pre><code class="language-python"># Sample from multiple regions using a list
+centers = atlas.sample_region_patches(
+    n_patches=50,
+    region_ids=[&quot;Hippocampus&quot;, &quot;Amygdala&quot;, &quot;Cortex&quot;],
+    seed=42
+)
+
+# Or use regex patterns
+cortical_centers = atlas.sample_region_patches(
+    n_patches=100,
+    regex=&quot;.*[Cc]ortex.*&quot;,  # Match any cortical regions
+    seed=42
+)
+</code></pre>
+<h3 id="different-patch-sizes-for-different-tasks">Different Patch Sizes for Different Tasks</h3>
+<pre><code class="language-python"># Large patches for context (512³ voxels)
+large_patches = highres_image.crop_centered(centers[:10], patch_size=(512, 512, 512))
+
+# Medium patches for training (256³ voxels)
+training_patches = highres_image.crop_centered(centers, patch_size=(256, 256, 256))
+
+# Small patches for fine details (128³ voxels)
+detail_patches = highres_image.crop_centered(centers, patch_size=(128, 128, 128))
+</code></pre>
+<h3 id="single-center-cropping">Single Center Cropping</h3>
+<p>When you need just one patch, <code>crop_centered()</code> returns a single <code>ZarrNii</code> object (not a list):</p>
+<pre><code class="language-python"># Get one specific center
+center = centers[0]
+
+# Extract single patch
+patch = highres_image.crop_centered(
+    center,  # Single tuple, not a list
+    patch_size=(256, 256, 256)
+)
+
+print(f&quot;Single patch type: {type(patch)}&quot;)  # &lt;class 'zarrnii.core.ZarrNii'&gt;
+print(f&quot;Shape: {patch.shape}&quot;)
+</code></pre>
+<h2 id="complete-ml-training-pipeline">Complete ML Training Pipeline</h2>
+<p>Here's a complete example showing data preparation for ML training:</p>
+<pre><code class="language-python">import numpy as np
+from zarrnii import ZarrNii, ZarrNiiAtlas
+from pathlib import Path
+
+# Configuration
+PATCH_SIZE = (256, 256, 256)
+N_TRAIN_PATCHES = 1000
+N_VAL_PATCHES = 200
+OUTPUT_DIR = Path(&quot;ml_training_data&quot;)
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+# Step 1: Load atlas and define regions of interest
+atlas = ZarrNiiAtlas.from_files(
+    dseg_path=&quot;atlas_1mm_dseg.nii.gz&quot;,
+    labels_path=&quot;atlas_1mm_dseg.tsv&quot;
+)
+
+# Step 2: Sample centers for training set
+train_centers = atlas.sample_region_patches(
+    n_patches=N_TRAIN_PATCHES,
+    region_ids=[&quot;Gray-Matter&quot;, &quot;Cortex&quot;],
+    seed=42
+)
+
+# Step 3: Sample centers for validation set
+val_centers = atlas.sample_region_patches(
+    n_patches=N_VAL_PATCHES,
+    region_ids=[&quot;Gray-Matter&quot;, &quot;Cortex&quot;],
+    seed=123  # Different seed for validation
+)
+
+# Step 4: Load high-resolution data
+highres_image = ZarrNii.from_ome_zarr(
+    &quot;specimen_highres.ome.zarr&quot;,
+    level=0  # Highest resolution
+)
+
+# Step 5: Extract training patches
+print(&quot;Extracting training patches...&quot;)
+train_patches = highres_image.crop_centered(train_centers, patch_size=PATCH_SIZE)
+
+# Step 6: Extract validation patches
+print(&quot;Extracting validation patches...&quot;)
+val_patches = highres_image.crop_centered(val_centers, patch_size=PATCH_SIZE)
+
+# Step 7: Save patches (example with one format)
+print(&quot;Saving patches...&quot;)
+for i, patch in enumerate(train_patches):
+    patch.to_nifti(OUTPUT_DIR / f&quot;train_patch_{i:04d}.nii.gz&quot;)
+
+for i, patch in enumerate(val_patches):
+    patch.to_nifti(OUTPUT_DIR / f&quot;val_patch_{i:04d}.nii.gz&quot;)
+
+print(f&quot;Training patches: {len(train_patches)}&quot;)
+print(f&quot;Validation patches: {len(val_patches)}&quot;)
+print(f&quot;Patch size: {PATCH_SIZE}&quot;)
+print(f&quot;Output directory: {OUTPUT_DIR}&quot;)
+</code></pre>
+<h2 id="integration-with-pytorch-dataloader">Integration with PyTorch DataLoader</h2>
+<p>Convert patches to numpy arrays for direct use with PyTorch:</p>
+<pre><code class="language-python">import torch
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
+
+class PatchDataset(Dataset):
+    def __init__(self, patches, transform=None):
+        &quot;&quot;&quot;
+        Args:
+            patches: List of ZarrNii objects
+            transform: Optional transforms to apply
+        &quot;&quot;&quot;
+        self.patches = patches
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.patches)
+
+    def __getitem__(self, idx):
+        # Get patch data
+        patch = self.patches[idx]
+
+        # Convert to numpy array
+        data = patch.data
+        if hasattr(data, 'compute'):
+            data = data.compute()
+
+        # Convert to float32 and normalize
+        data = data.astype(np.float32)
+
+        # Remove channel dimension if present
+        if data.shape[0] == 1:
+            data = data[0]
+
+        # Apply transforms if any
+        if self.transform:
+            data = self.transform(data)
+
+        return torch.from_numpy(data)
+
+# Create datasets
+train_dataset = PatchDataset(train_patches)
+val_dataset = PatchDataset(val_patches)
+
+# Create dataloaders
+train_loader = DataLoader(
+    train_dataset,
+    batch_size=4,
+    shuffle=True,
+    num_workers=4
+)
+
+val_loader = DataLoader(
+    val_dataset,
+    batch_size=4,
+    shuffle=False,
+    num_workers=4
+)
+
+# Use in training loop
+for batch in train_loader:
+    # batch shape: (batch_size, z, y, x)
+    # Your training code here
+    pass
+</code></pre>
+<h2 id="multi-resolution-training-strategy">Multi-Resolution Training Strategy</h2>
+<p>Sample at different atlas resolutions for multi-scale analysis:</p>
+<pre><code class="language-python"># Load atlases at different resolutions
+atlas_1mm = ZarrNiiAtlas.from_files(&quot;atlas_1mm_dseg.nii.gz&quot;, &quot;atlas_dseg.tsv&quot;)
+atlas_2mm = ZarrNiiAtlas.from_files(&quot;atlas_2mm_dseg.nii.gz&quot;, &quot;atlas_dseg.tsv&quot;)
+
+# Sample centers from each resolution
+centers_1mm = atlas_1mm.sample_region_patches(
+    n_patches=500,
+    region_ids=&quot;Cortex&quot;,
+    seed=42
+)
+
+centers_2mm = atlas_2mm.sample_region_patches(
+    n_patches=500,
+    region_ids=&quot;Cortex&quot;,
+    seed=42
+)
+
+# Load image at multiple resolutions
+highres_image = ZarrNii.from_ome_zarr(&quot;data.ome.zarr&quot;, level=0)  # Highest resolution
+lowres_image = ZarrNii.from_ome_zarr(&quot;data.ome.zarr&quot;, level=2)   # Lower resolution
+
+# Extract patches at different scales
+# All patches will be 256³ voxels, but represent different physical sizes
+highres_patches = highres_image.crop_centered(centers_1mm, patch_size=(256, 256, 256))
+lowres_patches = lowres_image.crop_centered(centers_2mm, patch_size=(256, 256, 256))
+</code></pre>
+<h2 id="balanced-sampling-from-multiple-regions">Balanced Sampling from Multiple Regions</h2>
+<p>Ensure equal representation from different anatomical regions:</p>
+<pre><code class="language-python"># Define regions and number of patches per region
+regions_config = {
+    &quot;Cortex&quot;: 300,
+    &quot;Hippocampus&quot;: 200,
+    &quot;Thalamus&quot;: 200,
+    &quot;Cerebellum&quot;: 300
+}
+
+# Sample from each region
+all_centers = []
+for region_name, n_patches in regions_config.items():
+    centers = atlas.sample_region_patches(
+        n_patches=n_patches,
+        region_ids=region_name,
+        seed=42
+    )
+    all_centers.extend(centers)
+
+print(f&quot;Total centers sampled: {len(all_centers)}&quot;)
+
+# Extract all patches
+patches = highres_image.crop_centered(all_centers, patch_size=(256, 256, 256))
+</code></pre>
+<h2 id="quality-control-verify-patch-coverage">Quality Control: Verify Patch Coverage</h2>
+<p>Check that patches cover the intended regions:</p>
+<pre><code class="language-python"># Sample centers
+centers = atlas.sample_region_patches(
+    n_patches=50,
+    region_ids=&quot;Hippocampus&quot;,
+    seed=42
+)
+
+# Extract patches from the atlas itself to verify regions
+atlas_patches = atlas.crop_centered(centers, patch_size=(64, 64, 64))
+
+# Check that patches contain the target region label
+hippocampus_label = atlas.get_region_info(&quot;Hippocampus&quot;)[&quot;index&quot;]
+
+for i, patch in enumerate(atlas_patches):
+    data = patch.data
+    if hasattr(data, 'compute'):
+        data = data.compute()
+
+    # Check if hippocampus label is present
+    has_hippocampus = np.any(data == hippocampus_label)
+    print(f&quot;Patch {i}: Contains Hippocampus = {has_hippocampus}&quot;)
+</code></pre>
+<h2 id="memory-efficient-processing">Memory-Efficient Processing</h2>
+<p>For large datasets, process patches in batches:</p>
+<pre><code class="language-python">def process_in_batches(centers, image, patch_size, batch_size=10):
+    &quot;&quot;&quot;Process patches in batches to save memory.&quot;&quot;&quot;
+    n_patches = len(centers)
+
+    for i in range(0, n_patches, batch_size):
+        # Get batch of centers
+        batch_centers = centers[i:i+batch_size]
+
+        # Extract batch of patches
+        batch_patches = image.crop_centered(batch_centers, patch_size=patch_size)
+
+        # Process batch (e.g., save, train, etc.)
+        for j, patch in enumerate(batch_patches):
+            patch_idx = i + j
+            # Your processing code here
+            patch.to_nifti(f&quot;patch_{patch_idx:04d}.nii.gz&quot;)
+
+        print(f&quot;Processed patches {i} to {i+len(batch_patches)-1}&quot;)
+
+# Use the function
+process_in_batches(
+    centers=train_centers,
+    image=highres_image,
+    patch_size=(256, 256, 256),
+    batch_size=10
+)
+</code></pre>
+<h2 id="tips-and-best-practices">Tips and Best Practices</h2>
+<h3 id="1-coordinate-systems">1. Coordinate Systems</h3>
 <ul>
-<li><strong>Improved processing efficiency</strong>: Isotropic voxels work better with many algorithms</li>
-<li><strong>Consistent visualization</strong>: Equal sampling in all dimensions for 3D rendering</li>
-<li><strong>Memory reduction</strong>: Removes unnecessary oversampling in fine dimensions</li>
-<li><strong>Algorithm compatibility</strong>: Many image processing algorithms assume isotropic voxels</li>
+<li>Centers are always in <strong>physical space (mm)</strong> in (x, y, z) order</li>
+<li>Patch sizes are always in <strong>voxels</strong> in (x, y, z) order</li>
+<li>This allows sampling at one resolution and cropping at another</li>
 </ul>
-<h2 id="when-to-use">When to Use</h2>
-<p>This feature is most beneficial for:
-- <strong>Lightsheet microscopy</strong> data with fine Z-sampling
-- <strong>High-resolution imaging</strong> with anisotropic acquisition
-- <strong>Preprocessing</strong> before analysis algorithms that assume isotropy
-- <strong>Visualization</strong> where consistent sampling is desired</p>
-<h2 id="manual-control">Manual Control</h2>
-<p>For fine-grained control, you can still use manual downsampling:</p>
-<pre><code class="language-python"># Manual approach - downsample Z dimension by specific factor
-znimg_manual = znimg.downsample(along_z=4, along_y=1, along_x=1)
-
-# This gives the same result as downsample_near_isotropic=True
-# but allows custom control over factors
+<h3 id="2-reproducibility">2. Reproducibility</h3>
+<ul>
+<li>Always set a <code>seed</code> for reproducible sampling</li>
+<li>Save the seed value with your training configuration</li>
+</ul>
+<pre><code class="language-python"># Save configuration
+config = {
+    'seed': 42,
+    'n_patches': 1000,
+    'patch_size': (256, 256, 256),
+    'regions': [&quot;Cortex&quot;, &quot;Hippocampus&quot;],
+}
 </code></pre>
-<h2 id="performance-impact">Performance Impact</h2>
-<p>The automatic downsampling:
-- Uses the same efficient downsampling algorithm as manual methods
-- Is applied lazily with Dask for memory efficiency<br />
-- Reduces data size and subsequent processing time
-- Preserves all metadata and coordinate system information</p>
+<h3 id="3-handling-edge-cases">3. Handling Edge Cases</h3>
+<ul>
+<li>Patches near image boundaries may be smaller than requested</li>
+<li>Check patch dimensions before training:</li>
+</ul>
+<pre><code class="language-python"># Filter patches by size
+min_size = (200, 200, 200)  # Minimum acceptable size
+valid_patches = [
+    p for p in patches 
+    if all(s &gt;= m for s, m in zip(p.shape[1:], min_size))
+]
+</code></pre>
+<h3 id="4-data-augmentation">4. Data Augmentation</h3>
+<ul>
+<li>Combine with standard augmentation techniques:</li>
+<li>Rotation (use <code>apply_transform()</code>)</li>
+<li>Flipping</li>
+<li>Intensity scaling</li>
+<li>Adding noise</li>
+</ul>
+<h3 id="5-distributed-training">5. Distributed Training</h3>
+<ul>
+<li>Sample centers once and share across workers:</li>
+</ul>
+<pre><code class="language-python"># In main process
+centers = atlas.sample_region_patches(n_patches=10000, region_ids=&quot;Cortex&quot;, seed=42)
+
+# Save centers for workers
+import pickle
+with open('centers.pkl', 'wb') as f:
+    pickle.dump(centers, f)
+
+# In worker processes, load and subset
+with open('centers.pkl', 'rb') as f:
+    all_centers = pickle.load(f)
+
+# Each worker gets a subset
+worker_centers = all_centers[worker_id::n_workers]
+patches = image.crop_centered(worker_centers, patch_size=(256, 256, 256))
+</code></pre>
 <h2 id="see-also">See Also</h2>
 <ul>
-<li><a href="../downsampling/">Downsampling and Upsampling</a> for general resolution operations</li>
-<li><a href="../../walkthrough/basic_tasks/">Basic Tasks</a> for getting started with transformations</li>
-<li><a href="../../reference/">API Reference</a> for detailed parameter documentation</li>
+<li><a href="../atlas_example/">Atlas Example</a> - General atlas functionality</li>
+<li><a href="../transformations/">Transformations</a> - Spatial transformations and alignment</li>
+<li><a href="../multiscale/">Multiscale OME-Zarr</a> - Working with multi-resolution data</li>
 </ul>
 
 
