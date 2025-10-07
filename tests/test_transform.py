@@ -8,7 +8,6 @@ import pytest
 from numpy.testing import assert_array_almost_equal
 
 from zarrnii import AffineTransform, DisplacementTransform
-from zarrnii.transform import Transform
 
 
 def test_affine_transform_identity():
@@ -208,13 +207,6 @@ def test_affine_transform_apply_transform_method():
 
     expected = np.array([1.0, 0.0, 0.0])
     assert_array_almost_equal(result, expected)
-
-
-def test_transform_abc():
-    """Test that Transform is an abstract base class."""
-    with pytest.raises(TypeError):
-        # Cannot instantiate abstract class
-        Transform()
 
 
 def test_displacement_transform_basic():

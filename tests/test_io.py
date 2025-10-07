@@ -391,12 +391,12 @@ def test_orientation_xyz_consistent_definition():
 
     # The key test: regardless of axes_order, RAS should mean the same thing
     # in physical space - verify this by checking the orientation extracted from affine
-    from zarrnii.core import affine_to_orientation
+    from zarrnii.core import _affine_to_orientation
 
     # Both should give us "RAS" when we extract orientation from their affines
     # (assuming the affine is properly constructed for XYZ space)
-    extracted_orientation_xyz = affine_to_orientation(affine_xyz)
-    extracted_orientation_zyx = affine_to_orientation(affine_zyx)
+    extracted_orientation_xyz = _affine_to_orientation(affine_xyz)
+    extracted_orientation_zyx = _affine_to_orientation(affine_zyx)
 
     print(f"ZYX affine:\n{affine_zyx}")
     print(f"XYZ affine:\n{affine_xyz}")
@@ -425,13 +425,13 @@ def test_orientation_consistency_multiple_strings():
         assert znimg_xyz.get_orientation() == orient
 
         # Extract orientation from affines - should be consistent
-        from zarrnii.core import affine_to_orientation
+        from zarrnii.core import _affine_to_orientation
 
         affine_zyx = znimg_zyx.get_affine_matrix(axes_order="ZYX")
         affine_xyz = znimg_xyz.get_affine_matrix(axes_order="XYZ")
 
-        extracted_zyx = affine_to_orientation(affine_zyx)
-        extracted_xyz = affine_to_orientation(affine_xyz)
+        extracted_zyx = _affine_to_orientation(affine_zyx)
+        extracted_xyz = _affine_to_orientation(affine_xyz)
 
         print(
             f"Orientation {orient}: ZYX extracted={extracted_zyx}, XYZ extracted={extracted_xyz}"
@@ -470,11 +470,11 @@ def test_orientation_xyz_definition_clarity():
 
     # Key test: when we extract orientation from the affines, both should give RAS
     # This confirms that RAS is consistently interpreted in XYZ physical space
-    from zarrnii.core import affine_to_orientation
+    from zarrnii.core import _affine_to_orientation
 
     # Both affines should be interpretable as RAS orientation
-    extracted_xyz = affine_to_orientation(affine_xyz)
-    extracted_zyx = affine_to_orientation(affine_zyx)
+    extracted_xyz = _affine_to_orientation(affine_xyz)
+    extracted_zyx = _affine_to_orientation(affine_zyx)
 
     assert (
         extracted_xyz == "RAS"

@@ -9,14 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from zarrnii import (
-    AffineTransform,
-    AmbiguousTemplateFlowQueryError,
-    ZarrNii,
-    ZarrNiiAtlas,
-    import_lut_csv_as_tsv,
-    import_lut_itksnap_as_tsv,
-)
+from zarrnii import AffineTransform, ZarrNii, ZarrNiiAtlas
+from zarrnii.atlas import AmbiguousTemplateFlowQueryError
 
 
 class TestZarrNiiAtlas:
@@ -667,63 +661,6 @@ class TestZarrNiiAtlasFileIO:
             expected_shapes = [shape, (1,) + shape]
             assert atlas.dseg.shape in expected_shapes
             assert len(atlas.labels_df) == 4
-
-
-class TestLUTConversion:
-    """Test suite for lookup table conversion functions."""
-
-    def test_import_lut_csv_as_tsv(self):
-        """Test CSV to TSV conversion."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
-
-            csv_path = tmpdir / "test.csv"
-            tsv_path = tmpdir / "test.tsv"
-
-            # Create test CSV file with header
-            csv_data = "index,name,abbreviation\n1,Left Region,LR\n2,Right Top,RT\n3,Right Bottom,RB\n"
-            with open(csv_path, "w") as f:
-                f.write(csv_data)
-
-            # Convert to TSV
-            import_lut_csv_as_tsv(csv_path, tsv_path)
-
-            # Check result
-            assert tsv_path.exists()
-            result_df = pd.read_csv(tsv_path, sep="\t")
-
-            assert len(result_df) == 3
-
-    def test_import_lut_itksnap_as_tsv(self):
-        """Test ITK-SNAP to TSV conversion."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir = Path(tmpdir)
-
-            itksnap_path = tmpdir / "test.txt"
-            tsv_path = tmpdir / "test.tsv"
-
-            # Create test ITK-SNAP format file
-            itksnap_data = """# ITK-SNAP Label Description File
-# File format:
-# IDX   -R-  -G-  -B-  -A--  VIS MSH  LABEL
-# Background
-1    255    0    0   255    1   1   "Left Region"
-2      0  255    0   255    1   1   "Right Top"
-3      0    0  255   255    1   1   "Right Bottom"
-"""
-            with open(itksnap_path, "w") as f:
-                f.write(itksnap_data)
-
-            # Convert to TSV
-            import_lut_itksnap_as_tsv(itksnap_path, tsv_path)
-
-            # Check result
-            assert tsv_path.exists()
-            result_df = pd.read_csv(tsv_path, sep="\t")
-
-            assert len(result_df) == 3
-            assert list(result_df.columns) == ["index", "name", "abbreviation"]
-            assert result_df["index"].tolist() == [1, 2, 3]
 
 
 class TestAmbiguousTemplateFlowQueryError:

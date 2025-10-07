@@ -10,10 +10,10 @@ import pytest
 
 from zarrnii import AffineTransform, ZarrNii
 from zarrnii.core import (
+    _affine_to_orientation,
+    _align_affine_to_input_orientation,
     _extract_channel_labels_from_omero,
-    affine_to_orientation,
-    align_affine_to_input_orientation,
-    orientation_to_affine,
+    _orientation_to_affine,
 )
 
 
@@ -70,7 +70,7 @@ def test_affine_to_orientation():
     affine[2, 2] = 1.0  # Superior
 
     # This should not crash and return a string
-    orientation = affine_to_orientation(affine)
+    orientation = _affine_to_orientation(affine)
     assert isinstance(orientation, str)
     assert len(orientation) == 3
 
@@ -78,11 +78,11 @@ def test_affine_to_orientation():
 def test_orientation_to_affine():
     """Test orientation_to_affine function."""
     # Test with default parameters
-    affine = orientation_to_affine("RAS")
+    affine = _orientation_to_affine("RAS")
     assert affine.shape == (4, 4)
 
     # Test with custom spacing and origin
-    affine = orientation_to_affine("LPI", spacing=(2.0, 2.0, 2.0), origin=(10, 10, 10))
+    affine = _orientation_to_affine("LPI", spacing=(2.0, 2.0, 2.0), origin=(10, 10, 10))
     assert affine.shape == (4, 4)
     # Check that spacing is applied
     assert (
@@ -96,7 +96,7 @@ def test_align_affine_to_input_orientation():
     affine = np.eye(4)
 
     # This function should not crash
-    aligned = align_affine_to_input_orientation(affine, "LPI")
+    aligned = _align_affine_to_input_orientation(affine, "LPI")
     assert aligned.shape == (4, 4)
 
 

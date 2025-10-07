@@ -10,11 +10,8 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-from zarrnii import ZarrNii, compute_histogram, compute_otsu_thresholds
-from zarrnii.analysis import compute_histogram as standalone_compute_histogram
-from zarrnii.analysis import (
-    compute_otsu_thresholds as standalone_compute_otsu_thresholds,
-)
+from zarrnii import ZarrNii
+from zarrnii.analysis import compute_histogram, compute_otsu_thresholds
 
 
 class TestStandaloneAnalysisFunctions:
