@@ -1452,7 +1452,7 @@ class ZarrNii:
         affine_matrix = nifti_img.affine.copy()
 
         # infer orientation from the affine
-        orientation = affine_to_orientation(affine_matrix)
+        orientation = _affine_to_orientation(affine_matrix)
 
         # Adjust shape and affine if zooms are provided
         if zooms is not None:
@@ -3458,7 +3458,7 @@ class ZarrNii:
 
     def get_orientation(self):
         """Get orientation string from affine matrix."""
-        return affine_to_orientation(self.get_affine_matrix())
+        return _affine_to_orientation(self.get_affine_matrix())
 
     def apply_transform_ref_to_flo_indices(self, *transforms, ref_znimg, indices):
         """Transform indices from reference to floating space."""
@@ -4002,7 +4002,7 @@ def reverse_orientation_string(orientation_str):
     return orientation_str[::-1]
 
 
-def affine_to_orientation(affine):
+def _affine_to_orientation(affine):
     """
     Convert an affine matrix to an anatomical orientation string (e.g., 'RAS').
 
@@ -4032,7 +4032,7 @@ def affine_to_orientation(affine):
     return "".join(orientation)
 
 
-def orientation_to_affine(orientation, spacing=(1, 1, 1), origin=(0, 0, 0)):
+def _orientation_to_affine(orientation, spacing=(1, 1, 1), origin=(0, 0, 0)):
     """
     Creates an affine matrix based on an orientation string (e.g., 'RAS').
 
@@ -4067,7 +4067,7 @@ def orientation_to_affine(orientation, spacing=(1, 1, 1), origin=(0, 0, 0)):
     return affine
 
 
-def align_affine_to_input_orientation(affine, orientation):
+def _align_affine_to_input_orientation(affine, orientation):
     """
     Reorders and flips the affine matrix to align with the specified input orientation.
 

@@ -21,14 +21,11 @@ from .plugins import (
 from .transform import AffineTransform, DisplacementTransform, Transform
 
 __all__ = [
-    "AmbiguousTemplateFlowQueryError",
-    "Template",
     "ZarrNii",
     "ZarrNiiAtlas",
     "Transform",
     "AffineTransform",
     "DisplacementTransform",
-    "affine_to_orientation",
     "SegmentationPlugin",
     "OtsuSegmentation",  # Backward compatibility
     "LocalOtsuSegmentation",
@@ -36,10 +33,4 @@ __all__ = [
     "ScaledProcessingPlugin",
     "GaussianBiasFieldCorrection",
     "N4BiasFieldCorrection",
-    "compute_histogram",
-    "compute_otsu_thresholds",
-    "get",
-    "get_template",
-    "import_lut_csv_as_tsv",
-    "import_lut_itksnap_as_tsv",
 ]

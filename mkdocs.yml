@@ -29,7 +29,7 @@ theme:
   name: material  # Use the Material theme for a clean look
 markdown_extensions:
   - toc:
-      toc_depth: 2  # Limits the TOC to 2 levels (e.g., H1 and H2)
+      toc_depth: 6  # Limits the TOC to 2 levels (e.g., H1 and H2)
 plugins:
   - search
   - mkdocstrings:
