@@ -7,8 +7,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal
 
-from zarrnii import AffineTransform, DisplacementTransform
-from zarrnii.transform import Transform
+from zarrnii import AffineTransform, DisplacementTransform, Transform
 
 
 def test_affine_transform_identity():

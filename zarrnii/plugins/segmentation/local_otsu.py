@@ -144,7 +144,3 @@ class LocalOtsuSegmentation(SegmentationPlugin):
             image = image[0]
 
         return threshold_otsu(image, nbins=self.nbins)
-
-
-# Keep the old name for backward compatibility
-OtsuSegmentation = LocalOtsuSegmentation

@@ -869,7 +869,7 @@ class ZarrNii:
 
         # Apply orientation alignment if orientation is available
         if hasattr(self, "orientation") and self.orientation:
-            affine = align_affine_to_input_orientation(affine, self.orientation)
+            affine = _align_affine_to_input_orientation(affine, self.orientation)
 
         return affine
 

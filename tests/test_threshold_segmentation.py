@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from zarrnii import LocalOtsuSegmentation, ThresholdSegmentation
+from zarrnii.plugins import LocalOtsuSegmentation, ThresholdSegmentation
 
 
 class TestThresholdSegmentation:
@@ -163,7 +163,7 @@ class TestThresholdSegmentation:
 
 
 class TestLocalOtsuSegmentation:
-    """Test the LocalOtsuSegmentation plugin (renamed from OtsuSegmentation)."""
+    """Test the LocalOtsuSegmentation plugin"""
 
     def test_basic_functionality(self):
         """Test basic local Otsu segmentation."""
@@ -202,18 +202,6 @@ class TestLocalOtsuSegmentation:
         assert isinstance(threshold, float)
         assert 0.3 < threshold < 0.7
 
-    def test_backward_compatibility_alias(self):
-        """Test that OtsuSegmentation is still available as alias."""
-        from zarrnii.plugins.segmentation.local_otsu import OtsuSegmentation
-
-        # Should be the same class
-        assert OtsuSegmentation is LocalOtsuSegmentation
-
-        # Should work the same way
-        plugin = OtsuSegmentation(nbins=64)
-        assert isinstance(plugin, LocalOtsuSegmentation)
-        assert plugin.name == "Local Otsu Thresholding"
-
     def test_constant_image_handling(self):
         """Test handling of constant images."""
         plugin = LocalOtsuSegmentation()
@@ -247,42 +235,3 @@ class TestLocalOtsuSegmentation:
 
         assert plugin.nbins == 128
         assert plugin.params["nbins"] == 128
-
-
-class TestBackwardCompatibility:
-    """Test backward compatibility with existing code."""
-
-    def test_otsu_segmentation_import(self):
-        """Test that OtsuSegmentation can still be imported."""
-        from zarrnii import OtsuSegmentation
-
-        # Should be the LocalOtsuSegmentation class
-        assert OtsuSegmentation is LocalOtsuSegmentation
-
-        plugin = OtsuSegmentation()
-        assert isinstance(plugin, LocalOtsuSegmentation)
-
-    def test_existing_segment_otsu_method(self):
-        """Test that existing segment_otsu method uses LocalOtsuSegmentation."""
-        import dask.array as da
-        import ngff_zarr as nz
-
-        from zarrnii import ZarrNii
-
-        # Create test ZarrNii
-        data = da.ones((1, 10, 10, 10), chunks=(1, 5, 5, 5))
-        dims = ["c", "z", "y", "x"]
-        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
-        translation = {"z": 0.0, "y": 0.0, "x": 0.0}
-
-        ngff_image = nz.NgffImage(
-            data=data, dims=dims, scale=scale, translation=translation, name="test"
-        )
-
-        znimg = ZarrNii(ngff_image=ngff_image, axes_order="ZYX", orientation="RAS")
-
-        # This should still work and use LocalOtsuSegmentation internally
-        result = znimg.segment_otsu(nbins=64)
-
-        assert result.shape == znimg.shape
-        assert result.darr.dtype == np.uint8
