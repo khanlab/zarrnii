@@ -271,26 +271,29 @@ class TestZarrNiiScaledProcessingIntegration:
 
         plugin = GaussianBiasFieldCorrection(sigma=1.0)
 
-        # Test with temp zarr disabled
-        result1 = znimg.apply_scaled_processing(
-            plugin, downsample_factor=2, use_temp_zarr=False
-        )
-        assert isinstance(result1, ZarrNii)
-        assert result1.shape == znimg.shape
-
-        # Test with custom temp zarr path
+        # Test with custom zarr store paths
         import os
         import tempfile
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = os.path.join(temp_dir, "custom_temp.ome.zarr")
-            result2 = znimg.apply_scaled_processing(
-                plugin, downsample_factor=2, temp_zarr_path=temp_path
+            upsampled_path = os.path.join(temp_dir, "upsampled.ome.zarr")
+            original_path = os.path.join(temp_dir, "original.zarr")
+            rechunked_path = os.path.join(temp_dir, "rechunked.zarr")
+
+            result = znimg.apply_scaled_processing(
+                plugin,
+                downsample_factor=2,
+                upsampled_ome_zarr_path=upsampled_path,
+                original_zarr_path=original_path,
+                rechunked_zarr_path=rechunked_path,
             )
-            assert isinstance(result2, ZarrNii)
-            assert result2.shape == znimg.shape
-            # Temp file should be cleaned up
-            assert not os.path.exists(temp_path)
+            assert isinstance(result, ZarrNii)
+            assert result.shape == znimg.shape
+
+            # Verify that the stores were created
+            assert os.path.exists(upsampled_path)
+            assert os.path.exists(original_path)
+            assert os.path.exists(rechunked_path)
 
 
 class TestScaledProcessingWorkflow:

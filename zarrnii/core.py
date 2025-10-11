@@ -3897,6 +3897,8 @@ class ZarrNii:
         downsample_factor: int = 4,
         chunk_size: Optional[Tuple[int, ...]] = None,
         upsampled_ome_zarr_path: Optional[str] = None,
+        original_zarr_path: Optional[str] = None,
+        rechunked_zarr_path: Optional[str] = None,
         **kwargs,
     ) -> "ZarrNii":
         """
@@ -3906,18 +3908,30 @@ class ZarrNii:
         1. The image is downsampled for efficient computation
         2. The plugin's lowres_func is applied to the downsampled data
         3. The result is upsampled using dask-based upsampling
-        4. The plugin's highres_func applies the result to full-resolution data
+        4. Both arrays are saved to local zarr stores to break up the dask graph
+        5. The original data is rechunked to match the upsampled data chunks
+        6. The plugin's highres_func applies the result to full-resolution data
+
+        The rechunking process uses disk-based materialization to optimize memory usage
+        and break up the dask computation graph for better performance on large datasets.
 
         Args:
             plugin: ScaledProcessingPlugin instance or class to apply
             downsample_factor: Factor for downsampling (default: 4)
             chunk_size: Optional chunk size for low-res processing. If None, uses (1, 10, 10, 10).
-            upsampled_ome_zarr_path: Path to save intermediate OME-Zarr, default saved in system temp directory.
+            upsampled_ome_zarr_path: Path to save intermediate upsampled OME-Zarr.
+                If None, saved in system temp directory.
+            original_zarr_path: Path to save original data zarr store.
+                If None, saved in system temp directory.
+            rechunked_zarr_path: Path to save rechunked data zarr store.
+                If None, saved in system temp directory.
             **kwargs: Additional arguments passed to the plugin
 
         Returns:
             New ZarrNii instance with processed data
         """
+        import tempfile
+
         from .plugins.scaled_processing import ScaledProcessingPlugin
 
         # Handle plugin instance or class
@@ -3942,8 +3956,6 @@ class ZarrNii:
         )
 
         # Use temporary OME-Zarr to break up dask graph for performance
-        import tempfile
-
         if upsampled_ome_zarr_path is None:
             upsampled_ome_zarr_path = tempfile.mkdtemp(suffix="_SPIM.ome.zarr")
 
@@ -3954,12 +3966,37 @@ class ZarrNii:
 
         upsampled_znimg = ZarrNii.from_ome_zarr(upsampled_ome_zarr_path)
 
-        corrected_znimg = self.copy()
+        # Step 4: Save both arrays to local zarr stores to break up dask graph
+        # This approach writes data to disk during rechunking, similar to what
+        # rechunker does, but using dask's native rechunk with disk materialization
 
-        # Step 4: Apply high-resolution function
-        # rechunk original data to use same chunksize as upsampled_data, before multiplying
+        # Create temporary zarr stores if paths not provided
+        if original_zarr_path is None:
+            original_zarr_path = tempfile.mkdtemp(suffix="_original.zarr")
+        if rechunked_zarr_path is None:
+            rechunked_zarr_path = tempfile.mkdtemp(suffix="_rechunked.zarr")
+
+        # Save original data to zarr (materializes the computation)
+        da.to_zarr(self.data, original_zarr_path, overwrite=True)
+
+        # Load original data back as dask array
+        original_array = da.from_zarr(original_zarr_path)
+
+        # Get target chunks from upsampled data
+        target_chunks = upsampled_znimg.data.chunks
+
+        # Rechunk the original data to match upsampled chunks and save to disk
+        # This breaks up the dask graph by materializing the rechunked data to disk
+        rechunked_data = original_array.rechunk(target_chunks)
+        da.to_zarr(rechunked_data, rechunked_zarr_path, overwrite=True)
+
+        # Load rechunked data back
+        rechunked_array = da.from_zarr(rechunked_zarr_path)
+
+        # Step 5: Apply high-resolution function
+        corrected_znimg = self.copy()
         corrected_znimg.data = plugin.highres_func(
-            self.data.rechunk(upsampled_znimg.data.chunks), upsampled_znimg.data
+            rechunked_array, upsampled_znimg.data
         )
 
         return corrected_znimg
