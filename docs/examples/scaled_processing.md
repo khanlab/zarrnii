@@ -163,21 +163,19 @@ result = znimg.apply_scaled_processing(
 
 ### Temporary File Options
 
-The framework uses temporary OME-Zarr files to break up the dask computation graph for better performance. You can control this behavior:
+The framework uses temporary zarr stores to break up the dask computation graph for better performance. Both the upsampled data and the rechunked original data are written to disk during processing. You can control the locations of these stores:
 
 ```python
-# Disable temporary file usage (may impact performance on large datasets)
+# Use custom zarr store locations for better control and debugging
 result = znimg.apply_scaled_processing(
     GaussianBiasFieldCorrection(),
-    use_temp_zarr=False
-)
-
-# Use custom temporary file location
-result = znimg.apply_scaled_processing(
-    GaussianBiasFieldCorrection(),
-    temp_zarr_path="/custom/path/temp_processing.ome.zarr"
+    upsampled_ome_zarr_path="/custom/path/upsampled.ome.zarr",
+    original_zarr_path="/custom/path/original.zarr",
+    rechunked_zarr_path="/custom/path/rechunked.zarr"
 )
 ```
+
+By default, all temporary stores are created in the system temp directory and cleaned up automatically after processing.
 
 ### Plugin Class vs Instance
 
@@ -195,7 +193,7 @@ result2 = znimg.apply_scaled_processing(plugin)
 1. **Downsampling Factor**: Higher factors reduce computation time but may reduce accuracy
 2. **Chunk Sizes**: Optimize for your memory constraints and processing requirements
 3. **Algorithm Complexity**: The `lowres_func` runs on small numpy arrays, while `highres_func` uses dask for scalability
-4. **Temporary Files**: The default temporary OME-Zarr approach breaks up dask computation graphs for better performance on large datasets. Disable only if you have specific memory/disk constraints
+4. **Disk-based Rechunking**: The method writes data to disk during rechunking, which breaks up the dask computation graph and optimizes memory usage for large datasets. This approach uses persistent disk storage to materialize intermediate results, preventing memory overflow on large arrays.
 5. **Dask-based Upsampling**: Uses ZarrNii's `.upsample()` method which leverages dask for efficient parallel upsampling
 
 ## Integration with Other Operations
