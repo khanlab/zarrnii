@@ -3967,10 +3967,11 @@ class ZarrNii:
     def __repr__(self) -> str:
         """String representation."""
         return (
-            f"ZarrNii(name='{self.name}', "
-            f"shape={self.shape}, "
-            f"dims={self.dims}, "
-            f"scale={self.scale})"
+            f"ZarrNii(\n"
+            f"  name='{self.name}', shape={self.shape}, dims={self.dims},\n"
+            f"  axes_order='{self.axes_order}', xyz_orientation='{self.xyz_orientation}',\n"
+            f"  scale={self.scale}\n"
+            f")"
         )
 
 
