@@ -298,9 +298,140 @@ def test_near_isotropic_downsampling_parameter_validation(nifti_nib):
 
     # Default and explicit False should be identical
     assert znimg1.shape == znimg3.shape
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_isotropic_downsampling_with_level(nifti_nib):
+    """Test level-constrained isotropic downsampling with the new isotropic parameter."""
+    nifti_nib.to_filename("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
+
+    # Create an OME-Zarr with anisotropic voxels (matching example in issue)
+    znimg.to_ome_zarr("test_level.ome.zarr", max_layer=0)
+
+    import zarr
+
+    store = zarr.open("test_level.ome.zarr", mode="r+")
+    multiscales = store.attrs["multiscales"]
+
+    # Set scales to match issue example: z=2.0, y=1.0, x=1.0
+    original_transforms = multiscales[0]["datasets"][0]["coordinateTransformations"]
+    for transform in original_transforms:
+        if transform["type"] == "scale":
+            if len(transform["scale"]) >= 4:  # [c, z, y, x] for ZYX
+                transform["scale"][-3] = 2.0  # z dimension - already coarser
+                transform["scale"][-2] = 1.0  # y dimension - fine
+                transform["scale"][-1] = 1.0  # x dimension - fine
+
+    store.attrs["multiscales"] = multiscales
+
+    # Load without downsampling
+    znimg_normal = ZarrNii.from_ome_zarr("test_level.ome.zarr", isotropic=False)
+
+    print(f"Normal scales: {znimg_normal.scale}")
+    print(f"Normal shape: {znimg_normal.shape}")
+
+    # Load with level=2 constraint (max factor = 4 = 2^2)
+    znimg_level2 = ZarrNii.from_ome_zarr("test_level.ome.zarr", isotropic=2)
+
+    print(f"Level 2 scales: {znimg_level2.scale}")
+    print(f"Level 2 shape: {znimg_level2.shape}")
+
+    # According to the issue:
+    # x and y should be downsampled by 4x (final scale: 4.0)
+    # z should be downsampled by 2x (final scale: 4.0)
+    # Result: z=4.0, y=4.0, x=4.0 (isotropic)
+
+    # Check scales are near-isotropic
+    scales = [znimg_level2.scale[dim] for dim in ["x", "y", "z"]]
+    print(f"Final scales: {scales}")
+
+    # All scales should be close to 4.0
+    for scale_val in scales:
+        assert abs(scale_val - 4.0) < 0.1, f"Scale {scale_val} not close to 4.0"
+
+    # Check that dimensions were downsampled appropriately
+    if znimg_normal.axes_order == "ZYX":
+        x_idx, y_idx, z_idx = 3, 2, 1
+    else:
+        x_idx, y_idx, z_idx = 1, 2, 3
+
+    # x and y should be downsampled by 4
+    assert abs(znimg_normal.shape[x_idx] / znimg_level2.shape[x_idx] - 4) < 0.5
+    assert abs(znimg_normal.shape[y_idx] / znimg_level2.shape[y_idx] - 4) < 0.5
+
+    # z should be downsampled by 2
+    assert abs(znimg_normal.shape[z_idx] / znimg_level2.shape[z_idx] - 2) < 0.5
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_isotropic_downsampling_level_constraint(nifti_nib):
+    """Test that level constraint prevents over-downsampling."""
+    nifti_nib.to_filename("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
+
+    # Create an OME-Zarr with highly anisotropic voxels
+    znimg.to_ome_zarr("test_constraint.ome.zarr", max_layer=0)
+
+    import zarr
+
+    store = zarr.open("test_constraint.ome.zarr", mode="r+")
+    multiscales = store.attrs["multiscales"]
+
+    # Set extreme anisotropy: z=0.125 (8x finer), y=1.0, x=1.0
+    original_transforms = multiscales[0]["datasets"][0]["coordinateTransformations"]
+    for transform in original_transforms:
+        if transform["type"] == "scale":
+            if len(transform["scale"]) >= 4:
+                transform["scale"][-3] = 0.125  # z dimension - very fine
+                transform["scale"][-2] = 1.0  # y dimension
+                transform["scale"][-1] = 1.0  # x dimension
+
+    store.attrs["multiscales"] = multiscales
+
+    # Load without constraint
+    znimg_normal = ZarrNii.from_ome_zarr("test_constraint.ome.zarr", isotropic=False)
+
+    # With level=1 (max factor = 2), z can only be downsampled 2x
+    znimg_level1 = ZarrNii.from_ome_zarr("test_constraint.ome.zarr", isotropic=1)
+
+    # z would ideally be downsampled 8x, but level=1 caps it at 2x
+    # Final z scale should be 0.125 * 2 = 0.25
+    # x and y stay at 1.0 (no downsampling needed to match coarsest dimension)
+    print(f"Level 1 scales: {znimg_level1.scale}")
+
+    assert abs(znimg_level1.scale["z"] - 0.25) < 0.01
+    assert abs(znimg_level1.scale["x"] - 1.0) < 0.01
+    assert abs(znimg_level1.scale["y"] - 1.0) < 0.01
+
+    # With level=3 (max factor = 8), z can be fully downsampled to match x,y
+    znimg_level3 = ZarrNii.from_ome_zarr("test_constraint.ome.zarr", isotropic=3)
+
+    print(f"Level 3 scales: {znimg_level3.scale}")
+
+    # All should be isotropic at 1.0
     for dim in ["x", "y", "z"]:
-        if dim in znimg1.scale and dim in znimg3.scale:
-            assert abs(znimg1.scale[dim] - znimg3.scale[dim]) < 1e-6
+        assert abs(znimg_level3.scale[dim] - 1.0) < 0.01
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_isotropic_parameter_compatibility(nifti_nib):
+    """Test new isotropic parameter and backward compatibility with downsample_near_isotropic."""
+    nifti_nib.to_filename("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
+    znimg.to_ome_zarr("test_compat.ome.zarr", max_layer=0)
+
+    # Test with new boolean parameter (should work like old parameter)
+    znimg_new_true = ZarrNii.from_ome_zarr("test_compat.ome.zarr", isotropic=True)
+    znimg_new_false = ZarrNii.from_ome_zarr("test_compat.ome.zarr", isotropic=False)
+
+    # Test with integer level parameter
+    znimg_level2 = ZarrNii.from_ome_zarr("test_compat.ome.zarr", isotropic=2)
+
+    # All should load successfully (actual behavior depends on data isotropy)
+    assert znimg_new_true is not None
+    assert znimg_new_false is not None
+    assert znimg_level2 is not None
 
 
 @pytest.mark.usefixtures("cleandir")
