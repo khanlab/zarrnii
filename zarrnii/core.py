@@ -550,19 +550,38 @@ def downsample_ngff_image(
     )
 
 
-def _apply_near_isotropic_downsampling(znimg: "ZarrNii", axes_order: str) -> "ZarrNii":
+def downsample_to_isotropic_level(
+    znimg: "ZarrNii", axes_order: str, level: int
+) -> "ZarrNii":
     """
-    Apply near-isotropic downsampling to a ZarrNii instance.
+    Downsample image to achieve near-isotropic voxels within a level constraint.
 
-    This function calculates downsampling factors for dimensions where the pixel sizes
-    are smaller than others by at least an integer factor, making the image more isotropic.
+    This function distributes downsampling across spatial dimensions to make the
+    image more isotropic, while ensuring no dimension is downsampled by more than
+    2^level. Finer resolution dimensions receive more downsampling, up to the
+    level cap, while coarser dimensions receive less downsampling.
+
+    The algorithm calculates a target scale that all dimensions should approach,
+    then applies appropriate downsampling factors (capped at 2^level) to reach
+    that target.
 
     Args:
         znimg: Input ZarrNii instance
         axes_order: Spatial axes order ("ZYX" or "XYZ")
+        level: Maximum downsampling level. Each axis can be downsampled by at
+            most 2^level. For example, level=2 allows up to 4x downsampling.
 
     Returns:
         New ZarrNii instance with downsampling applied if needed
+
+    Example:
+        For original scales z=2.0, y=1.0, x=1.0 and level=2:
+        - Max downsampling factor = 2^2 = 4
+        - Target scale = finest scale (1.0) * max_factor (4) = 4.0
+        - x: from 1.0 to 4.0 -> downsample by 4x
+        - y: from 1.0 to 4.0 -> downsample by 4x
+        - z: from 2.0 to 4.0 -> downsample by 2x
+        - Result: z=4.0, y=4.0, x=4.0 (isotropic)
     """
     # Get scale information
     scale = znimg.scale
@@ -585,21 +604,32 @@ def _apply_near_isotropic_downsampling(znimg: "ZarrNii", axes_order: str) -> "Za
         # Need at least 2 spatial dimensions to compare
         return znimg
 
-    # Find the largest scale (coarsest resolution) to use as reference
-    max_scale = max(scales)
+    # Maximum downsampling factor allowed
+    max_factor = 2**level
+
+    # Calculate target scale: finest resolution * max_factor
+    # This is the scale all dimensions should aim to reach
+    min_scale = min(scales)
+    target_scale = min_scale * max_factor
 
     # Calculate downsampling factors for each dimension
     downsample_factors = []
     for i, current_scale in enumerate(scales):
-        if current_scale < max_scale:
-            # Calculate ratio and find the nearest power of 2
-            ratio = max_scale / current_scale
-            level = int(np.log2(round(ratio)))
-            if level > 0:
-                downsample_factors.append(2**level)
+        # How much do we need to downsample to reach target?
+        ratio = target_scale / current_scale
+
+        if ratio > 1.0:
+            # Need to downsample this dimension
+            # Find the nearest power of 2
+            ideal_level = int(np.log2(round(ratio)))
+            # Cap at the specified level
+            capped_level = min(ideal_level, level)
+            if capped_level > 0:
+                downsample_factors.append(2**capped_level)
             else:
                 downsample_factors.append(1)
         else:
+            # Already at or past target scale, no downsampling
             downsample_factors.append(1)
 
     # Only apply downsampling if at least one factor is > 1
@@ -609,6 +639,42 @@ def _apply_near_isotropic_downsampling(znimg: "ZarrNii", axes_order: str) -> "Za
         )
 
     return znimg
+
+
+# Maintain backward compatibility with old function name
+def _apply_near_isotropic_downsampling(znimg: "ZarrNii", axes_order: str) -> "ZarrNii":
+    """
+    Deprecated: Use downsample_to_isotropic_level instead.
+
+    Apply near-isotropic downsampling to a ZarrNii instance without level constraint.
+    This maintains backward compatibility but is deprecated.
+
+    Args:
+        znimg: Input ZarrNii instance
+        axes_order: Spatial axes order ("ZYX" or "XYZ")
+
+    Returns:
+        New ZarrNii instance with downsampling applied if needed
+    """
+    # Get scale information to determine maximum level needed
+    scale = znimg.scale
+    if axes_order == "ZYX":
+        spatial_dims = ["z", "y", "x"]
+    else:
+        spatial_dims = ["x", "y", "z"]
+
+    scales = [scale[dim] for dim in spatial_dims if dim in scale]
+    if len(scales) < 2:
+        return znimg
+
+    # Calculate the maximum level needed to achieve isotropy
+    max_scale = max(scales)
+    min_scale = min(scales)
+    ratio = max_scale / min_scale
+    max_level = int(np.ceil(np.log2(ratio)))
+
+    # Use the new function with the calculated level
+    return downsample_to_isotropic_level(znimg, axes_order, max_level)
 
 
 def apply_transform_to_ngff_image(
@@ -1102,7 +1168,8 @@ class ZarrNii:
         storage_options: Optional[Dict[str, Any]] = None,
         axes_order: str = "ZYX",
         orientation: str = "RAS",
-        downsample_near_isotropic: bool = False,
+        downsample_near_isotropic: Optional[bool] = None,
+        isotropic: Optional[Union[bool, int]] = None,
         chunks: tuple[int, Ellipsis] | Literal["auto"] = "auto",
         rechunk: bool = False,
     ) -> "ZarrNii":
@@ -1133,9 +1200,14 @@ class ZarrNii:
             orientation: Default anatomical orientation if not in metadata.
                 Standard orientations like "RAS", "LPI", etc. This is always
                 interpreted in XYZ axes order for consistency.
-            downsample_near_isotropic: If True, automatically downsample
-                dimensions with smaller voxel sizes to achieve near-isotropic
-                resolution
+            downsample_near_isotropic: Deprecated. Use `isotropic` parameter instead.
+                If True, automatically downsample dimensions with smaller voxel
+                sizes to achieve near-isotropic resolution (unbounded)
+            isotropic: Control near-isotropic downsampling. Can be:
+                - False or None: No isotropic downsampling
+                - True: Apply unbounded isotropic downsampling (same as old behavior)
+                - int: Apply isotropic downsampling with level constraint (max
+                  downsampling factor = 2^level). Recommended to use explicit level.
             chunks: chunking strategy, or explicit chunk sizes to use if not automatic
             rechunk: If True, rechunks the dataset after lazy loading, based
                 on the chunks parameter
@@ -1370,9 +1442,47 @@ class ZarrNii:
                 factors=downsample_factor, spatial_dims=spatial_dims
             )
 
+        # Handle backward compatibility for downsample_near_isotropic
+        # and new isotropic parameter
+        apply_isotropic = False
+        isotropic_level = None
+
+        if downsample_near_isotropic is not None:
+            # Deprecated parameter used - maintain backward compatibility
+            import warnings
+
+            warnings.warn(
+                "The 'downsample_near_isotropic' parameter is deprecated. "
+                "Use 'isotropic' parameter instead. "
+                "For example: isotropic=True or isotropic=2 for level-constrained downsampling.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if downsample_near_isotropic:
+                apply_isotropic = True
+                # Old behavior: unbounded downsampling
+
+        if isotropic is not None:
+            # New parameter takes precedence
+            if isinstance(isotropic, bool):
+                apply_isotropic = isotropic
+                # True means unbounded (old behavior)
+            elif isinstance(isotropic, int):
+                apply_isotropic = True
+                isotropic_level = isotropic
+            else:
+                raise ValueError(
+                    f"isotropic parameter must be bool or int, got {type(isotropic)}"
+                )
+
         # Apply near-isotropic downsampling if requested
-        if downsample_near_isotropic:
-            znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
+        if apply_isotropic:
+            if isotropic_level is not None:
+                # Use new level-constrained function
+                znimg = downsample_to_isotropic_level(znimg, axes_order, isotropic_level)
+            else:
+                # Use old unbounded behavior for backward compatibility
+                znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
 
         if rechunk:
             znimg.data = znimg.data.rechunk(chunks)
