@@ -1479,7 +1479,9 @@ class ZarrNii:
         if apply_isotropic:
             if isotropic_level is not None:
                 # Use new level-constrained function
-                znimg = downsample_to_isotropic_level(znimg, axes_order, isotropic_level)
+                znimg = downsample_to_isotropic_level(
+                    znimg, axes_order, isotropic_level
+                )
             else:
                 # Use old unbounded behavior for backward compatibility
                 znimg = _apply_near_isotropic_downsampling(znimg, axes_order)

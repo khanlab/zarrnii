@@ -40,10 +40,10 @@ print("Affine matrix:\n", znimg.affine.matrix)
 For datasets with anisotropic voxels (common in lightsheet microscopy), you can automatically downsample to create more isotropic voxels:
 
 ```python
-# Load with near-isotropic downsampling
+# Load with near-isotropic downsampling (with level constraint recommended)
 znimg_isotropic = ZarrNii.from_ome_zarr(
     "path/to/anisotropic_data.ome.zarr", 
-    downsample_near_isotropic=True
+    isotropic=2  # Max downsampling factor = 2^2 = 4
 )
 
 print("Isotropic data shape:", znimg_isotropic.darr.shape)

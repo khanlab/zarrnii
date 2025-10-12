@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Near-isotropic downsampling**: New `downsample_near_isotropic` parameter in `from_ome_zarr()` automatically downsamples dimensions with higher resolution to create more isotropic voxels
+- **Level-constrained isotropic downsampling**: Enhanced `from_ome_zarr()` with new `isotropic` parameter supporting both boolean and integer (level) values for controlled near-isotropic downsampling
+- **New `downsample_to_isotropic_level()` function**: Core implementation for level-constrained isotropic downsampling with configurable max downsampling factor per axis
 - Comprehensive documentation with examples and API reference
 - Multi-resolution OME-Zarr support with pyramid creation
 - Enhanced transformation pipeline with composite operations
@@ -19,9 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Migration from Poetry to uv**: Faster dependency management and builds with modern Python packaging
 - **Automated versioning**: Version now derived from git tags using setuptools-scm
 - **Enhanced CI/CD**: Updated workflows with trusted publishing to PyPI
+- **Refactored isotropic downsampling**: Algorithm now distributes downsampling across all axes with target scale calculation for better near-isotropy
 - Improved performance for large dataset operations
 - Enhanced metadata preservation across format conversions
 - Optimized chunk sizing for better I/O performance
+
+### Deprecated
+- **`downsample_near_isotropic` parameter**: Use `isotropic` parameter instead. The old parameter still works but shows a deprecation warning
 
 ### Fixed
 - **NumPy 2.0 Compatibility**: Fixed deprecated np.product usage

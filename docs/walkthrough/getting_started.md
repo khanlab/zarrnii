@@ -63,7 +63,7 @@ print("Affine matrix:\n", znimg.affine.matrix)
 # For anisotropic data, automatically create more isotropic voxels
 znimg_isotropic = ZarrNii.from_ome_zarr(
     "path/to/dataset.ome.zarr", 
-    downsample_near_isotropic=True
+    isotropic=2  # Max downsampling factor = 2^2 = 4
 )
 # Load specific timepoints and channels from 5D data
 znimg_5d = ZarrNii.from_ome_zarr("timeseries.zarr", timepoints=[0, 2], channels=[1])
