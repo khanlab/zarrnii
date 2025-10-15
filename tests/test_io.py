@@ -353,14 +353,14 @@ def test_orientation_in_from_ome_zarr(tmp_path):
     zarr_path = tmp_path / "test_from_ome_zarr_orientation.zarr"
     znimg.to_ome_zarr(str(zarr_path))
 
-    # Load with different default orientation (should use stored orientation)
+    # Load with different default orientation (should override with this orientation)
     loaded_znimg = ZarrNii.from_ome_zarr(str(zarr_path), orientation="LPI")
-    assert loaded_znimg.orientation == "RAS"  # Should use the stored orientation
+    assert loaded_znimg.orientation == "LPI"  # Should use the stored orientation
 
     # Test fallback to provided orientation when none is stored
     # (This would require a zarr file without orientation metadata)
     # For now, just test that the parameter is accepted
-    loaded_znimg2 = ZarrNii.from_ome_zarr(str(zarr_path), orientation="IPL")
+    loaded_znimg2 = ZarrNii.from_ome_zarr(str(zarr_path), orientation=None)
     assert loaded_znimg2.orientation == "RAS"  # Should still use stored orientation
 
 
