@@ -3437,7 +3437,7 @@ with code that expects the 'orientation' property.</p>
 
 
 <h3 id="zarrnii.ZarrNii.from_ome_zarr" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">from_ome_zarr</span><span class="p">(</span><span class="n">store_or_path</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">channels</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">channel_labels</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">timepoints</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">storage_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">axes_order</span><span class="o">=</span><span class="s1">&#39;ZYX&#39;</span><span class="p">,</span> <span class="n">orientation</span><span class="o">=</span><span class="s1">&#39;RAS&#39;</span><span class="p">,</span> <span class="n">downsample_near_isotropic</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">chunks</span><span class="o">=</span><span class="s1">&#39;auto&#39;</span><span class="p">,</span> <span class="n">rechunk</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">from_ome_zarr</span><span class="p">(</span><span class="n">store_or_path</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">channels</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">channel_labels</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">timepoints</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">storage_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">axes_order</span><span class="o">=</span><span class="s1">&#39;ZYX&#39;</span><span class="p">,</span> <span class="n">orientation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">downsample_near_isotropic</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">chunks</span><span class="o">=</span><span class="s1">&#39;auto&#39;</span><span class="p">,</span> <span class="n">rechunk</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
@@ -3536,14 +3536,15 @@ Either "ZYX" or "XYZ"</p>
         </li>
         <li class="doc-section-item field-body">
             <b><code>orientation</code></b>
-              (<code><span title="str">str</span></code>, default:
-                  <code>&#39;RAS&#39;</code>
+              (<code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>, default:
+                  <code>None</code>
 )
           –
           <div class="doc-md-description">
             <p>Default anatomical orientation if not in metadata.
 Standard orientations like "RAS", "LPI", etc. This is always
-interpreted in XYZ axes order for consistency.</p>
+interpreted in XYZ axes order for consistency. This setting will override
+any orientation defined in the OME zarr metadata</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -3654,7 +3655,11 @@ or if invalid level/indices are provided</p>
 <p>This method implements backwards compatibility for orientation metadata:</p>
 <ol>
 <li>
-<p><strong>Priority Order</strong>: Checks for 'xyz_orientation' first (new format),
+<p><strong>Override</strong>: Setting the orientation here will override
+   any orientation defined in the OME Zarr metadata.</p>
+</li>
+<li>
+<p><strong>Zarr Metadata</strong>: Checks for 'xyz_orientation' first (new format),
    then falls back to 'orientation' (legacy format)</p>
 </li>
 <li>
@@ -3663,8 +3668,8 @@ or if invalid level/indices are provided</p>
    encoding (legacy) to XYZ-based encoding (current standard)</p>
 </li>
 <li>
-<p><strong>Default Fallback</strong>: If no orientation metadata is found, uses the
-   provided 'orientation' parameter as the default</p>
+<p><strong>Default Fallback</strong>: If no orientation metadata is found, uses RAS
+   orientation as the default.</p>
 </li>
 </ol>
 <p>Examples of the conversion:
@@ -3962,7 +3967,16 @@ compatibility with existing OME-Zarr files that use the legacy format.</p>
 <span class="normal">1377</span>
 <span class="normal">1378</span>
 <span class="normal">1379</span>
-<span class="normal">1380</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="normal">1380</span>
+<span class="normal">1381</span>
+<span class="normal">1382</span>
+<span class="normal">1383</span>
+<span class="normal">1384</span>
+<span class="normal">1385</span>
+<span class="normal">1386</span>
+<span class="normal">1387</span>
+<span class="normal">1388</span>
+<span class="normal">1389</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">from_ome_zarr</span><span class="p">(</span>
     <span class="bp">cls</span><span class="p">,</span>
     <span class="n">store_or_path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
@@ -3972,7 +3986,7 @@ compatibility with existing OME-Zarr files that use the legacy format.</p>
     <span class="n">timepoints</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">storage_options</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">axes_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;ZYX&quot;</span><span class="p">,</span>
-    <span class="n">orientation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;RAS&quot;</span><span class="p">,</span>
+    <span class="n">orientation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">downsample_near_isotropic</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="bp">Ellipsis</span><span class="p">]</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">rechunk</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
@@ -4003,7 +4017,8 @@ compatibility with existing OME-Zarr files that use the legacy format.</p>
 <span class="sd">            Either &quot;ZYX&quot; or &quot;XYZ&quot;</span>
 <span class="sd">        orientation: Default anatomical orientation if not in metadata.</span>
 <span class="sd">            Standard orientations like &quot;RAS&quot;, &quot;LPI&quot;, etc. This is always</span>
-<span class="sd">            interpreted in XYZ axes order for consistency.</span>
+<span class="sd">            interpreted in XYZ axes order for consistency. This setting will override</span>
+<span class="sd">            any orientation defined in the OME zarr metadata</span>
 <span class="sd">        downsample_near_isotropic: If True, automatically downsample</span>
 <span class="sd">            dimensions with smaller voxel sizes to achieve near-isotropic</span>
 <span class="sd">            resolution</span>
@@ -4044,15 +4059,18 @@ compatibility with existing OME-Zarr files that use the legacy format.</p>
 
 <span class="sd">        This method implements backwards compatibility for orientation metadata:</span>
 
-<span class="sd">        1. **Priority Order**: Checks for &#39;xyz_orientation&#39; first (new format),</span>
+<span class="sd">        1. **Override**: Setting the orientation here will override</span>
+<span class="sd">           any orientation defined in the OME Zarr metadata.</span>
+
+<span class="sd">        2. **Zarr Metadata**: Checks for &#39;xyz_orientation&#39; first (new format),</span>
 <span class="sd">           then falls back to &#39;orientation&#39; (legacy format)</span>
 
-<span class="sd">        2. **Legacy Fallback**: When only legacy &#39;orientation&#39; is found, the</span>
+<span class="sd">        3. **Legacy Fallback**: When only legacy &#39;orientation&#39; is found, the</span>
 <span class="sd">           orientation string is automatically reversed to convert from ZYX-based</span>
 <span class="sd">           encoding (legacy) to XYZ-based encoding (current standard)</span>
 
-<span class="sd">        3. **Default Fallback**: If no orientation metadata is found, uses the</span>
-<span class="sd">           provided &#39;orientation&#39; parameter as the default</span>
+<span class="sd">        4. **Default Fallback**: If no orientation metadata is found, uses RAS</span>
+<span class="sd">           orientation as the default.</span>
 
 <span class="sd">        Examples of the conversion:</span>
 <span class="sd">        - Legacy &#39;orientation&#39;=&#39;SAR&#39; (ZYX) → &#39;xyz_orientation&#39;=&#39;RAS&#39; (XYZ)</span>
@@ -4162,19 +4180,31 @@ compatibility with existing OME-Zarr files that use the legacy format.</p>
     <span class="k">try</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">zarr</span>
 
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">store_or_path</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-            <span class="k">if</span> <span class="n">store_or_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.zip&quot;</span><span class="p">):</span>
-                <span class="n">zip_store</span> <span class="o">=</span> <span class="n">zarr</span><span class="o">.</span><span class="n">storage</span><span class="o">.</span><span class="n">ZipStore</span><span class="p">(</span><span class="n">store_or_path</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r&quot;</span><span class="p">)</span>
-                <span class="n">group</span> <span class="o">=</span> <span class="n">zarr</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="n">zip_store</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r&quot;</span><span class="p">)</span>
-                <span class="c1"># Check for new xyz_orientation first, then fallback to legacy orientation</span>
-                <span class="k">if</span> <span class="s2">&quot;xyz_orientation&quot;</span> <span class="ow">in</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">:</span>
-                    <span class="n">orientation</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;xyz_orientation&quot;</span><span class="p">]</span>
-                <span class="k">elif</span> <span class="s2">&quot;orientation&quot;</span> <span class="ow">in</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">:</span>
-                    <span class="c1"># Legacy orientation is ZYX-based, reverse it to get XYZ-based orientation</span>
-                    <span class="n">legacy_orientation</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;orientation&quot;</span><span class="p">]</span>
-                    <span class="n">orientation</span> <span class="o">=</span> <span class="n">reverse_orientation_string</span><span class="p">(</span><span class="n">legacy_orientation</span><span class="p">)</span>
-                <span class="c1"># If neither found, use the provided default orientation</span>
-                <span class="n">zip_store</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">orientation</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">store_or_path</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">store_or_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.zip&quot;</span><span class="p">):</span>
+                    <span class="n">zip_store</span> <span class="o">=</span> <span class="n">zarr</span><span class="o">.</span><span class="n">storage</span><span class="o">.</span><span class="n">ZipStore</span><span class="p">(</span><span class="n">store_or_path</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r&quot;</span><span class="p">)</span>
+                    <span class="n">group</span> <span class="o">=</span> <span class="n">zarr</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="n">zip_store</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r&quot;</span><span class="p">)</span>
+                    <span class="c1"># Check for new xyz_orientation first, then fallback to legacy orientation</span>
+                    <span class="k">if</span> <span class="s2">&quot;xyz_orientation&quot;</span> <span class="ow">in</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">:</span>
+                        <span class="n">orientation</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;xyz_orientation&quot;</span><span class="p">]</span>
+                    <span class="k">elif</span> <span class="s2">&quot;orientation&quot;</span> <span class="ow">in</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">:</span>
+                        <span class="c1"># Legacy orientation is ZYX-based, reverse it to get XYZ-based orientation</span>
+                        <span class="n">legacy_orientation</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;orientation&quot;</span><span class="p">]</span>
+                        <span class="n">orientation</span> <span class="o">=</span> <span class="n">reverse_orientation_string</span><span class="p">(</span><span class="n">legacy_orientation</span><span class="p">)</span>
+                    <span class="c1"># If neither found, use the provided default orientation</span>
+                    <span class="n">zip_store</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">group</span> <span class="o">=</span> <span class="n">zarr</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="n">store_or_path</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r&quot;</span><span class="p">)</span>
+                    <span class="c1"># Check for new xyz_orientation first, then fallback to legacy orientation</span>
+                    <span class="k">if</span> <span class="s2">&quot;xyz_orientation&quot;</span> <span class="ow">in</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">:</span>
+                        <span class="n">orientation</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;xyz_orientation&quot;</span><span class="p">]</span>
+                    <span class="k">elif</span> <span class="s2">&quot;orientation&quot;</span> <span class="ow">in</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">:</span>
+                        <span class="c1"># Legacy orientation is ZYX-based, reverse it to get XYZ-based orientation</span>
+                        <span class="n">legacy_orientation</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;orientation&quot;</span><span class="p">]</span>
+                        <span class="n">orientation</span> <span class="o">=</span> <span class="n">reverse_orientation_string</span><span class="p">(</span><span class="n">legacy_orientation</span><span class="p">)</span>
+                    <span class="c1"># If neither found, use the provided default orientation</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">group</span> <span class="o">=</span> <span class="n">zarr</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="n">store_or_path</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r&quot;</span><span class="p">)</span>
                 <span class="c1"># Check for new xyz_orientation first, then fallback to legacy orientation</span>
@@ -4185,21 +4215,14 @@ compatibility with existing OME-Zarr files that use the legacy format.</p>
                     <span class="n">legacy_orientation</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;orientation&quot;</span><span class="p">]</span>
                     <span class="n">orientation</span> <span class="o">=</span> <span class="n">reverse_orientation_string</span><span class="p">(</span><span class="n">legacy_orientation</span><span class="p">)</span>
                 <span class="c1"># If neither found, use the provided default orientation</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">group</span> <span class="o">=</span> <span class="n">zarr</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="n">store_or_path</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r&quot;</span><span class="p">)</span>
-            <span class="c1"># Check for new xyz_orientation first, then fallback to legacy orientation</span>
-            <span class="k">if</span> <span class="s2">&quot;xyz_orientation&quot;</span> <span class="ow">in</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">:</span>
-                <span class="n">orientation</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;xyz_orientation&quot;</span><span class="p">]</span>
-            <span class="k">elif</span> <span class="s2">&quot;orientation&quot;</span> <span class="ow">in</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">:</span>
-                <span class="c1"># Legacy orientation is ZYX-based, reverse it to get XYZ-based orientation</span>
-                <span class="n">legacy_orientation</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;orientation&quot;</span><span class="p">]</span>
-                <span class="n">orientation</span> <span class="o">=</span> <span class="n">reverse_orientation_string</span><span class="p">(</span><span class="n">legacy_orientation</span><span class="p">)</span>
-            <span class="c1"># If neither found, use the provided default orientation</span>
 
     <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
         <span class="c1"># If we can&#39;t read orientation metadata, use the provided default</span>
         <span class="k">pass</span>
 
+    <span class="c1"># If orientation is still None, use the fallback default</span>
+    <span class="k">if</span> <span class="n">orientation</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">orientation</span> <span class="o">=</span> <span class="s2">&quot;RAS&quot;</span>
     <span class="c1"># Determine the available pyramid levels and handle lazy downsampling</span>
     <span class="n">max_level</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">multiscales</span><span class="o">.</span><span class="n">images</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
     <span class="n">actual_level</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">max_level</span><span class="p">)</span>
@@ -4421,16 +4444,7 @@ them to the specified axes_order for consistency with OME-Zarr workflows.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1382</span>
-<span class="normal">1383</span>
-<span class="normal">1384</span>
-<span class="normal">1385</span>
-<span class="normal">1386</span>
-<span class="normal">1387</span>
-<span class="normal">1388</span>
-<span class="normal">1389</span>
-<span class="normal">1390</span>
-<span class="normal">1391</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1391</span>
 <span class="normal">1392</span>
 <span class="normal">1393</span>
 <span class="normal">1394</span>
@@ -4567,7 +4581,16 @@ them to the specified axes_order for consistency with OME-Zarr workflows.</p>
 <span class="normal">1525</span>
 <span class="normal">1526</span>
 <span class="normal">1527</span>
-<span class="normal">1528</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="normal">1528</span>
+<span class="normal">1529</span>
+<span class="normal">1530</span>
+<span class="normal">1531</span>
+<span class="normal">1532</span>
+<span class="normal">1533</span>
+<span class="normal">1534</span>
+<span class="normal">1535</span>
+<span class="normal">1536</span>
+<span class="normal">1537</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">from_nifti</span><span class="p">(</span>
     <span class="bp">cls</span><span class="p">,</span>
     <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">],</span>
@@ -4869,16 +4892,7 @@ if both list and bbox_max are provided</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1531</span>
-<span class="normal">1532</span>
-<span class="normal">1533</span>
-<span class="normal">1534</span>
-<span class="normal">1535</span>
-<span class="normal">1536</span>
-<span class="normal">1537</span>
-<span class="normal">1538</span>
-<span class="normal">1539</span>
-<span class="normal">1540</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1540</span>
 <span class="normal">1541</span>
 <span class="normal">1542</span>
 <span class="normal">1543</span>
@@ -5024,7 +5038,16 @@ if both list and bbox_max are provided</p>
 <span class="normal">1683</span>
 <span class="normal">1684</span>
 <span class="normal">1685</span>
-<span class="normal">1686</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">crop</span><span class="p">(</span>
+<span class="normal">1686</span>
+<span class="normal">1687</span>
+<span class="normal">1688</span>
+<span class="normal">1689</span>
+<span class="normal">1690</span>
+<span class="normal">1691</span>
+<span class="normal">1692</span>
+<span class="normal">1693</span>
+<span class="normal">1694</span>
+<span class="normal">1695</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">crop</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">bbox_min</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span>
         <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span>
@@ -5229,16 +5252,16 @@ use physical_coords parameter of crop() instead)</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1688</span>
-<span class="normal">1689</span>
-<span class="normal">1690</span>
-<span class="normal">1691</span>
-<span class="normal">1692</span>
-<span class="normal">1693</span>
-<span class="normal">1694</span>
-<span class="normal">1695</span>
-<span class="normal">1696</span>
-<span class="normal">1697</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">crop_with_bounding_box</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bbox_min</span><span class="p">,</span> <span class="n">bbox_max</span><span class="p">,</span> <span class="n">ras_coords</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1697</span>
+<span class="normal">1698</span>
+<span class="normal">1699</span>
+<span class="normal">1700</span>
+<span class="normal">1701</span>
+<span class="normal">1702</span>
+<span class="normal">1703</span>
+<span class="normal">1704</span>
+<span class="normal">1705</span>
+<span class="normal">1706</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">crop_with_bounding_box</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bbox_min</span><span class="p">,</span> <span class="n">bbox_max</span><span class="p">,</span> <span class="n">ras_coords</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Legacy method name for crop.</span>
 
 <span class="sd">    Args:</span>
@@ -5417,16 +5440,7 @@ image boundaries. Default is 0.0.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1699</span>
-<span class="normal">1700</span>
-<span class="normal">1701</span>
-<span class="normal">1702</span>
-<span class="normal">1703</span>
-<span class="normal">1704</span>
-<span class="normal">1705</span>
-<span class="normal">1706</span>
-<span class="normal">1707</span>
-<span class="normal">1708</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1708</span>
 <span class="normal">1709</span>
 <span class="normal">1710</span>
 <span class="normal">1711</span>
@@ -5716,7 +5730,16 @@ image boundaries. Default is 0.0.</p>
 <span class="normal">1995</span>
 <span class="normal">1996</span>
 <span class="normal">1997</span>
-<span class="normal">1998</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">crop_centered</span><span class="p">(</span>
+<span class="normal">1998</span>
+<span class="normal">1999</span>
+<span class="normal">2000</span>
+<span class="normal">2001</span>
+<span class="normal">2002</span>
+<span class="normal">2003</span>
+<span class="normal">2004</span>
+<span class="normal">2005</span>
+<span class="normal">2006</span>
+<span class="normal">2007</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">crop_centered</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">centers</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]],</span>
     <span class="n">patch_size</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
@@ -6160,16 +6183,7 @@ from axes_order</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2000</span>
-<span class="normal">2001</span>
-<span class="normal">2002</span>
-<span class="normal">2003</span>
-<span class="normal">2004</span>
-<span class="normal">2005</span>
-<span class="normal">2006</span>
-<span class="normal">2007</span>
-<span class="normal">2008</span>
-<span class="normal">2009</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2009</span>
 <span class="normal">2010</span>
 <span class="normal">2011</span>
 <span class="normal">2012</span>
@@ -6237,7 +6251,16 @@ from axes_order</p>
 <span class="normal">2074</span>
 <span class="normal">2075</span>
 <span class="normal">2076</span>
-<span class="normal">2077</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">downsample</span><span class="p">(</span>
+<span class="normal">2077</span>
+<span class="normal">2078</span>
+<span class="normal">2079</span>
+<span class="normal">2080</span>
+<span class="normal">2081</span>
+<span class="normal">2082</span>
+<span class="normal">2083</span>
+<span class="normal">2084</span>
+<span class="normal">2085</span>
+<span class="normal">2086</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">downsample</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">factors</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">along_x</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
@@ -6412,16 +6435,7 @@ from axes_order</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2079</span>
-<span class="normal">2080</span>
-<span class="normal">2081</span>
-<span class="normal">2082</span>
-<span class="normal">2083</span>
-<span class="normal">2084</span>
-<span class="normal">2085</span>
-<span class="normal">2086</span>
-<span class="normal">2087</span>
-<span class="normal">2088</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2088</span>
 <span class="normal">2089</span>
 <span class="normal">2090</span>
 <span class="normal">2091</span>
@@ -6517,7 +6531,16 @@ from axes_order</p>
 <span class="normal">2181</span>
 <span class="normal">2182</span>
 <span class="normal">2183</span>
-<span class="normal">2184</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">upsample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">along_x</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">along_y</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">along_z</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">to_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="normal">2184</span>
+<span class="normal">2185</span>
+<span class="normal">2186</span>
+<span class="normal">2187</span>
+<span class="normal">2188</span>
+<span class="normal">2189</span>
+<span class="normal">2190</span>
+<span class="normal">2191</span>
+<span class="normal">2192</span>
+<span class="normal">2193</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">upsample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">along_x</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">along_y</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">along_z</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">to_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Upsamples the ZarrNii instance using `scipy.ndimage.zoom`.</span>
 
@@ -6739,16 +6762,7 @@ automatically derived from axes_order</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2257</span>
-<span class="normal">2258</span>
-<span class="normal">2259</span>
-<span class="normal">2260</span>
-<span class="normal">2261</span>
-<span class="normal">2262</span>
-<span class="normal">2263</span>
-<span class="normal">2264</span>
-<span class="normal">2265</span>
-<span class="normal">2266</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2266</span>
 <span class="normal">2267</span>
 <span class="normal">2268</span>
 <span class="normal">2269</span>
@@ -6802,7 +6816,16 @@ automatically derived from axes_order</p>
 <span class="normal">2317</span>
 <span class="normal">2318</span>
 <span class="normal">2319</span>
-<span class="normal">2320</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform</span><span class="p">(</span>
+<span class="normal">2320</span>
+<span class="normal">2321</span>
+<span class="normal">2322</span>
+<span class="normal">2323</span>
+<span class="normal">2324</span>
+<span class="normal">2325</span>
+<span class="normal">2326</span>
+<span class="normal">2327</span>
+<span class="normal">2328</span>
+<span class="normal">2329</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="o">*</span><span class="n">transforms</span><span class="p">:</span> <span class="n">Transform</span><span class="p">,</span>
     <span class="n">ref_znimg</span><span class="p">:</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">,</span>
@@ -7001,16 +7024,7 @@ May include compression options, chunk sizes, etc.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2323</span>
-<span class="normal">2324</span>
-<span class="normal">2325</span>
-<span class="normal">2326</span>
-<span class="normal">2327</span>
-<span class="normal">2328</span>
-<span class="normal">2329</span>
-<span class="normal">2330</span>
-<span class="normal">2331</span>
-<span class="normal">2332</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2332</span>
 <span class="normal">2333</span>
 <span class="normal">2334</span>
 <span class="normal">2335</span>
@@ -7094,7 +7108,16 @@ May include compression options, chunk sizes, etc.</p>
 <span class="normal">2413</span>
 <span class="normal">2414</span>
 <span class="normal">2415</span>
-<span class="normal">2416</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_ome_zarr</span><span class="p">(</span>
+<span class="normal">2416</span>
+<span class="normal">2417</span>
+<span class="normal">2418</span>
+<span class="normal">2419</span>
+<span class="normal">2420</span>
+<span class="normal">2421</span>
+<span class="normal">2422</span>
+<span class="normal">2423</span>
+<span class="normal">2424</span>
+<span class="normal">2425</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_ome_zarr</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">store_or_path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
     <span class="n">max_layer</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
@@ -7293,16 +7316,7 @@ If None, returns nibabel image object without saving</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2418</span>
-<span class="normal">2419</span>
-<span class="normal">2420</span>
-<span class="normal">2421</span>
-<span class="normal">2422</span>
-<span class="normal">2423</span>
-<span class="normal">2424</span>
-<span class="normal">2425</span>
-<span class="normal">2426</span>
-<span class="normal">2427</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2427</span>
 <span class="normal">2428</span>
 <span class="normal">2429</span>
 <span class="normal">2430</span>
@@ -7397,7 +7411,16 @@ If None, returns nibabel image object without saving</p>
 <span class="normal">2519</span>
 <span class="normal">2520</span>
 <span class="normal">2521</span>
-<span class="normal">2522</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_nifti</span><span class="p">(</span>
+<span class="normal">2522</span>
+<span class="normal">2523</span>
+<span class="normal">2524</span>
+<span class="normal">2525</span>
+<span class="normal">2526</span>
+<span class="normal">2527</span>
+<span class="normal">2528</span>
+<span class="normal">2529</span>
+<span class="normal">2530</span>
+<span class="normal">2531</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_nifti</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">nib</span><span class="o">.</span><span class="n">Nifti1Image</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert to NIfTI format with automatic dimension handling.</span>
@@ -7668,16 +7691,7 @@ or if dtype is not supported</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2524</span>
-<span class="normal">2525</span>
-<span class="normal">2526</span>
-<span class="normal">2527</span>
-<span class="normal">2528</span>
-<span class="normal">2529</span>
-<span class="normal">2530</span>
-<span class="normal">2531</span>
-<span class="normal">2532</span>
-<span class="normal">2533</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2533</span>
 <span class="normal">2534</span>
 <span class="normal">2535</span>
 <span class="normal">2536</span>
@@ -7942,7 +7956,16 @@ or if dtype is not supported</p>
 <span class="normal">2795</span>
 <span class="normal">2796</span>
 <span class="normal">2797</span>
-<span class="normal">2798</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_tiff_stack</span><span class="p">(</span>
+<span class="normal">2798</span>
+<span class="normal">2799</span>
+<span class="normal">2800</span>
+<span class="normal">2801</span>
+<span class="normal">2802</span>
+<span class="normal">2803</span>
+<span class="normal">2804</span>
+<span class="normal">2805</span>
+<span class="normal">2806</span>
+<span class="normal">2807</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_tiff_stack</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">filename_pattern</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">channel</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -8349,16 +8372,7 @@ This method requires the 'imaris' extra dependency (h5py).</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2800</span>
-<span class="normal">2801</span>
-<span class="normal">2802</span>
-<span class="normal">2803</span>
-<span class="normal">2804</span>
-<span class="normal">2805</span>
-<span class="normal">2806</span>
-<span class="normal">2807</span>
-<span class="normal">2808</span>
-<span class="normal">2809</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2809</span>
 <span class="normal">2810</span>
 <span class="normal">2811</span>
 <span class="normal">2812</span>
@@ -8526,7 +8540,16 @@ This method requires the 'imaris' extra dependency (h5py).</p>
 <span class="normal">2974</span>
 <span class="normal">2975</span>
 <span class="normal">2976</span>
-<span class="normal">2977</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="normal">2977</span>
+<span class="normal">2978</span>
+<span class="normal">2979</span>
+<span class="normal">2980</span>
+<span class="normal">2981</span>
+<span class="normal">2982</span>
+<span class="normal">2983</span>
+<span class="normal">2984</span>
+<span class="normal">2985</span>
+<span class="normal">2986</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">from_imaris</span><span class="p">(</span>
     <span class="bp">cls</span><span class="p">,</span>
     <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -8786,16 +8809,7 @@ All attributes use byte-array encoding as required by Imaris.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2979</span>
-<span class="normal">2980</span>
-<span class="normal">2981</span>
-<span class="normal">2982</span>
-<span class="normal">2983</span>
-<span class="normal">2984</span>
-<span class="normal">2985</span>
-<span class="normal">2986</span>
-<span class="normal">2987</span>
-<span class="normal">2988</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2988</span>
 <span class="normal">2989</span>
 <span class="normal">2990</span>
 <span class="normal">2991</span>
@@ -9080,7 +9094,16 @@ All attributes use byte-array encoding as required by Imaris.</p>
 <span class="normal">3270</span>
 <span class="normal">3271</span>
 <span class="normal">3272</span>
-<span class="normal">3273</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_imaris</span><span class="p">(</span>
+<span class="normal">3273</span>
+<span class="normal">3274</span>
+<span class="normal">3275</span>
+<span class="normal">3276</span>
+<span class="normal">3277</span>
+<span class="normal">3278</span>
+<span class="normal">3279</span>
+<span class="normal">3280</span>
+<span class="normal">3281</span>
+<span class="normal">3282</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_imaris</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">compression</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;gzip&quot;</span><span class="p">,</span> <span class="n">compression_opts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -9409,16 +9432,7 @@ All attributes use byte-array encoding as required by Imaris.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3356</span>
-<span class="normal">3357</span>
-<span class="normal">3358</span>
-<span class="normal">3359</span>
-<span class="normal">3360</span>
-<span class="normal">3361</span>
-<span class="normal">3362</span>
-<span class="normal">3363</span>
-<span class="normal">3364</span>
-<span class="normal">3365</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3365</span>
 <span class="normal">3366</span>
 <span class="normal">3367</span>
 <span class="normal">3368</span>
@@ -9429,7 +9443,16 @@ All attributes use byte-array encoding as required by Imaris.</p>
 <span class="normal">3373</span>
 <span class="normal">3374</span>
 <span class="normal">3375</span>
-<span class="normal">3376</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
+<span class="normal">3376</span>
+<span class="normal">3377</span>
+<span class="normal">3378</span>
+<span class="normal">3379</span>
+<span class="normal">3380</span>
+<span class="normal">3381</span>
+<span class="normal">3382</span>
+<span class="normal">3383</span>
+<span class="normal">3384</span>
+<span class="normal">3385</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Create a copy of this ZarrNii.</span>
 
@@ -9486,16 +9509,7 @@ the NgffImage with computed data.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3378</span>
-<span class="normal">3379</span>
-<span class="normal">3380</span>
-<span class="normal">3381</span>
-<span class="normal">3382</span>
-<span class="normal">3383</span>
-<span class="normal">3384</span>
-<span class="normal">3385</span>
-<span class="normal">3386</span>
-<span class="normal">3387</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3387</span>
 <span class="normal">3388</span>
 <span class="normal">3389</span>
 <span class="normal">3390</span>
@@ -9506,7 +9520,16 @@ the NgffImage with computed data.</p>
 <span class="normal">3395</span>
 <span class="normal">3396</span>
 <span class="normal">3397</span>
-<span class="normal">3398</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nz</span><span class="o">.</span><span class="n">NgffImage</span><span class="p">:</span>
+<span class="normal">3398</span>
+<span class="normal">3399</span>
+<span class="normal">3400</span>
+<span class="normal">3401</span>
+<span class="normal">3402</span>
+<span class="normal">3403</span>
+<span class="normal">3404</span>
+<span class="normal">3405</span>
+<span class="normal">3406</span>
+<span class="normal">3407</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nz</span><span class="o">.</span><span class="n">NgffImage</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Compute the dask array and return the underlying NgffImage.</span>
 
@@ -9549,9 +9572,9 @@ the NgffImage with computed data.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3459</span>
-<span class="normal">3460</span>
-<span class="normal">3461</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_orientation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3468</span>
+<span class="normal">3469</span>
+<span class="normal">3470</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_orientation</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get orientation string from affine matrix.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">_affine_to_orientation</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_affine_matrix</span><span class="p">())</span>
 </code></pre></div></td></tr></table></div>
@@ -9603,16 +9626,7 @@ the NgffImage with computed data.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3411</span>
-<span class="normal">3412</span>
-<span class="normal">3413</span>
-<span class="normal">3414</span>
-<span class="normal">3415</span>
-<span class="normal">3416</span>
-<span class="normal">3417</span>
-<span class="normal">3418</span>
-<span class="normal">3419</span>
-<span class="normal">3420</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3420</span>
 <span class="normal">3421</span>
 <span class="normal">3422</span>
 <span class="normal">3423</span>
@@ -9625,7 +9639,16 @@ the NgffImage with computed data.</p>
 <span class="normal">3430</span>
 <span class="normal">3431</span>
 <span class="normal">3432</span>
-<span class="normal">3433</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_zooms</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">3433</span>
+<span class="normal">3434</span>
+<span class="normal">3435</span>
+<span class="normal">3436</span>
+<span class="normal">3437</span>
+<span class="normal">3438</span>
+<span class="normal">3439</span>
+<span class="normal">3440</span>
+<span class="normal">3441</span>
+<span class="normal">3442</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_zooms</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Get voxel spacing (zooms) from NgffImage scale.</span>
 
@@ -9697,16 +9720,7 @@ the NgffImage with computed data.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3435</span>
-<span class="normal">3436</span>
-<span class="normal">3437</span>
-<span class="normal">3438</span>
-<span class="normal">3439</span>
-<span class="normal">3440</span>
-<span class="normal">3441</span>
-<span class="normal">3442</span>
-<span class="normal">3443</span>
-<span class="normal">3444</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3444</span>
 <span class="normal">3445</span>
 <span class="normal">3446</span>
 <span class="normal">3447</span>
@@ -9719,7 +9733,16 @@ the NgffImage with computed data.</p>
 <span class="normal">3454</span>
 <span class="normal">3455</span>
 <span class="normal">3456</span>
-<span class="normal">3457</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_origin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">3457</span>
+<span class="normal">3458</span>
+<span class="normal">3459</span>
+<span class="normal">3460</span>
+<span class="normal">3461</span>
+<span class="normal">3462</span>
+<span class="normal">3463</span>
+<span class="normal">3464</span>
+<span class="normal">3465</span>
+<span class="normal">3466</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_origin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Get origin (translation) from NgffImage.</span>
 
@@ -9764,10 +9787,10 @@ the NgffImage with computed data.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3463</span>
-<span class="normal">3464</span>
-<span class="normal">3465</span>
-<span class="normal">3466</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform_ref_to_flo_indices</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">transforms</span><span class="p">,</span> <span class="n">ref_znimg</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3472</span>
+<span class="normal">3473</span>
+<span class="normal">3474</span>
+<span class="normal">3475</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform_ref_to_flo_indices</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">transforms</span><span class="p">,</span> <span class="n">ref_znimg</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Transform indices from reference to floating space.&quot;&quot;&quot;</span>
     <span class="c1"># Placeholder implementation - would need full transform logic</span>
     <span class="k">return</span> <span class="n">indices</span>
@@ -9793,10 +9816,10 @@ the NgffImage with computed data.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3468</span>
-<span class="normal">3469</span>
-<span class="normal">3470</span>
-<span class="normal">3471</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform_flo_to_ref_indices</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">transforms</span><span class="p">,</span> <span class="n">ref_znimg</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3477</span>
+<span class="normal">3478</span>
+<span class="normal">3479</span>
+<span class="normal">3480</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform_flo_to_ref_indices</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">transforms</span><span class="p">,</span> <span class="n">ref_znimg</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Transform indices from floating to reference space.&quot;&quot;&quot;</span>
     <span class="c1"># Placeholder implementation - would need full transform logic</span>
     <span class="k">return</span> <span class="n">indices</span>
@@ -9863,16 +9886,7 @@ human-readable names for multi-channel datasets.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3473</span>
-<span class="normal">3474</span>
-<span class="normal">3475</span>
-<span class="normal">3476</span>
-<span class="normal">3477</span>
-<span class="normal">3478</span>
-<span class="normal">3479</span>
-<span class="normal">3480</span>
-<span class="normal">3481</span>
-<span class="normal">3482</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3482</span>
 <span class="normal">3483</span>
 <span class="normal">3484</span>
 <span class="normal">3485</span>
@@ -9893,7 +9907,16 @@ human-readable names for multi-channel datasets.</p>
 <span class="normal">3500</span>
 <span class="normal">3501</span>
 <span class="normal">3502</span>
-<span class="normal">3503</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">list_channels</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="normal">3503</span>
+<span class="normal">3504</span>
+<span class="normal">3505</span>
+<span class="normal">3506</span>
+<span class="normal">3507</span>
+<span class="normal">3508</span>
+<span class="normal">3509</span>
+<span class="normal">3510</span>
+<span class="normal">3511</span>
+<span class="normal">3512</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">list_channels</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get list of available channel labels from OMERO metadata.</span>
 
 <span class="sd">    Extracts channel labels from OMERO metadata if available, providing</span>
@@ -10032,16 +10055,7 @@ channel_labels used without OMERO metadata, or if labels not found</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3505</span>
-<span class="normal">3506</span>
-<span class="normal">3507</span>
-<span class="normal">3508</span>
-<span class="normal">3509</span>
-<span class="normal">3510</span>
-<span class="normal">3511</span>
-<span class="normal">3512</span>
-<span class="normal">3513</span>
-<span class="normal">3514</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3514</span>
 <span class="normal">3515</span>
 <span class="normal">3516</span>
 <span class="normal">3517</span>
@@ -10135,7 +10149,16 @@ channel_labels used without OMERO metadata, or if labels not found</p>
 <span class="normal">3605</span>
 <span class="normal">3606</span>
 <span class="normal">3607</span>
-<span class="normal">3608</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">select_channels</span><span class="p">(</span>
+<span class="normal">3608</span>
+<span class="normal">3609</span>
+<span class="normal">3610</span>
+<span class="normal">3611</span>
+<span class="normal">3612</span>
+<span class="normal">3613</span>
+<span class="normal">3614</span>
+<span class="normal">3615</span>
+<span class="normal">3616</span>
+<span class="normal">3617</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">select_channels</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">channels</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">channel_labels</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -10288,16 +10311,7 @@ channel_labels used without OMERO metadata, or if labels not found</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3610</span>
-<span class="normal">3611</span>
-<span class="normal">3612</span>
-<span class="normal">3613</span>
-<span class="normal">3614</span>
-<span class="normal">3615</span>
-<span class="normal">3616</span>
-<span class="normal">3617</span>
-<span class="normal">3618</span>
-<span class="normal">3619</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3619</span>
 <span class="normal">3620</span>
 <span class="normal">3621</span>
 <span class="normal">3622</span>
@@ -10330,7 +10344,16 @@ channel_labels used without OMERO metadata, or if labels not found</p>
 <span class="normal">3649</span>
 <span class="normal">3650</span>
 <span class="normal">3651</span>
-<span class="normal">3652</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">select_timepoints</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timepoints</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
+<span class="normal">3652</span>
+<span class="normal">3653</span>
+<span class="normal">3654</span>
+<span class="normal">3655</span>
+<span class="normal">3656</span>
+<span class="normal">3657</span>
+<span class="normal">3658</span>
+<span class="normal">3659</span>
+<span class="normal">3660</span>
+<span class="normal">3661</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">select_timepoints</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timepoints</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Select timepoints from the image data and return a new ZarrNii instance.</span>
 
@@ -10422,16 +10445,7 @@ channel_labels used without OMERO metadata, or if labels not found</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3654</span>
-<span class="normal">3655</span>
-<span class="normal">3656</span>
-<span class="normal">3657</span>
-<span class="normal">3658</span>
-<span class="normal">3659</span>
-<span class="normal">3660</span>
-<span class="normal">3661</span>
-<span class="normal">3662</span>
-<span class="normal">3663</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3663</span>
 <span class="normal">3664</span>
 <span class="normal">3665</span>
 <span class="normal">3666</span>
@@ -10441,7 +10455,16 @@ channel_labels used without OMERO metadata, or if labels not found</p>
 <span class="normal">3670</span>
 <span class="normal">3671</span>
 <span class="normal">3672</span>
-<span class="normal">3673</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_ngff_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nz</span><span class="o">.</span><span class="n">NgffImage</span><span class="p">:</span>
+<span class="normal">3673</span>
+<span class="normal">3674</span>
+<span class="normal">3675</span>
+<span class="normal">3676</span>
+<span class="normal">3677</span>
+<span class="normal">3678</span>
+<span class="normal">3679</span>
+<span class="normal">3680</span>
+<span class="normal">3681</span>
+<span class="normal">3682</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_ngff_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nz</span><span class="o">.</span><span class="n">NgffImage</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Convert to NgffImage object.</span>
 
@@ -10526,16 +10549,7 @@ blockwise processing for efficient computation on large datasets.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3675</span>
-<span class="normal">3676</span>
-<span class="normal">3677</span>
-<span class="normal">3678</span>
-<span class="normal">3679</span>
-<span class="normal">3680</span>
-<span class="normal">3681</span>
-<span class="normal">3682</span>
-<span class="normal">3683</span>
-<span class="normal">3684</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3684</span>
 <span class="normal">3685</span>
 <span class="normal">3686</span>
 <span class="normal">3687</span>
@@ -10598,7 +10612,16 @@ blockwise processing for efficient computation on large datasets.</p>
 <span class="normal">3744</span>
 <span class="normal">3745</span>
 <span class="normal">3746</span>
-<span class="normal">3747</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment</span><span class="p">(</span>
+<span class="normal">3747</span>
+<span class="normal">3748</span>
+<span class="normal">3749</span>
+<span class="normal">3750</span>
+<span class="normal">3751</span>
+<span class="normal">3752</span>
+<span class="normal">3753</span>
+<span class="normal">3754</span>
+<span class="normal">3755</span>
+<span class="normal">3756</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="n">plugin</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -10732,16 +10755,7 @@ This computes the threshold locally for each processing block.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3749</span>
-<span class="normal">3750</span>
-<span class="normal">3751</span>
-<span class="normal">3752</span>
-<span class="normal">3753</span>
-<span class="normal">3754</span>
-<span class="normal">3755</span>
-<span class="normal">3756</span>
-<span class="normal">3757</span>
-<span class="normal">3758</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3758</span>
 <span class="normal">3759</span>
 <span class="normal">3760</span>
 <span class="normal">3761</span>
@@ -10751,7 +10765,16 @@ This computes the threshold locally for each processing block.</p>
 <span class="normal">3765</span>
 <span class="normal">3766</span>
 <span class="normal">3767</span>
-<span class="normal">3768</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment_otsu</span><span class="p">(</span>
+<span class="normal">3768</span>
+<span class="normal">3769</span>
+<span class="normal">3770</span>
+<span class="normal">3771</span>
+<span class="normal">3772</span>
+<span class="normal">3773</span>
+<span class="normal">3774</span>
+<span class="normal">3775</span>
+<span class="normal">3776</span>
+<span class="normal">3777</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment_otsu</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="n">nbins</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -10854,16 +10877,7 @@ If False, pixels &gt; threshold are labeled as foreground.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3770</span>
-<span class="normal">3771</span>
-<span class="normal">3772</span>
-<span class="normal">3773</span>
-<span class="normal">3774</span>
-<span class="normal">3775</span>
-<span class="normal">3776</span>
-<span class="normal">3777</span>
-<span class="normal">3778</span>
-<span class="normal">3779</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3779</span>
 <span class="normal">3780</span>
 <span class="normal">3781</span>
 <span class="normal">3782</span>
@@ -10889,7 +10903,16 @@ If False, pixels &gt; threshold are labeled as foreground.</p>
 <span class="normal">3802</span>
 <span class="normal">3803</span>
 <span class="normal">3804</span>
-<span class="normal">3805</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment_threshold</span><span class="p">(</span>
+<span class="normal">3805</span>
+<span class="normal">3806</span>
+<span class="normal">3807</span>
+<span class="normal">3808</span>
+<span class="normal">3809</span>
+<span class="normal">3810</span>
+<span class="normal">3811</span>
+<span class="normal">3812</span>
+<span class="normal">3813</span>
+<span class="normal">3814</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment_threshold</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">thresholds</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
     <span class="n">inclusive</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
@@ -11037,16 +11060,7 @@ where mask &gt; 0 are included in histogram computation</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3807</span>
-<span class="normal">3808</span>
-<span class="normal">3809</span>
-<span class="normal">3810</span>
-<span class="normal">3811</span>
-<span class="normal">3812</span>
-<span class="normal">3813</span>
-<span class="normal">3814</span>
-<span class="normal">3815</span>
-<span class="normal">3816</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3816</span>
 <span class="normal">3817</span>
 <span class="normal">3818</span>
 <span class="normal">3819</span>
@@ -11077,7 +11091,16 @@ where mask &gt; 0 are included in histogram computation</p>
 <span class="normal">3844</span>
 <span class="normal">3845</span>
 <span class="normal">3846</span>
-<span class="normal">3847</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_histogram</span><span class="p">(</span>
+<span class="normal">3847</span>
+<span class="normal">3848</span>
+<span class="normal">3849</span>
+<span class="normal">3850</span>
+<span class="normal">3851</span>
+<span class="normal">3852</span>
+<span class="normal">3853</span>
+<span class="normal">3854</span>
+<span class="normal">3855</span>
+<span class="normal">3856</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_histogram</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">bins</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
     <span class="nb">range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -11228,16 +11251,7 @@ where mask &gt; 0 are included in histogram computation</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3849</span>
-<span class="normal">3850</span>
-<span class="normal">3851</span>
-<span class="normal">3852</span>
-<span class="normal">3853</span>
-<span class="normal">3854</span>
-<span class="normal">3855</span>
-<span class="normal">3856</span>
-<span class="normal">3857</span>
-<span class="normal">3858</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3858</span>
 <span class="normal">3859</span>
 <span class="normal">3860</span>
 <span class="normal">3861</span>
@@ -11271,7 +11285,16 @@ where mask &gt; 0 are included in histogram computation</p>
 <span class="normal">3889</span>
 <span class="normal">3890</span>
 <span class="normal">3891</span>
-<span class="normal">3892</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_otsu_thresholds</span><span class="p">(</span>
+<span class="normal">3892</span>
+<span class="normal">3893</span>
+<span class="normal">3894</span>
+<span class="normal">3895</span>
+<span class="normal">3896</span>
+<span class="normal">3897</span>
+<span class="normal">3898</span>
+<span class="normal">3899</span>
+<span class="normal">3900</span>
+<span class="normal">3901</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_otsu_thresholds</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
     <span class="n">bins</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
@@ -11403,16 +11426,7 @@ where mask &gt; 0 are included in histogram computation</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3894</span>
-<span class="normal">3895</span>
-<span class="normal">3896</span>
-<span class="normal">3897</span>
-<span class="normal">3898</span>
-<span class="normal">3899</span>
-<span class="normal">3900</span>
-<span class="normal">3901</span>
-<span class="normal">3902</span>
-<span class="normal">3903</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">3903</span>
 <span class="normal">3904</span>
 <span class="normal">3905</span>
 <span class="normal">3906</span>
@@ -11474,7 +11488,16 @@ where mask &gt; 0 are included in histogram computation</p>
 <span class="normal">3962</span>
 <span class="normal">3963</span>
 <span class="normal">3964</span>
-<span class="normal">3965</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
+<span class="normal">3965</span>
+<span class="normal">3966</span>
+<span class="normal">3967</span>
+<span class="normal">3968</span>
+<span class="normal">3969</span>
+<span class="normal">3970</span>
+<span class="normal">3971</span>
+<span class="normal">3972</span>
+<span class="normal">3973</span>
+<span class="normal">3974</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">plugin</span><span class="p">,</span>
     <span class="n">downsample_factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
