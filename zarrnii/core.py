@@ -1333,9 +1333,11 @@ class ZarrNii:
 
         except Exception:
             # If we can't read orientation metadata, use the provided default
-            orientation = "RAS"
             pass
 
+        # If orientation is still None, use the fallback default
+        if orientation is None:
+            orientation = "RAS"
         # Determine the available pyramid levels and handle lazy downsampling
         max_level = len(multiscales.images) - 1
         actual_level = min(level, max_level)
