@@ -1101,7 +1101,7 @@ class ZarrNii:
         timepoints: Optional[List[int]] = None,
         storage_options: Optional[Dict[str, Any]] = None,
         axes_order: str = "ZYX",
-        orientation: str = "RAS",
+        orientation: Optional[str] = None,
         downsample_near_isotropic: bool = False,
         chunks: tuple[int, Ellipsis] | Literal["auto"] = "auto",
         rechunk: bool = False,
@@ -1132,7 +1132,8 @@ class ZarrNii:
                 Either "ZYX" or "XYZ"
             orientation: Default anatomical orientation if not in metadata.
                 Standard orientations like "RAS", "LPI", etc. This is always
-                interpreted in XYZ axes order for consistency.
+                interpreted in XYZ axes order for consistency. This setting will override
+                any orientation defined in the OME zarr metadata
             downsample_near_isotropic: If True, automatically downsample
                 dimensions with smaller voxel sizes to achieve near-isotropic
                 resolution
@@ -1173,15 +1174,18 @@ class ZarrNii:
 
             This method implements backwards compatibility for orientation metadata:
 
-            1. **Priority Order**: Checks for 'xyz_orientation' first (new format),
+            1. **Override**: Setting the orientation here will override
+               any orientation defined in the OME Zarr metadata.
+
+            2. **Zarr Metadata**: Checks for 'xyz_orientation' first (new format),
                then falls back to 'orientation' (legacy format)
 
-            2. **Legacy Fallback**: When only legacy 'orientation' is found, the
+            3. **Legacy Fallback**: When only legacy 'orientation' is found, the
                orientation string is automatically reversed to convert from ZYX-based
                encoding (legacy) to XYZ-based encoding (current standard)
 
-            3. **Default Fallback**: If no orientation metadata is found, uses the
-               provided 'orientation' parameter as the default
+            4. **Default Fallback**: If no orientation metadata is found, uses RAS
+               orientation as the default.
 
             Examples of the conversion:
             - Legacy 'orientation'='SAR' (ZYX) → 'xyz_orientation'='RAS' (XYZ)
@@ -1291,19 +1295,31 @@ class ZarrNii:
         try:
             import zarr
 
-            if isinstance(store_or_path, str):
-                if store_or_path.endswith(".zip"):
-                    zip_store = zarr.storage.ZipStore(store_or_path, mode="r")
-                    group = zarr.open_group(zip_store, mode="r")
-                    # Check for new xyz_orientation first, then fallback to legacy orientation
-                    if "xyz_orientation" in group.attrs:
-                        orientation = group.attrs["xyz_orientation"]
-                    elif "orientation" in group.attrs:
-                        # Legacy orientation is ZYX-based, reverse it to get XYZ-based orientation
-                        legacy_orientation = group.attrs["orientation"]
-                        orientation = reverse_orientation_string(legacy_orientation)
-                    # If neither found, use the provided default orientation
-                    zip_store.close()
+            if orientation is None:
+
+                if isinstance(store_or_path, str):
+                    if store_or_path.endswith(".zip"):
+                        zip_store = zarr.storage.ZipStore(store_or_path, mode="r")
+                        group = zarr.open_group(zip_store, mode="r")
+                        # Check for new xyz_orientation first, then fallback to legacy orientation
+                        if "xyz_orientation" in group.attrs:
+                            orientation = group.attrs["xyz_orientation"]
+                        elif "orientation" in group.attrs:
+                            # Legacy orientation is ZYX-based, reverse it to get XYZ-based orientation
+                            legacy_orientation = group.attrs["orientation"]
+                            orientation = reverse_orientation_string(legacy_orientation)
+                        # If neither found, use the provided default orientation
+                        zip_store.close()
+                    else:
+                        group = zarr.open_group(store_or_path, mode="r")
+                        # Check for new xyz_orientation first, then fallback to legacy orientation
+                        if "xyz_orientation" in group.attrs:
+                            orientation = group.attrs["xyz_orientation"]
+                        elif "orientation" in group.attrs:
+                            # Legacy orientation is ZYX-based, reverse it to get XYZ-based orientation
+                            legacy_orientation = group.attrs["orientation"]
+                            orientation = reverse_orientation_string(legacy_orientation)
+                        # If neither found, use the provided default orientation
                 else:
                     group = zarr.open_group(store_or_path, mode="r")
                     # Check for new xyz_orientation first, then fallback to legacy orientation
@@ -1314,19 +1330,10 @@ class ZarrNii:
                         legacy_orientation = group.attrs["orientation"]
                         orientation = reverse_orientation_string(legacy_orientation)
                     # If neither found, use the provided default orientation
-            else:
-                group = zarr.open_group(store_or_path, mode="r")
-                # Check for new xyz_orientation first, then fallback to legacy orientation
-                if "xyz_orientation" in group.attrs:
-                    orientation = group.attrs["xyz_orientation"]
-                elif "orientation" in group.attrs:
-                    # Legacy orientation is ZYX-based, reverse it to get XYZ-based orientation
-                    legacy_orientation = group.attrs["orientation"]
-                    orientation = reverse_orientation_string(legacy_orientation)
-                # If neither found, use the provided default orientation
 
         except Exception:
             # If we can't read orientation metadata, use the provided default
+            orientation = "RAS"
             pass
 
         # Determine the available pyramid levels and handle lazy downsampling
