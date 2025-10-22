@@ -2123,8 +2123,10 @@ class ZarrNii:
                 tuple(c * scale for c in chunks_i)
                 for chunks_i, scale in zip(self.data.chunks, scaling)
             )
+            print(f'chunks_out in upsample to shape: {chunks_out}')
         else:
             chunks_out, scaling = self.__get_upsampled_chunks(to_shape)
+            print(f'chunks_out in upsample: {chunks_out}')
 
         # Define block-wise upsampling function
         def zoom_blocks(x, block_info=None):
@@ -2237,6 +2239,12 @@ class ZarrNii:
         new_chunks = []
         scaling = []
 
+        print(f'in get_upsampled_chunks')
+        print(f'self chunks: {self.data.chunks}')
+        print(f'self shape: {self.data.shape}')
+        print(f'self target_shape: {target_shape}')
+
+
         for dim, (orig_shape, orig_chunks, new_shape) in enumerate(
             zip(self.data.shape, self.data.chunks, target_shape)
         ):
@@ -2258,6 +2266,7 @@ class ZarrNii:
             new_chunks.append(tuple(scaled_chunks))
             scaling.append(scaling_factor)
 
+        print(f'new_chunks: {new_chunks}')
         if return_scaling:
             return tuple(new_chunks), scaling
         else:
@@ -3940,6 +3949,7 @@ class ZarrNii:
         # Step 1: Downsample the data for low-resolution processing
         lowres_znimg = self.downsample(level=int(np.log2(downsample_factor)))
 
+        print(lowres_znimg)
         # Convert to numpy array for lowres processing
         lowres_array = lowres_znimg.data.compute()
 
@@ -3950,26 +3960,44 @@ class ZarrNii:
             plugin.lowres_func(lowres_array), chunks=lowres_chunks
         )
 
+        print('after setting chunking in downsampled')
+        print(lowres_znimg)
         # Use temporary OME-Zarr to break up dask graph for performance
         import tempfile
 
-        if upsampled_ome_zarr_path is None:
-            upsampled_ome_zarr_path = tempfile.mkdtemp(suffix="_SPIM.ome.zarr")
+        upsampled_zarr_path = tempfile.mkdtemp(suffix="_upsampled_SPIM.zarr")
+        corrected_zarr_path = tempfile.mkdtemp(suffix="_corrected_SPIM.zarr")
+
+        print('verify chunking in lazy upsampled')
+    
+        lazy_upsampled = lowres_znimg.upsample(to_shape=self.shape)
+        print(self.shape)
+        print(lazy_upsampled)
+        print(lazy_upsampled.data)
+        print(lazy_upsampled)
+
 
         # Step 3: Upsample using dask-based upsampling, save to ome zarr
-        lowres_znimg.upsample(to_shape=self.shape).to_ome_zarr(
-            upsampled_ome_zarr_path, max_layer=0
+        upsampled = lowres_znimg.upsample(to_shape=self.shape)
+
+        upsampled.data.to_zarr(
+            upsampled_zarr_path
         )
 
-        upsampled_znimg = ZarrNii.from_ome_zarr(upsampled_ome_zarr_path)
+        # rechunk original data to use same chunksize as upsampled_data, before multiplying
+        rechunked = self.data.rechunk(upsampled.data.chunks)
+
+        rechunked_zarr_path = tempfile.mkdtemp(suffix="_rechunked_SPIM.zarr")
+        rechunked.to_zarr(rechunked_zarr_path)
 
         corrected_znimg = self.copy()
 
         # Step 4: Apply high-resolution function
-        # rechunk original data to use same chunksize as upsampled_data, before multiplying
-        corrected_znimg.data = plugin.highres_func(
-            self.data.rechunk(upsampled_znimg.data.chunks), upsampled_znimg.data
-        )
+        plugin.highres_func(
+            da.from_zarr(rechunked_zarr_path), da.from_zarr(upsampled_zarr_path)
+        ).to_zarr(corrected_zarr_path)
+        corrected_znimg.data = da.from_zarr(corrected_zarr_path)
+
 
         return corrected_znimg
 
@@ -3977,9 +4005,10 @@ class ZarrNii:
         """String representation."""
         return (
             f"ZarrNii(name='{self.name}', "
-            f"shape={self.shape}, "
-            f"dims={self.dims}, "
-            f"scale={self.scale})"
+            f"scale={self.scale},"
+            f"axes_order={self.axes_order},"
+            f"xyz_orientation={self.xyz_orientation},"
+            f"ngff_image={self.ngff_image},"
         )
 
 
