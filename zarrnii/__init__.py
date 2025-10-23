@@ -1,5 +1,5 @@
 from .atlas import ZarrNiiAtlas
-from .core import ZarrNii
+from .core import MetadataInvalidError, ZarrNii
 from .transform import AffineTransform, DisplacementTransform
 
 __all__ = [
@@ -7,4 +7,5 @@ __all__ = [
     "ZarrNiiAtlas",
     "AffineTransform",
     "DisplacementTransform",
+    "MetadataInvalidError",
 ]

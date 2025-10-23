@@ -21,6 +21,7 @@ Key Functions:
 
 from __future__ import annotations
 
+import copy
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dask.array as da
@@ -32,6 +33,13 @@ from attrs import define
 from scipy.ndimage import zoom
 
 from .transform import AffineTransform, Transform
+
+
+class MetadataInvalidError(Exception):
+    """Raised when an operation would invalidate ZarrNii metadata."""
+
+    pass
+
 
 # NgffImage-based function library
 # These functions operate directly on ngff_zarr.NgffImage objects
@@ -3981,6 +3989,224 @@ class ZarrNii:
             f"dims={self.dims}, "
             f"scale={self.scale})"
         )
+
+    def _is_metadata_valid(self, result: Any) -> bool:
+        """Check if resulting array preserves metadata integrity.
+
+        Args:
+            result: The result from a Dask operation
+
+        Returns:
+            True if metadata remains valid, False otherwise
+        """
+        # If it's not a dask array, we can't wrap it
+        if not isinstance(result, da.Array):
+            return False
+
+        # Simplest heuristic: same shape and dtype = safe
+        if (
+            result.shape == self.ngff_image.data.shape
+            and result.dtype == self.ngff_image.data.dtype
+        ):
+            return True
+
+        return False
+
+    def _wrap_result(self, result: Any, op_name: str) -> "ZarrNii":
+        """Wrap Dask array result as a new ZarrNii, enforcing metadata validity.
+
+        Args:
+            result: The result from a Dask operation
+            op_name: Name of the operation for error messages
+
+        Returns:
+            New ZarrNii instance with updated data
+
+        Raises:
+            MetadataInvalidError: If operation changes shape or dtype
+        """
+        # If result is not a dask array, return it as-is
+        if not isinstance(result, da.Array):
+            return result
+
+        # Check if metadata is still valid
+        if not self._is_metadata_valid(result):
+            raise MetadataInvalidError(
+                f"Operation '{op_name}' changes shape or dtype — metadata invalid. "
+                "Use explicit spatial operations (e.g., resample, reorder_axes)."
+            )
+
+        # Create a shallow copy of self and update the data
+        newobj = copy.copy(self)
+        # Also copy the ngff_image to avoid mutating the original
+        newobj.ngff_image = copy.copy(self.ngff_image)
+        newobj.ngff_image.data = result
+
+        return newobj
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate attribute/method access to underlying Dask array.
+
+        This enables ZarrNii objects to support Dask array operations
+        directly while preserving metadata.
+
+        Args:
+            name: Attribute or method name
+
+        Returns:
+            The attribute value or a wrapped method that returns ZarrNii
+        """
+        # Get the attribute from ngff_image.data
+        try:
+            attr = getattr(self.ngff_image.data, name)
+        except AttributeError:
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute '{name}'"
+            )
+
+        # If it's callable, wrap it to return ZarrNii
+        if callable(attr):
+
+            def method(*args, **kwargs):
+                result = attr(*args, **kwargs)
+                return self._wrap_result(result, name)
+
+            return method
+
+        # Return the attribute as-is
+        return attr
+
+    # Arithmetic operator overloading
+    def __add__(self, other):
+        """Add operation."""
+        return self._wrap_result(self.ngff_image.data.__add__(other), "add")
+
+    def __radd__(self, other):
+        """Reverse add operation."""
+        return self._wrap_result(self.ngff_image.data.__radd__(other), "add")
+
+    def __sub__(self, other):
+        """Subtract operation."""
+        return self._wrap_result(self.ngff_image.data.__sub__(other), "subtract")
+
+    def __rsub__(self, other):
+        """Reverse subtract operation."""
+        return self._wrap_result(self.ngff_image.data.__rsub__(other), "subtract")
+
+    def __mul__(self, other):
+        """Multiply operation."""
+        return self._wrap_result(self.ngff_image.data.__mul__(other), "multiply")
+
+    def __rmul__(self, other):
+        """Reverse multiply operation."""
+        return self._wrap_result(self.ngff_image.data.__rmul__(other), "multiply")
+
+    def __truediv__(self, other):
+        """True division operation."""
+        return self._wrap_result(self.ngff_image.data.__truediv__(other), "true_divide")
+
+    def __rtruediv__(self, other):
+        """Reverse true division operation."""
+        return self._wrap_result(
+            self.ngff_image.data.__rtruediv__(other), "true_divide"
+        )
+
+    def __floordiv__(self, other):
+        """Floor division operation."""
+        return self._wrap_result(
+            self.ngff_image.data.__floordiv__(other), "floor_divide"
+        )
+
+    def __rfloordiv__(self, other):
+        """Reverse floor division operation."""
+        return self._wrap_result(
+            self.ngff_image.data.__rfloordiv__(other), "floor_divide"
+        )
+
+    def __mod__(self, other):
+        """Modulo operation."""
+        return self._wrap_result(self.ngff_image.data.__mod__(other), "mod")
+
+    def __rmod__(self, other):
+        """Reverse modulo operation."""
+        return self._wrap_result(self.ngff_image.data.__rmod__(other), "mod")
+
+    def __pow__(self, other):
+        """Power operation."""
+        return self._wrap_result(self.ngff_image.data.__pow__(other), "power")
+
+    def __rpow__(self, other):
+        """Reverse power operation."""
+        return self._wrap_result(self.ngff_image.data.__rpow__(other), "power")
+
+    def __neg__(self):
+        """Negation operation."""
+        return self._wrap_result(self.ngff_image.data.__neg__(), "negative")
+
+    def __pos__(self):
+        """Positive operation."""
+        return self._wrap_result(self.ngff_image.data.__pos__(), "positive")
+
+    def __abs__(self):
+        """Absolute value operation."""
+        return self._wrap_result(self.ngff_image.data.__abs__(), "absolute")
+
+    def __array_ufunc__(self, ufunc, method: str, *inputs, out=None, **kwargs):
+        """Enable NumPy universal function support.
+
+        This allows using NumPy ufuncs (e.g., np.sqrt, np.add) on ZarrNii objects
+        while preserving metadata.
+
+        Args:
+            ufunc: The ufunc object
+            method: String indicating how the ufunc was called
+            inputs: Input arrays
+            out: Optional output array
+            **kwargs: Additional keyword arguments
+
+        Returns:
+            ZarrNii with the result of the ufunc operation
+        """
+        # Handle out parameter
+        if out is not None:
+            return NotImplemented
+
+        # Extract dask arrays from ZarrNii objects
+        inputs = [i.ngff_image.data if isinstance(i, ZarrNii) else i for i in inputs]
+
+        # Apply the ufunc
+        result = getattr(ufunc, method)(*inputs, **kwargs)
+
+        # Wrap and return
+        return self._wrap_result(result, ufunc.__name__)
+
+    def __array_function__(self, func, types, args, kwargs):
+        """Enable NumPy function protocol.
+
+        This allows using NumPy functions (e.g., np.mean, np.concatenate) on
+        ZarrNii objects while preserving metadata when safe.
+
+        Args:
+            func: The NumPy function
+            types: Types involved in the operation
+            args: Positional arguments
+            kwargs: Keyword arguments
+
+        Returns:
+            ZarrNii with the result of the function, or NotImplemented
+        """
+        # Only handle if at least one argument is ZarrNii
+        if not any(issubclass(t, ZarrNii) for t in types):
+            return NotImplemented
+
+        # Extract dask arrays from ZarrNii objects
+        args = [a.ngff_image.data if isinstance(a, ZarrNii) else a for a in args]
+
+        # Apply the function
+        result = func(*args, **kwargs)
+
+        # Wrap and return
+        return self._wrap_result(result, func.__name__)
 
 
 # Helper functions for backward compatibility
