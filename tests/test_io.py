@@ -731,3 +731,63 @@ def test_orientation_round_trip_with_new_format(tmp_path):
         assert loaded_znimg.xyz_orientation == orient
         assert transformed.xyz_orientation == orient
         assert cropped.xyz_orientation == orient
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_chunk_preservation_to_ome_zarr():
+    """Test that chunk sizes are preserved when saving to OME-Zarr.
+
+    This test addresses the bug where chunking always reverted to 128x128x128
+    when performing to_ome_zarr(), regardless of the input chunk size.
+    """
+    import zarr
+
+    # Test case 1: Custom chunk size (64, 64, 64)
+    darr1 = da.ones((1, 200, 190, 180), chunks=(1, 64, 64, 64))
+    assert darr1.chunksize == (1, 64, 64, 64), "Input chunks should be (1, 64, 64, 64)"
+
+    zn1 = ZarrNii.from_darr(darr1)
+    zn1.to_ome_zarr("test_chunks_64.ome.zarr")
+
+    # Verify the saved chunks match the input
+    z1 = zarr.open("test_chunks_64.ome.zarr/scale0/image", mode="r")
+    assert z1.chunks == (
+        1,
+        64,
+        64,
+        64,
+    ), f"Expected chunks (1, 64, 64, 64), got {z1.chunks}"
+
+    # Test case 2: Different custom chunk size (32, 32, 32)
+    darr2 = da.ones((1, 200, 190, 180), chunks=(1, 32, 32, 32))
+    assert darr2.chunksize == (1, 32, 32, 32), "Input chunks should be (1, 32, 32, 32)"
+
+    zn2 = ZarrNii.from_darr(darr2)
+    zn2.to_ome_zarr("test_chunks_32.ome.zarr")
+
+    # Verify the saved chunks match the input
+    z2 = zarr.open("test_chunks_32.ome.zarr/scale0/image", mode="r")
+    assert z2.chunks == (
+        1,
+        32,
+        32,
+        32,
+    ), f"Expected chunks (1, 32, 32, 32), got {z2.chunks}"
+
+    # Test case 3: Verify that default (128) is no longer used when input has different chunks
+    # Before the fix, this would have reverted to (1, 128, 128, 128)
+    darr3 = da.ones((1, 200, 190, 180), chunks=(1, 96, 96, 96))
+    assert darr3.chunksize == (1, 96, 96, 96), "Input chunks should be (1, 96, 96, 96)"
+
+    zn3 = ZarrNii.from_darr(darr3)
+    zn3.to_ome_zarr("test_chunks_96.ome.zarr")
+
+    # Verify the saved chunks match the input (not the old default of 128)
+    z3 = zarr.open("test_chunks_96.ome.zarr/scale0/image", mode="r")
+    assert z3.chunks == (
+        1,
+        96,
+        96,
+        96,
+    ), f"Expected chunks (1, 96, 96, 96), got {z3.chunks}"
+    assert z3.chunks != (1, 128, 128, 128), "Chunks should not revert to default 128"

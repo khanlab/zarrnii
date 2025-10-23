@@ -144,8 +144,22 @@ def save_ngff_image(
     if scale_factors is None:
         scale_factors = [2**i for i in range(1, max_layer)]
 
-    # Create multiscales from the image
-    multiscales = nz.to_multiscales(ngff_image, scale_factors=scale_factors)
+    # Extract chunks from the input data if available
+    # This preserves the original chunk size from dask arrays
+    # ngff_zarr.to_multiscales expects an integer chunk size for spatial dimensions
+    chunks = None
+    if hasattr(ngff_image, "data") and hasattr(ngff_image.data, "chunksize"):
+        chunksize = ngff_image.data.chunksize
+        # Extract spatial chunk sizes (skip the first dimension which is typically channel/time)
+        # and use the first spatial dimension's chunk size as representative
+        if len(chunksize) > 1:
+            # Take the chunk size from the first spatial dimension (index 1)
+            chunks = chunksize[1]
+
+    # Create multiscales from the image, passing chunks to preserve original chunking
+    multiscales = nz.to_multiscales(
+        ngff_image, scale_factors=scale_factors, chunks=chunks
+    )
 
     # Check if the target is a ZIP file (based on extension)
     if isinstance(store_or_path, str) and store_or_path.endswith(".zip"):
