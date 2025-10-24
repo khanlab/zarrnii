@@ -4227,7 +4227,7 @@ class ZarrNii:
 
         # Step 3: Upsample using dask-based upsampling, save to ome zarr
         lowres_znimg.upsample(to_shape=self.shape).to_ome_zarr(
-            upsampled_ome_zarr_path, max_layer=0
+            upsampled_ome_zarr_path, max_layer=1
         )
 
         upsampled_znimg = ZarrNii.from_ome_zarr(upsampled_ome_zarr_path)
