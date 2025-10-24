@@ -290,6 +290,47 @@ def test_write_ome_zarr(znimg_from_multiscales):
     assert reloaded.darr.shape == znimg_from_multiscales.darr.shape
 
 
+def test_to_ome_zarr_backend_parameter(znimg_from_multiscales):
+    """Test that to_ome_zarr works with different backend parameters."""
+    import os
+    import tempfile
+
+    # Test with default backend (ngff-zarr)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = os.path.join(tmpdir, "test_default.ome.zarr")
+        znimg_from_multiscales.to_ome_zarr(output_path)
+        assert os.path.exists(output_path)
+        reloaded = ZarrNii.from_ome_zarr(output_path)
+        assert reloaded.darr.shape == znimg_from_multiscales.darr.shape
+
+    # Test with explicit ngff-zarr backend
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = os.path.join(tmpdir, "test_ngff_zarr.ome.zarr")
+        znimg_from_multiscales.to_ome_zarr(output_path, backend="ngff-zarr")
+        assert os.path.exists(output_path)
+        reloaded = ZarrNii.from_ome_zarr(output_path)
+        assert reloaded.darr.shape == znimg_from_multiscales.darr.shape
+
+    # Test with ome-zarr-py backend
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = os.path.join(tmpdir, "test_ome_zarr_py.ome.zarr")
+        znimg_from_multiscales.to_ome_zarr(output_path, backend="ome-zarr-py")
+        assert os.path.exists(output_path)
+        reloaded = ZarrNii.from_ome_zarr(output_path)
+        assert reloaded.darr.shape == znimg_from_multiscales.darr.shape
+
+    # Test with invalid backend (should raise ValueError)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = os.path.join(tmpdir, "test_invalid.ome.zarr")
+        try:
+            znimg_from_multiscales.to_ome_zarr(output_path, backend="invalid")
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "Invalid backend" in str(e)
+            assert "ngff-zarr" in str(e)
+            assert "ome-zarr-py" in str(e)
+
+
 class TestOMEZarr:
     @pytest.mark.usefixtures("cleandir")
     @pytest.mark.xfail(reason="Known issue with synthetic data generation")

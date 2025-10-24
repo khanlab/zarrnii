@@ -240,7 +240,6 @@ def save_ngff_image_with_ome_zarr(
     from ome_zarr.scale import Scaler
     from ome_zarr.writer import write_image
 
-
     # Note: ome-zarr's Scaler interprets max_layer as the highest pyramid level index
     # (not count), so max_layer=N creates N+1 levels: 0, 1, ..., N
     # To match save_ngff_image behavior where max_layer=N creates N total levels,
@@ -2571,6 +2570,7 @@ class ZarrNii:
         store_or_path: Union[str, Any],
         max_layer: int = 4,
         scale_factors: Optional[List[int]] = None,
+        backend: str = "ngff-zarr",
         **kwargs: Any,
     ) -> "ZarrNii":
         """Save to OME-Zarr store with multiscale pyramid.
@@ -2589,15 +2589,19 @@ class ZarrNii:
                 Higher values create more downsampled levels
             scale_factors: Custom downsampling factors for each pyramid level.
                 If None, uses powers of 2: [2, 4, 8, 16, ...]
-            **kwargs: Additional arguments passed to underlying to_ngff_zarr function.
-                May include compression options, chunk sizes, etc.
+            backend: Backend library to use for writing. Options:
+                - 'ngff-zarr': Use ngff-zarr library (default)
+                - 'ome-zarr-py': Use ome-zarr-py library for better dask integration
+            **kwargs: Additional arguments passed to the save function.
+                For 'ngff-zarr': passed to to_ngff_zarr function
+                For 'ome-zarr-py': passed to write_image (e.g., scaling_method, compute)
 
         Returns:
             Self for method chaining
 
         Raises:
             OSError: If unable to write to target location
-            ValueError: If invalid scale_factors provided
+            ValueError: If invalid scale_factors or backend provided
 
         Examples:
             >>> # Save with default pyramid levels
@@ -2608,6 +2612,13 @@ class ZarrNii:
             ...     "/path/to/output.zarr.zip",
             ...     max_layer=3,
             ...     scale_factors=[2, 4]
+            ... )
+
+            >>> # Use ome-zarr-py backend for better dask performance
+            >>> znii.to_ome_zarr(
+            ...     "/path/to/output.zarr",
+            ...     backend="ome-zarr-py",
+            ...     scaling_method="gaussian"
             ... )
 
             >>> # Chain with other operations
@@ -2621,7 +2632,15 @@ class ZarrNii:
             - Spatial transformations and metadata are preserved
             - Orientation information is stored using the new 'xyz_orientation'
               metadata key for consistency and future compatibility
+            - The 'ome-zarr-py' backend provides better performance with dask
+              and dask distributed workflows
         """
+        # Validate backend parameter
+        if backend not in ["ngff-zarr", "ome-zarr-py"]:
+            raise ValueError(
+                f"Invalid backend '{backend}'. Must be 'ngff-zarr' or 'ome-zarr-py'"
+            )
+
         # Determine the image to save
         if self.axes_order == "XYZ":
             # Need to reorder data from XYZ to ZYX for OME-Zarr
@@ -2630,16 +2649,29 @@ class ZarrNii:
             # Already in ZYX order
             ngff_image_to_save = self.ngff_image
 
-        save_ngff_image(
-            ngff_image_to_save,
-            store_or_path,
-            max_layer,
-            scale_factors,
-            xyz_orientation=(
-                self.xyz_orientation if hasattr(self, "xyz_orientation") else None
-            ),
-            **kwargs,
-        )
+        # Use the appropriate save function based on backend
+        if backend == "ngff-zarr":
+            save_ngff_image(
+                ngff_image_to_save,
+                store_or_path,
+                max_layer,
+                scale_factors,
+                xyz_orientation=(
+                    self.xyz_orientation if hasattr(self, "xyz_orientation") else None
+                ),
+                **kwargs,
+            )
+        elif backend == "ome-zarr-py":
+            save_ngff_image_with_ome_zarr(
+                ngff_image_to_save,
+                store_or_path,
+                max_layer,
+                scale_factors,
+                xyz_orientation=(
+                    self.xyz_orientation if hasattr(self, "xyz_orientation") else None
+                ),
+                **kwargs,
+            )
 
         # Add orientation metadata to the zarr store (only for non-ZIP files)
         # For ZIP files, orientation is handled inside save_ngff_image
