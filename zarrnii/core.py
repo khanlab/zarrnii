@@ -405,11 +405,13 @@ def _ngff_image_to_ome_zarr_transforms(
     )
 
     # Additional levels with downsampling
+    # Note: ome-zarr-py only downsamples in xy plane, not in z
     for factor in scale_factors:
         level_scale = []
         for i, dim in enumerate(ngff_image.dims):
-            # Only apply scaling to spatial dimensions
-            if dim in ["x", "y", "z"]:
+            # Only apply scaling to x and y dimensions (not z)
+            # ome-zarr-py Scaler only downsamples in the xy plane
+            if dim in ["x", "y"]:
                 level_scale.append(base_scale[i] * factor)
             else:
                 level_scale.append(base_scale[i])

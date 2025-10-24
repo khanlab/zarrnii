@@ -351,3 +351,44 @@ class TestOmeZarrWriter:
             # Load back and verify - should only have 1 level
             multiscales = get_multiscales(output_path)
             assert len(multiscales.images) == 1  # Only original level
+
+    def test_save_ngff_image_with_ome_zarr_z_axis_no_downsampling(
+        self, simple_ngff_image
+    ):
+        """Test that ome-zarr-py backend only downsamples in xy, not z."""
+        from zarrnii.core import save_ngff_image_with_ome_zarr
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "output.zarr")
+            save_ngff_image_with_ome_zarr(simple_ngff_image, output_path, max_layer=3)
+
+            # Verify the output exists
+            assert os.path.exists(output_path)
+
+            # Load back and check that z scale doesn't change across levels
+            multiscales = get_multiscales(output_path)
+            assert len(multiscales.images) == 3  # 3 pyramid levels
+
+            # Get z scale for each level
+            z_scales = []
+            for img in multiscales.images:
+                # Z dimension is at index 1 (dims are ['c', 'z', 'y', 'x'])
+                z_scale = img.scale.get("z", 1.0)
+                z_scales.append(z_scale)
+
+            # All z scales should be the same (z axis not downsampled)
+            assert all(
+                z_scale == z_scales[0] for z_scale in z_scales
+            ), f"Z scales should be constant across pyramid levels, but got: {z_scales}"
+
+            # Check that x and y scales do change (they are downsampled)
+            x_scales = [img.scale.get("x", 1.0) for img in multiscales.images]
+            y_scales = [img.scale.get("y", 1.0) for img in multiscales.images]
+
+            # X and Y scales should increase with pyramid level
+            assert (
+                x_scales[0] < x_scales[1] < x_scales[2]
+            ), f"X scales should increase: {x_scales}"
+            assert (
+                y_scales[0] < y_scales[1] < y_scales[2]
+            ), f"Y scales should increase: {y_scales}"
