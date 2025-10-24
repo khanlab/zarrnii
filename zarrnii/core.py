@@ -188,6 +188,243 @@ def save_ngff_image(
                 pass
 
 
+def save_ngff_image_with_ome_zarr(
+    ngff_image: nz.NgffImage,
+    store_or_path: Union[str, Any],
+    max_layer: int = 4,
+    scale_factors: Optional[List[int]] = None,
+    scaling_method: str = "nearest",
+    xyz_orientation: Optional[str] = None,
+    compute: bool = True,
+    **kwargs: Any,
+) -> None:
+    """Save an NgffImage to an OME-Zarr store using ome-zarr-py library.
+
+    This function uses the ome-zarr-py library for writing, which can provide
+    performance enhancements when using dask and dask distributed. It was the
+    default writer before v2.0 and is now offered as an alternative.
+
+    Args:
+        ngff_image: NgffImage object to save containing data and metadata
+        store_or_path: Target store or path. Supports local paths, remote URLs,
+            and .zip extensions for ZipStore creation
+        max_layer: Maximum number of pyramid levels to create (including level 0)
+        scale_factors: Custom scale factors for each pyramid level. If None,
+            uses powers of 2: [2, 4, 8, ...]
+        scaling_method: Method for downsampling ('nearest', 'gaussian', etc.)
+        xyz_orientation: Anatomical orientation string (e.g., 'RAS', 'LPI') to store
+            as metadata
+        compute: Whether to compute the write operations immediately (True) or
+            return delayed operations (False)
+        **kwargs: Additional arguments passed to ome_zarr.writer.write_image
+
+    Raises:
+        ValueError: If scale_factors length doesn't match max_layer-1
+        OSError: If unable to write to the specified location
+        TypeError: If ngff_image is not a valid NgffImage object
+
+    Examples:
+        >>> # Save with default pyramid levels
+        >>> save_ngff_image_with_ome_zarr(img, "/path/to/output.zarr")
+
+        >>> # Save to ZIP with custom pyramid
+        >>> save_ngff_image_with_ome_zarr(img, "/path/to/output.zarr.zip",
+        ...                                scale_factors=[2, 4], xyz_orientation="RAS")
+
+        >>> # Use with dask distributed for better performance
+        >>> from dask.distributed import Client
+        >>> client = Client()
+        >>> save_ngff_image_with_ome_zarr(img, "/path/to/output.zarr", compute=True)
+    """
+    import zarr
+    from ome_zarr.scale import Scaler
+    from ome_zarr.writer import write_image
+
+
+    # Note: ome-zarr's Scaler interprets max_layer as the highest pyramid level index
+    # (not count), so max_layer=N creates N+1 levels: 0, 1, ..., N
+    # To match save_ngff_image behavior where max_layer=N creates N total levels,
+    # we need to adjust: ome_zarr_max_layer = max_layer - 1
+    if scale_factors is None:
+        # Generate scale factors for each additional level beyond level 0
+        # For max_layer total levels, we need max_layer-1 scale factors
+        scale_factors = [2**i for i in range(1, max_layer)]
+
+    # Convert NgffImage metadata to ome-zarr format
+    axes = _ngff_image_to_ome_zarr_axes(ngff_image)
+    coordinate_transformations = _ngff_image_to_ome_zarr_transforms(
+        ngff_image, scale_factors
+    )
+
+    # Set up scaler for multi-resolution pyramid
+    # Adjust max_layer to match ome-zarr's interpretation (highest index, not count)
+    if max_layer <= 1:
+        # No pyramid, just one level
+        scaler = None
+    else:
+        # ome-zarr max_layer is the highest index, so max_layer-1 for N total levels
+        scaler = Scaler(max_layer=max_layer - 1, method=scaling_method)
+
+    # Check if the target is a ZIP file (based on extension)
+    if isinstance(store_or_path, str) and store_or_path.endswith(".zip"):
+        # For ZIP files, use temp directory approach
+        import os
+        import shutil
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Save to temporary directory first
+            temp_zarr_path = os.path.join(tmpdir, "temp.zarr")
+            store = zarr.open_group(temp_zarr_path, mode="w")
+
+            # Write the data to OME-Zarr
+            write_image(
+                image=ngff_image.data,
+                group=store,
+                scaler=scaler,
+                coordinate_transformations=coordinate_transformations,
+                axes=axes,
+                compute=compute,
+                **kwargs,
+            )
+
+            # Add xyz_orientation metadata if provided
+            if xyz_orientation:
+                try:
+                    store.attrs["xyz_orientation"] = xyz_orientation
+                except Exception:
+                    # If we can't write orientation metadata, that's not critical
+                    pass
+
+            # Create ZIP file from the directory
+            zip_base_path = store_or_path.replace(".zip", "")
+            shutil.make_archive(zip_base_path, "zip", temp_zarr_path)
+    else:
+        # Write to zarr store directly
+        if isinstance(store_or_path, str):
+            store = zarr.open_group(store_or_path, mode="w")
+        else:
+            store = store_or_path
+
+        # Write the data to OME-Zarr
+        write_image(
+            image=ngff_image.data,
+            group=store,
+            scaler=scaler,
+            coordinate_transformations=coordinate_transformations,
+            axes=axes,
+            compute=compute,
+            **kwargs,
+        )
+
+        # Add xyz_orientation metadata if provided
+        if xyz_orientation:
+            try:
+                if isinstance(store_or_path, str):
+                    group = zarr.open_group(store_or_path, mode="r+")
+                else:
+                    group = store_or_path
+                group.attrs["xyz_orientation"] = xyz_orientation
+            except Exception:
+                # If we can't write orientation metadata, that's not critical
+                pass
+
+
+def _ngff_image_to_ome_zarr_axes(ngff_image: nz.NgffImage) -> list:
+    """Convert NgffImage dims to ome-zarr axes format.
+
+    Args:
+        ngff_image: NgffImage object
+
+    Returns:
+        List of axis dictionaries for ome-zarr
+    """
+    axes = []
+    for dim in ngff_image.dims:
+        axis = {"name": dim}
+
+        # Determine axis type
+        if dim == "t":
+            axis["type"] = "time"
+            # Add unit if available
+            if ngff_image.axes_units and dim in ngff_image.axes_units:
+                axis["unit"] = ngff_image.axes_units[dim]
+        elif dim == "c":
+            axis["type"] = "channel"
+        elif dim in ["x", "y", "z"]:
+            axis["type"] = "space"
+            # Add unit if available
+            if ngff_image.axes_units and dim in ngff_image.axes_units:
+                axis["unit"] = ngff_image.axes_units[dim]
+            else:
+                # Default to micrometer for space axes if not specified
+                axis["unit"] = "micrometer"
+
+        axes.append(axis)
+
+    return axes
+
+
+def _ngff_image_to_ome_zarr_transforms(
+    ngff_image: nz.NgffImage, scale_factors: List[int]
+) -> list:
+    """Convert NgffImage scale/translation to ome-zarr coordinate_transformations.
+
+    Args:
+        ngff_image: NgffImage object
+        scale_factors: List of scale factors for each pyramid level
+
+    Returns:
+        List of coordinate transformations for each pyramid level
+    """
+    # Build base scale and translation arrays in the order of dims
+    base_scale = []
+    base_translation = []
+
+    for dim in ngff_image.dims:
+        # Get scale for this dimension (default to 1.0)
+        if ngff_image.scale and dim in ngff_image.scale:
+            base_scale.append(ngff_image.scale[dim])
+        else:
+            base_scale.append(1.0)
+
+        # Get translation for this dimension (default to 0.0)
+        if ngff_image.translation and dim in ngff_image.translation:
+            base_translation.append(ngff_image.translation[dim])
+        else:
+            base_translation.append(0.0)
+
+    # Create coordinate transformations for each pyramid level
+    coordinate_transformations = []
+
+    # Level 0 (original resolution)
+    coordinate_transformations.append(
+        [
+            {"type": "scale", "scale": base_scale.copy()},
+            {"type": "translation", "translation": base_translation.copy()},
+        ]
+    )
+
+    # Additional levels with downsampling
+    for factor in scale_factors:
+        level_scale = []
+        for i, dim in enumerate(ngff_image.dims):
+            # Only apply scaling to spatial dimensions
+            if dim in ["x", "y", "z"]:
+                level_scale.append(base_scale[i] * factor)
+            else:
+                level_scale.append(base_scale[i])
+
+        coordinate_transformations.append(
+            [
+                {"type": "scale", "scale": level_scale},
+                {"type": "translation", "translation": base_translation.copy()},
+            ]
+        )
+
+    return coordinate_transformations
+
+
 def get_multiscales(
     store_or_path,
     storage_options: Optional[Dict] = None,

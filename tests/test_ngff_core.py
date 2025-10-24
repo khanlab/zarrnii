@@ -241,3 +241,113 @@ class TestNgffImageFunctions:
         assert transformed.data.shape == reference.data.shape
         assert transformed.dims == reference.dims
         assert transformed.scale == reference.scale
+
+
+class TestOmeZarrWriter:
+    """Test the ome-zarr-py based writer."""
+
+    @pytest.fixture
+    def simple_ngff_image(self):
+        """Create a simple NgffImage for testing."""
+        # Create test data
+        data = da.random.random((1, 32, 64, 64), chunks=(1, 16, 32, 32))
+
+        # Create NgffImage
+        ngff_image = nz.NgffImage(
+            data=data,
+            dims=["c", "z", "y", "x"],
+            scale={"z": 2.0, "y": 1.0, "x": 1.0},
+            translation={"z": 0.0, "y": 0.0, "x": 0.0},
+            name="test_image",
+        )
+
+        return ngff_image
+
+    def test_save_ngff_image_with_ome_zarr(self, simple_ngff_image):
+        """Test saving NgffImage using ome-zarr-py library."""
+        from zarrnii.core import save_ngff_image_with_ome_zarr
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "output.zarr")
+            save_ngff_image_with_ome_zarr(simple_ngff_image, output_path, max_layer=3)
+
+            # Verify the output exists and can be loaded
+            assert os.path.exists(output_path)
+
+            # Load back and verify with load_ngff_image
+            reloaded = load_ngff_image(output_path, level=0)
+            assert reloaded.data.shape == simple_ngff_image.data.shape
+            assert reloaded.dims == simple_ngff_image.dims
+
+    def test_save_ngff_image_with_ome_zarr_custom_scale_factors(
+        self, simple_ngff_image
+    ):
+        """Test saving with custom scale factors."""
+        from zarrnii.core import save_ngff_image_with_ome_zarr
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "output.zarr")
+            save_ngff_image_with_ome_zarr(
+                simple_ngff_image, output_path, scale_factors=[2, 4], max_layer=3
+            )
+
+            # Verify the output exists
+            assert os.path.exists(output_path)
+
+            # Load back and verify pyramid levels
+            multiscales = get_multiscales(output_path)
+            assert len(multiscales.images) == 3  # Original + 2 downsampled levels
+
+    def test_save_ngff_image_with_ome_zarr_orientation(self, simple_ngff_image):
+        """Test saving with xyz_orientation metadata."""
+        import zarr
+
+        from zarrnii.core import save_ngff_image_with_ome_zarr
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "output.zarr")
+            save_ngff_image_with_ome_zarr(
+                simple_ngff_image,
+                output_path,
+                max_layer=2,
+                xyz_orientation="RAS",
+            )
+
+            # Verify the output exists
+            assert os.path.exists(output_path)
+
+            # Check that orientation metadata was saved
+            group = zarr.open_group(output_path, mode="r")
+            assert "xyz_orientation" in group.attrs
+            assert group.attrs["xyz_orientation"] == "RAS"
+
+    def test_save_ngff_image_with_ome_zarr_zip(self, simple_ngff_image):
+        """Test saving to ZIP file."""
+        from zarrnii.core import save_ngff_image_with_ome_zarr
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "output.zarr.zip")
+            save_ngff_image_with_ome_zarr(simple_ngff_image, output_path, max_layer=2)
+
+            # Verify the ZIP file was created
+            assert os.path.exists(output_path)
+
+            # Load back from ZIP and verify
+            reloaded = load_ngff_image(output_path, level=0)
+            assert reloaded.data.shape == simple_ngff_image.data.shape
+            assert reloaded.dims == simple_ngff_image.dims
+
+    def test_save_ngff_image_with_ome_zarr_no_pyramid(self, simple_ngff_image):
+        """Test saving without pyramid levels (max_layer=0)."""
+        from zarrnii.core import save_ngff_image_with_ome_zarr
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "output.zarr")
+            save_ngff_image_with_ome_zarr(simple_ngff_image, output_path, max_layer=0)
+
+            # Verify the output exists
+            assert os.path.exists(output_path)
+
+            # Load back and verify - should only have 1 level
+            multiscales = get_multiscales(output_path)
+            assert len(multiscales.images) == 1  # Only original level
