@@ -2570,7 +2570,7 @@ class ZarrNii:
         store_or_path: Union[str, Any],
         max_layer: int = 4,
         scale_factors: Optional[List[int]] = None,
-        backend: str = "ngff-zarr",
+        backend: str = "ome-zarr-py",
         **kwargs: Any,
     ) -> "ZarrNii":
         """Save to OME-Zarr store with multiscale pyramid.
