@@ -143,10 +143,11 @@ def test_read_from_downsampled_level(nifti_nib):
     xyz_orig = znimg.darr.shape[1:]
     xyz_ds = znimg2.darr.shape[:0:-1]
 
-    # x y and z are modified by 2^level
+    # x and y are modified by 2^level (ome-zarr-py downsamples in xy only)
     assert_array_equal(int(xyz_orig[0] / (2**level)), xyz_ds[0])
     assert_array_equal(int(xyz_orig[1] / (2**level)), xyz_ds[1])
-    assert_array_equal(int(xyz_orig[2] / (2**level)), xyz_ds[2])
+    # z is NOT downsampled by ome-zarr-py (only downsamples in xy plane)
+    assert_array_equal(xyz_orig[2], xyz_ds[2])
 
 
 @pytest.mark.usefixtures("cleandir")
