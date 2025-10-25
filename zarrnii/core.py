@@ -237,8 +237,13 @@ def save_ngff_image_with_ome_zarr(
         >>> save_ngff_image_with_ome_zarr(img, "/path/to/output.zarr", compute=True)
     """
     import zarr
+    from ome_zarr.format import FormatV04
     from ome_zarr.scale import Scaler
     from ome_zarr.writer import write_image
+
+    # Force use of OME-NGFF v0.4 format (Zarr v2) instead of v0.5 (Zarr v3)
+    # This ensures compatibility with existing tools and avoids .zarr.json files
+    fmt = FormatV04()
 
     # Note: ome-zarr's Scaler interprets max_layer as the highest pyramid level index
     # (not count), so max_layer=N creates N+1 levels: 0, 1, ..., N
@@ -274,7 +279,8 @@ def save_ngff_image_with_ome_zarr(
         with tempfile.TemporaryDirectory() as tmpdir:
             # Save to temporary directory first
             temp_zarr_path = os.path.join(tmpdir, "temp.zarr")
-            store = zarr.open_group(temp_zarr_path, mode="w")
+            # Use Zarr v2 format for compatibility with OME-NGFF v0.4
+            store = zarr.open_group(temp_zarr_path, mode="w", zarr_format=2)
 
             # Write the data to OME-Zarr
             write_image(
@@ -283,6 +289,7 @@ def save_ngff_image_with_ome_zarr(
                 scaler=scaler,
                 coordinate_transformations=coordinate_transformations,
                 axes=axes,
+                fmt=fmt,
                 compute=compute,
                 **kwargs,
             )
@@ -301,7 +308,8 @@ def save_ngff_image_with_ome_zarr(
     else:
         # Write to zarr store directly
         if isinstance(store_or_path, str):
-            store = zarr.open_group(store_or_path, mode="w")
+            # Use Zarr v2 format for compatibility with OME-NGFF v0.4
+            store = zarr.open_group(store_or_path, mode="w", zarr_format=2)
         else:
             store = store_or_path
 
@@ -312,6 +320,7 @@ def save_ngff_image_with_ome_zarr(
             scaler=scaler,
             coordinate_transformations=coordinate_transformations,
             axes=axes,
+            fmt=fmt,
             compute=compute,
             **kwargs,
         )
