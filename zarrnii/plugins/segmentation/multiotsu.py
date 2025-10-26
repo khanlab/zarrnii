@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 
+from zarrnii.analysis import compute_otsu_thresholds
+
 from .base import SegmentationPlugin
 
 
@@ -120,8 +122,6 @@ class MultiOtsuSegmentation(SegmentationPlugin):
         self._last_bin_edges = bin_edges
 
         # Compute thresholds using the analysis module
-        from zarrnii.analysis import compute_otsu_thresholds
-
         try:
             threshold_list = compute_otsu_thresholds(
                 hist_counts, classes=self.classes, bin_edges=bin_edges
@@ -131,9 +131,11 @@ class MultiOtsuSegmentation(SegmentationPlugin):
         except ValueError as e:
             # Handle constant images or images with insufficient unique values
             if "different values" in str(e) or "cannot be thresholded" in str(e):
-                # For constant/near-constant images, just use min value as threshold
-                # This will result in all pixels being classified into the highest class
-                thresholds = [image.min()] * (self.classes - 1)
+                # For constant/near-constant images, assign all pixels to class 0
+                # Return zeros array directly
+                self._last_thresholds = []
+                self._save_outputs()
+                return np.zeros(original_shape, dtype=np.uint8)
             else:
                 raise
 
@@ -143,10 +145,12 @@ class MultiOtsuSegmentation(SegmentationPlugin):
         self._save_outputs()
 
         # Apply thresholds to create labeled regions
-        result = np.zeros(original_shape, dtype=np.uint8)
-        for i, threshold in enumerate(thresholds):
-            mask = image >= threshold
-            result[mask] = i + 1
+        # Using np.digitize which assigns each value to a bin
+        # For thresholds [t1, t2], values are classified as:
+        # - class 0: x < t1
+        # - class 1: t1 <= x < t2
+        # - class 2: x >= t2
+        result = np.digitize(image, bins=thresholds).astype(np.uint8)
 
         return result
 
