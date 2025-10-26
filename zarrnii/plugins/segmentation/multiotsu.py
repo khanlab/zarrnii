@@ -131,8 +131,10 @@ class MultiOtsuSegmentation(SegmentationPlugin):
         except ValueError as e:
             # Handle constant images or images with insufficient unique values
             if "different values" in str(e) or "cannot be thresholded" in str(e):
-                # For constant/near-constant images, assign all pixels to class 0
-                # Return zeros array directly
+                # For constant/near-constant images where thresholding is impossible,
+                # assign all pixels to class 0 (background) as a sensible default.
+                # This is preferable to arbitrary thresholding since all pixels
+                # have essentially the same value.
                 self._last_thresholds = []
                 self._save_outputs()
                 return np.zeros(original_shape, dtype=np.uint8)
@@ -145,11 +147,13 @@ class MultiOtsuSegmentation(SegmentationPlugin):
         self._save_outputs()
 
         # Apply thresholds to create labeled regions
-        # Using np.digitize which assigns each value to a bin
-        # For thresholds [t1, t2], values are classified as:
-        # - class 0: x < t1
-        # - class 1: t1 <= x < t2
-        # - class 2: x >= t2
+        # Use np.digitize for proper multi-class classification:
+        # - It assigns each value to exactly one bin/class based on threshold intervals
+        # - For thresholds [t1, t2], values are classified as:
+        #   * class 0: x < t1
+        #   * class 1: t1 <= x < t2
+        #   * class 2: x >= t2
+        # This avoids the issue of overlapping assignments from iterative thresholding
         result = np.digitize(image, bins=thresholds).astype(np.uint8)
 
         return result
