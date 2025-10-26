@@ -155,15 +155,18 @@ def compute_otsu_thresholds(
         else:
             # Pass histogram and bin centers directly to threshold_multiotsu
             # This is memory-efficient as it doesn't reconstruct data points
+            # The hist parameter expects a 2-tuple: (histogram_counts, bin_centers)
             otsu_thresholds = threshold_multiotsu(
                 hist=(histogram_counts, bin_centers), classes=classes
             )
             mid_thresholds = otsu_thresholds.tolist()
     else:
         # If no bin_edges provided, work in histogram bin index space
-        # Create bin centers as integer indices
+        # Create bin centers as integer indices (0 to len-1)
         bin_centers = np.arange(len(histogram_counts))
         min_val = 0.0
+        # max_val is set to len(histogram_counts) for backward compatibility
+        # This represents the upper bound of the histogram range
         max_val = float(len(histogram_counts))
 
         # Check if histogram has any data
@@ -172,6 +175,7 @@ def compute_otsu_thresholds(
             mid_thresholds = np.linspace(min_val, max_val, classes + 1)[1:-1].tolist()
         else:
             # Pass histogram and bin centers directly to threshold_multiotsu
+            # The hist parameter expects a 2-tuple: (histogram_counts, bin_centers)
             otsu_thresholds = threshold_multiotsu(
                 hist=(histogram_counts, bin_centers), classes=classes
             )
