@@ -4256,11 +4256,47 @@ class ZarrNii:
     def __repr__(self) -> str:
         """String representation."""
         return (
-            f"ZarrNii(name='{self.name}', "
-            f"shape={self.shape}, "
-            f"dims={self.dims}, "
-            f"scale={self.scale})"
+            f"ZarrNii(\n"
+            f"  name='{self.name}', shape={self.shape}, dims={self.dims},\n"
+            f"  axes_order='{self.axes_order}', xyz_orientation='{self.xyz_orientation}',\n"
+            f"  scale={self.scale},\n"
+            f"  dtype={self.data.dtype}, chunksize={self.data.chunksize}\n"
+            f")"
         )
+
+    def _repr_html_(self) -> str:
+        """HTML representation for Jupyter notebooks.
+
+        Combines ZarrNii metadata with the dask array visualization.
+        """
+        # Create HTML for ZarrNii metadata
+        metadata_html = f"""
+        <div style="margin-bottom: 10px;">
+            <strong>ZarrNii Object</strong>
+            <table style="margin-left: 20px; border-collapse: collapse;">
+                <tr><td style="padding: 2px;"><strong>name:</strong></td><td style="padding: 2px;">{self.name}</td></tr>
+                <tr><td style="padding: 2px;"><strong>shape:</strong></td><td style="padding: 2px;">{self.shape}</td></tr>
+                <tr><td style="padding: 2px;"><strong>dims:</strong></td><td style="padding: 2px;">{self.dims}</td></tr>
+                <tr><td style="padding: 2px;"><strong>axes_order:</strong></td><td style="padding: 2px;">{self.axes_order}</td></tr>
+                <tr><td style="padding: 2px;"><strong>xyz_orientation:</strong></td><td style="padding: 2px;">{self.xyz_orientation}</td></tr>
+                <tr><td style="padding: 2px;"><strong>scale:</strong></td><td style="padding: 2px;">{self.scale}</td></tr>
+                <tr><td style="padding: 2px;"><strong>dtype:</strong></td><td style="padding: 2px;">{self.data.dtype}</td></tr>
+                <tr><td style="padding: 2px;"><strong>chunksize:</strong></td><td style="padding: 2px;">{self.data.chunksize}</td></tr>
+            </table>
+        </div>
+        """
+
+        # Get dask array's HTML representation
+        dask_html = ""
+        if hasattr(self.data, "_repr_html_"):
+            dask_html = f"""
+            <div style="margin-top: 10px;">
+                <strong>Dask Array:</strong>
+                {self.data._repr_html_()}
+            </div>
+            """
+
+        return metadata_html + dask_html
 
 
 # Helper functions for backward compatibility
