@@ -7,7 +7,7 @@ histogram computation and threshold calculation.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import dask.array as da
 import numpy as np
@@ -179,7 +179,8 @@ def compute_otsu_thresholds(
         raise ValueError("Histogram is empty")
 
     # Use scikit-image's threshold_multiotsu with histogram directly
-    # threshold_multiotsu accepts hist parameter as (histogram_counts, bin_centers) tuple
+    # threshold_multiotsu accepts hist parameter as
+    # (histogram_counts, bin_centers) tuple
     # This avoids reconstructing millions of data points from histogram
     if bin_edges is not None:
         # Calculate bin centers from edges
