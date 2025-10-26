@@ -146,6 +146,96 @@ class TestStandaloneAnalysisFunctions:
         # For uniform distribution, threshold should be near middle
         assert 0.4 < thresholds[1] < 0.6
 
+    def test_compute_otsu_thresholds_return_histogram(self):
+        """Test returning histogram data along with thresholds."""
+        hist = np.array([100, 50, 20, 50, 100])
+        bin_edges = np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+
+        thresholds, (returned_hist, returned_edges) = compute_otsu_thresholds(
+            hist, classes=2, bin_edges=bin_edges, return_histogram=True
+        )
+
+        assert len(thresholds) == 3
+        assert_array_equal(returned_hist, hist)
+        assert_array_equal(returned_edges, bin_edges)
+
+    def test_compute_otsu_thresholds_return_histogram_no_bin_edges(self):
+        """Test returning histogram without explicit bin_edges."""
+        hist = np.array([100, 50, 20, 50, 100])
+
+        thresholds, (returned_hist, returned_edges) = compute_otsu_thresholds(
+            hist, classes=2, return_histogram=True
+        )
+
+        assert len(thresholds) == 3
+        assert_array_equal(returned_hist, hist)
+        # When no bin_edges provided, should return integer indices
+        assert_array_equal(returned_edges, np.arange(len(hist) + 1))
+
+    def test_compute_otsu_thresholds_return_figure(self):
+        """Test returning matplotlib figure with annotated thresholds."""
+        pytest.importorskip("matplotlib")
+
+        hist = np.array([100, 50, 20, 5, 2, 5, 20, 50, 100])
+        bin_edges = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0])
+
+        thresholds, fig = compute_otsu_thresholds(
+            hist, classes=2, bin_edges=bin_edges, return_figure=True
+        )
+
+        assert len(thresholds) == 3
+        assert fig is not None
+
+        # Check that figure has the expected components
+        import matplotlib.pyplot as plt
+
+        assert isinstance(fig, plt.Figure)
+        assert len(fig.axes) == 1
+
+        # Clean up
+        plt.close(fig)
+
+    def test_compute_otsu_thresholds_return_figure_multi_class(self):
+        """Test returning figure with multiple threshold lines."""
+        pytest.importorskip("matplotlib")
+
+        hist = np.array([100, 80, 60, 20, 10, 5, 10, 20, 60, 80, 100])
+        bin_edges = np.linspace(0.0, 1.0, 12)
+
+        thresholds, fig = compute_otsu_thresholds(
+            hist, classes=3, bin_edges=bin_edges, return_figure=True
+        )
+
+        assert len(thresholds) == 4  # [min, thresh1, thresh2, max]
+        assert fig is not None
+
+        import matplotlib.pyplot as plt
+
+        ax = fig.axes[0]
+
+        # Check that there are threshold lines (vertical lines) in the plot
+        vlines = [line for line in ax.get_lines() if line.get_linestyle() == "--"]
+        assert len(vlines) >= 2  # At least 2 threshold lines for 3 classes
+
+        # Clean up
+        plt.close(fig)
+
+    def test_compute_otsu_thresholds_both_return_options_error(self):
+        """Test that requesting both return_histogram and return_figure raises error."""
+        hist = np.array([100, 50, 100])
+
+        with pytest.raises(ValueError, match="Cannot return both histogram and figure"):
+            compute_otsu_thresholds(
+                hist, classes=2, return_histogram=True, return_figure=True
+            )
+
+    def test_compute_otsu_thresholds_return_figure_no_matplotlib(self):
+        """Test that return_figure without matplotlib gives helpful error."""
+        # This test can only run if matplotlib is not available
+        # In practice, matplotlib will be available in dev environment
+        # But this documents the expected behavior
+        pass  # Skip this test as matplotlib is in dev dependencies
+
 
 class TestZarrNiiAnalysisMethods:
     """Test the ZarrNii analysis methods."""
@@ -275,6 +365,36 @@ class TestZarrNiiAnalysisMethods:
         # Exclusive: [0, 0, 1]
         assert_array_equal(result_inclusive, [0, 1, 1])
         assert_array_equal(result_exclusive, [0, 0, 1])
+
+    def test_compute_otsu_thresholds_return_histogram(self):
+        """Test ZarrNii method with return_histogram option."""
+        thresholds, (hist, bin_edges) = self.znimg.compute_otsu_thresholds(
+            classes=2, bins=10, return_histogram=True
+        )
+
+        assert len(thresholds) == 3
+        assert hist.shape == (10,)
+        assert bin_edges.shape == (11,)
+        assert isinstance(hist, np.ndarray)
+        assert isinstance(bin_edges, np.ndarray)
+
+    def test_compute_otsu_thresholds_return_figure(self):
+        """Test ZarrNii method with return_figure option."""
+        pytest.importorskip("matplotlib")
+
+        thresholds, fig = self.znimg.compute_otsu_thresholds(
+            classes=2, bins=10, return_figure=True
+        )
+
+        assert len(thresholds) == 3
+        assert fig is not None
+
+        import matplotlib.pyplot as plt
+
+        assert isinstance(fig, plt.Figure)
+
+        # Clean up
+        plt.close(fig)
 
 
 class TestIntegrationWithExistingCode:
