@@ -139,59 +139,47 @@ def compute_otsu_thresholds(
     if len(histogram_counts) == 0:
         raise ValueError("Histogram is empty")
 
-    # Use scikit-image's threshold_multiotsu
-    # When using hist parameter, thresholds are returned in the same scale as the data
-    # We need to reconstruct the intensity values from bin centers
+    # Use scikit-image's threshold_multiotsu with histogram directly
+    # threshold_multiotsu accepts hist parameter as (histogram_counts, bin_centers) tuple
+    # This avoids reconstructing millions of data points from histogram
     if bin_edges is not None:
         # Calculate bin centers from edges
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-        # threshold_multiotsu with hist returns indices into the histogram
-        threshold_indices = threshold_multiotsu(hist=histogram_counts, classes=classes)
-        # Convert indices to actual intensity values using bin centers
-        # But threshold_multiotsu actually returns intensity values when hist is provided
-        # Let's use it directly on the reconstructed data
-
-        # Reconstruct data from histogram for threshold_multiotsu
-        data_points = []
-        for i, count in enumerate(histogram_counts):
-            if count > 0:
-                # Add 'count' number of points at bin_centers[i]
-                data_points.extend([bin_centers[i]] * int(count))
-
-        if len(data_points) == 0:
-            # Empty histogram case
-            min_val = float(bin_edges[0])
-            max_val = float(bin_edges[-1])
-            # Return evenly spaced thresholds
-            mid_thresholds = np.linspace(min_val, max_val, classes + 1)[1:-1].tolist()
-        else:
-            data_array = np.array(data_points)
-            otsu_thresholds = threshold_multiotsu(data_array, classes=classes)
-            mid_thresholds = otsu_thresholds.tolist()
-
         min_val = float(bin_edges[0])
         max_val = float(bin_edges[-1])
-    else:
-        # If no bin_edges provided, work in histogram bin index space
-        # Reconstruct data points from histogram
-        data_points = []
-        for i, count in enumerate(histogram_counts):
-            if count > 0:
-                data_points.extend([i] * int(count))
 
-        if len(data_points) == 0:
+        # Check if histogram has any data
+        if histogram_counts.sum() == 0:
             # Empty histogram case
-            min_val = 0.0
-            max_val = float(len(histogram_counts))
-            # Return evenly spaced thresholds
             mid_thresholds = np.linspace(min_val, max_val, classes + 1)[1:-1].tolist()
         else:
-            data_array = np.array(data_points)
-            otsu_thresholds = threshold_multiotsu(data_array, classes=classes)
+            # Pass histogram and bin centers directly to threshold_multiotsu
+            # This is memory-efficient as it doesn't reconstruct data points
+            # The hist parameter expects a 2-tuple: (histogram_counts, bin_centers)
+            otsu_thresholds = threshold_multiotsu(
+                hist=(histogram_counts, bin_centers), classes=classes
+            )
             mid_thresholds = otsu_thresholds.tolist()
-
+    else:
+        # If no bin_edges provided, work in histogram bin index space
+        # Create bin centers as integer indices (0 to len-1)
+        bin_centers = np.arange(len(histogram_counts))
         min_val = 0.0
+        # max_val is set to len(histogram_counts) for backward compatibility
+        # This represents the upper bound of the histogram range
         max_val = float(len(histogram_counts))
+
+        # Check if histogram has any data
+        if histogram_counts.sum() == 0:
+            # Empty histogram case
+            mid_thresholds = np.linspace(min_val, max_val, classes + 1)[1:-1].tolist()
+        else:
+            # Pass histogram and bin centers directly to threshold_multiotsu
+            # The hist parameter expects a 2-tuple: (histogram_counts, bin_centers)
+            otsu_thresholds = threshold_multiotsu(
+                hist=(histogram_counts, bin_centers), classes=classes
+            )
+            mid_thresholds = otsu_thresholds.tolist()
 
     # Format as requested in the issue: [min, threshold1, ..., threshold_k-1, max]
     result = [min_val] + mid_thresholds + [max_val]

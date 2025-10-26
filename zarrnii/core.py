@@ -201,7 +201,7 @@ def save_ngff_image_with_ome_zarr(
     store_or_path: Union[str, Any],
     max_layer: int = 4,
     scale_factors: Optional[List[int]] = None,
-    scaling_method: str = "nearest",
+    scaling_method: str = "local_mean",
     xyz_orientation: Optional[str] = None,
     compute: bool = True,
     **kwargs: Any,
