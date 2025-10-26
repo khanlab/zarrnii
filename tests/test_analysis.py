@@ -127,6 +127,25 @@ class TestStandaloneAnalysisFunctions:
         with pytest.raises(ValueError, match="Histogram is empty"):
             compute_otsu_thresholds(hist, classes=2)
 
+    def test_compute_otsu_thresholds_large_histogram(self):
+        """Test that large histograms are handled efficiently without memory issues."""
+        # Create a histogram representing a very large image (e.g., 1000^3 pixels)
+        # This simulates the case where old implementation would fail with OOM
+        # The histogram is small (256 bins) but represents billions of pixels
+        large_pixel_count = 10**9  # 1 billion pixels
+        hist = np.array([large_pixel_count // 256] * 256)  # Uniform distribution
+        bin_edges = np.linspace(0.0, 1.0, 257)
+
+        # This should work without memory issues (old implementation would try to
+        # create an array with 1 billion elements)
+        thresholds = compute_otsu_thresholds(hist, classes=2, bin_edges=bin_edges)
+
+        assert len(thresholds) == 3  # [min, threshold, max]
+        assert thresholds[0] == 0.0
+        assert thresholds[-1] == 1.0
+        # For uniform distribution, threshold should be near middle
+        assert 0.4 < thresholds[1] < 0.6
+
 
 class TestZarrNiiAnalysisMethods:
     """Test the ZarrNii analysis methods."""
