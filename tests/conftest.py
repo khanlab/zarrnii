@@ -29,9 +29,7 @@ def znimg_from_multiscales():
         ngff_image, scale_factors=[2, 4], chunks=(1, 32, 32, 32)
     )
 
-    nz.to_ngff_zarr(
-        "test_znimg.ome.zarr", multiscales, chunks_per_shard=16, version="0.5"
-    )
+    nz.to_ngff_zarr("test_znimg.ome.zarr", multiscales, version="0.4")
     znimg = ZarrNii.from_ome_zarr("test_znimg.ome.zarr")
 
     return znimg

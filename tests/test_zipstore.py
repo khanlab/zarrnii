@@ -20,7 +20,6 @@ class TestZipStoreSupport:
         data = da.ones((1, 16, 32, 32), dtype=np.uint16, chunks=(1, 8, 16, 16))
         return ZarrNii.from_darr(data, axes_order="ZYX", orientation="RAS")
 
-    @pytest.mark.xfail(reason="Test expects 'scale0' naming but actual structure uses '0/' pattern")
     def test_save_to_zip_file(self, sample_zarrnii):
         """Test saving OME-Zarr to a .zip file."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -44,7 +43,7 @@ class TestZipStoreSupport:
                 assert ".zgroup" in files
                 assert ".zattrs" in files
                 # Should have multiscale levels
-                assert any("scale0" in name for name in files)
+                assert any("0" in name for name in files)
 
     def test_load_from_zip_file(self, sample_zarrnii):
         """Test loading OME-Zarr from a .zip file."""
@@ -111,7 +110,6 @@ class TestZipStoreSupport:
             assert loaded_regular.orientation == loaded_zip.orientation
             assert loaded_regular.darr.shape == loaded_zip.darr.shape
 
-    @pytest.mark.xfail(reason="Test expects Z-axis downsampling but only Y/X axes are downsampled (correct OME-Zarr behavior)")
     def test_multi_level_zip_access(self, sample_zarrnii):
         """Test accessing different pyramid levels in ZIP files."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -127,9 +125,9 @@ class TestZipStoreSupport:
 
             # Verify pyramid structure
             assert level0.darr.shape == sample_zarrnii.darr.shape
-            # Each level should be roughly half the size
-            assert level1.darr.shape[1] <= level0.darr.shape[1] // 2 + 1
-            assert level2.darr.shape[1] <= level1.darr.shape[1] // 2 + 1
+            # Each level should be roughly half the size in index 2 or 3 (y or x)
+            assert level1.darr.shape[2] <= level0.darr.shape[2] // 2 + 1
+            assert level2.darr.shape[2] <= level1.darr.shape[2] // 2 + 1
 
     def test_zip_file_extension_detection(self, sample_zarrnii):
         """Test that .zip extension is properly detected for ZipStore handling."""

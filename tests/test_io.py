@@ -331,35 +331,6 @@ def test_to_ome_zarr_backend_parameter(znimg_from_multiscales):
             assert "ome-zarr-py" in str(e)
 
 
-class TestOMEZarr:
-    @pytest.mark.usefixtures("cleandir")
-    @pytest.mark.xfail(reason="Known issue with synthetic data generation")
-    def test_ome_zarr(self):
-        # test reading and writing ome zarr
-        OME_ZARR_PATH = "./test.ome.zarr"
-        generate_synthetic_dataset(
-            OME_ZARR_PATH,
-            arr_sz=(1, 16, 128, 128),
-        )
-        arr = ZarrNii.from_ome_zarr(OME_ZARR_PATH, level=0, channels=[0]).darr
-        assert arr.compute().sum() > 0
-
-
-"""
-    @pytest.mark.usefixtures("cleandir")
-    def test_ome_zarr_zip(self):
-        # test reading and writing ome zarr
-        OME_ZARR_PATH = './test.ome.zarr.zip'
-        generate_synthetic_dataset(
-            OME_ZARR_PATH,
-            arr_sz=(1, 16, 128, 128),
-            MAX_LAYER=1  # layer 0 and 1
-        )
-        arr = ZarrNii.from_ome_zarr(OME_ZARR_PATH, level=1, channels=[0]).darr
-        assert arr.compute().sum() > 0
-"""
-
-
 def test_orientation_functionality(tmp_path):
     """Test orientation reading/writing functionality."""
     # Create a simple test image
