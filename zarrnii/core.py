@@ -4149,11 +4149,9 @@ class ZarrNii:
         bins: int = 256,
         range: Optional[Tuple[float, float]] = None,
         mask: Optional["ZarrNii"] = None,
-        return_histogram: bool = False,
         return_figure: bool = False,
     ) -> Union[
         List[float],
-        Tuple[List[float], Tuple[np.ndarray, np.ndarray]],
         Tuple[List[float], Any],
     ]:
         """
@@ -4171,22 +4169,15 @@ class ZarrNii:
                 uses the full range of the data
             mask: Optional ZarrNii mask of same shape as image. Only pixels
                 where mask > 0 are included in histogram computation
-            return_histogram: If True, returns a tuple containing thresholds and
-                histogram data (histogram_counts, bin_edges) (default: False)
             return_figure: If True, returns a tuple containing thresholds and a
                 matplotlib figure with the histogram and annotated threshold lines
                 (default: False). Cannot be combined with return_histogram=True.
 
         Returns:
-            If both return_histogram and return_figure are False (default):
+            If return_figure is False (default):
                 List of threshold values. For classes=k, returns k+1 values:
                 [0, threshold1, threshold2, ..., threshold_k-1, max_intensity]
                 where 0 represents the minimum and max_intensity represents the maximum.
-
-            If return_histogram is True:
-                Tuple of (thresholds, (histogram_counts, bin_edges)) where
-                histogram_counts is a numpy array of bin counts and bin_edges
-                is a numpy array of bin edge values.
 
             If return_figure is True:
                 Tuple of (thresholds, figure) where figure is a matplotlib Figure
@@ -4222,7 +4213,6 @@ class ZarrNii:
             hist,
             classes=classes,
             bin_edges=bin_edges,
-            return_histogram=return_histogram,
             return_figure=return_figure,
         )
 

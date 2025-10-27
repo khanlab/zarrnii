@@ -87,11 +87,9 @@ def compute_otsu_thresholds(
     histogram_counts: Union[np.ndarray, da.Array],
     classes: int = 2,
     bin_edges: Optional[Union[np.ndarray, da.Array]] = None,
-    return_histogram: bool = False,
     return_figure: bool = False,
 ) -> Union[
     List[float],
-    Tuple[List[float], Tuple[np.ndarray, np.ndarray]],
     Tuple[List[float], Any],
 ]:
     """
@@ -109,30 +107,22 @@ def compute_otsu_thresholds(
         bin_edges: Optional bin edges corresponding to histogram. If provided,
             used to determine the min/max range for the output format. If None,
             assumes bin edges from 0 to len(histogram_counts)
-        return_histogram: If True, returns a tuple containing thresholds and
-            histogram data (histogram_counts, bin_edges) (default: False)
         return_figure: If True, returns a tuple containing thresholds and a
             matplotlib figure with the histogram and annotated threshold lines
             (default: False). Cannot be combined with return_histogram=True.
 
     Returns:
-        If both return_histogram and return_figure are False (default):
+        If return_figure is False (default):
             List of threshold values. For classes=k, returns k+1 values:
             [min_value, threshold1, threshold2, ..., threshold_k-1, max_value]
             where min_value and max_value are the data range bounds.
-
-        If return_histogram is True:
-            Tuple of (thresholds, (histogram_counts, bin_edges)) where
-            histogram_counts is a numpy array of bin counts and bin_edges
-            is a numpy array of bin edge values.
 
         If return_figure is True:
             Tuple of (thresholds, figure) where figure is a matplotlib Figure
             object showing the histogram with annotated threshold lines.
 
     Raises:
-        ValueError: If classes < 2 or if histogram is empty, or if both
-            return_histogram and return_figure are True
+        ValueError: If classes < 2 or if histogram is empty
 
     Examples:
         >>> import numpy as np
@@ -149,11 +139,6 @@ def compute_otsu_thresholds(
         >>> thresholds = compute_otsu_thresholds(hist, classes=3)
         >>> print(f"Multi-level thresholds: {thresholds}")
         >>>
-        >>> # Return histogram data along with thresholds
-        >>> thresholds, (hist, bin_edges) = compute_otsu_thresholds(
-        ...     hist, classes=2, return_histogram=True
-        ... )
-        >>>
         >>> # Generate a figure with annotated thresholds
         >>> thresholds, fig = compute_otsu_thresholds(
         ...     hist, classes=2, return_figure=True
@@ -162,12 +147,6 @@ def compute_otsu_thresholds(
     """
     if classes < 2:
         raise ValueError("Number of classes must be >= 2")
-
-    if return_histogram and return_figure:
-        raise ValueError(
-            "Cannot return both histogram and figure. "
-            "Set only one of return_histogram or return_figure to True."
-        )
 
     # Convert dask arrays to numpy if needed
     if hasattr(histogram_counts, "compute"):
@@ -224,18 +203,7 @@ def compute_otsu_thresholds(
     # Format as requested in the issue: [min, threshold1, ..., threshold_k-1, max]
     result = [min_val] + mid_thresholds + [max_val]
 
-    # Handle different return options
-    if return_histogram:
-        # Return thresholds and histogram data
-        return result, (
-            histogram_counts,
-            (
-                bin_edges
-                if bin_edges is not None
-                else np.arange(len(histogram_counts) + 1)
-            ),
-        )
-    elif return_figure:
+    if return_figure:
         # Import matplotlib here to avoid requiring it as a hard dependency
         try:
             import matplotlib.pyplot as plt
