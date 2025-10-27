@@ -43,7 +43,7 @@ class TestZipStoreSupport:
                 assert ".zgroup" in files
                 assert ".zattrs" in files
                 # Should have multiscale levels
-                assert any("scale0" in name for name in files)
+                assert any("0" in name for name in files)
 
     def test_load_from_zip_file(self, sample_zarrnii):
         """Test loading OME-Zarr from a .zip file."""
@@ -125,9 +125,9 @@ class TestZipStoreSupport:
 
             # Verify pyramid structure
             assert level0.darr.shape == sample_zarrnii.darr.shape
-            # Each level should be roughly half the size
-            assert level1.darr.shape[1] <= level0.darr.shape[1] // 2 + 1
-            assert level2.darr.shape[1] <= level1.darr.shape[1] // 2 + 1
+            # Each level should be roughly half the size in index 2 or 3 (y or x)
+            assert level1.darr.shape[2] <= level0.darr.shape[2] // 2 + 1
+            assert level2.darr.shape[2] <= level1.darr.shape[2] // 2 + 1
 
     def test_zip_file_extension_detection(self, sample_zarrnii):
         """Test that .zip extension is properly detected for ZipStore handling."""

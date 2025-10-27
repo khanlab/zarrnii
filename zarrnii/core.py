@@ -4489,6 +4489,7 @@ class ZarrNii:
 
         # Wrap and return
         return self._wrap_result(result, func.__name__)
+
     def _repr_html_(self) -> str:
         """HTML representation for Jupyter notebooks.
 
