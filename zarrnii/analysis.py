@@ -16,7 +16,7 @@ from skimage.filters import threshold_multiotsu
 
 def compute_histogram(
     image: da.Array,
-    bins: int = 256,
+    bins: Optional[int] = None,
     range: Optional[Tuple[float, float]] = None,
     mask: Optional[da.Array] = None,
     **kwargs: Any,
@@ -30,7 +30,7 @@ def compute_histogram(
 
     Args:
         image: Input dask array image
-        bins: Number of histogram bins (default: 256)
+        bins: Number of histogram bins (default: bin width 1, bins=max - min + 1)
         range: Optional tuple (min, max) defining histogram range. If None,
             uses the full range of the data
         mask: Optional dask array mask of same shape as image. Only pixels
@@ -69,17 +69,25 @@ def compute_histogram(
         valid_data = flat_image[valid_indices]
 
         # For dask histogram, we need to provide a range
-        if range is None:
+        if range is None or bins is None:
             data_min = da.min(valid_data).compute()
             data_max = da.max(valid_data).compute()
+        if range is None:
             range = (data_min, data_max)
+        if bins is None:
+            bins =  data_max - data_min + 1
+
         return da.histogram(valid_data, bins=bins, range=range, **kwargs)
     else:
         # For dask histogram, we need to provide a range
+        if range is None or bins is None:
+            data_min = da.min(valid_data).compute()
+            data_max = da.max(valid_data).compute()
         if range is None:
-            data_min = da.min(image).compute()
-            data_max = da.max(image).compute()
             range = (data_min, data_max)
+        if bins is None:
+            bins =  data_max - data_min + 1
+
         return da.histogram(image, bins=bins, range=range, **kwargs)
 
 

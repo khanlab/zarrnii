@@ -4103,7 +4103,7 @@ class ZarrNii:
 
     def compute_histogram(
         self,
-        bins: int = 256,
+        bins: Optional[int] = None,
         range: Optional[Tuple[float, float]] = None,
         mask: Optional["ZarrNii"] = None,
         **kwargs: Any,
@@ -4116,7 +4116,7 @@ class ZarrNii:
         efficient processing of large datasets.
 
         Args:
-            bins: Number of histogram bins (default: 256)
+            bins: Number of histogram bins (default: bin width 1, bins=max - min + 1)
             range: Optional tuple (min, max) defining histogram range. If None,
                 uses the full range of the data
             mask: Optional ZarrNii mask of same shape as image. Only pixels
@@ -4146,7 +4146,7 @@ class ZarrNii:
     def compute_otsu_thresholds(
         self,
         classes: int = 2,
-        bins: int = 256,
+        bins: Optional[int] = None,
         range: Optional[Tuple[float, float]] = None,
         mask: Optional["ZarrNii"] = None,
         return_figure: bool = False,
@@ -4164,7 +4164,7 @@ class ZarrNii:
             classes: Number of classes to separate data into (default: 2).
                 Must be >= 2. For classes=2, returns 1 threshold. For classes=k,
                 returns k-1 thresholds.
-            bins: Number of histogram bins (default: 256)
+            bins: Number of histogram bins (default: bin width 1, bins=max - min + 1)
             range: Optional tuple (min, max) defining histogram range. If None,
                 uses the full range of the data
             mask: Optional ZarrNii mask of same shape as image. Only pixels
