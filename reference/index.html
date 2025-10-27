@@ -11239,7 +11239,7 @@ where mask &gt; 0 are included in histogram computation</p>
 
 
 <h3 id="zarrnii.ZarrNii.compute_otsu_thresholds" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">compute_otsu_thresholds</span><span class="p">(</span><span class="n">classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="nb">range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">compute_otsu_thresholds</span><span class="p">(</span><span class="n">classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="nb">range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_figure</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
 </h3>
 
@@ -11297,30 +11297,40 @@ uses the full range of the data</p>
 where mask &gt; 0 are included in histogram computation</p>
           </div>
         </li>
+        <li class="doc-section-item field-body">
+            <b><code>return_figure</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>If True, returns a tuple containing thresholds and a
+matplotlib figure with the histogram and annotated threshold lines
+(default: False). Cannot be combined with return_histogram=True.</p>
+          </div>
+        </li>
     </ul>
 
 
 <p><span class="doc-section-title">Returns:</span></p>
     <ul>
         <li class="doc-section-item field-body">
-              <code><span title="typing.List">List</span>[<span title="float">float</span>]</code>
+              <code><span title="typing.Union">Union</span>[<span title="typing.List">List</span>[<span title="float">float</span>], <span title="typing.Tuple">Tuple</span>[<span title="typing.List">List</span>[<span title="float">float</span>], <span title="typing.Any">Any</span>]]</code>
           –
           <div class="doc-md-description">
-            <p>List of threshold values. For classes=k, returns k+1 values:</p>
+            <p>If return_figure is False (default):
+List of threshold values. For classes=k, returns k+1 values:
+[0, threshold1, threshold2, ..., threshold_k-1, max_intensity]
+where 0 represents the minimum and max_intensity represents the maximum.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
-              <code><span title="typing.List">List</span>[<span title="float">float</span>]</code>
+              <code><span title="typing.Union">Union</span>[<span title="typing.List">List</span>[<span title="float">float</span>], <span title="typing.Tuple">Tuple</span>[<span title="typing.List">List</span>[<span title="float">float</span>], <span title="typing.Any">Any</span>]]</code>
           –
           <div class="doc-md-description">
-            <p>[0, threshold1, threshold2, ..., threshold_k-1, max_intensity]</p>
-          </div>
-        </li>
-        <li class="doc-section-item field-body">
-              <code><span title="typing.List">List</span>[<span title="float">float</span>]</code>
-          –
-          <div class="doc-md-description">
-            <p>where 0 represents the minimum and max_intensity represents the maximum.</p>
+            <p>If return_figure is True:
+Tuple of (thresholds, figure) where figure is a matplotlib Figure
+object showing the histogram with annotated threshold lines.</p>
           </div>
         </li>
     </ul>
@@ -11334,6 +11344,17 @@ where mask &gt; 0 are included in histogram computation</p>
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># Compute multi-level thresholds (3 classes)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">thresholds</span> <span class="o">=</span> <span class="n">znimg</span><span class="o">.</span><span class="n">compute_otsu_thresholds</span><span class="p">(</span><span class="n">classes</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Multi-level thresholds: </span><span class="si">{</span><span class="n">thresholds</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Get histogram data along with thresholds</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">thresholds</span><span class="p">,</span> <span class="p">(</span><span class="n">hist</span><span class="p">,</span> <span class="n">bin_edges</span><span class="p">)</span> <span class="o">=</span> <span class="n">znimg</span><span class="o">.</span><span class="n">compute_otsu_thresholds</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">return_histogram</span><span class="o">=</span><span class="kc">True</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Generate a figure with annotated thresholds</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">thresholds</span><span class="p">,</span> <span class="n">fig</span> <span class="o">=</span> <span class="n">znimg</span><span class="o">.</span><span class="n">compute_otsu_thresholds</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">return_figure</span><span class="o">=</span><span class="kc">True</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">fig</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s1">&#39;otsu_thresholds.png&#39;</span><span class="p">)</span>
 </code></pre></div>
 
 
@@ -11382,13 +11403,45 @@ where mask &gt; 0 are included in histogram computation</p>
 <span class="normal">4186</span>
 <span class="normal">4187</span>
 <span class="normal">4188</span>
-<span class="normal">4189</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_otsu_thresholds</span><span class="p">(</span>
+<span class="normal">4189</span>
+<span class="normal">4190</span>
+<span class="normal">4191</span>
+<span class="normal">4192</span>
+<span class="normal">4193</span>
+<span class="normal">4194</span>
+<span class="normal">4195</span>
+<span class="normal">4196</span>
+<span class="normal">4197</span>
+<span class="normal">4198</span>
+<span class="normal">4199</span>
+<span class="normal">4200</span>
+<span class="normal">4201</span>
+<span class="normal">4202</span>
+<span class="normal">4203</span>
+<span class="normal">4204</span>
+<span class="normal">4205</span>
+<span class="normal">4206</span>
+<span class="normal">4207</span>
+<span class="normal">4208</span>
+<span class="normal">4209</span>
+<span class="normal">4210</span>
+<span class="normal">4211</span>
+<span class="normal">4212</span>
+<span class="normal">4213</span>
+<span class="normal">4214</span>
+<span class="normal">4215</span>
+<span class="normal">4216</span>
+<span class="normal">4217</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_otsu_thresholds</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
     <span class="n">bins</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
     <span class="nb">range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">mask</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;ZarrNii&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]:</span>
+    <span class="n">return_figure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span>
+    <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+    <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">Any</span><span class="p">],</span>
+<span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Compute Otsu multi-level thresholds for the image.</span>
 
@@ -11404,11 +11457,19 @@ where mask &gt; 0 are included in histogram computation</p>
 <span class="sd">            uses the full range of the data</span>
 <span class="sd">        mask: Optional ZarrNii mask of same shape as image. Only pixels</span>
 <span class="sd">            where mask &gt; 0 are included in histogram computation</span>
+<span class="sd">        return_figure: If True, returns a tuple containing thresholds and a</span>
+<span class="sd">            matplotlib figure with the histogram and annotated threshold lines</span>
+<span class="sd">            (default: False). Cannot be combined with return_histogram=True.</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        List of threshold values. For classes=k, returns k+1 values:</span>
-<span class="sd">        [0, threshold1, threshold2, ..., threshold_k-1, max_intensity]</span>
-<span class="sd">        where 0 represents the minimum and max_intensity represents the maximum.</span>
+<span class="sd">        If return_figure is False (default):</span>
+<span class="sd">            List of threshold values. For classes=k, returns k+1 values:</span>
+<span class="sd">            [0, threshold1, threshold2, ..., threshold_k-1, max_intensity]</span>
+<span class="sd">            where 0 represents the minimum and max_intensity represents the maximum.</span>
+
+<span class="sd">        If return_figure is True:</span>
+<span class="sd">            Tuple of (thresholds, figure) where figure is a matplotlib Figure</span>
+<span class="sd">            object showing the histogram with annotated threshold lines.</span>
 
 <span class="sd">    Examples:</span>
 <span class="sd">        &gt;&gt;&gt; # Compute binary threshold (2 classes)</span>
@@ -11418,14 +11479,30 @@ where mask &gt; 0 are included in histogram computation</p>
 <span class="sd">        &gt;&gt;&gt; # Compute multi-level thresholds (3 classes)</span>
 <span class="sd">        &gt;&gt;&gt; thresholds = znimg.compute_otsu_thresholds(classes=3)</span>
 <span class="sd">        &gt;&gt;&gt; print(f&quot;Multi-level thresholds: {thresholds}&quot;)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; # Get histogram data along with thresholds</span>
+<span class="sd">        &gt;&gt;&gt; thresholds, (hist, bin_edges) = znimg.compute_otsu_thresholds(</span>
+<span class="sd">        ...     classes=2, return_histogram=True</span>
+<span class="sd">        ... )</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; # Generate a figure with annotated thresholds</span>
+<span class="sd">        &gt;&gt;&gt; thresholds, fig = znimg.compute_otsu_thresholds(</span>
+<span class="sd">        ...     classes=2, return_figure=True</span>
+<span class="sd">        ... )</span>
+<span class="sd">        &gt;&gt;&gt; fig.savefig(&#39;otsu_thresholds.png&#39;)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="n">compute_otsu_thresholds</span>
 
     <span class="c1"># First compute histogram</span>
     <span class="n">hist</span><span class="p">,</span> <span class="n">bin_edges</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compute_histogram</span><span class="p">(</span><span class="n">bins</span><span class="o">=</span><span class="n">bins</span><span class="p">,</span> <span class="nb">range</span><span class="o">=</span><span class="nb">range</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="n">mask</span><span class="p">)</span>
 
-    <span class="c1"># Then compute thresholds</span>
-    <span class="k">return</span> <span class="n">compute_otsu_thresholds</span><span class="p">(</span><span class="n">hist</span><span class="p">,</span> <span class="n">classes</span><span class="o">=</span><span class="n">classes</span><span class="p">,</span> <span class="n">bin_edges</span><span class="o">=</span><span class="n">bin_edges</span><span class="p">)</span>
+    <span class="c1"># Then compute thresholds with optional returns</span>
+    <span class="k">return</span> <span class="n">compute_otsu_thresholds</span><span class="p">(</span>
+        <span class="n">hist</span><span class="p">,</span>
+        <span class="n">classes</span><span class="o">=</span><span class="n">classes</span><span class="p">,</span>
+        <span class="n">bin_edges</span><span class="o">=</span><span class="n">bin_edges</span><span class="p">,</span>
+        <span class="n">return_figure</span><span class="o">=</span><span class="n">return_figure</span><span class="p">,</span>
+    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -11514,35 +11591,7 @@ where mask &gt; 0 are included in histogram computation</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">4191</span>
-<span class="normal">4192</span>
-<span class="normal">4193</span>
-<span class="normal">4194</span>
-<span class="normal">4195</span>
-<span class="normal">4196</span>
-<span class="normal">4197</span>
-<span class="normal">4198</span>
-<span class="normal">4199</span>
-<span class="normal">4200</span>
-<span class="normal">4201</span>
-<span class="normal">4202</span>
-<span class="normal">4203</span>
-<span class="normal">4204</span>
-<span class="normal">4205</span>
-<span class="normal">4206</span>
-<span class="normal">4207</span>
-<span class="normal">4208</span>
-<span class="normal">4209</span>
-<span class="normal">4210</span>
-<span class="normal">4211</span>
-<span class="normal">4212</span>
-<span class="normal">4213</span>
-<span class="normal">4214</span>
-<span class="normal">4215</span>
-<span class="normal">4216</span>
-<span class="normal">4217</span>
-<span class="normal">4218</span>
-<span class="normal">4219</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">4219</span>
 <span class="normal">4220</span>
 <span class="normal">4221</span>
 <span class="normal">4222</span>
@@ -11585,7 +11634,35 @@ where mask &gt; 0 are included in histogram computation</p>
 <span class="normal">4259</span>
 <span class="normal">4260</span>
 <span class="normal">4261</span>
-<span class="normal">4262</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
+<span class="normal">4262</span>
+<span class="normal">4263</span>
+<span class="normal">4264</span>
+<span class="normal">4265</span>
+<span class="normal">4266</span>
+<span class="normal">4267</span>
+<span class="normal">4268</span>
+<span class="normal">4269</span>
+<span class="normal">4270</span>
+<span class="normal">4271</span>
+<span class="normal">4272</span>
+<span class="normal">4273</span>
+<span class="normal">4274</span>
+<span class="normal">4275</span>
+<span class="normal">4276</span>
+<span class="normal">4277</span>
+<span class="normal">4278</span>
+<span class="normal">4279</span>
+<span class="normal">4280</span>
+<span class="normal">4281</span>
+<span class="normal">4282</span>
+<span class="normal">4283</span>
+<span class="normal">4284</span>
+<span class="normal">4285</span>
+<span class="normal">4286</span>
+<span class="normal">4287</span>
+<span class="normal">4288</span>
+<span class="normal">4289</span>
+<span class="normal">4290</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">plugin</span><span class="p">,</span>
     <span class="n">downsample_factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
