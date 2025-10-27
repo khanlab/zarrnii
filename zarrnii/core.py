@@ -4149,7 +4149,11 @@ class ZarrNii:
         bins: int = 256,
         range: Optional[Tuple[float, float]] = None,
         mask: Optional["ZarrNii"] = None,
-    ) -> List[float]:
+        return_figure: bool = False,
+    ) -> Union[
+        List[float],
+        Tuple[List[float], Any],
+    ]:
         """
         Compute Otsu multi-level thresholds for the image.
 
@@ -4165,11 +4169,19 @@ class ZarrNii:
                 uses the full range of the data
             mask: Optional ZarrNii mask of same shape as image. Only pixels
                 where mask > 0 are included in histogram computation
+            return_figure: If True, returns a tuple containing thresholds and a
+                matplotlib figure with the histogram and annotated threshold lines
+                (default: False). Cannot be combined with return_histogram=True.
 
         Returns:
-            List of threshold values. For classes=k, returns k+1 values:
-            [0, threshold1, threshold2, ..., threshold_k-1, max_intensity]
-            where 0 represents the minimum and max_intensity represents the maximum.
+            If return_figure is False (default):
+                List of threshold values. For classes=k, returns k+1 values:
+                [0, threshold1, threshold2, ..., threshold_k-1, max_intensity]
+                where 0 represents the minimum and max_intensity represents the maximum.
+
+            If return_figure is True:
+                Tuple of (thresholds, figure) where figure is a matplotlib Figure
+                object showing the histogram with annotated threshold lines.
 
         Examples:
             >>> # Compute binary threshold (2 classes)
@@ -4179,14 +4191,30 @@ class ZarrNii:
             >>> # Compute multi-level thresholds (3 classes)
             >>> thresholds = znimg.compute_otsu_thresholds(classes=3)
             >>> print(f"Multi-level thresholds: {thresholds}")
+            >>>
+            >>> # Get histogram data along with thresholds
+            >>> thresholds, (hist, bin_edges) = znimg.compute_otsu_thresholds(
+            ...     classes=2, return_histogram=True
+            ... )
+            >>>
+            >>> # Generate a figure with annotated thresholds
+            >>> thresholds, fig = znimg.compute_otsu_thresholds(
+            ...     classes=2, return_figure=True
+            ... )
+            >>> fig.savefig('otsu_thresholds.png')
         """
         from .analysis import compute_otsu_thresholds
 
         # First compute histogram
         hist, bin_edges = self.compute_histogram(bins=bins, range=range, mask=mask)
 
-        # Then compute thresholds
-        return compute_otsu_thresholds(hist, classes=classes, bin_edges=bin_edges)
+        # Then compute thresholds with optional returns
+        return compute_otsu_thresholds(
+            hist,
+            classes=classes,
+            bin_edges=bin_edges,
+            return_figure=return_figure,
+        )
 
     def apply_scaled_processing(
         self,

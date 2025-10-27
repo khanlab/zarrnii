@@ -7,7 +7,7 @@ histogram computation and threshold calculation.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import dask.array as da
 import numpy as np
@@ -87,7 +87,11 @@ def compute_otsu_thresholds(
     histogram_counts: Union[np.ndarray, da.Array],
     classes: int = 2,
     bin_edges: Optional[Union[np.ndarray, da.Array]] = None,
-) -> List[float]:
+    return_figure: bool = False,
+) -> Union[
+    List[float],
+    Tuple[List[float], Any],
+]:
     """
     Compute Otsu multi-level thresholds from histogram data.
 
@@ -103,11 +107,19 @@ def compute_otsu_thresholds(
         bin_edges: Optional bin edges corresponding to histogram. If provided,
             used to determine the min/max range for the output format. If None,
             assumes bin edges from 0 to len(histogram_counts)
+        return_figure: If True, returns a tuple containing thresholds and a
+            matplotlib figure with the histogram and annotated threshold lines
+            (default: False). Cannot be combined with return_histogram=True.
 
     Returns:
-        List of threshold values. For classes=k, returns k+1 values:
-        [min_value, threshold1, threshold2, ..., threshold_k-1, max_value]
-        where min_value and max_value are the data range bounds.
+        If return_figure is False (default):
+            List of threshold values. For classes=k, returns k+1 values:
+            [min_value, threshold1, threshold2, ..., threshold_k-1, max_value]
+            where min_value and max_value are the data range bounds.
+
+        If return_figure is True:
+            Tuple of (thresholds, figure) where figure is a matplotlib Figure
+            object showing the histogram with annotated threshold lines.
 
     Raises:
         ValueError: If classes < 2 or if histogram is empty
@@ -126,6 +138,12 @@ def compute_otsu_thresholds(
         >>> # Compute multi-level thresholds (3 classes)
         >>> thresholds = compute_otsu_thresholds(hist, classes=3)
         >>> print(f"Multi-level thresholds: {thresholds}")
+        >>>
+        >>> # Generate a figure with annotated thresholds
+        >>> thresholds, fig = compute_otsu_thresholds(
+        ...     hist, classes=2, return_figure=True
+        ... )
+        >>> fig.savefig('otsu_thresholds.png')
     """
     if classes < 2:
         raise ValueError("Number of classes must be >= 2")
@@ -140,7 +158,8 @@ def compute_otsu_thresholds(
         raise ValueError("Histogram is empty")
 
     # Use scikit-image's threshold_multiotsu with histogram directly
-    # threshold_multiotsu accepts hist parameter as (histogram_counts, bin_centers) tuple
+    # threshold_multiotsu accepts hist parameter as
+    # (histogram_counts, bin_centers) tuple
     # This avoids reconstructing millions of data points from histogram
     if bin_edges is not None:
         # Calculate bin centers from edges
@@ -183,4 +202,62 @@ def compute_otsu_thresholds(
 
     # Format as requested in the issue: [min, threshold1, ..., threshold_k-1, max]
     result = [min_val] + mid_thresholds + [max_val]
-    return result
+
+    if return_figure:
+        # Import matplotlib here to avoid requiring it as a hard dependency
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            raise ImportError(
+                "matplotlib is required for return_figure=True. "
+                "Install it with: pip install matplotlib"
+            )
+
+        # Create figure with histogram and threshold annotations
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        # Plot histogram
+        if bin_edges is not None:
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            ax.bar(
+                bin_centers,
+                histogram_counts,
+                width=np.diff(bin_edges),
+                alpha=0.7,
+                color="skyblue",
+                edgecolor="black",
+                label="Histogram",
+            )
+        else:
+            ax.bar(
+                np.arange(len(histogram_counts)),
+                histogram_counts,
+                alpha=0.7,
+                color="skyblue",
+                edgecolor="black",
+                label="Histogram",
+            )
+
+        # Plot threshold lines (exclude min and max)
+        colors = plt.cm.Set1(np.linspace(0, 1, len(mid_thresholds)))
+        for i, (thresh, color) in enumerate(zip(mid_thresholds, colors)):
+            ax.axvline(
+                thresh,
+                color=color,
+                linestyle="--",
+                linewidth=2,
+                label=f"Threshold {i+1}: {thresh:.3f}",
+            )
+
+        ax.set_xlabel("Intensity Value", fontsize=12)
+        ax.set_ylabel("Frequency", fontsize=12)
+        ax.set_title(f"Histogram with {classes}-class Otsu Thresholds", fontsize=14)
+        ax.legend(fontsize=10)
+        ax.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+
+        return result, fig
+    else:
+        # Default: return only thresholds
+        return result
