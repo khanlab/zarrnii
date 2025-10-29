@@ -31,6 +31,8 @@ import nibabel as nib
 import numpy as np
 from attrs import define
 from scipy.ndimage import zoom
+from scipy.interpolate import interpn
+
 
 from .transform import AffineTransform, Transform
 
@@ -887,6 +889,9 @@ def apply_transform_to_ngff_image(
     # For now, return a placeholder implementation
     # This would need full implementation of interpolation logic
     print("Warning: apply_transform_to_ngff_image is not fully implemented yet")
+
+
+
     return reference_image
 
 
@@ -989,6 +994,98 @@ def _select_dimensions_from_image_with_omero(
         filtered_omero = FilteredOmero(filtered_channels)
 
     return selected_ngff_image, filtered_omero
+
+
+def interp_by_block(
+    x,
+    transforms: list[Transform],
+    flo_znimg: ZarrNii,
+    block_info=None,
+    interp_method="linear",
+):
+    """
+    Interpolates the floating image (`flo_znimg`) onto the reference image block (`x`)
+    using the provided transformations.
+
+    This function extracts the necessary subset of the floating image for each block
+    of the reference image, applies the transformations, and interpolates the floating
+    image intensities onto the reference image grid.
+
+    Parameters:
+        x (np.ndarray): The reference image block to interpolate onto.
+        transforms (list[Transform]): A list of `Transform` objects to apply to the
+                                       reference image coordinates.
+        flo_znimg (ZarrNii): The floating ZarrNii instance to interpolate from.
+        block_info (dict, optional): Metadata about the current block being processed.
+        interp_method (str, optional): Interpolation method. Defaults to "linear".
+
+    Returns:
+        np.ndarray: The interpolated block of the reference image.
+
+    Notes:
+        - The function transforms the reference image block coordinates to the floating
+          image space, extracts the required subregion from the floating image, and
+          performs interpolation.
+        - If the transformed coordinates are completely outside the bounds of the floating
+          image, a zero-filled array is returned.
+
+    Example:
+        interpolated_block = interp_by_block(
+            x=ref_block,
+            transforms=[transform1, transform2],
+            flo_znimg=floating_image,
+            block_info=block_metadata,
+        )
+    """
+    print(flo_znimg)
+    # Extract the array location (block bounds) from block_info
+    arr_location = block_info[0]["array-location"]
+
+    # Generate coordinate grids for the reference image block
+    xv, yv, zv = np.meshgrid(
+        np.arange(arr_location[-3][0], arr_location[-3][1]),
+        np.arange(arr_location[-2][0], arr_location[-2][1]),
+        np.arange(arr_location[-1][0], arr_location[-1][1]),
+        indexing="ij",
+    )
+
+    # Reshape grids into vectors for matrix multiplication
+    xvf = xv.reshape((1, np.product(xv.shape)))
+    yvf = yv.reshape((1, np.product(yv.shape)))
+    zvf = zv.reshape((1, np.product(zv.shape)))
+    homog = np.ones(xvf.shape)
+
+    xfm_vecs = np.vstack((xvf, yvf, zvf, homog))
+
+    # Apply transformations sequentially
+    for tfm in transforms:
+        xfm_vecs = tfm.apply_transform(xfm_vecs)
+
+    # Initialize the output array for interpolated values
+    interpolated = np.zeros(x.shape)
+
+    # Determine the required subregion of the floating image
+    grid_points, flo_vol = flo_znimg.get_bounded_subregion(xfm_vecs)
+    if grid_points is None and flo_vol is None:
+        # Points are fully outside the floating image; return zeros
+        return interpolated
+
+    # Interpolate each channel of the floating image
+    for c in range(flo_vol.shape[0]):
+        interpolated[c, :, :, :] = (
+            interpn(
+                grid_points,
+                flo_vol[c, :, :, :],
+                xfm_vecs[:3, :].T,  # Transformed coordinates
+                method=interp_method,
+                bounds_error=False,
+                fill_value=0,
+            )
+            .reshape((x.shape[-3], x.shape[-2], x.shape[-1]))
+            .astype(block_info[None]["dtype"])
+        )
+
+    return interpolated
 
 
 @define
@@ -2518,6 +2615,77 @@ class ZarrNii:
         else:
             return tuple(new_chunks)
 
+
+
+
+    def get_bounded_subregion(self, points: np.ndarray):
+        """
+        Extracts a bounded subregion of the dask array containing the specified points,
+        along with the grid points for interpolation.
+
+        If the points extend beyond the domain of the dask array, the extent is capped
+        at the boundaries. If all points are outside the domain, the function returns
+        `(None, None)`.
+
+        Parameters:
+            points (np.ndarray): Nx3 or Nx4 array of coordinates in the array's space.
+                                 If Nx4, the last column is assumed to be the homogeneous
+                                 coordinate and is ignored.
+
+        Returns:
+            tuple:
+                grid_points (tuple): A tuple of three 1D arrays representing the grid
+                                     points along each axis (X, Y, Z) in the subregion.
+                subvol (np.ndarray or None): The extracted subregion as a NumPy array.
+                                             Returns `None` if all points are outside
+                                             the array domain.
+
+        Notes:
+            - The function uses `compute()` on the dask array to immediately load the
+              subregion, as Dask doesn't support the type of indexing required for
+              interpolation.
+            - A padding of 1 voxel is applied around the extent of the points.
+
+        Example:
+            grid_points, subvol = znimg.get_bounded_subregion(points)
+            if subvol is not None:
+                print("Subvolume shape:", subvol.shape)
+        """
+        pad = 1  # Padding around the extent of the points
+
+        # Compute the extent of the points in the array's coordinate space
+        min_extent = np.floor(points.min(axis=1)[:3] - pad).astype("int")
+        max_extent = np.ceil(points.max(axis=1)[:3] + pad).astype("int")
+
+        # Clip the extents to ensure they stay within the bounds of the array
+        clip_min = np.zeros_like(min_extent)
+        clip_max = np.array(self.darr.shape[-3:])  # Z, Y, X dimensions
+
+        min_extent = np.clip(min_extent, clip_min, clip_max)
+        max_extent = np.clip(max_extent, clip_min, clip_max)
+
+        # Check if all points are outside the domain
+        if np.any(max_extent <= min_extent):
+            return None, None
+
+        # Extract the subvolume using the computed extents
+        subvol = self.darr[
+            :,
+            min_extent[0] : max_extent[0],
+            min_extent[1] : max_extent[1],
+            min_extent[2] : max_extent[2],
+        ].compute()
+
+        # Generate grid points for interpolation
+        grid_points = (
+            np.arange(min_extent[0], max_extent[0]),  # Z
+            np.arange(min_extent[1], max_extent[1]),  # Y
+            np.arange(min_extent[2], max_extent[2]),  # X
+        )
+
+        return grid_points, subvol
+
+
     def apply_transform(
         self,
         *transforms: Transform,
@@ -2568,20 +2736,45 @@ class ZarrNii:
                 ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
             )
 
-        # For now, just apply the first transform (placeholder)
-        if transforms:
-            transformed_image = apply_transform_to_ngff_image(
-                self.ngff_image, transforms[0], ref_znimg.ngff_image, spatial_dims
-            )
-        else:
-            transformed_image = self.ngff_image
 
-        return ZarrNii(
-            ngff_image=transformed_image,
-            axes_order=self.axes_order,
-            xyz_orientation=self.xyz_orientation,
-            _omero=self._omero,
+
+        # Initialize the list of transformations to apply
+        tfms_to_apply = [ref_znimg.affine]  # Start with the reference image affine
+
+        # Append all transformations passed as arguments
+        tfms_to_apply.extend(transforms)
+
+        # Append the inverse of the current image's affine
+        tfms_to_apply.append(self.affine.invert())
+
+        # Create new NgffImage from ref image
+        interp_ngff_image  = nz.NgffImage(
+            data=ref_znimg.data,
+            dims=ref_znimg.ngff_image.dims.copy(),
+            scale=ref_znimg.ngff_image.scale.copy(),
+            translation=ref_znimg.ngff_image.translation.copy(),
+            name=f"{self.name}_transformed_to_{ref_znimg.name}",
         )
+        print('in apply_transform')
+        print(self)
+        # Lazily apply the transformations using dask
+        interp_ngff_image.data = da.map_blocks(
+            interp_by_block,  # Function to interpolate each block
+            ref_znimg.data,  # Reference image data
+            dtype=np.float32,  # Output data type
+            transforms=tfms_to_apply,  # Transformations to apply
+            flo_znimg=self,  # Floating image to align
+        )
+
+        return ZarrNii.from_ngff_image(
+            interp_ngff_image,
+            axes_order=ref_znimg.axes_order,
+            xyz_orientation=ref_znimg.xyz_orientation,
+            omero=self.omero,
+        )
+
+
+
 
     # I/O operations
     def to_ome_zarr(
@@ -4354,37 +4547,6 @@ class ZarrNii:
 
         return newobj
 
-    def __getattr__(self, name: str) -> Any:
-        """Delegate attribute/method access to underlying Dask array.
-
-        This enables ZarrNii objects to support Dask array operations
-        directly while preserving metadata.
-
-        Args:
-            name: Attribute or method name
-
-        Returns:
-            The attribute value or a wrapped method that returns ZarrNii
-        """
-        # Get the attribute from ngff_image.data
-        try:
-            attr = getattr(self.ngff_image.data, name)
-        except AttributeError:
-            raise AttributeError(
-                f"'{type(self).__name__}' object has no attribute '{name}'"
-            )
-
-        # If it's callable, wrap it to return ZarrNii
-        if callable(attr):
-
-            def method(*args, **kwargs):
-                result = attr(*args, **kwargs)
-                return self._wrap_result(result, name)
-
-            return method
-
-        # Return the attribute as-is
-        return attr
 
     # Arithmetic operator overloading
     def __add__(self, other):
@@ -4672,3 +4834,6 @@ def _align_affine_to_input_orientation(affine, orientation):
     reordered_affine[3, :] = affine[3, :]
 
     return reordered_affine
+
+
+
