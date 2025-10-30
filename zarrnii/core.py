@@ -30,9 +30,8 @@ import ngff_zarr as nz
 import nibabel as nib
 import numpy as np
 from attrs import define
-from scipy.ndimage import zoom
 from scipy.interpolate import interpn
-
+from scipy.ndimage import zoom
 
 from .transform import AffineTransform, Transform
 
@@ -644,82 +643,32 @@ def _select_channels_from_image(
     return new_image
 
 
-def get_affine_matrix(ngff_image: nz.NgffImage, axes_order: str = "ZYX") -> np.ndarray:
-    """
-    Construct an affine transformation matrix from NgffImage metadata.
-
-    Args:
-        ngff_image: Input NgffImage
-        axes_order: Order of spatial axes (default: "ZYX")
-
-    Returns:
-        4x4 affine transformation matrix
-    """
-    # Extract scale and translation for spatial dimensions
-    spatial_dims = list(axes_order.lower())
-
-    # Build 4x4 affine matrix
-    affine = np.eye(4)
-
-    for i, dim in enumerate(spatial_dims):
-        if dim in ngff_image.scale:
-            affine[i, i] = ngff_image.scale[dim]
-        if dim in ngff_image.translation:
-            affine[i, 3] = ngff_image.translation[dim]
-
-    return affine
-
-
-def get_affine_transform(
-    ngff_image: nz.NgffImage, axes_order: str = "ZYX"
-) -> AffineTransform:
-    """
-    Get an AffineTransform object from NgffImage metadata.
-
-    Args:
-        ngff_image: Input NgffImage
-        axes_order: Order of spatial axes (default: "ZYX")
-
-    Returns:
-        AffineTransform object
-    """
-    matrix = get_affine_matrix(ngff_image, axes_order)
-    return AffineTransform.from_array(matrix)
-
-
 # Function-based API for operating on NgffImage objects
 def crop_ngff_image(
     ngff_image: nz.NgffImage,
-    bbox_min: tuple,
-    bbox_max: tuple,
-    spatial_dims: List[str] = None,
+    bbox_min: dict[float],
+    bbox_max: dict[float],
+    dim_flips: dict[float],
 ) -> nz.NgffImage:
     """
     Crop an NgffImage using a bounding box.
 
     Args:
         ngff_image: Input NgffImage to crop
-        bbox_min: Minimum corner of bounding box
-        bbox_max: Maximum corner of bounding box
-        spatial_dims: Names of spatial dimensions (defaults to ["z", "y", "x"])
+        bbox_min: Minimum corner of bounding box, dict with spatial dim keys
+        bbox_max: Maximum corner of bounding box, dict with spatial dim keys
+        orientation_flips: orientation flips by dimensions, dict with spatial dim keys, vals as -1 or +1
 
     Returns:
         New cropped NgffImage
     """
-    if spatial_dims is None:
-        spatial_dims = ["z", "y", "x"]
     # Build slices for cropping
     slices = []
-    spatial_idx = 0
 
     for dim in ngff_image.dims:
-        if dim.lower() in [d.lower() for d in spatial_dims]:
+        if dim in bbox_min:
             # This is a spatial dimension
-            if spatial_idx < len(bbox_min):
-                slices.append(slice(bbox_min[spatial_idx], bbox_max[spatial_idx]))
-                spatial_idx += 1
-            else:
-                slices.append(slice(None))
+            slices.append(slice(bbox_min[dim], bbox_max[dim]))
         else:
             # Non-spatial dimension, keep all
             slices.append(slice(None))
@@ -729,15 +678,12 @@ def crop_ngff_image(
 
     # Update translation to account for cropping
     new_translation = ngff_image.translation.copy()
-    spatial_idx = 0
 
-    for dim in ngff_image.dims:
-        if dim.lower() in [d.lower() for d in spatial_dims]:
-            if spatial_idx < len(bbox_min) and dim in new_translation:
-                # Update translation by adding the crop offset
-                offset = bbox_min[spatial_idx] * ngff_image.scale.get(dim, 1.0)
-                new_translation[dim] += offset
-                spatial_idx += 1
+    for dim in bbox_min.keys():
+        new_translation[dim] = (
+            new_translation[dim]
+            + dim_flips[dim] * bbox_min[dim] * ngff_image.scale[dim]
+        )
 
     # Create new NgffImage
     return nz.NgffImage(
@@ -890,8 +836,6 @@ def apply_transform_to_ngff_image(
     # This would need full implementation of interpolation logic
     print("Warning: apply_transform_to_ngff_image is not fully implemented yet")
 
-
-
     return reference_image
 
 
@@ -1037,7 +981,6 @@ def interp_by_block(
             block_info=block_metadata,
         )
     """
-    print(flo_znimg)
     # Extract the array location (block bounds) from block_info
     arr_location = block_info[0]["array-location"]
 
@@ -1186,44 +1129,9 @@ class ZarrNii:
         Affine transformation matrix derived from NgffImage scale and translation.
 
         Returns:
-            AffineTransform: 4x4 affine transformation matrix
+            AffineTransform: 4x4 affine transformation matrix in axes order of self.
         """
         return self.get_affine_transform()
-
-    def get_affine_matrix(self, axes_order: str = None) -> np.ndarray:
-        """
-        Get 4x4 affine transformation matrix from NgffImage metadata.
-
-        Args:
-            axes_order: Spatial axes order, defaults to self.axes_order
-
-        Returns:
-            4x4 affine transformation matrix
-        """
-        if axes_order is None:
-            axes_order = self.axes_order
-
-        # Create identity 4x4 matrix
-        affine = np.eye(4)
-
-        # Map axes order to matrix indices
-        spatial_dims = ["z", "y", "x"] if axes_order == "ZYX" else ["x", "y", "z"]
-
-        # Set scale values
-        for i, dim in enumerate(spatial_dims):
-            if dim in self.ngff_image.scale:
-                affine[i, i] = self.ngff_image.scale[dim]
-
-        # Set translation values
-        for i, dim in enumerate(spatial_dims):
-            if dim in self.ngff_image.translation:
-                affine[i, 3] = self.ngff_image.translation[dim]
-
-        # Apply orientation alignment if orientation is available
-        if hasattr(self, "orientation") and self.orientation:
-            affine = _align_affine_to_input_orientation(affine, self.orientation)
-
-        return affine
 
     def get_affine_transform(self, axes_order: str = None) -> AffineTransform:
         """
@@ -1999,7 +1907,9 @@ class ZarrNii:
             phys_max = np.array(list(bbox_max) + [1.0])
 
             # Get inverse affine to convert from physical to voxel
-            affine_inv = np.linalg.inv(self.affine.matrix)
+            affine_inv = np.linalg.inv(
+                self.get_affine_matrix(axes_order="XYZ")
+            )  # TODO: should this always be xyz affine??
 
             # Transform to voxel coordinates
             voxel_min = affine_inv @ phys_min
@@ -2021,23 +1931,20 @@ class ZarrNii:
             )
 
             # Create mapping from x,y,z to voxel coordinates
-            xyz_to_voxel = {
+            bbox_vox_min = {
                 "x": voxel_min_xyz[0],
                 "y": voxel_min_xyz[1],
                 "z": voxel_min_xyz[2],
             }
-            xyz_to_voxel_max = {
+            bbox_vox_max = {
                 "x": voxel_max_xyz[0],
                 "y": voxel_max_xyz[1],
                 "z": voxel_max_xyz[2],
             }
 
-            # Reorder according to spatial_dims
-            bbox_min = tuple(xyz_to_voxel[dim.lower()] for dim in spatial_dims)
-            bbox_max = tuple(xyz_to_voxel_max[dim.lower()] for dim in spatial_dims)
-
+        dim_flips = _axcodes2flips(self.orientation)
         cropped_image = crop_ngff_image(
-            self.ngff_image, bbox_min, bbox_max, spatial_dims
+            self.ngff_image, bbox_vox_min, bbox_vox_max, dim_flips
         )
         return ZarrNii(
             ngff_image=cropped_image,
@@ -2153,7 +2060,7 @@ class ZarrNii:
         center_phys = np.array(list(centers) + [1.0])
 
         # Get inverse affine to convert from physical to voxel
-        affine_inv = np.linalg.inv(self.affine.matrix)
+        affine_inv = np.linalg.inv(self.get_affine_matrix(axes_order="XYZ"))
 
         # Transform to voxel coordinates
         center_voxel = affine_inv @ center_phys
@@ -2269,24 +2176,21 @@ class ZarrNii:
             )
 
         # Create mapping from x,y,z to voxel coordinates for cropping
-        xyz_to_voxel = {
+        bbox_vox_min = {
             "x": crop_min_xyz[0],
             "y": crop_min_xyz[1],
             "z": crop_min_xyz[2],
         }
-        xyz_to_voxel_max = {
+        bbox_vox_max = {
             "x": crop_max_xyz[0],
             "y": crop_max_xyz[1],
             "z": crop_max_xyz[2],
         }
 
-        # Reorder according to spatial_dims
-        bbox_min = tuple(xyz_to_voxel[dim.lower()] for dim in spatial_dims)
-        bbox_max = tuple(xyz_to_voxel_max[dim.lower()] for dim in spatial_dims)
-
+        dim_flips = _axcodes2flips(self.orientation)
         # Crop the actual image data that exists
         cropped_image = crop_ngff_image(
-            self.ngff_image, bbox_min, bbox_max, spatial_dims
+            self.ngff_image, bbox_vox_min, bbox_vox_max, dim_flips
         )
 
         # Check if padding is needed
@@ -2324,23 +2228,11 @@ class ZarrNii:
 
             # Adjust translation for the padding
             new_translation = cropped_image.translation.copy()
-            for i, dim in enumerate(cropped_image.dims):
-                if dim.lower() in [d.lower() for d in spatial_dims]:
-                    dim_lower = dim.lower()
-                    if dim_lower == "x":
-                        pad_before = pad_before_xyz[0]
-                    elif dim_lower == "y":
-                        pad_before = pad_before_xyz[1]
-                    elif dim_lower == "z":
-                        pad_before = pad_before_xyz[2]
-                    else:
-                        pad_before = 0
 
-                    if dim in new_translation:
-                        # Adjust translation by the padding offset
-                        new_translation[dim] -= pad_before * cropped_image.scale.get(
-                            dim, 1.0
-                        )
+            for i, dim in enumerate(bbox_vox_min.keys()):
+                new_translation[dim] = new_translation + dim_flips[
+                    dim
+                ] * pad_before_xyz[i] * cropped_image.scale.get(dim, 1.0)
 
             # Create padded NgffImage
             cropped_image = nz.NgffImage(
@@ -2511,7 +2403,6 @@ class ZarrNii:
             scaling_matrix = np.diag(
                 (1 / scaling[-1], 1 / scaling[-2], 1 / scaling[-3], 1)
             )
-        new_affine = AffineTransform.from_array(scaling_matrix @ self.affine.matrix)
 
         # Create new NgffImage with upsampled data
         dims = self.dims
@@ -2615,9 +2506,6 @@ class ZarrNii:
         else:
             return tuple(new_chunks)
 
-
-
-
     def get_bounded_subregion(self, points: np.ndarray):
         """
         Extracts a bounded subregion of the dask array containing the specified points,
@@ -2685,7 +2573,6 @@ class ZarrNii:
 
         return grid_points, subvol
 
-
     def apply_transform(
         self,
         *transforms: Transform,
@@ -2736,8 +2623,6 @@ class ZarrNii:
                 ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
             )
 
-
-
         # Initialize the list of transformations to apply
         tfms_to_apply = [ref_znimg.affine]  # Start with the reference image affine
 
@@ -2748,15 +2633,13 @@ class ZarrNii:
         tfms_to_apply.append(self.affine.invert())
 
         # Create new NgffImage from ref image
-        interp_ngff_image  = nz.NgffImage(
+        interp_ngff_image = nz.NgffImage(
             data=ref_znimg.data,
             dims=ref_znimg.ngff_image.dims.copy(),
             scale=ref_znimg.ngff_image.scale.copy(),
             translation=ref_znimg.ngff_image.translation.copy(),
             name=f"{self.name}_transformed_to_{ref_znimg.name}",
         )
-        print('in apply_transform')
-        print(self)
         # Lazily apply the transformations using dask
         interp_ngff_image.data = da.map_blocks(
             interp_by_block,  # Function to interpolate each block
@@ -2772,9 +2655,6 @@ class ZarrNii:
             xyz_orientation=ref_znimg.xyz_orientation,
             omero=self.omero,
         )
-
-
-
 
     # I/O operations
     def to_ome_zarr(
@@ -3946,9 +3826,49 @@ class ZarrNii:
 
         return np.array(origin)
 
-    def get_orientation(self):
-        """Get orientation string from affine matrix."""
-        return _affine_to_orientation(self.get_affine_matrix())
+    def get_affine_matrix(self, axes_order: str = None) -> np.ndarray:
+        """
+        Construct a 4x4 affine matrix from NGFF metadata (scale/translation),
+        and align it to self.orientation (if provided) using nibabel.orientations.
+
+        Args:
+            axes_order: Spatial axes order, e.g. 'ZYX' or 'XYZ'. Defaults to 'XYZ'.
+
+        Returns:
+            np.ndarray: 4x4 affine matrix.
+        """
+        if axes_order is None:
+            axes_order = self.axes_order
+
+        if axes_order == "ZYX":
+            orientation = reverse_orientation_string(self.orientation)
+        else:
+            orientation = self.orientation
+
+        # Safely pull scale/translation from metadata (dict-like expected)
+        scale_meta = getattr(self.ngff_image, "scale", {}) or {}
+        trans_meta = getattr(self.ngff_image, "translation", {}) or {}
+
+        scale = np.ones(
+            3,
+        )
+        trans = np.zeros(
+            3,
+        )
+
+        for i, dim in enumerate(axes_order):
+            s = scale_meta.get(dim.lower())
+            if s is not None:
+                scale[i] = float(s)
+
+        for i, dim in enumerate(axes_order):
+            s = trans_meta.get(dim.lower())
+            if s is not None:
+                trans[i] = float(s)
+
+        affine = _axcodes2aff(orientation, scale=scale, translate=trans)
+
+        return affine
 
     def apply_transform_ref_to_flo_indices(self, *transforms, ref_znimg, indices):
         """Transform indices from reference to floating space."""
@@ -4547,7 +4467,6 @@ class ZarrNii:
 
         return newobj
 
-
     # Arithmetic operator overloading
     def __add__(self, other):
         """Add operation."""
@@ -4736,10 +4655,12 @@ def reverse_orientation_string(orientation_str):
         >>> reverse_orientation_string('LPI')
         'IPL'
     """
+
     if len(orientation_str) != 3:
         raise ValueError(
             f"Orientation string must be exactly 3 characters, got: {orientation_str}"
         )
+
     return orientation_str[::-1]
 
 
@@ -4773,67 +4694,118 @@ def _affine_to_orientation(affine):
     return "".join(orientation)
 
 
-def _orientation_to_affine(orientation, spacing=(1, 1, 1), origin=(0, 0, 0)):
+from nibabel.orientations import (
+    axcodes2ornt,
+    inv_ornt_aff,
+    io_orientation,
+    ornt_transform,
+)
+
+
+def _infer_spatial_shape_from_data(self, axes_order: str) -> tuple[int, int, int]:
     """
-    Creates an affine matrix based on an orientation string (e.g., 'RAS').
+    Infer the (Z, Y, X) or (X, Y, Z) spatial shape from self.data.shape and axes_order.
+    Assumes the last 3 dims of self.data are spatial (common in NGFF / OME-Zarr workflows).
+    """
+    shape = getattr(self, "data", None)
+    if shape is None:
+        raise ValueError("self.data is not set; cannot infer spatial shape.")
+    shape = self.data.shape
+    if len(shape) < 3:
+        raise ValueError(f"Expected at least 3D data; got shape={shape}")
+
+    tail3 = shape[-3:]  # assume trailing 3 dims are spatial
+    ao = (axes_order or getattr(self, "axes_order", "XYZ")).upper()
+    if ao == "ZYX":
+        # trailing dims are (Z, Y, X)
+        return tuple(int(d) for d in tail3)  # (Z, Y, X)
+    else:
+        # treat everything else as XYZ
+        x, y, z = tail3
+        return (int(x), int(y), int(z))  # (X, Y, Z)
+
+
+def _make_affine_aligned_to_orientation(
+    affine: np.ndarray, orientation: str, spatial_shape: tuple[int, int, int]
+) -> np.ndarray:
+    """
+    Align affine to `orientation` using nibabel.orientations, with the correct spatial shape.
+    """
+    if not isinstance(orientation, str) or len(orientation) != 3:
+        raise ValueError(
+            f"orientation must be a 3-letter code like 'RAS', got {orientation!r}"
+        )
+
+    current_ornt = io_orientation(affine)
+    target_ornt = axcodes2ornt(tuple(orientation.upper()))
+    transform = ornt_transform(current_ornt, target_ornt)
+    # IMPORTANT: pass the SPATIAL SHAPE (not affine.shape)
+    return affine @ inv_ornt_aff(transform, spatial_shape)
+
+
+def _axcodes2aff(axcodes, scale, translate, labels=None):
+    """Create a homogeneous affine from axis codes.
+
+    Uses the provided scale and translate to set diag and offset.
+
+    Parameters
+    ----------
+    axcodes : sequence of length p
+        Axis codes, e.g. ('R','A','S') or (None, 'L', 'S').
+    scale: (3,) list of scaling values for X Y Z
+    trans: (3,) list of translation values for X Y Z
+    labels : sequence of (2,) label tuples, optional
+        Same semantics as for axcodes2ornt / ornt2axcodes.  If None, defaults
+        to (('L','R'), ('P','A'), ('I','S')).
+
+    Returns
+    -------
+    aff : (p+1, p+1) ndarray
+        Homogeneous affine implementing the permutation and flips implied by
+        `axcodes`, with provided translation and scaling.
+
+    Notes
+    -----
+    - If an axis code is None (a dropped axis), the corresponding column in
+      the linear part is left all zeros.
+    """
+    ornt = axcodes2ornt(axcodes, labels)
+    p = ornt.shape[0]
+    aff = np.zeros((p + 1, p + 1), dtype=float)
+    # Fill linear part: for each input axis (column), put a 1 or -1 in the
+    # output-axis row indicated by ornt[:,0]
+    for in_idx, (out_ax, flip) in enumerate(ornt):
+        if np.isnan(out_ax):
+            # dropped axis -> leave column zero
+            continue
+        out_idx = int(out_ax)
+        aff[out_idx, in_idx] = float(flip) * scale[in_idx]
+        aff[out_idx, p] = translate[in_idx]
+    aff[p, p] = 1.0
+    return aff
+
+
+def _axcodes2flips(axcodes, labels=None):
+    """
+    Make a dict mapping dimensions ('x','y,'z') to flips (+1,-1) based on  xyz orientation string (or axcodes), e.g. RAS
 
     Parameters:
-        orientation (str): Orientation string (e.g., 'RAS', 'LPS').
-        spacing (tuple): Voxel spacing along each axis (default: (1, 1, 1)).
-        origin (tuple): Origin point in physical space (default: (0, 0, 0)).
+    axcodes : sequence of length p
+        Axis codes, e.g. ('R','A','S') or (None, 'L', 'S').
+    labels : sequence of (2,) label tuples, optional
+        Same semantics as for axcodes2ornt / ornt2axcodes.  If None, defaults
+        to (('L','R'), ('P','A'), ('I','S')).
+
 
     Returns:
-        affine (numpy.ndarray): Affine matrix from voxel to world coordinates.
+        dict: Anatomical orientation (e.g., 'RAS', 'LPI').
     """
-    # Validate orientation length
-    if len(orientation) != 3:
-        raise ValueError("Orientation must be a 3-character string (e.g., 'RAS').")
 
-    # Axis mapping and flipping
-    axis_map = {"R": 0, "L": 0, "A": 1, "P": 1, "S": 2, "I": 2}
-    sign_map = {"R": 1, "L": -1, "A": 1, "P": -1, "S": 1, "I": -1}
+    ornt = axcodes2ornt(axcodes, labels)
+    dims = ["x", "y", "z"]
 
-    axes = [axis_map[ax] for ax in orientation]
-    signs = [sign_map[ax] for ax in orientation]
+    dim_flips = {}
+    for i, (out_ax, flip) in enumerate(ornt):
+        dim_flips[dims[i]] = float(flip)
 
-    # Construct the affine matrix
-    affine = np.zeros((4, 4))
-    for i, (axis, sign) in enumerate(zip(axes, signs)):
-        affine[i, axis] = sign * spacing[axis]
-
-    # Add origin
-    affine[:3, 3] = origin
-    affine[3, 3] = 1
-
-    return affine
-
-
-def _align_affine_to_input_orientation(affine, orientation):
-    """
-    Reorders and flips the affine matrix to align with the specified input orientation.
-
-    Parameters:
-        affine (np.ndarray): Initial affine matrix.
-        orientation (str): Input orientation (e.g., 'RAS').
-
-    Returns:
-        np.ndarray: Reordered and flipped affine matrix.
-    """
-    axis_map = {"R": 0, "L": 0, "A": 1, "P": 1, "S": 2, "I": 2}
-    sign_map = {"R": 1, "L": -1, "A": 1, "P": -1, "S": 1, "I": -1}
-
-    input_axes = [axis_map[ax] for ax in orientation]
-    input_signs = [sign_map[ax] for ax in orientation]
-
-    reordered_affine = np.zeros_like(affine)
-    for i, (axis, sign) in enumerate(zip(input_axes, input_signs)):
-        reordered_affine[i, :3] = sign * affine[axis, :3]
-        reordered_affine[i, 3] = sign * affine[i, 3]
-
-    # Copy the homogeneous row
-    reordered_affine[3, :] = affine[3, :]
-
-    return reordered_affine
-
-
-
+    return dim_flips
