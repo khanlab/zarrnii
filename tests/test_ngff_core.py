@@ -15,8 +15,6 @@ from zarrnii.core import (
     apply_transform_to_ngff_image,
     crop_ngff_image,
     downsample_ngff_image,
-    get_affine_matrix,
-    get_affine_transform,
     get_multiscales,
     load_ngff_image,
     save_ngff_image,
@@ -105,17 +103,6 @@ class TestNgffImageFunctions:
             else:
                 # Each level should be smaller
                 assert image.data.shape[1] <= multiscales.images[i - 1].data.shape[1]
-
-    def test_get_affine_matrix(self, simple_ngff_image):
-        """Test affine matrix construction from NgffImage."""
-        affine = get_affine_matrix(simple_ngff_image)
-
-        expected = np.eye(4)
-        expected[0, 0] = 2.0  # Z scale
-        expected[1, 1] = 1.0  # Y scale
-        expected[2, 2] = 1.0  # X scale
-
-        assert_array_equal(affine, expected)
 
     def test_get_affine_transform(self, simple_ngff_image):
         """Test AffineTransform object creation from NgffImage."""
