@@ -359,7 +359,7 @@ def test_orientation_in_from_ome_zarr(tmp_path):
     assert loaded_znimg2.orientation == "RAS"  # Should still use stored orientation
 
 
-def test_orientation_xyz_consistent_definiSARn():
+def test_orientation_xyz_consistent_definition():
     """Test that orientation strings are consistently defined with respect to XYZ ordering."""
     # Create test data
     data = np.random.rand(1, 64, 64, 64).astype(np.float32)
