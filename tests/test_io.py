@@ -474,12 +474,12 @@ def test_orientation_xyz_definition_clarity():
     extracted_xyz = _affine_to_orientation(affine_xyz)
     extracted_zyx = _affine_to_orientation(affine_zyx)
 
-    assert (
-        extracted_xyz == "RAS"
-    ), f"XYZ affine should extract as RAS, got {extracted_xyz}"
-    assert (
-        extracted_zyx == "SAR"
-    ), f"ZYX affine should extract as SAR, got {extracted_zyx}"
+    assert extracted_xyz == "RAS", (
+        f"XYZ affine should extract as RAS, got {extracted_xyz}"
+    )
+    assert extracted_zyx == "SAR", (
+        f"ZYX affine should extract as SAR, got {extracted_zyx}"
+    )
 
     # Document what RAS means:
     print("✓ RAS orientation confirmed to mean:")

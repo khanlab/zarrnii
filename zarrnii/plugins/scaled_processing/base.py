@@ -7,7 +7,6 @@ This module defines the abstract interface that all scaled processing plugins mu
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
 
 import dask.array as da
 import numpy as np

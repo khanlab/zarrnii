@@ -12,19 +12,18 @@ Console Scripts:
 import argparse
 import sys
 from pathlib import Path
-from typing import List, Tuple
 
 from zarrnii import ZarrNii
 
 
-def parse_int_list(value: str) -> List[int]:
+def parse_int_list(value: str) -> list[int]:
     """Parse comma-separated list of integers."""
     if not value.strip():
         return []
     return [int(x.strip()) for x in value.split(",")]
 
 
-def parse_float_tuple(value: str) -> Tuple[float, float, float]:
+def parse_float_tuple(value: str) -> tuple[float, float, float]:
     """Parse comma-separated tuple of 3 floats."""
     parts = [float(x.strip()) for x in value.split(",")]
     if len(parts) != 3:
@@ -32,7 +31,7 @@ def parse_float_tuple(value: str) -> Tuple[float, float, float]:
     return tuple(parts)
 
 
-def parse_int_tuple(value: str) -> Tuple[int, ...]:
+def parse_int_tuple(value: str) -> tuple[int, ...]:
     """Parse comma-separated tuple of integers."""
     return tuple(int(x.strip()) for x in value.split(","))
 

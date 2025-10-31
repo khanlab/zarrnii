@@ -73,9 +73,7 @@ def create_test_dataset_with_omero_metadata(store_path, num_channels=3):
         ("DAPI", "0000FF"),
         ("Abeta", "00FF00"),
         ("GFP", "FF0000"),
-    ][
-        :num_channels
-    ]  # Only include as many as we have channels
+    ][:num_channels]  # Only include as many as we have channels
 
     # Create channel dictionaries with proper structure for ngff_zarr
     omero_channels = []
@@ -445,9 +443,9 @@ class TestChannelSelection:
         expected_sums = [100 * expected_volume, 300 * expected_volume]
         actual_sums = [int(channel_0_sum), int(channel_1_sum)]
 
-        assert (
-            actual_sums == expected_sums
-        ), f"Channel data mismatch: expected {expected_sums}, got {actual_sums}"
+        assert actual_sums == expected_sums, (
+            f"Channel data mismatch: expected {expected_sums}, got {actual_sums}"
+        )
 
     def test_select_channels_error_no_channel_dimension(self):
         """Test that proper error is raised when there's no channel dimension."""

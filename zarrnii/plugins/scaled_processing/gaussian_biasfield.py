@@ -7,8 +7,6 @@ at low resolution and applies it to full resolution data.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-
 import dask.array as da
 import numpy as np
 from scipy import ndimage

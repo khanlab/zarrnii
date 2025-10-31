@@ -7,7 +7,7 @@ histogram computation and threshold calculation.
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any
 
 import dask.array as da
 import numpy as np
@@ -17,10 +17,10 @@ from skimage.filters import threshold_multiotsu
 def compute_histogram(
     image: da.Array,
     bins: int = 256,
-    range: Optional[Tuple[float, float]] = None,
-    mask: Optional[da.Array] = None,
+    range: tuple[float, float] | None = None,
+    mask: da.Array | None = None,
     **kwargs: Any,
-) -> Tuple[da.Array, da.Array]:
+) -> tuple[da.Array, da.Array]:
     """
     Compute histogram of a dask array image.
 
@@ -84,14 +84,11 @@ def compute_histogram(
 
 
 def compute_otsu_thresholds(
-    histogram_counts: Union[np.ndarray, da.Array],
+    histogram_counts: np.ndarray | da.Array,
     classes: int = 2,
-    bin_edges: Optional[Union[np.ndarray, da.Array]] = None,
+    bin_edges: np.ndarray | da.Array | None = None,
     return_figure: bool = False,
-) -> Union[
-    List[float],
-    Tuple[List[float], Any],
-]:
+) -> list[float] | tuple[list[float], Any]:
     """
     Compute Otsu multi-level thresholds from histogram data.
 
@@ -246,7 +243,7 @@ def compute_otsu_thresholds(
                 color=color,
                 linestyle="--",
                 linewidth=2,
-                label=f"Threshold {i+1}: {thresh:.3f}",
+                label=f"Threshold {i + 1}: {thresh:.3f}",
             )
 
         ax.set_xlabel("Intensity Value", fontsize=12)

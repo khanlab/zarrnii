@@ -7,7 +7,7 @@ manual threshold values or computed thresholds (e.g., from Otsu analysis).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import numpy as np
 
@@ -33,7 +33,7 @@ class ThresholdSegmentation(SegmentationPlugin):
     """
 
     def __init__(
-        self, thresholds: Union[float, List[float]], inclusive: bool = True, **kwargs
+        self, thresholds: float | list[float], inclusive: bool = True, **kwargs
     ):
         """
         Initialize threshold segmentation plugin.
@@ -56,7 +56,7 @@ class ThresholdSegmentation(SegmentationPlugin):
         self.inclusive = inclusive
 
     def segment(
-        self, image: np.ndarray, metadata: Optional[Dict[str, Any]] = None
+        self, image: np.ndarray, metadata: dict[str, Any] | None = None
     ) -> np.ndarray:
         """
         Segment image using threshold values.
@@ -115,7 +115,7 @@ class ThresholdSegmentation(SegmentationPlugin):
                 f"which thresholds each pixel exceeds (using {op} comparison)."
             )
 
-    def get_thresholds(self) -> List[float]:
+    def get_thresholds(self) -> list[float]:
         """
         Get the threshold values used by this plugin.
 

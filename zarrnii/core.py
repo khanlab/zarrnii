@@ -22,7 +22,7 @@ Key Functions:
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import dask.array as da
 import fsspec
@@ -47,12 +47,12 @@ class MetadataInvalidError(Exception):
 
 
 def load_ngff_image(
-    store_or_path: Union[str, Any],
+    store_or_path: str | Any,
     level: int = 0,
-    channels: Optional[List[int]] = None,
-    channel_labels: Optional[List[str]] = None,
-    timepoints: Optional[List[int]] = None,
-    storage_options: Optional[Dict[str, Any]] = None,
+    channels: list[int] | None = None,
+    channel_labels: list[str] | None = None,
+    timepoints: list[int] | None = None,
+    storage_options: dict[str, Any] | None = None,
 ) -> nz.NgffImage:
     """Load an NgffImage from an OME-Zarr store.
 
@@ -112,10 +112,10 @@ def load_ngff_image(
 
 def save_ngff_image(
     ngff_image: nz.NgffImage,
-    store_or_path: Union[str, Any],
+    store_or_path: str | Any,
     max_layer: int = 4,
-    scale_factors: Optional[List[int]] = None,
-    xyz_orientation: Optional[str] = None,
+    scale_factors: list[int] | None = None,
+    xyz_orientation: str | None = None,
     **kwargs: Any,
 ) -> None:
     """Save an NgffImage to an OME-Zarr store with multiscale pyramid.
@@ -199,11 +199,11 @@ def save_ngff_image(
 
 def save_ngff_image_with_ome_zarr(
     ngff_image: nz.NgffImage,
-    store_or_path: Union[str, Any],
+    store_or_path: str | Any,
     max_layer: int = 4,
-    scale_factors: Optional[List[int]] = None,
+    scale_factors: list[int] | None = None,
     scaling_method: str = "local_mean",
-    xyz_orientation: Optional[str] = None,
+    xyz_orientation: str | None = None,
     compute: bool = True,
     **kwargs: Any,
 ) -> None:
@@ -383,7 +383,7 @@ def _ngff_image_to_ome_zarr_axes(ngff_image: nz.NgffImage) -> list:
 
 
 def _ngff_image_to_ome_zarr_transforms(
-    ngff_image: nz.NgffImage, scale_factors: List[int]
+    ngff_image: nz.NgffImage, scale_factors: list[int]
 ) -> list:
     """Convert NgffImage scale/translation to ome-zarr coordinate_transformations.
 
@@ -446,7 +446,7 @@ def _ngff_image_to_ome_zarr_transforms(
 
 def get_multiscales(
     store_or_path,
-    storage_options: Optional[Dict] = None,
+    storage_options: dict | None = None,
 ) -> nz.Multiscales:
     """
     Load the full multiscales object from an OME-Zarr store.
@@ -466,9 +466,9 @@ def get_multiscales(
 def _select_dimensions_from_image(
     image: nz.NgffImage,
     multiscales: nz.Multiscales,
-    channels: Optional[List[int]] = None,
-    channel_labels: Optional[List[str]] = None,
-    timepoints: Optional[List[int]] = None,
+    channels: list[int] | None = None,
+    channel_labels: list[str] | None = None,
+    timepoints: list[int] | None = None,
 ) -> nz.NgffImage:
     """
     Create a new NgffImage with selected channels and timepoints.
@@ -566,8 +566,8 @@ def _select_dimensions_from_image(
 def _select_channels_from_image(
     image: nz.NgffImage,
     multiscales: nz.Multiscales,
-    channels: Optional[List[int]] = None,
-    channel_labels: Optional[List[str]] = None,
+    channels: list[int] | None = None,
+    channel_labels: list[str] | None = None,
 ) -> nz.NgffImage:
     """
     Create a new NgffImage with selected channels.
@@ -697,8 +697,8 @@ def crop_ngff_image(
 
 def downsample_ngff_image(
     ngff_image: nz.NgffImage,
-    factors: Union[int, List[int]],
-    spatial_dims: List[str] = ["z", "y", "x"],
+    factors: int | list[int],
+    spatial_dims: list[str] = ["z", "y", "x"],
 ) -> nz.NgffImage:
     """
     Downsample an NgffImage by the specified factors.
@@ -753,7 +753,7 @@ def downsample_ngff_image(
     )
 
 
-def _apply_near_isotropic_downsampling(znimg: "ZarrNii", axes_order: str) -> "ZarrNii":
+def _apply_near_isotropic_downsampling(znimg: ZarrNii, axes_order: str) -> ZarrNii:
     """
     Apply near-isotropic downsampling to a ZarrNii instance.
 
@@ -818,7 +818,7 @@ def apply_transform_to_ngff_image(
     ngff_image: nz.NgffImage,
     transform: Transform,
     reference_image: nz.NgffImage,
-    spatial_dims: List[str] = ["z", "y", "x"],
+    spatial_dims: list[str] = ["z", "y", "x"],
 ) -> nz.NgffImage:
     """
     Apply a spatial transformation to an NgffImage.
@@ -1049,7 +1049,7 @@ class ZarrNii:
     ngff_image: nz.NgffImage
     axes_order: str = "ZYX"
     xyz_orientation: str = "RAS"
-    _omero: Optional[object] = None
+    _omero: object | None = None
 
     # Properties that delegate to the internal NgffImage
     @property
@@ -1078,17 +1078,17 @@ class ZarrNii:
         return self.ngff_image.data.shape
 
     @property
-    def dims(self) -> List[str]:
+    def dims(self) -> list[str]:
         """Dimension names."""
         return self.ngff_image.dims
 
     @property
-    def scale(self) -> Dict[str, float]:
+    def scale(self) -> dict[str, float]:
         """Scale information from NgffImage."""
         return self.ngff_image.scale
 
     @property
-    def translation(self) -> Dict[str, float]:
+    def translation(self) -> dict[str, float]:
         """Translation information from NgffImage."""
         return self.ngff_image.translation
 
@@ -1148,7 +1148,7 @@ class ZarrNii:
 
     # Legacy compatibility properties
     @property
-    def axes(self) -> Optional[List[Dict]]:
+    def axes(self) -> list[dict] | None:
         """Axes metadata - derived from NgffImage for compatibility."""
         axes = []
         for dim in self.ngff_image.dims:
@@ -1159,7 +1159,7 @@ class ZarrNii:
         return axes
 
     @property
-    def coordinate_transformations(self) -> Optional[List[Dict]]:
+    def coordinate_transformations(self) -> list[dict] | None:
         """Coordinate transformations - derived from NgffImage scale/translation."""
         transforms = []
 
@@ -1179,7 +1179,7 @@ class ZarrNii:
         return transforms if transforms else None
 
     @property
-    def omero(self) -> Optional[object]:
+    def omero(self) -> object | None:
         """Omero metadata object."""
         return self._omero
 
@@ -1199,8 +1199,8 @@ class ZarrNii:
         ngff_image: nz.NgffImage,
         axes_order: str = "ZYX",
         xyz_orientation: str = "RAS",
-        omero: Optional[object] = None,
-    ) -> "ZarrNii":
+        omero: object | None = None,
+    ) -> ZarrNii:
         """
         Create ZarrNii from an existing NgffImage.
 
@@ -1224,15 +1224,15 @@ class ZarrNii:
     def from_darr(
         cls,
         darr: da.Array,
-        affine: Optional[AffineTransform] = None,
+        affine: AffineTransform | None = None,
         axes_order: str = "ZYX",
         orientation: str = "RAS",
-        spacing: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-        origin: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        spacing: tuple[float, float, float] = (1.0, 1.0, 1.0),
+        origin: tuple[float, float, float] = (0.0, 0.0, 0.0),
         name: str = "image",
-        omero: Optional[object] = None,
+        omero: object | None = None,
         **kwargs,
-    ) -> "ZarrNii":
+    ) -> ZarrNii:
         """
         Create ZarrNii from dask array (legacy compatibility constructor).
 
@@ -1354,18 +1354,18 @@ class ZarrNii:
     @classmethod
     def from_ome_zarr(
         cls,
-        store_or_path: Union[str, Any],
+        store_or_path: str | Any,
         level: int = 0,
-        channels: Optional[List[int]] = None,
-        channel_labels: Optional[List[str]] = None,
-        timepoints: Optional[List[int]] = None,
-        storage_options: Optional[Dict[str, Any]] = None,
+        channels: list[int] | None = None,
+        channel_labels: list[str] | None = None,
+        timepoints: list[int] | None = None,
+        storage_options: dict[str, Any] | None = None,
         axes_order: str = "ZYX",
-        orientation: Optional[str] = None,
+        orientation: str | None = None,
         downsample_near_isotropic: bool = False,
-        chunks: tuple[int, Ellipsis] | Literal["auto"] = "auto",
+        chunks: tuple[int, Ellipsis] | Literal[auto] = "auto",
         rechunk: bool = False,
-    ) -> "ZarrNii":
+    ) -> ZarrNii:
         """Load ZarrNii from OME-Zarr store with flexible options.
 
         Creates a ZarrNii instance from an OME-Zarr store, supporting multiscale
@@ -1476,7 +1476,7 @@ class ZarrNii:
                     )
             else:
                 multiscales = nz.from_ngff_zarr(store_or_path)
-        except Exception as e:
+        except Exception:
             # Fallback for older zarr/ngff_zarr versions
             if isinstance(store_or_path, str):
                 if store_or_path.endswith(".zip"):
@@ -1556,7 +1556,6 @@ class ZarrNii:
             import zarr
 
             if orientation is None:
-
                 if isinstance(store_or_path, str):
                     if store_or_path.endswith(".zip"):
                         zip_store = zarr.storage.ZipStore(store_or_path, mode="r")
@@ -1651,13 +1650,13 @@ class ZarrNii:
     @classmethod
     def from_nifti(
         cls,
-        path: Union[str, bytes],
-        chunks: Union[str, Tuple[int, ...]] = "auto",
+        path: str | bytes,
+        chunks: str | tuple[int, ...] = "auto",
         axes_order: str = "XYZ",
-        name: Optional[str] = None,
+        name: str | None = None,
         as_ref: bool = False,
-        zooms: Optional[Tuple[float, float, float]] = None,
-    ) -> "ZarrNii":
+        zooms: tuple[float, float, float] | None = None,
+    ) -> ZarrNii:
         """Load ZarrNii from NIfTI file with flexible loading options.
 
         Creates a ZarrNii instance from a NIfTI file, automatically converting
@@ -1799,13 +1798,11 @@ class ZarrNii:
     # Chainable operations - each returns a new ZarrNii instance
     def crop(
         self,
-        bbox_min: Union[
-            Tuple[float, ...], List[Tuple[Tuple[float, ...], Tuple[float, ...]]]
-        ],
-        bbox_max: Optional[Tuple[float, ...]] = None,
-        spatial_dims: Optional[List[str]] = None,
+        bbox_min: tuple[float, ...] | list[tuple[tuple[float, ...], tuple[float, ...]]],
+        bbox_max: tuple[float, ...] | None = None,
+        spatial_dims: list[str] | None = None,
         physical_coords: bool = False,
-    ) -> Union["ZarrNii", List["ZarrNii"]]:
+    ) -> ZarrNii | list[ZarrNii]:
         """Extract a spatial region or multiple regions from the image.
 
         Crops the image to the specified bounding box coordinates, preserving
@@ -1970,11 +1967,11 @@ class ZarrNii:
 
     def crop_centered(
         self,
-        centers: Union[Tuple[float, float, float], List[Tuple[float, float, float]]],
-        patch_size: Tuple[int, int, int],
-        spatial_dims: Optional[List[str]] = None,
+        centers: tuple[float, float, float] | list[tuple[float, float, float]],
+        patch_size: tuple[int, int, int],
+        spatial_dims: list[str] | None = None,
         fill_value: float = 0.0,
-    ) -> Union["ZarrNii", List["ZarrNii"]]:
+    ) -> ZarrNii | list[ZarrNii]:
         """Extract fixed-size patches centered at specified coordinates.
 
         Crops the image to extract patches of a fixed size (in voxels) centered
@@ -2256,13 +2253,13 @@ class ZarrNii:
 
     def downsample(
         self,
-        factors: Optional[Union[int, List[int]]] = None,
+        factors: int | list[int] | None = None,
         along_x: int = 1,
         along_y: int = 1,
         along_z: int = 1,
-        level: Optional[int] = None,
-        spatial_dims: Optional[List[str]] = None,
-    ) -> "ZarrNii":
+        level: int | None = None,
+        spatial_dims: list[str] | None = None,
+    ) -> ZarrNii:
         """Reduce image resolution by downsampling.
 
         Performs spatial downsampling by averaging blocks of voxels, effectively
@@ -2580,9 +2577,9 @@ class ZarrNii:
     def apply_transform(
         self,
         *transforms: Transform,
-        ref_znimg: "ZarrNii",
-        spatial_dims: Optional[List[str]] = None,
-    ) -> "ZarrNii":
+        ref_znimg: ZarrNii,
+        spatial_dims: list[str] | None = None,
+    ) -> ZarrNii:
         """Apply spatial transformations to image data.
 
         Transforms the image data to align with a reference image space using
@@ -2663,12 +2660,12 @@ class ZarrNii:
     # I/O operations
     def to_ome_zarr(
         self,
-        store_or_path: Union[str, Any],
+        store_or_path: str | Any,
         max_layer: int = 4,
-        scale_factors: Optional[List[int]] = None,
+        scale_factors: list[int] | None = None,
         backend: str = "ome-zarr-py",
         **kwargs: Any,
-    ) -> "ZarrNii":
+    ) -> ZarrNii:
         """Save to OME-Zarr store with multiscale pyramid.
 
         Creates an OME-Zarr dataset with automatic multiscale pyramid generation
@@ -2789,9 +2786,7 @@ class ZarrNii:
 
         return self
 
-    def to_nifti(
-        self, filename: Optional[Union[str, bytes]] = None
-    ) -> Union[nib.Nifti1Image, str]:
+    def to_nifti(self, filename: str | bytes | None = None) -> nib.Nifti1Image | str:
         """Convert to NIfTI format with automatic dimension handling.
 
         Converts the ZarrNii image to NIfTI-1 format, handling dimension
@@ -2898,10 +2893,10 @@ class ZarrNii:
     def to_tiff_stack(
         self,
         filename_pattern: str,
-        channel: Optional[int] = None,
-        timepoint: Optional[int] = None,
+        channel: int | None = None,
+        timepoint: int | None = None,
         compress: bool = True,
-        dtype: Optional[str] = "uint16",
+        dtype: str | None = "uint16",
         rescale: bool = True,
     ) -> str:
         """Save data as a stack of 2D TIFF images.
@@ -3181,7 +3176,7 @@ class ZarrNii:
         chunks: str = "auto",
         axes_order: str = "ZYX",
         orientation: str = "RAS",
-    ) -> "ZarrNii":
+    ) -> ZarrNii:
         """
         Load from Imaris (.ims) file format.
 
@@ -3233,7 +3228,7 @@ class ZarrNii:
             # Validate level parameter
             if level >= len(resolution_levels):
                 raise ValueError(
-                    f"Level {level} not available. Available levels: 0-{len(resolution_levels)-1}"
+                    f"Level {level} not available. Available levels: 0-{len(resolution_levels) - 1}"
                 )
 
             # Navigate to specified resolution level
@@ -3253,7 +3248,7 @@ class ZarrNii:
             # Validate timepoint parameter
             if timepoint >= len(timepoints):
                 raise ValueError(
-                    f"Timepoint {timepoint} not available. Available timepoints: 0-{len(timepoints)-1}"
+                    f"Timepoint {timepoint} not available. Available timepoints: 0-{len(timepoints) - 1}"
                 )
 
             # Navigate to specified timepoint
@@ -3271,7 +3266,7 @@ class ZarrNii:
             # Validate channel parameter
             if channel >= len(channels):
                 raise ValueError(
-                    f"Channel {channel} not available. Available channels: 0-{len(channels)-1}"
+                    f"Channel {channel} not available. Available channels: 0-{len(channels) - 1}"
                 )
 
             # Navigate to specified channel
@@ -3439,8 +3434,9 @@ class ZarrNii:
                 )
 
                 # Histogram range attributes
-                data_min, data_max = float(channel_data.min()), float(
-                    channel_data.max()
+                data_min, data_max = (
+                    float(channel_data.min()),
+                    float(channel_data.max()),
                 )
                 channel_group.attrs["HistogramMin"] = _string_to_byte_array(
                     f"{data_min:.3f}"
@@ -3535,12 +3531,12 @@ class ZarrNii:
 
             # CRITICAL: Set proper physical extents that define voxel size
             # Imaris reads voxel size from these extent values
-            image_info.attrs["ExtMin0"] = _string_to_byte_array(f"{-ext_x/2:.3f}")
-            image_info.attrs["ExtMax0"] = _string_to_byte_array(f"{ext_x/2:.3f}")
-            image_info.attrs["ExtMin1"] = _string_to_byte_array(f"{-ext_y/2:.3f}")
-            image_info.attrs["ExtMax1"] = _string_to_byte_array(f"{ext_y/2:.3f}")
-            image_info.attrs["ExtMin2"] = _string_to_byte_array(f"{-ext_z/2:.3f}")
-            image_info.attrs["ExtMax2"] = _string_to_byte_array(f"{ext_z/2:.3f}")
+            image_info.attrs["ExtMin0"] = _string_to_byte_array(f"{-ext_x / 2:.3f}")
+            image_info.attrs["ExtMax0"] = _string_to_byte_array(f"{ext_x / 2:.3f}")
+            image_info.attrs["ExtMin1"] = _string_to_byte_array(f"{-ext_y / 2:.3f}")
+            image_info.attrs["ExtMax1"] = _string_to_byte_array(f"{ext_y / 2:.3f}")
+            image_info.attrs["ExtMin2"] = _string_to_byte_array(f"{-ext_z / 2:.3f}")
+            image_info.attrs["ExtMax2"] = _string_to_byte_array(f"{ext_z / 2:.3f}")
 
             # Add device/acquisition metadata
             image_info.attrs["ManufactorString"] = _string_to_byte_array("ZarrNii")
@@ -3593,7 +3589,7 @@ class ZarrNii:
             log_group = info_group.create_group("Log")
             log_group.attrs["Entries"] = _string_to_byte_array("1")
             log_group.attrs["Entry0"] = _string_to_byte_array(
-                f"<ZarrNiiExport channels=\"{' '.join(['on'] * n_channels)}\"/>"
+                f'<ZarrNiiExport channels="{" ".join(["on"] * n_channels)}"/>'
             )
 
             # Create thumbnail group with proper multi-channel thumbnail
@@ -3727,7 +3723,7 @@ class ZarrNii:
 
         return zyx_image
 
-    def copy(self) -> "ZarrNii":
+    def copy(self) -> ZarrNii:
         """
         Create a copy of this ZarrNii.
 
@@ -3884,7 +3880,7 @@ class ZarrNii:
         # Placeholder implementation - would need full transform logic
         return indices
 
-    def list_channels(self) -> List[str]:
+    def list_channels(self) -> list[str]:
         """Get list of available channel labels from OMERO metadata.
 
         Extracts channel labels from OMERO metadata if available, providing
@@ -3918,9 +3914,9 @@ class ZarrNii:
 
     def select_channels(
         self,
-        channels: Optional[List[int]] = None,
-        channel_labels: Optional[List[str]] = None,
-    ) -> "ZarrNii":
+        channels: list[int] | None = None,
+        channel_labels: list[str] | None = None,
+    ) -> ZarrNii:
         """Select specific channels from multi-channel image data.
 
         Creates a new ZarrNii instance containing only the specified channels,
@@ -4021,7 +4017,7 @@ class ZarrNii:
             _omero=filtered_omero,
         )
 
-    def select_timepoints(self, timepoints: Optional[List[int]] = None) -> "ZarrNii":
+    def select_timepoints(self, timepoints: list[int] | None = None) -> ZarrNii:
         """
         Select timepoints from the image data and return a new ZarrNii instance.
 
@@ -4087,8 +4083,8 @@ class ZarrNii:
         )
 
     def segment(
-        self, plugin, chunk_size: Optional[Tuple[int, ...]] = None, **kwargs
-    ) -> "ZarrNii":
+        self, plugin, chunk_size: tuple[int, ...] | None = None, **kwargs
+    ) -> ZarrNii:
         """
         Apply segmentation plugin to the image using blockwise processing.
 
@@ -4161,8 +4157,8 @@ class ZarrNii:
         )
 
     def segment_otsu(
-        self, nbins: int = 256, chunk_size: Optional[Tuple[int, ...]] = None
-    ) -> "ZarrNii":
+        self, nbins: int = 256, chunk_size: tuple[int, ...] | None = None
+    ) -> ZarrNii:
         """
         Apply local Otsu thresholding segmentation to the image.
 
@@ -4183,10 +4179,10 @@ class ZarrNii:
 
     def segment_threshold(
         self,
-        thresholds: Union[float, List[float]],
+        thresholds: float | list[float],
         inclusive: bool = True,
-        chunk_size: Optional[Tuple[int, ...]] = None,
-    ) -> "ZarrNii":
+        chunk_size: tuple[int, ...] | None = None,
+    ) -> ZarrNii:
         """
         Apply threshold-based segmentation to the image.
 
@@ -4221,10 +4217,10 @@ class ZarrNii:
     def compute_histogram(
         self,
         bins: int = 256,
-        range: Optional[Tuple[float, float]] = None,
-        mask: Optional["ZarrNii"] = None,
+        range: tuple[float, float] | None = None,
+        mask: ZarrNii | None = None,
         **kwargs: Any,
-    ) -> Tuple[da.Array, da.Array]:
+    ) -> tuple[da.Array, da.Array]:
         """
         Compute histogram of the image.
 
@@ -4264,13 +4260,10 @@ class ZarrNii:
         self,
         classes: int = 2,
         bins: int = 256,
-        range: Optional[Tuple[float, float]] = None,
-        mask: Optional["ZarrNii"] = None,
+        range: tuple[float, float] | None = None,
+        mask: ZarrNii | None = None,
         return_figure: bool = False,
-    ) -> Union[
-        List[float],
-        Tuple[List[float], Any],
-    ]:
+    ) -> list[float] | tuple[list[float], Any]:
         """
         Compute Otsu multi-level thresholds for the image.
 
@@ -4337,10 +4330,10 @@ class ZarrNii:
         self,
         plugin,
         downsample_factor: int = 4,
-        chunk_size: Optional[Tuple[int, ...]] = None,
-        upsampled_ome_zarr_path: Optional[str] = None,
+        chunk_size: tuple[int, ...] | None = None,
+        upsampled_ome_zarr_path: str | None = None,
         **kwargs,
-    ) -> "ZarrNii":
+    ) -> ZarrNii:
         """
         Apply scaled processing plugin using multi-resolution approach.
 
@@ -4439,7 +4432,7 @@ class ZarrNii:
 
         return False
 
-    def _wrap_result(self, result: Any, op_name: str) -> "ZarrNii":
+    def _wrap_result(self, result: Any, op_name: str) -> ZarrNii:
         """Wrap Dask array result as a new ZarrNii, enforcing metadata validity.
 
         Args:

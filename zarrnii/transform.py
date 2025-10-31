@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Tuple, Union
 
 import nibabel as nib
 import numpy as np
@@ -55,9 +54,7 @@ class AffineTransform(Transform):
     matrix: np.ndarray = None
 
     @classmethod
-    def from_txt(
-        cls, path: Union[str, bytes], invert: bool = False
-    ) -> "AffineTransform":
+    def from_txt(cls, path: str | bytes, invert: bool = False) -> AffineTransform:
         """Create AffineTransform from text file containing matrix.
 
         Args:
@@ -77,7 +74,7 @@ class AffineTransform(Transform):
         return cls(matrix=matrix)
 
     @classmethod
-    def from_array(cls, matrix: np.ndarray, invert: bool = False) -> "AffineTransform":
+    def from_array(cls, matrix: np.ndarray, invert: bool = False) -> AffineTransform:
         """Create AffineTransform from numpy array.
 
         Args:
@@ -98,7 +95,7 @@ class AffineTransform(Transform):
         return cls(matrix=matrix)
 
     @classmethod
-    def identity(cls) -> "AffineTransform":
+    def identity(cls) -> AffineTransform:
         """Create identity transformation.
 
         Returns:
@@ -116,7 +113,7 @@ class AffineTransform(Transform):
         """
         return self.matrix
 
-    def __getitem__(self, key) -> Union[np.ndarray, float]:
+    def __getitem__(self, key) -> np.ndarray | float:
         """Enable array-like indexing on the matrix.
 
         Args:
@@ -127,7 +124,7 @@ class AffineTransform(Transform):
         """
         return self.matrix[key]
 
-    def __setitem__(self, key, value: Union[float, np.ndarray]) -> None:
+    def __setitem__(self, key, value: float | np.ndarray) -> None:
         """Enable array-like assignment to the matrix.
 
         Args:
@@ -137,8 +134,8 @@ class AffineTransform(Transform):
         self.matrix[key] = value
 
     def __matmul__(
-        self, other: Union[np.ndarray, "AffineTransform"]
-    ) -> Union[np.ndarray, "AffineTransform"]:
+        self, other: np.ndarray | AffineTransform
+    ) -> np.ndarray | AffineTransform:
         """Perform matrix multiplication with another object.
 
         Args:
@@ -206,7 +203,7 @@ class AffineTransform(Transform):
         """
         return self @ vecs
 
-    def invert(self) -> "AffineTransform":
+    def invert(self) -> AffineTransform:
         """Return the inverse of the matrix transformation.
 
         Returns:
@@ -219,7 +216,7 @@ class AffineTransform(Transform):
 
     def update_for_orientation(
         self, input_orientation: str, output_orientation: str
-    ) -> "AffineTransform":
+    ) -> AffineTransform:
         """Update the matrix to map from input orientation to output orientation.
 
         Args:
@@ -287,11 +284,11 @@ class DisplacementTransform(Transform):
     """
 
     disp_xyz: np.ndarray = None
-    disp_grid: Tuple[np.ndarray, ...] = None
+    disp_grid: tuple[np.ndarray, ...] = None
     disp_affine: AffineTransform = None
 
     @classmethod
-    def from_nifti(cls, path: Union[str, bytes]) -> "DisplacementTransform":
+    def from_nifti(cls, path: str | bytes) -> DisplacementTransform:
         """Create DisplacementTransform from NIfTI file.
 
         Args:
