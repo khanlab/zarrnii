@@ -37,9 +37,7 @@ class TestZarrNiiAtlas:
         # Create ZarrNii from the data
         dseg = ZarrNii.from_darr(dseg_data, affine=affine)
 
-        print(dseg)
-        dseg.to_nifti("test_atlas.nii")
-        # Create labels DataFrame
+        labels_df = pd.DataFrame(
         labels_df = pd.DataFrame(
             {
                 "index": [0, 1, 2, 3],
