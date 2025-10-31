@@ -109,7 +109,7 @@ def compute_otsu_thresholds(
             assumes bin edges from 0 to len(histogram_counts)
         return_figure: If True, returns a tuple containing thresholds and a
             matplotlib figure with the histogram and annotated threshold lines
-            (default: False). Cannot be combined with return_histogram=True.
+            (default: False).
 
     Returns:
         If return_figure is False (default):

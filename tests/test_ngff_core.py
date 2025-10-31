@@ -15,8 +15,6 @@ from zarrnii.core import (
     apply_transform_to_ngff_image,
     crop_ngff_image,
     downsample_ngff_image,
-    get_affine_matrix,
-    get_affine_transform,
     get_multiscales,
     load_ngff_image,
     save_ngff_image,
@@ -106,32 +104,6 @@ class TestNgffImageFunctions:
                 # Each level should be smaller
                 assert image.data.shape[1] <= multiscales.images[i - 1].data.shape[1]
 
-    def test_get_affine_matrix(self, simple_ngff_image):
-        """Test affine matrix construction from NgffImage."""
-        affine = get_affine_matrix(simple_ngff_image)
-
-        expected = np.eye(4)
-        expected[0, 0] = 2.0  # Z scale
-        expected[1, 1] = 1.0  # Y scale
-        expected[2, 2] = 1.0  # X scale
-
-        assert_array_equal(affine, expected)
-
-    def test_get_affine_transform(self, simple_ngff_image):
-        """Test AffineTransform object creation from NgffImage."""
-        transform = get_affine_transform(simple_ngff_image)
-
-        from zarrnii.transform import AffineTransform
-
-        assert isinstance(transform, AffineTransform)
-
-        expected_matrix = np.eye(4)
-        expected_matrix[0, 0] = 2.0
-        expected_matrix[1, 1] = 1.0
-        expected_matrix[2, 2] = 1.0
-
-        assert_array_equal(transform.matrix, expected_matrix)
-
     def test_crop_ngff_image(self):
         """Test cropping an NgffImage."""
         # Create test image
@@ -145,10 +117,15 @@ class TestNgffImageFunctions:
         )
 
         # Crop to a smaller region
-        bbox_min = (5, 10, 15)  # Z, Y, X
-        bbox_max = (15, 30, 35)  # Z, Y, X
+        bbox_min = {"z": 5, "y": 10, "x": 15}  # Z, Y, X
+        bbox_max = {"z": 15, "y": 30, "x": 35}  # Z, Y, X
 
-        cropped = crop_ngff_image(ngff_image, bbox_min, bbox_max)
+        dim_flips = {
+            "x": 1,
+            "y": 1,
+            "z": 1,
+        }  # would normally get this from _axcodes2flips
+        cropped = crop_ngff_image(ngff_image, bbox_min, bbox_max, dim_flips)
 
         # Check new shape
         expected_shape = (1, 10, 20, 20)  # C unchanged, Z, Y, X cropped

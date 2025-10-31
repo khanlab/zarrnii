@@ -84,9 +84,9 @@ class TestCompatibilityMethods:
         # Check affine matrix constructed correctly
         expected_affine = np.array(
             [
-                [2.0, 0.0, 0.0, 10.0],
-                [0.0, 1.0, 0.0, 20.0],
                 [0.0, 0.0, 1.0, 30.0],
+                [0.0, 1.0, 0.0, 20.0],
+                [2.0, 0.0, 0.0, 10.0],
                 [0.0, 0.0, 0.0, 1.0],
             ]
         )
@@ -200,7 +200,10 @@ class TestMigrationWorkflow:
 
         # Process with new API
         cropped_ngff = crop_ngff_image(
-            ngff_image, bbox_min=(2, 4, 6), bbox_max=(10, 20, 26)
+            ngff_image,
+            bbox_min={"z": 2, "y": 4, "x": 6},
+            bbox_max={"z": 10, "y": 20, "x": 26},
+            dim_flips={"x": 1, "y": 1, "z": 1},
         )
 
         # Convert back to legacy API if needed
