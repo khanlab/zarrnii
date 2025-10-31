@@ -38,7 +38,6 @@ class TestZarrNiiAtlas:
         dseg = ZarrNii.from_darr(dseg_data, affine=affine)
 
         labels_df = pd.DataFrame(
-        labels_df = pd.DataFrame(
             {
                 "index": [0, 1, 2, 3],
                 "name": ["Background", "Left Region", "Right Top", "Right Bottom"],
@@ -237,9 +236,6 @@ class TestZarrNiiAtlas:
 
         # atlas is in ZYX ordering, so
         # Region 1 is [:, :, :5], so in XYZ: x=[0, 10), y=[0, 10), z=[0, 5)
-        print("in single region test")
-        print(bbox_min)
-        print(bbox_max)
         assert bbox_min == (0.0, 0.0, 0.0)
         assert bbox_max == (10.0, 10.0, 5.0)
 
