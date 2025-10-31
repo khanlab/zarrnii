@@ -8,7 +8,7 @@ resolution data.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import dask.array as da
 import numpy as np
@@ -40,7 +40,7 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
     def __init__(
         self,
         spline_param: tuple[int, int, int] = [2, 2, 2],
-        convergence: Optional[Dict[str, Any]] = {
+        convergence: dict[str, Any] | None = {
             "iters": [50, 50, 50, 50],
             "tol": 1e-07,
         },

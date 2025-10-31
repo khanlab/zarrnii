@@ -12,7 +12,7 @@ https://github.com/khanlab/SPIMquant/blob/main/spimquant/workflow/scripts/
 import json
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -34,7 +34,7 @@ from .core import ZarrNii
 class AmbiguousTemplateFlowQueryError(ValueError):
     """Raised when TemplateFlow query returns multiple files requiring more specific query."""
 
-    def __init__(self, template: str, suffix: str, matching_files: List[str], **kwargs):
+    def __init__(self, template: str, suffix: str, matching_files: list[str], **kwargs):
         """Initialize with template query details."""
         self.template = template
         self.suffix = suffix
@@ -49,7 +49,7 @@ class AmbiguousTemplateFlowQueryError(ValueError):
 
 
 # TemplateFlow wrapper functions
-def get(template: str, **kwargs) -> Union[str, List[str]]:
+def get(template: str, **kwargs) -> str | list[str]:
     """Thin wrapper on templateflow.api.get() - preserves original signature.
 
     Args:
@@ -226,8 +226,8 @@ class Template:
     description: str
     anatomical_image: ZarrNii
     resolution: str = field(default="Unknown")
-    dimensions: Tuple = field(default=())
-    metadata: Dict[str, Any] = field(factory=dict)
+    dimensions: tuple = field(default=())
+    metadata: dict[str, Any] = field(factory=dict)
 
     def get_atlas(self, atlas_name: str) -> "ZarrNiiAtlas":
         """Get a specific atlas for this template using TemplateFlow.
@@ -389,7 +389,7 @@ class ZarrNiiAtlas(ZarrNii):
 
         # Function to convert 8‐bit R, G, B values to a hex string (e.g., "ff0000")
         def rgb_to_hex(r, g, b):
-            return "{:02x}{:02x}{:02x}".format(int(r), int(g), int(b))
+            return f"{int(r):02x}{int(g):02x}{int(b):02x}"
 
         # Read the ITK‐Snap LUT file.
         # The ITK‐Snap LUT contains a header (all lines starting with "#")
@@ -415,9 +415,7 @@ class ZarrNiiAtlas(ZarrNii):
     # ---- New constructors for different LUT formats ----
 
     @classmethod
-    def from_files(
-        cls, dseg_path: Union[str, Path], labels_path: Union[str, Path], **kwargs
-    ):
+    def from_files(cls, dseg_path: str | Path, labels_path: str | Path, **kwargs):
         """Load ZarrNiiAtlas from dseg image and labels TSV files.
 
         Args:
@@ -536,7 +534,7 @@ class ZarrNiiAtlas(ZarrNii):
             dup_labels = self.labels_df[duplicates][self.label_column].tolist()
             raise ValueError(f"Duplicate labels found in atlas: {dup_labels}")
 
-    def _resolve_region_identifier(self, region_id: Union[int, str]) -> int:
+    def _resolve_region_identifier(self, region_id: int | str) -> int:
         """Resolve region identifier to integer label.
 
         Supports lookup by:
@@ -585,7 +583,7 @@ class ZarrNiiAtlas(ZarrNii):
                 f"Region identifier must be int or str, got {type(region_id)}"
             )
 
-    def get_region_info(self, region_id: Union[int, str]) -> Dict[str, Any]:
+    def get_region_info(self, region_id: int | str) -> dict[str, Any]:
         """Get information about a specific region.
 
         Args:
@@ -606,7 +604,7 @@ class ZarrNiiAtlas(ZarrNii):
 
         return region_row.iloc[0].to_dict()
 
-    def get_region_mask(self, region_id: Union[int, str]) -> ZarrNii:
+    def get_region_mask(self, region_id: int | str) -> ZarrNii:
         """Create binary mask for a specific region.
 
         Args:
@@ -631,7 +629,7 @@ class ZarrNiiAtlas(ZarrNii):
             mask_data, affine=self.dseg.affine, axes_order=self.dseg.axes_order
         )
 
-    def get_region_volume(self, region_id: Union[int, str]) -> float:
+    def get_region_volume(self, region_id: int | str) -> float:
         """Calculate volume of a specific region in mm³.
 
         Args:
@@ -820,9 +818,9 @@ class ZarrNiiAtlas(ZarrNii):
 
     def get_region_bounding_box(
         self,
-        region_ids: Union[int, str, List[Union[int, str]]] = None,
-        regex: Optional[str] = None,
-    ) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+        region_ids: int | str | list[int | str] = None,
+        regex: str | None = None,
+    ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
         """Get bounding box in physical coordinates for selected regions.
 
         This method computes the spatial extents (bounding box) of one or more
@@ -981,10 +979,10 @@ class ZarrNiiAtlas(ZarrNii):
     def sample_region_patches(
         self,
         n_patches: int,
-        region_ids: Union[int, str, List[Union[int, str]]] = None,
-        regex: Optional[str] = None,
-        seed: Optional[int] = None,
-    ) -> List[Tuple[float, float, float]]:
+        region_ids: int | str | list[int | str] = None,
+        regex: str | None = None,
+        seed: int | None = None,
+    ) -> list[tuple[float, float, float]]:
         """Sample random coordinates (centers) within atlas regions.
 
         This method generates a list of center coordinates by randomly sampling

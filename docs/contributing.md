@@ -36,23 +36,24 @@ Thank you for your interest in contributing to ZarrNii! This document provides g
 
 ### Code Style and Quality
 
-ZarrNii follows Python best practices and uses several tools to maintain code quality:
+ZarrNii follows Python best practices and uses ruff to maintain code quality:
 
-- **Black**: Code formatting (line-length: 88)
-- **isort**: Import sorting (profile: black, line-length: 88)  
-- **flake8**: Linting and style checking (max-line-length: 88, extend-ignore: E203,W503)
-- **pre-commit**: Automated checks before commits
+- **Ruff**: Fast linter and formatter that replaces black, isort, and flake8
+  - Line length: 88 characters
+  - Google-style docstrings
+  - Import sorting included
+  - Automatic fixes for many issues
 
 Run quality checks:
 ```bash
 # Format code  
-uv run black .
+uv run ruff format .
 
-# Sort imports
-uv run isort .
+# Check linting
+uv run ruff check .
 
-# Lint code
-uv run flake8 .
+# Auto-fix linting issues
+uv run ruff check --fix .
 
 # Run all quality checks (matches CI exactly)
 ./scripts/quality-check.sh
@@ -64,9 +65,9 @@ just quality
 ```
 
 **Important**: All tools are configured with consistent settings:
-- Line length: 88 characters (matches Black's default)
-- Import profile: black (ensures compatibility)
-- Flake8 ignores: E203, W503 (compatibility with Black)
+- Line length: 88 characters
+- Target Python version: 3.11+
+- Google-style docstrings enforced
 
 ### Testing
 

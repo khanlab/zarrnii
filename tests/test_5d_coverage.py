@@ -275,9 +275,9 @@ class TestEdgeCases:
 
             for kwargs, expected_shape in test_cases:
                 znimg = ZarrNii.from_ome_zarr(store_path, **kwargs)
-                assert (
-                    znimg.darr.shape == expected_shape
-                ), f"Failed for {kwargs}: got {znimg.darr.shape}, expected {expected_shape}"
+                assert znimg.darr.shape == expected_shape, (
+                    f"Failed for {kwargs}: got {znimg.darr.shape}, expected {expected_shape}"
+                )
 
     def test_channel_labels_with_5d_data(self):
         """Test channel label selection with 5D data."""

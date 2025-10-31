@@ -42,12 +42,7 @@ dev = [
     "jupyterlab>=4.2.1",
     "matplotlib>=3.9.0",
     "bokeh>=3.4.1",
-    "flake8>=7.3.0",
-    "flake8-docstrings>=1.7.0",
-    "flake8-bugbear>=24.12.12",
-    "flake8-import-order>=0.18.2",
-    "black>=24.10.0",
-    "isort>=5.13.2",
+    "ruff>=0.9.0",
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.5.50",
     "mkdocstrings>=0.27.0",
@@ -91,21 +86,47 @@ Repository = "https://github.com/khanlab/zarrnii"
 Issues = "https://github.com/khanlab/zarrnii/issues"
 
 
-[tool.flake8]
-max-line-length = 88  # Matches Black's default line length
-extend-ignore = ["E203", "W503"]  # Compatibility with Black
-docstring-convention = "google"  # Enforces Google-style docstrings
-exclude = ["tests/*", ".venv", "build", "dist"]
-
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ['py39']  # Set to your target Python version
+target-version = "py311"
+extend-exclude = [
+    "notebooks",
+    "examples",
+    "scripts",
+]
 
-[tool.isort]
-profile = "black"  # Ensure compatibility with Black
-line_length = 88
-skip_glob = ["zarrnii/_version.py"]
-skip = [".pixi",".venv"]
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+]
+ignore = [
+    "E203", # whitespace before ':' (black compatibility)
+]
+exclude = [
+    "tests/*",
+    ".venv",
+    "build",
+    "dist",
+    "zarrnii/_version.py",
+    ".pixi",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["zarrnii"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [tool.coverage.run]
 source = ["zarrnii"]
@@ -138,12 +159,7 @@ dev = [
     "jupyterlab>=4.2.1",
     "matplotlib>=3.9.0",
     "bokeh>=3.4.1",
-    "black>=25.1.0",
-    "flake8>=7.3.0",
-    "flake8-docstrings>=1.7.0",
-    "flake8-bugbear>=24.12.12",
-    "flake8-import-order>=0.18.2",
-    "isort>=6.0.1",
+    "ruff>=0.9.0",
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.6.19",
     "mkdocstrings>=0.30.0",
