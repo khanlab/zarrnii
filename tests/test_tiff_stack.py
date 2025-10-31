@@ -369,3 +369,66 @@ class TestTiffStackExport:
                 assert loaded_slice.shape == (16, 16)  # Should be 2D
             except ImportError:
                 pytest.skip("tifffile not available for verification")
+
+    def test_rescale_with_integer_input_data(self):
+        """Test rescaling with integer input data types (uint8, uint16).
+
+        Regression test for issue where integer input data caused overflow
+        errors during rescaling due to arithmetic operations being performed
+        in the original dtype space rather than float space.
+        """
+        # Test with uint8 input data (common for 8-bit images)
+        data_uint8 = np.random.randint(0, 256, size=(1, 3, 16, 16), dtype=np.uint8)
+        dask_data_uint8 = da.from_array(data_uint8, chunks=(1, 2, 8, 8))
+        znii_uint8 = ZarrNii.from_darr(dask_data_uint8, spacing=(1.0, 1.0, 1.0))
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pattern_uint8 = os.path.join(temp_dir, "test_uint8_z{z:04d}.tif")
+
+            # This should not raise an OverflowError
+            znii_uint8.to_tiff_stack(pattern_uint8, dtype="uint16", rescale=True)
+
+            # Verify files were created
+            files_uint8 = [
+                f for f in os.listdir(temp_dir) if f.startswith("test_uint8")
+            ]
+            assert len(files_uint8) == 3
+
+            # Verify the data was properly rescaled to full uint16 range
+            try:
+                import tifffile
+
+                loaded_slice = tifffile.imread(os.path.join(temp_dir, files_uint8[0]))
+                assert loaded_slice.dtype == np.uint16
+                # Should use a good range of uint16 values (not just 0 and 1)
+                assert np.max(loaded_slice) > 30000
+            except ImportError:
+                pytest.skip("tifffile not available")
+
+        # Test with uint16 input data
+        data_uint16 = np.random.randint(0, 10000, size=(1, 3, 16, 16), dtype=np.uint16)
+        dask_data_uint16 = da.from_array(data_uint16, chunks=(1, 2, 8, 8))
+        znii_uint16 = ZarrNii.from_darr(dask_data_uint16, spacing=(1.0, 1.0, 1.0))
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pattern_uint16 = os.path.join(temp_dir, "test_uint16_z{z:04d}.tif")
+
+            # This should not raise an OverflowError
+            znii_uint16.to_tiff_stack(pattern_uint16, dtype="uint16", rescale=True)
+
+            # Verify files were created
+            files_uint16 = [
+                f for f in os.listdir(temp_dir) if f.startswith("test_uint16")
+            ]
+            assert len(files_uint16) == 3
+
+            # Verify the data was properly rescaled to full uint16 range
+            try:
+                import tifffile
+
+                loaded_slice = tifffile.imread(os.path.join(temp_dir, files_uint16[0]))
+                assert loaded_slice.dtype == np.uint16
+                # Should use full uint16 range
+                assert np.max(loaded_slice) > 50000
+            except ImportError:
+                pytest.skip("tifffile not available")
