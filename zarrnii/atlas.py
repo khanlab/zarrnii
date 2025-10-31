@@ -865,8 +865,8 @@ class ZarrNiiAtlas(ZarrNii):
 
         Notes:
             - Bounding box is in physical coordinates (mm), not voxel indices
+            - Axes ordering is relative to self.axes_order (e.g. ZYX for ome zarr)
             - The bounding box is the union of all selected regions
-            - Physical coordinates are in RAS orientation (Right-Anterior-Superior)
             - Use the returned values with crop(physical_coords=True)
         """
         import re

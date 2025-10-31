@@ -37,6 +37,8 @@ class TestZarrNiiAtlas:
         # Create ZarrNii from the data
         dseg = ZarrNii.from_darr(dseg_data, affine=affine)
 
+        print(dseg)
+        dseg.to_nifti("test_atlas.nii")
         # Create labels DataFrame
         labels_df = pd.DataFrame(
             {
@@ -235,10 +237,13 @@ class TestZarrNiiAtlas:
         assert len(bbox_min) == 3
         assert len(bbox_max) == 3
 
-        # With identity affine, physical coords should match voxel coords
-        # Region 1 is [:, :, :5], so in XYZ: x=[0, 5), y=[0, 10), z=[0, 10)
+        # atlas is in ZYX ordering, so
+        # Region 1 is [:, :, :5], so in XYZ: x=[0, 10), y=[0, 10), z=[0, 5)
+        print("in single region test")
+        print(bbox_min)
+        print(bbox_max)
         assert bbox_min == (0.0, 0.0, 0.0)
-        assert bbox_max == (5.0, 10.0, 10.0)
+        assert bbox_max == (10.0, 10.0, 5.0)
 
     def test_get_region_bounding_box_by_name(self, sample_atlas):
         """Test getting bounding box by region name."""
@@ -248,7 +253,7 @@ class TestZarrNiiAtlas:
 
         # Should return same as by index
         assert bbox_min == (0.0, 0.0, 0.0)
-        assert bbox_max == (5.0, 10.0, 10.0)
+        assert bbox_max == (10.0, 10.0, 5.0)
 
     def test_get_region_bounding_box_by_abbreviation(self, sample_atlas):
         """Test getting bounding box by region abbreviation."""
@@ -257,8 +262,8 @@ class TestZarrNiiAtlas:
         bbox_min, bbox_max = atlas.get_region_bounding_box("RT")  # Right Top
 
         # Region 2 is [:5, :, 5:], so in XYZ: x=[5, 10), y=[0, 10), z=[0, 5)
-        assert bbox_min == (5.0, 0.0, 0.0)
-        assert bbox_max == (10.0, 10.0, 5.0)
+        assert bbox_min == (0.0, 0.0, 5.0)
+        assert bbox_max == (5.0, 10.0, 10.0)
 
     def test_get_region_bounding_box_multiple_regions(self, sample_atlas):
         """Test getting bounding box for multiple regions."""
@@ -270,7 +275,7 @@ class TestZarrNiiAtlas:
         # Region 2: [:5, :, 5:] (right half top)
         # Region 3: [5:, :, 5:] (right half bottom)
         # Union: [:, :, 5:], so in XYZ: x=[5, 10), y=[0, 10), z=[0, 10)
-        assert bbox_min == (5.0, 0.0, 0.0)
+        assert bbox_min == (0.0, 0.0, 5.0)
         assert bbox_max == (10.0, 10.0, 10.0)
 
     def test_get_region_bounding_box_regex(self, sample_atlas):
@@ -281,7 +286,7 @@ class TestZarrNiiAtlas:
         bbox_min, bbox_max = atlas.get_region_bounding_box(regex="Right.*")
 
         # Should match regions 2 and 3
-        assert bbox_min == (5.0, 0.0, 0.0)
+        assert bbox_min == (0.0, 0.0, 5.0)
         assert bbox_max == (10.0, 10.0, 10.0)
 
     def test_get_region_bounding_box_regex_case_insensitive(self, sample_atlas):
@@ -292,7 +297,7 @@ class TestZarrNiiAtlas:
 
         # Should match "Left Region"
         assert bbox_min == (0.0, 0.0, 0.0)
-        assert bbox_max == (5.0, 10.0, 10.0)
+        assert bbox_max == (10.0, 10.0, 5.0)
 
     def test_get_region_bounding_box_with_crop(self, sample_atlas):
         """Test that bounding box output works with crop method."""
@@ -359,7 +364,7 @@ class TestZarrNiiAtlas:
 
             # With identity affine, centers should be within region 1 bounds (x=[0, 5))
             # Check that x coordinate is roughly in region 1
-            assert 0 <= center[0] < 5.0
+            assert 0 <= center[2] < 5.0
 
     def test_sample_region_patches_by_name(self, sample_atlas):
         """Test patch sampling using region name."""
@@ -375,7 +380,7 @@ class TestZarrNiiAtlas:
         # All centers should be within region 1 bounds (x=[0, 5))
         for center in centers:
             # Check that center x coordinate is in region 1
-            assert 0 <= center[0] < 5.0
+            assert 0 <= center[2] < 5.0
 
     def test_sample_region_patches_regex(self, sample_atlas):
         """Test patch sampling using regex pattern."""

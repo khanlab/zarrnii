@@ -1931,16 +1931,20 @@ class ZarrNii:
             )
 
             # Create mapping from x,y,z to voxel coordinates
-            bbox_vox_min = {
-                "x": voxel_min_xyz[0],
-                "y": voxel_min_xyz[1],
-                "z": voxel_min_xyz[2],
-            }
-            bbox_vox_max = {
-                "x": voxel_max_xyz[0],
-                "y": voxel_max_xyz[1],
-                "z": voxel_max_xyz[2],
-            }
+            bbox_min = voxel_min_xyz
+            bbox_max = voxel_max_xyz
+
+        # Create mapping from x,y,z to voxel coordinates
+        bbox_vox_min = {
+            "x": bbox_min[0],
+            "y": bbox_min[1],
+            "z": bbox_min[2],
+        }
+        bbox_vox_max = {
+            "x": bbox_max[0],
+            "y": bbox_max[1],
+            "z": bbox_max[2],
+        }
 
         dim_flips = _axcodes2flips(self.orientation)
         cropped_image = crop_ngff_image(
@@ -2230,7 +2234,7 @@ class ZarrNii:
             new_translation = cropped_image.translation.copy()
 
             for i, dim in enumerate(bbox_vox_min.keys()):
-                new_translation[dim] = new_translation + dim_flips[
+                new_translation[dim] = new_translation[dim] + dim_flips[
                     dim
                 ] * pad_before_xyz[i] * cropped_image.scale.get(dim, 1.0)
 
@@ -4284,7 +4288,7 @@ class ZarrNii:
                 where mask > 0 are included in histogram computation
             return_figure: If True, returns a tuple containing thresholds and a
                 matplotlib figure with the histogram and annotated threshold lines
-                (default: False). Cannot be combined with return_histogram=True.
+                (default: False).
 
         Returns:
             If return_figure is False (default):
