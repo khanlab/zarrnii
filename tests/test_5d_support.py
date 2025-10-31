@@ -128,9 +128,10 @@ class Test5DSupport:
 
         # Test cropping - should preserve T and C dimensions
         cropped = znimg.crop([0, 0, 0], [8, 16, 16])  # Crop spatial dimensions only
+        # since crop dims are always defined x y z, x is the one cropped more..
 
         # Should maintain T and C dimensions but crop spatial ones
-        expected_shape = (3, 8, 16, 16, 2)  # (t, z_cropped, y_cropped, x_cropped, c)
+        expected_shape = (3, 16, 16, 8, 2)  # (t, z_cropped, y_cropped, x_cropped, c)
         assert cropped.darr.shape == expected_shape
 
     def test_downsample_5d_data(self, test_5d_dataset):
@@ -213,4 +214,4 @@ class Test5DSupport:
 
         # Spatial operations should still work
         cropped = znimg.crop([0, 0, 0], [8, 16, 16])
-        assert cropped.darr.shape == (1, 8, 16, 16)
+        assert cropped.darr.shape == (1, 16, 16, 8)

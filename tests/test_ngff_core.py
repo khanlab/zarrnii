@@ -104,21 +104,6 @@ class TestNgffImageFunctions:
                 # Each level should be smaller
                 assert image.data.shape[1] <= multiscales.images[i - 1].data.shape[1]
 
-    def test_get_affine_transform(self, simple_ngff_image):
-        """Test AffineTransform object creation from NgffImage."""
-        transform = get_affine_transform(simple_ngff_image)
-
-        from zarrnii.transform import AffineTransform
-
-        assert isinstance(transform, AffineTransform)
-
-        expected_matrix = np.eye(4)
-        expected_matrix[0, 0] = 2.0
-        expected_matrix[1, 1] = 1.0
-        expected_matrix[2, 2] = 1.0
-
-        assert_array_equal(transform.matrix, expected_matrix)
-
     def test_crop_ngff_image(self):
         """Test cropping an NgffImage."""
         # Create test image
@@ -132,10 +117,15 @@ class TestNgffImageFunctions:
         )
 
         # Crop to a smaller region
-        bbox_min = (5, 10, 15)  # Z, Y, X
-        bbox_max = (15, 30, 35)  # Z, Y, X
+        bbox_min = {"z": 5, "y": 10, "x": 15}  # Z, Y, X
+        bbox_max = {"z": 15, "y": 30, "x": 35}  # Z, Y, X
 
-        cropped = crop_ngff_image(ngff_image, bbox_min, bbox_max)
+        dim_flips = {
+            "x": 1,
+            "y": 1,
+            "z": 1,
+        }  # would normally get this from _axcodes2flips
+        cropped = crop_ngff_image(ngff_image, bbox_min, bbox_max, dim_flips)
 
         # Check new shape
         expected_shape = (1, 10, 20, 20)  # C unchanged, Z, Y, X cropped

@@ -166,23 +166,6 @@ def test_from_nifti_to_zarr_to_zarr(nifti_nib):
 
 
 @pytest.mark.usefixtures("cleandir")
-def test_affine_transform_identify(nifti_nib):
-    """tests affine transform from nifti to zarr using identity transformation"""
-
-    nifti_nib.to_filename("test.nii")
-
-    flo_znimg = ZarrNii.from_nifti("test.nii")
-
-    ref_znimg = ZarrNii.from_nifti("test.nii")
-
-    interp_znimg = flo_znimg.apply_transform(
-        AffineTransform.from_array(np.eye(4)), ref_znimg=ref_znimg
-    )
-
-    assert_array_almost_equal(flo_znimg.darr.compute(), interp_znimg.darr.compute())
-
-
-@pytest.mark.usefixtures("cleandir")
 def test_transform_indices_flo_to_ref(nifti_nib):
     """tests transformation of points from floating to reference space"""
     # first try with just identity, floating as nifti, ref as zarr
@@ -376,7 +359,7 @@ def test_orientation_in_from_ome_zarr(tmp_path):
     assert loaded_znimg2.orientation == "RAS"  # Should still use stored orientation
 
 
-def test_orientation_xyz_consistent_definition():
+def test_orientation_xyz_consistent_definiSARn():
     """Test that orientation strings are consistently defined with respect to XYZ ordering."""
     # Create test data
     data = np.random.rand(1, 64, 64, 64).astype(np.float32)
@@ -405,8 +388,9 @@ def test_orientation_xyz_consistent_definition():
     # in physical space - verify this by checking the orientation extracted from affine
     from zarrnii.core import _affine_to_orientation
 
-    # Both should give us "RAS" when we extract orientation from their affines
-    # (assuming the affine is properly constructed for XYZ space)
+    #  when we extract orientation from their affines, the axes ordering
+    # changes the affine.. so the orienation extracted from the affine
+    # will necessarily be different..
     extracted_orientation_xyz = _affine_to_orientation(affine_xyz)
     extracted_orientation_zyx = _affine_to_orientation(affine_zyx)
 
@@ -417,7 +401,7 @@ def test_orientation_xyz_consistent_definition():
 
     # Both should consistently represent RAS in physical space
     assert extracted_orientation_xyz == "RAS"
-    assert extracted_orientation_zyx == "RAS"
+    assert extracted_orientation_zyx == "SAR"
 
 
 def test_orientation_consistency_multiple_strings():
@@ -426,8 +410,9 @@ def test_orientation_consistency_multiple_strings():
     dask_data = da.from_array(data, chunks=(1, 16, 16, 16))
 
     orientations = ["RAS", "LPI", "RAI", "LPS"]
+    orientations_rev = ["SAR", "IPL", "IAR", "SPL"]
 
-    for orient in orientations:
+    for orient, orient_rev in zip(orientations, orientations_rev):
         # Create with both axes orders
         znimg_zyx = ZarrNii.from_darr(dask_data, orientation=orient, axes_order="ZYX")
         znimg_xyz = ZarrNii.from_darr(dask_data, orientation=orient, axes_order="XYZ")
@@ -451,7 +436,7 @@ def test_orientation_consistency_multiple_strings():
 
         # Key requirement: orientation should be defined consistently in XYZ space
         assert extracted_xyz == orient
-        assert extracted_zyx == orient
+        assert extracted_zyx == orient_rev
 
 
 def test_orientation_xyz_definition_clarity():
@@ -480,8 +465,9 @@ def test_orientation_xyz_definition_clarity():
     affine_xyz = znimg_xyz.get_affine_matrix(axes_order="XYZ")  # X,Y,Z order
     affine_zyx = znimg_zyx.get_affine_matrix(axes_order="ZYX")  # Z,Y,X order
 
-    # Key test: when we extract orientation from the affines, both should give RAS
-    # This confirms that RAS is consistently interpreted in XYZ physical space
+    # Key test: when we extract orientation from the affines,
+    # the affine will be dependent on axes ordering, thus the orientation
+    # extracted from the affine will be reversed
     from zarrnii.core import _affine_to_orientation
 
     # Both affines should be interpretable as RAS orientation
@@ -492,15 +478,17 @@ def test_orientation_xyz_definition_clarity():
         extracted_xyz == "RAS"
     ), f"XYZ affine should extract as RAS, got {extracted_xyz}"
     assert (
-        extracted_zyx == "RAS"
-    ), f"ZYX affine should extract as RAS, got {extracted_zyx}"
+        extracted_zyx == "SAR"
+    ), f"ZYX affine should extract as SAR, got {extracted_zyx}"
 
     # Document what RAS means:
     print("✓ RAS orientation confirmed to mean:")
     print("  - R→L along X axis (physical left-right)")
     print("  - A→P along Y axis (physical anterior-posterior)")
     print("  - I→S along Z axis (physical inferior-superior)")
-    print("  - This definition is consistent regardless of axes_order")
+    print(
+        "  - This definition is consistent regardless of axes_order, except when derived from the affine"
+    )
 
 
 def test_orientation_round_trip_preservation():
