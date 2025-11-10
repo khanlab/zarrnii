@@ -5,9 +5,8 @@ import tempfile
 
 import dask.array as da
 import numpy as np
-import pytest
 import zarr
-from numpy.testing import assert_array_almost_equal
+from numpy.testing import assert_array_almost_equal  # noqa: F401
 
 from zarrnii import AffineTransform, ZarrNii
 
@@ -91,7 +90,8 @@ def test_zarrnii_apply_transform_with_zarr_backend():
         store_path = os.path.join(tmpdir, "test.zarr")
 
         # Create data and save using to_ome_zarr to get proper metadata
-        data = da.random.random((1, 20, 20, 20), chunks=(1, 10, 10, 10)).astype("f4")
+        data = da.random.random((1, 20, 20, 20), chunks=(1, 10, 10, 10))
+        data = data.astype("f4")
         temp_znimg = ZarrNii.from_darr(data)
         temp_znimg.to_ome_zarr(store_path, max_layer=1)
 
@@ -124,7 +124,8 @@ def test_zarrnii_get_zarr_store_info():
         store_path = os.path.join(tmpdir, "test.zarr")
 
         # Create data and save using to_ome_zarr to get proper metadata
-        data = da.random.random((2, 30, 30, 30), chunks=(1, 15, 15, 15)).astype("f4")
+        data = da.random.random((2, 30, 30, 30), chunks=(1, 15, 15, 15))
+        data = data.astype("f4")
         temp_znimg = ZarrNii.from_darr(data)
         temp_znimg.to_ome_zarr(store_path, max_layer=1)
 
