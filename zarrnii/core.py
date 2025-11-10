@@ -940,15 +940,119 @@ def _select_dimensions_from_image_with_omero(
     return selected_ngff_image, filtered_omero
 
 
+def get_bounded_subregion_from_zarr(
+    points: np.ndarray,
+    store_path: str,
+    array_shape: Tuple[int, ...],
+    dataset_path: str = "0",
+    storage_options: Optional[Dict[str, Any]] = None,
+):
+    """
+    Extract a bounded subregion from a zarr array using direct zarr access.
+
+    This function reads data directly from a zarr store without using dask's compute(),
+    avoiding nested compute() calls when used within dask.map_blocks.
+
+    Parameters:
+        points (np.ndarray): Nx3 or Nx4 array of coordinates in the array's space.
+                            If Nx4, the last column is assumed to be the homogeneous
+                            coordinate and is ignored.
+        store_path (str): Path or URI to the zarr store
+        array_shape (tuple): Shape of the full array (C, Z, Y, X)
+        dataset_path (str): Path to the dataset within the zarr group (default: "0")
+        storage_options (dict, optional): Additional options for the storage backend
+
+    Returns:
+        tuple:
+            grid_points (tuple): A tuple of three 1D arrays representing the grid
+                                points along each axis (Z, Y, X) in the subregion.
+            subvol (np.ndarray or None): The extracted subregion as a NumPy array.
+                                        Returns `None` if all points are outside
+                                        the array domain.
+
+    Notes:
+        - Uses zarr library directly to load the subregion
+        - A padding of 1 voxel is applied around the extent of the points
+        - Handles ZIP stores automatically if store_path ends with .zip
+    """
+    import zarr
+
+    # Ensure store_path is a string (could be Path object)
+    store_path = str(store_path)
+
+    pad = 1  # Padding around the extent of the points
+
+    # Compute the extent of the points in the array's coordinate space
+    min_extent = np.floor(points.min(axis=1)[:3] - pad).astype("int")
+    max_extent = np.ceil(points.max(axis=1)[:3] + pad).astype("int")
+
+    # Clip the extents to ensure they stay within the bounds of the array
+    clip_min = np.zeros_like(min_extent)
+    clip_max = np.array(array_shape[-3:])  # Z, Y, X dimensions
+
+    min_extent = np.clip(min_extent, clip_min, clip_max)
+    max_extent = np.clip(max_extent, clip_min, clip_max)
+
+    # Check if all points are outside the domain
+    if np.any(max_extent <= min_extent):
+        return None, None
+
+    # Open the zarr store and read the subregion directly
+    try:
+        if store_path.endswith(".zip"):
+            store = zarr.storage.ZipStore(store_path, mode="r")
+            root = zarr.open_group(store, mode="r")
+        else:
+            if storage_options:
+                # Use fsspec for remote stores with storage options
+                mapper = fsspec.get_mapper(store_path, **storage_options)
+                root = zarr.open_group(mapper, mode="r")
+            else:
+                root = zarr.open_group(store_path, mode="r")
+
+        # Access the dataset
+        arr = root[dataset_path]
+
+        # Extract the subvolume using direct zarr array access
+        subvol = arr[
+            :,
+            min_extent[0] : max_extent[0],
+            min_extent[1] : max_extent[1],
+            min_extent[2] : max_extent[2],
+        ]
+
+        # Ensure we have a numpy array (zarr v3 may return zarr Array)
+        if not isinstance(subvol, np.ndarray):
+            subvol = np.asarray(subvol)
+
+    finally:
+        # Close ZIP store if used
+        if store_path.endswith(".zip"):
+            store.close()
+
+    # Generate grid points for interpolation
+    grid_points = (
+        np.arange(min_extent[0], max_extent[0]),  # Z
+        np.arange(min_extent[1], max_extent[1]),  # Y
+        np.arange(min_extent[2], max_extent[2]),  # X
+    )
+
+    return grid_points, subvol
+
+
 def interp_by_block(
     x,
     transforms: list[Transform],
-    flo_znimg: ZarrNii,
+    flo_store_path: Optional[str] = None,
+    flo_array_shape: Optional[Tuple[int, ...]] = None,
+    flo_dataset_path: str = "0",
+    flo_storage_options: Optional[Dict[str, Any]] = None,
+    flo_znimg: Optional["ZarrNii"] = None,
     block_info=None,
     interp_method="linear",
 ):
     """
-    Interpolates the floating image (`flo_znimg`) onto the reference image block (`x`)
+    Interpolates the floating image onto the reference image block (`x`)
     using the provided transformations.
 
     This function extracts the necessary subset of the floating image for each block
@@ -959,7 +1063,16 @@ def interp_by_block(
         x (np.ndarray): The reference image block to interpolate onto.
         transforms (list[Transform]): A list of `Transform` objects to apply to the
                                        reference image coordinates.
-        flo_znimg (ZarrNii): The floating ZarrNii instance to interpolate from.
+        flo_store_path (str, optional): Path/URI to the zarr store containing the
+                                       floating image. If provided, uses direct zarr
+                                       access instead of dask compute().
+        flo_array_shape (tuple, optional): Shape of the floating array (C, Z, Y, X).
+                                          Required if flo_store_path is provided.
+        flo_dataset_path (str, optional): Path to dataset within zarr group.
+                                         Defaults to "0".
+        flo_storage_options (dict, optional): Storage options for accessing the store.
+        flo_znimg (ZarrNii, optional): The floating ZarrNii instance. Used as fallback
+                                      if store path not provided (legacy behavior).
         block_info (dict, optional): Metadata about the current block being processed.
         interp_method (str, optional): Interpolation method. Defaults to "linear".
 
@@ -967,13 +1080,24 @@ def interp_by_block(
         np.ndarray: The interpolated block of the reference image.
 
     Notes:
-        - The function transforms the reference image block coordinates to the floating
-          image space, extracts the required subregion from the floating image, and
-          performs interpolation.
-        - If the transformed coordinates are completely outside the bounds of the floating
-          image, a zero-filled array is returned.
+        - When flo_store_path is provided, uses direct zarr access to avoid nested
+          compute() calls.
+        - Falls back to using flo_znimg.get_bounded_subregion() for backwards
+          compatibility.
+        - If the transformed coordinates are completely outside the bounds of the
+          floating image, a zero-filled array is returned.
 
     Example:
+        # New approach with store path
+        interpolated_block = interp_by_block(
+            x=ref_block,
+            transforms=[transform1, transform2],
+            flo_store_path="/path/to/data.zarr",
+            flo_array_shape=(3, 100, 100, 100),
+            block_info=block_metadata,
+        )
+
+        # Legacy approach with ZarrNii instance
         interpolated_block = interp_by_block(
             x=ref_block,
             transforms=[transform1, transform2],
@@ -993,9 +1117,9 @@ def interp_by_block(
     )
 
     # Reshape grids into vectors for matrix multiplication
-    xvf = xv.reshape((1, np.product(xv.shape)))
-    yvf = yv.reshape((1, np.product(yv.shape)))
-    zvf = zv.reshape((1, np.product(zv.shape)))
+    xvf = xv.reshape((1, np.prod(xv.shape)))
+    yvf = yv.reshape((1, np.prod(yv.shape)))
+    zvf = zv.reshape((1, np.prod(zv.shape)))
     homog = np.ones(xvf.shape)
 
     xfm_vecs = np.vstack((xvf, yvf, zvf, homog))
@@ -1008,7 +1132,23 @@ def interp_by_block(
     interpolated = np.zeros(x.shape)
 
     # Determine the required subregion of the floating image
-    grid_points, flo_vol = flo_znimg.get_bounded_subregion(xfm_vecs)
+    # Use direct zarr access if store path is provided, otherwise use legacy method
+    if flo_store_path is not None and flo_array_shape is not None:
+        grid_points, flo_vol = get_bounded_subregion_from_zarr(
+            xfm_vecs,
+            flo_store_path,
+            flo_array_shape,
+            flo_dataset_path,
+            flo_storage_options,
+        )
+    elif flo_znimg is not None:
+        # Legacy fallback
+        grid_points, flo_vol = flo_znimg.get_bounded_subregion(xfm_vecs)
+    else:
+        raise ValueError(
+            "Either (flo_store_path and flo_array_shape) or flo_znimg must be provided"
+        )
+
     if grid_points is None and flo_vol is None:
         # Points are fully outside the floating image; return zeros
         return interpolated
@@ -1145,6 +1285,78 @@ class ZarrNii:
         """
         matrix = self.get_affine_matrix(axes_order)
         return AffineTransform.from_array(matrix)
+
+    def get_zarr_store_info(
+        self,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Extract zarr store information from the dask array if available.
+
+        Attempts to extract the underlying zarr store path and metadata from
+        the dask array graph. This information can be used for direct zarr
+        access without triggering dask compute() operations.
+
+        Returns:
+            Dictionary containing store information if available:
+                - 'store_path': Path or URI to the zarr store
+                - 'dataset_path': Path to the dataset within the zarr group
+                - 'array_shape': Shape of the full array
+            Returns None if the data is not backed by a zarr store.
+
+        Notes:
+            - Only works if the dask array was created from zarr using da.from_zarr()
+            - Returns None for in-memory arrays or arrays from other sources
+        """
+        try:
+            # Check if the dask array has a graph
+            graph = self.data.__dask_graph__()
+
+            # Look for zarr array in the graph
+            # The first key in a from_zarr graph typically contains the zarr array
+            for key in graph.keys():
+                task = graph[key]
+                # Check if this is a zarr array
+                if hasattr(task, "store") and hasattr(task, "name"):
+                    # Extract store information
+                    import zarr
+                    import zarr.storage
+
+                    store = task.store
+                    dataset_path = task.name.strip("/")
+
+                    # Determine store path based on store type
+                    # Handle both zarr v2 and v3 store types
+                    store_path = None
+
+                    # Try zarr v3 LocalStore first (has 'root' attribute)
+                    if hasattr(store, "root"):
+                        store_path = store.root
+                    # Try zarr v2 DirectoryStore (has 'path' attribute)
+                    elif hasattr(store, "path"):
+                        store_path = store.path
+                    # Try string representation as fallback
+                    elif isinstance(store, str):
+                        store_path = store
+                    # Try str(store) which works for LocalStore
+                    else:
+                        store_str = str(store)
+                        # LocalStore repr is like "file:///path/to/store"
+                        if store_str.startswith("file://"):
+                            store_path = store_str.replace("file://", "")
+                        else:
+                            store_path = store_str
+
+                    if store_path:
+                        return {
+                            "store_path": store_path,
+                            "dataset_path": dataset_path,
+                            "array_shape": self.shape,
+                        }
+        except Exception:
+            # If we can't extract store info, return None
+            pass
+
+        return None
 
     # Legacy compatibility properties
     @property
@@ -2644,14 +2856,32 @@ class ZarrNii:
             translation=ref_znimg.ngff_image.translation.copy(),
             name=f"{self.name}_transformed_to_{ref_znimg.name}",
         )
+
+        # Try to get zarr store information for direct access (avoids nested compute)
+        store_info = self.get_zarr_store_info()
+
         # Lazily apply the transformations using dask
-        interp_ngff_image.data = da.map_blocks(
-            interp_by_block,  # Function to interpolate each block
-            ref_znimg.data,  # Reference image data
-            dtype=np.float32,  # Output data type
-            transforms=tfms_to_apply,  # Transformations to apply
-            flo_znimg=self,  # Floating image to align
-        )
+        if store_info is not None:
+            # Use direct zarr access to avoid nested compute() calls
+            interp_ngff_image.data = da.map_blocks(
+                interp_by_block,  # Function to interpolate each block
+                ref_znimg.data,  # Reference image data
+                dtype=np.float32,  # Output data type
+                transforms=tfms_to_apply,  # Transformations to apply
+                flo_store_path=store_info["store_path"],
+                flo_array_shape=store_info["array_shape"],
+                flo_dataset_path=store_info["dataset_path"],
+                flo_storage_options=None,  # TODO: Extract from dask array if available
+            )
+        else:
+            # Fall back to passing ZarrNii instance (legacy behavior with nested compute)
+            interp_ngff_image.data = da.map_blocks(
+                interp_by_block,  # Function to interpolate each block
+                ref_znimg.data,  # Reference image data
+                dtype=np.float32,  # Output data type
+                transforms=tfms_to_apply,  # Transformations to apply
+                flo_znimg=self,  # Floating image to align (legacy)
+            )
 
         return ZarrNii.from_ngff_image(
             interp_ngff_image,
