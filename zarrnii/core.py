@@ -3410,9 +3410,13 @@ class ZarrNii:
                 elif dtype == "int16":
                     target_min, target_max = -32768, 32767
 
-                # Linear rescaling: new_value = (value - data_min) * (target_max - target_min) / (data_max - data_min) + target_min
+                # Convert data to float to avoid overflow during rescaling
+                # Linear rescaling formula:
+                # new_value = (value - data_min) * (target_max - target_min)
+                #             / (data_max - data_min) + target_min
+                data_float = data.astype(np.float64)
                 data_scaled = (
-                    (data - data_min)
+                    (data_float - data_min)
                     * (target_max - target_min)
                     / (data_max - data_min)
                     + target_min
