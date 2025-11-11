@@ -1358,20 +1358,22 @@ class ZarrNii:
                         try:
                             # Convert store_path to string in case it's a Path object
                             store_path_str = str(store_path)
-                            
+
                             # Open the zarr store to get the actual array shape
                             if store_path_str.endswith(".zip"):
-                                zarr_store = zarr.storage.ZipStore(store_path_str, mode="r")
+                                zarr_store = zarr.storage.ZipStore(
+                                    store_path_str, mode="r"
+                                )
                                 root = zarr.open_group(zarr_store, mode="r")
                                 zarr_array = root[dataset_path]
                                 zarr_store.close()
                             else:
                                 root = zarr.open_group(store_path_str, mode="r")
                                 zarr_array = root[dataset_path]
-                            
+
                             zarr_shape = zarr_array.shape
                             dask_shape = self.shape
-                            
+
                             # Check if shapes match
                             if zarr_shape != dask_shape:
                                 raise ValueError(
@@ -1385,7 +1387,7 @@ class ZarrNii:
                                     f"  flo_znimg = ZarrNii.from_ome_zarr('intermediate.zarr')\n"
                                     f"  transformed = flo_znimg.apply_transform(...)"
                                 )
-                            
+
                         except (KeyError, FileNotFoundError) as e:
                             # Dataset doesn't exist at the specified path
                             raise ValueError(
@@ -1398,7 +1400,7 @@ class ZarrNii:
                                 f"  flo_znimg = ZarrNii.from_ome_zarr('intermediate.zarr')\n"
                                 f"  transformed = flo_znimg.apply_transform(...)"
                             ) from e
-                        
+
                         return {
                             "store_path": store_path,
                             "dataset_path": dataset_path,
