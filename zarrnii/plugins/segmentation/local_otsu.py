@@ -7,7 +7,7 @@ image segmentation, applied locally to each processing block.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 from skimage.filters import threshold_otsu
@@ -41,7 +41,7 @@ class LocalOtsuSegmentation(SegmentationPlugin):
         self.nbins = nbins
 
     def segment(
-        self, image: np.ndarray, metadata: Optional[Dict[str, Any]] = None
+        self, image: np.ndarray, metadata: dict[str, Any] | None = None
     ) -> np.ndarray:
         """
         Segment image using local Otsu thresholding.

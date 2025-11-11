@@ -354,18 +354,18 @@ class TestOmeZarrWriter:
                 z_scales.append(z_scale)
 
             # All z scales should be the same (z axis not downsampled)
-            assert all(
-                z_scale == z_scales[0] for z_scale in z_scales
-            ), f"Z scales should be constant across pyramid levels, but got: {z_scales}"
+            assert all(z_scale == z_scales[0] for z_scale in z_scales), (
+                f"Z scales should be constant across pyramid levels, but got: {z_scales}"
+            )
 
             # Check that x and y scales do change (they are downsampled)
             x_scales = [img.scale.get("x", 1.0) for img in multiscales.images]
             y_scales = [img.scale.get("y", 1.0) for img in multiscales.images]
 
             # X and Y scales should increase with pyramid level
-            assert (
-                x_scales[0] < x_scales[1] < x_scales[2]
-            ), f"X scales should increase: {x_scales}"
-            assert (
-                y_scales[0] < y_scales[1] < y_scales[2]
-            ), f"Y scales should increase: {y_scales}"
+            assert x_scales[0] < x_scales[1] < x_scales[2], (
+                f"X scales should increase: {x_scales}"
+            )
+            assert y_scales[0] < y_scales[1] < y_scales[2], (
+                f"Y scales should increase: {y_scales}"
+            )

@@ -5,32 +5,33 @@
 setup:
     uv run pre-commit install
 
-# Run linting with flake8
+# Run linting with ruff
 lint:
-    uv run flake8 .
+    uv run ruff check .
 
-# Format code with black
+# Format code with ruff
 format:
-    uv run black .
+    uv run ruff format .
 
-# Sort imports with isort
+# Sort imports with ruff (included in format)
 sort-imports:
-    uv run isort .
+    uv run ruff check --select I --fix .
 
-# Check code formatting with black (no changes)
+# Check code formatting with ruff (no changes)
 check-format:
-    uv run black --check .
+    uv run ruff format --check .
 
-# Check import sorting with isort (no changes)
-check-imports:
-    uv run isort --check .
+# Check linting with ruff (no changes)
+check-lint:
+    uv run ruff check .
 
 # Run tests with pytest
 test:
     uv run pytest -v
 
-# Quality fix
-quality_fix: format sort-imports
+# Quality fix (format and auto-fix lint issues)
+quality_fix: format
+    uv run ruff check --fix .
 
 # Run tests with coverage reporting
 test-cov:
@@ -69,7 +70,7 @@ quality:
     ./scripts/quality-check.sh
 
 # Run individual quality checks
-quality-individual: check-format check-imports lint
+quality-individual: check-format check-lint
 
 # Build package
 build:

@@ -7,20 +7,20 @@ set -e
 echo "🔍 Running quality checks..."
 echo ""
 
-echo "📝 Checking code formatting with black..."
-if ! uv run black --check --diff .; then
-    echo "❌ Code formatting issues found. Run 'uv run black .' to fix."
+echo "📝 Checking code formatting with ruff..."
+if ! uv run ruff format --check --diff .; then
+    echo "❌ Code formatting issues found. Run 'uv run ruff format .' to fix."
     exit 1
 fi
 echo "✅ Code formatting looks good"
 echo ""
 
-echo "📝 Checking import sorting with isort..."
-if ! uv run isort --check --diff .; then
-    echo "❌ Import sorting issues found. Run 'uv run isort .' to fix." 
+echo "📝 Checking linting with ruff..."
+if ! uv run ruff check .; then
+    echo "❌ Linting issues found. Run 'uv run ruff check --fix .' to fix."
     exit 1
 fi
-echo "✅ Import sorting looks good"
+echo "✅ Linting looks good"
 echo ""
 
 
@@ -46,8 +46,8 @@ fi
 echo ""
 
 echo "🎉 Quality checks completed!"
-echo "   - Black formatting: enforced (line-length: 88)"
-echo "   - Import sorting: enforced (profile: black)"
+echo "   - Ruff formatting: enforced (line-length: 88)"
+echo "   - Ruff linting: enforced (includes import sorting)"
 echo "   - Import test: passed"
 echo "   - Documentation: built" 
 echo "   - Package build: successful"

@@ -540,9 +540,9 @@ class TestZarrNiiAtlas:
 
         for name, center in test_cases:
             patch = atlas.crop_centered(center, patch_size=patch_size)
-            assert (
-                patch.shape == expected_shape
-            ), f"{name}: Expected {expected_shape}, got {patch.shape}"
+            assert patch.shape == expected_shape, (
+                f"{name}: Expected {expected_shape}, got {patch.shape}"
+            )
 
     def test_crop_centered_padding_values(self, sample_atlas):
         """Test that padding uses the correct fill value."""
@@ -568,9 +568,9 @@ class TestZarrNiiAtlas:
 
         # The custom fill value should appear in the padded region
         # (at the left edge of x dimension)
-        assert np.any(
-            data_custom == -999.0
-        ), "Custom fill value not found in padded region"
+        assert np.any(data_custom == -999.0), (
+            "Custom fill value not found in padded region"
+        )
 
     def test_crop_centered_batch_fixed_size(self, sample_atlas):
         """Test that batch crop_centered returns consistent sizes."""
@@ -589,9 +589,9 @@ class TestZarrNiiAtlas:
         # All patches should have exactly the same size
         expected_shape = (1, patch_size[2], patch_size[1], patch_size[0])
         for i, patch in enumerate(patches):
-            assert (
-                patch.shape == expected_shape
-            ), f"Patch {i}: Expected {expected_shape}, got {patch.shape}"
+            assert patch.shape == expected_shape, (
+                f"Patch {i}: Expected {expected_shape}, got {patch.shape}"
+            )
 
     def test_crop_centered_completely_outside(self, sample_atlas):
         """Test that crop_centered handles centers completely outside image bounds."""
@@ -611,16 +611,16 @@ class TestZarrNiiAtlas:
 
         for name, center in test_cases:
             patch = atlas.crop_centered(center, patch_size=patch_size)
-            assert (
-                patch.shape == expected_shape
-            ), f"{name}: Expected {expected_shape}, got {patch.shape}"
+            assert patch.shape == expected_shape, (
+                f"{name}: Expected {expected_shape}, got {patch.shape}"
+            )
 
             # The patch should be entirely filled with the fill value (0)
             data = patch.data.compute()
             # Since we're completely outside, all data should be the fill value
-            assert np.all(
-                data == 0.0
-            ), f"{name}: Patch should be entirely filled with fill_value"
+            assert np.all(data == 0.0), (
+                f"{name}: Patch should be entirely filled with fill_value"
+            )
 
 
 class TestZarrNiiAtlasFileIO:

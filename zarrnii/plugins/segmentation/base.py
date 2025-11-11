@@ -7,7 +7,7 @@ This module defines the abstract interface that all segmentation plugins must im
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 
@@ -32,7 +32,7 @@ class SegmentationPlugin(ABC):
 
     @abstractmethod
     def segment(
-        self, image: np.ndarray, metadata: Optional[Dict[str, Any]] = None
+        self, image: np.ndarray, metadata: dict[str, Any] | None = None
     ) -> np.ndarray:
         """
         Segment an image and return a binary or labeled mask.

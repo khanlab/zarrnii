@@ -325,18 +325,18 @@ def test_get_upsampled_chunks_function(nifti_nib):
         # Check that chunks sum up to exactly the target shape
         for dim, (target_dim, chunks_dim) in enumerate(zip(target_shape, new_chunks)):
             chunks_sum = sum(chunks_dim)
-            assert (
-                chunks_sum == target_dim
-            ), f"Dimension {dim}: chunks sum {chunks_sum} != target {target_dim}"
+            assert chunks_sum == target_dim, (
+                f"Dimension {dim}: chunks sum {chunks_sum} != target {target_dim}"
+            )
 
         # Check that scaling factors are reasonable
         for dim, (orig_dim, target_dim, scale) in enumerate(
             zip(znimg.shape, target_shape, scaling)
         ):
             expected_scale = target_dim / orig_dim
-            assert (
-                abs(scale - expected_scale) < 1e-10
-            ), f"Dimension {dim}: scaling {scale} != expected {expected_scale}"
+            assert abs(scale - expected_scale) < 1e-10, (
+                f"Dimension {dim}: scaling {scale} != expected {expected_scale}"
+            )
 
 
 @pytest.mark.usefixtures("cleandir")
@@ -355,11 +355,11 @@ def test_upsample_to_shape_exact_match(nifti_nib):
 
     for target_shape in test_cases:
         upsampled = znimg.upsample(to_shape=target_shape)
-        assert (
-            upsampled.shape == target_shape
-        ), f"Upsampled shape {upsampled.shape} != target {target_shape}"
+        assert upsampled.shape == target_shape, (
+            f"Upsampled shape {upsampled.shape} != target {target_shape}"
+        )
 
         # Also verify the data shape matches (not just the ZarrNii shape property)
-        assert (
-            upsampled.data.shape == target_shape
-        ), f"Data shape {upsampled.data.shape} != target {target_shape}"
+        assert upsampled.data.shape == target_shape, (
+            f"Data shape {upsampled.data.shape} != target {target_shape}"
+        )
