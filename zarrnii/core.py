@@ -3661,6 +3661,11 @@ class ZarrNii:
 
         Raises:
             ImportError: If h5py is not available
+
+        Notes:
+            - Imaris files are always saved in ZYX axis order
+            - Automatic axis reordering from XYZ to ZYX if needed
+            - Spatial transformations and metadata are preserved
         """
         try:
             import h5py
@@ -3683,6 +3688,20 @@ class ZarrNii:
             data = self.darr.compute()  # Convert Dask array to numpy array
         else:
             data = np.asarray(self.darr)  # Handle numpy arrays directly
+
+        # Reorder data from XYZ to ZYX if necessary (Imaris expects ZYX order)
+        if self.axes_order == "XYZ":
+            # Need to transpose spatial dimensions from XYZ to ZYX
+            if len(data.shape) == 4:
+                # CXYZ -> CZYX: transpose last 3 dimensions
+                data = data.transpose(0, 3, 2, 1)
+            elif len(data.shape) == 3:
+                # XYZ -> ZYX: reverse spatial dimensions
+                data = data.transpose(2, 1, 0)
+            else:
+                raise ValueError(
+                    f"Unsupported data shape: {data.shape}. Expected 3D or 4D"
+                )
 
         # Handle dimensions: expect ZYX or CZYX
         if len(data.shape) == 4:
