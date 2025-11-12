@@ -1,26 +1,31 @@
 """
 Base class for scaled processing plugins.
 
-This module defines the abstract interface that all scaled processing plugins must implement.
+This module defines the interface that all scaled processing plugins must implement
+using the pluggy framework.
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
 import dask.array as da
 import numpy as np
+import pluggy
+
+hookimpl = pluggy.HookimplMarker("zarrnii")
 
 
-class ScaledProcessingPlugin(ABC):
+class ScaledProcessingPlugin:
     """
-    Abstract base class for scaled processing plugins.
+    Base class for scaled processing plugins using pluggy.
 
-    All scaled processing plugins must inherit from this class and implement the
-    lowres_func and highres_func methods. This architecture enables efficient
-    multi-resolution processing where an algorithm is computed at low resolution
-    and then applied to full resolution data.
+    All scaled processing plugins should inherit from this class and implement the
+    required methods. This architecture enables efficient multi-resolution processing
+    where an algorithm is computed at low resolution and then applied to full
+    resolution data.
+
+    The plugin methods are decorated with @hookimpl to work with pluggy.
     """
 
     def __init__(self, **kwargs):
@@ -32,7 +37,7 @@ class ScaledProcessingPlugin(ABC):
         """
         self.params = kwargs
 
-    @abstractmethod
+    @hookimpl
     def lowres_func(self, lowres_array: np.ndarray) -> np.ndarray:
         """
         Process low-resolution data and return the result.
@@ -50,9 +55,11 @@ class ScaledProcessingPlugin(ABC):
         Raises:
             NotImplementedError: If the method is not implemented by the subclass
         """
-        pass
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement lowres_func method"
+        )
 
-    @abstractmethod
+    @hookimpl
     def highres_func(
         self, fullres_array: da.Array, upsampled_output: da.Array
     ) -> da.Array:
@@ -73,29 +80,63 @@ class ScaledProcessingPlugin(ABC):
         Raises:
             NotImplementedError: If the method is not implemented by the subclass
         """
-        pass
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement highres_func method"
+        )
 
-    @property
-    @abstractmethod
-    def name(self) -> str:
+    @hookimpl
+    def scaled_processing_plugin_name(self) -> str:
         """
         Return the name of the scaled processing algorithm.
 
         Returns:
             String name of the algorithm
-        """
-        pass
 
-    @property
-    @abstractmethod
-    def description(self) -> str:
+        Raises:
+            NotImplementedError: If the method is not implemented by the subclass
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement scaled_processing_plugin_name method"
+        )
+
+    @hookimpl
+    def scaled_processing_plugin_description(self) -> str:
         """
         Return a description of the scaled processing algorithm.
 
         Returns:
             String description of the algorithm
+
+        Raises:
+            NotImplementedError: If the method is not implemented by the subclass
         """
-        pass
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement scaled_processing_plugin_description method"
+        )
+
+    @property
+    def name(self) -> str:
+        """
+        Return the name of the scaled processing algorithm.
+
+        This property provides backward compatibility.
+
+        Returns:
+            String name of the algorithm
+        """
+        return self.scaled_processing_plugin_name()
+
+    @property
+    def description(self) -> str:
+        """
+        Return a description of the scaled processing algorithm.
+
+        This property provides backward compatibility.
+
+        Returns:
+            String description of the algorithm
+        """
+        return self.scaled_processing_plugin_description()
 
     def __repr__(self) -> str:
         """Return string representation of the plugin."""

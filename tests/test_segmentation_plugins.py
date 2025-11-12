@@ -18,9 +18,20 @@ class TestSegmentationPlugin:
     """Test the base SegmentationPlugin interface."""
 
     def test_abstract_plugin_cannot_be_instantiated(self):
-        """Test that abstract SegmentationPlugin cannot be instantiated directly."""
-        with pytest.raises(TypeError):
-            SegmentationPlugin()
+        """Test that SegmentationPlugin base class raises NotImplementedError when methods are called."""
+        # With pluggy, we can instantiate the base class but methods should raise NotImplementedError
+        plugin = SegmentationPlugin()
+        
+        test_image = np.random.rand(10, 10).astype(np.float32)
+        
+        with pytest.raises(NotImplementedError):
+            plugin.segment(test_image)
+        
+        with pytest.raises(NotImplementedError):
+            plugin.segmentation_plugin_name()
+        
+        with pytest.raises(NotImplementedError):
+            plugin.segmentation_plugin_description()
 
     def test_plugin_interface(self):
         """Test that plugins implement the required interface."""
@@ -30,12 +41,10 @@ class TestSegmentationPlugin:
             def segment(self, image, metadata=None):
                 return np.ones_like(image, dtype=np.uint8)
 
-            @property
-            def name(self):
+            def segmentation_plugin_name(self):
                 return "Test Plugin"
 
-            @property
-            def description(self):
+            def segmentation_plugin_description(self):
                 return "A test plugin"
 
         plugin = TestPlugin(param1=10, param2="test")

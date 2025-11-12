@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 from skimage.filters import threshold_otsu
 
-from .base import SegmentationPlugin
+from .base import SegmentationPlugin, hookimpl
 
 
 class LocalOtsuSegmentation(SegmentationPlugin):
@@ -40,6 +40,7 @@ class LocalOtsuSegmentation(SegmentationPlugin):
         super().__init__(nbins=nbins, **kwargs)
         self.nbins = nbins
 
+    @hookimpl
     def segment(
         self, image: np.ndarray, metadata: Optional[Dict[str, Any]] = None
     ) -> np.ndarray:
@@ -107,13 +108,13 @@ class LocalOtsuSegmentation(SegmentationPlugin):
 
         return binary_mask.astype(np.uint8)
 
-    @property
-    def name(self) -> str:
+    @hookimpl
+    def segmentation_plugin_name(self) -> str:
         """Return the name of the segmentation algorithm."""
         return "Local Otsu Thresholding"
 
-    @property
-    def description(self) -> str:
+    @hookimpl
+    def segmentation_plugin_description(self) -> str:
         """Return a description of the segmentation algorithm."""
         return (
             "Local Otsu's automatic threshold selection method for binary segmentation. "
@@ -121,6 +122,16 @@ class LocalOtsuSegmentation(SegmentationPlugin):
             "bimodal intensity distribution. Threshold is computed locally for each "
             "processing block, suitable for images with varying illumination."
         )
+
+    @property
+    def name(self) -> str:
+        """Return the name of the segmentation algorithm."""
+        return self.segmentation_plugin_name()
+
+    @property
+    def description(self) -> str:
+        """Return a description of the segmentation algorithm."""
+        return self.segmentation_plugin_description()
 
     def get_threshold(self, image: np.ndarray) -> float:
         """

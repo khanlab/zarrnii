@@ -24,9 +24,26 @@ class TestScaledProcessingPlugin:
     """Test the base ScaledProcessingPlugin interface."""
 
     def test_abstract_plugin_cannot_be_instantiated(self):
-        """Test that abstract ScaledProcessingPlugin cannot be instantiated directly."""
-        with pytest.raises(TypeError):
-            ScaledProcessingPlugin()
+        """Test that ScaledProcessingPlugin base class raises NotImplementedError when methods are called."""
+        # With pluggy, we can instantiate the base class but methods should raise NotImplementedError
+        plugin = ScaledProcessingPlugin()
+        
+        test_lowres = np.random.rand(10, 10).astype(np.float32)
+        test_fullres = da.from_array(
+            np.random.rand(20, 20).astype(np.float32), chunks=(10, 10)
+        )
+        
+        with pytest.raises(NotImplementedError):
+            plugin.lowres_func(test_lowres)
+        
+        with pytest.raises(NotImplementedError):
+            plugin.highres_func(test_fullres, test_fullres)
+        
+        with pytest.raises(NotImplementedError):
+            plugin.scaled_processing_plugin_name()
+        
+        with pytest.raises(NotImplementedError):
+            plugin.scaled_processing_plugin_description()
 
     def test_plugin_interface(self):
         """Test that plugins implement the required interface."""
@@ -41,12 +58,10 @@ class TestScaledProcessingPlugin:
                 # Simple multiplication by 2
                 return fullres_array * 2
 
-            @property
-            def name(self):
+            def scaled_processing_plugin_name(self):
                 return "Test Plugin"
 
-            @property
-            def description(self):
+            def scaled_processing_plugin_description(self):
                 return "A test plugin"
 
         plugin = TestPlugin(param1=10, param2="test")

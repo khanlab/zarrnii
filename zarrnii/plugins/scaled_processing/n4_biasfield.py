@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 import dask.array as da
 import numpy as np
 
-from .base import ScaledProcessingPlugin
+from .base import ScaledProcessingPlugin, hookimpl
 
 try:
     import ants
@@ -76,6 +76,7 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
         self.convergence = convergence
         self.shrink_factor = shrink_factor
 
+    @hookimpl
     def lowres_func(self, lowres_array: np.ndarray) -> np.ndarray:
         """
         Estimate bias field from low-resolution data using N4 algorithm.
@@ -159,6 +160,7 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
 
         return bias_field
 
+    @hookimpl
     def highres_func(
         self, fullres_array: da.Array, upsampled_output: da.Array
     ) -> da.Array:
@@ -182,16 +184,26 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
 
         return corrected_array
 
-    @property
-    def name(self) -> str:
+    @hookimpl
+    def scaled_processing_plugin_name(self) -> str:
         """Return the name of the algorithm."""
         return "N4 Bias Field Correction"
 
-    @property
-    def description(self) -> str:
+    @hookimpl
+    def scaled_processing_plugin_description(self) -> str:
         """Return a description of the algorithm."""
         return (
             "Multi-resolution N4 bias field correction. Estimates smooth bias "
             "field at low resolution using ANTsPy N4 algorithm and applies "
             "correction to full resolution data by division."
         )
+
+    @property
+    def name(self) -> str:
+        """Return the name of the algorithm."""
+        return self.scaled_processing_plugin_name()
+
+    @property
+    def description(self) -> str:
+        """Return a description of the algorithm."""
+        return self.scaled_processing_plugin_description()
