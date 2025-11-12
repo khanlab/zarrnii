@@ -27,21 +27,21 @@ class TestScaledProcessingPlugin:
         """Test that ScaledProcessingPlugin base class raises NotImplementedError when methods are called."""
         # With pluggy, we can instantiate the base class but methods should raise NotImplementedError
         plugin = ScaledProcessingPlugin()
-        
+
         test_lowres = np.random.rand(10, 10).astype(np.float32)
         test_fullres = da.from_array(
             np.random.rand(20, 20).astype(np.float32), chunks=(10, 10)
         )
-        
+
         with pytest.raises(NotImplementedError):
             plugin.lowres_func(test_lowres)
-        
+
         with pytest.raises(NotImplementedError):
             plugin.highres_func(test_fullres, test_fullres)
-        
+
         with pytest.raises(NotImplementedError):
             plugin.scaled_processing_plugin_name()
-        
+
         with pytest.raises(NotImplementedError):
             plugin.scaled_processing_plugin_description()
 

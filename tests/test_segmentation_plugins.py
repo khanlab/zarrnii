@@ -21,15 +21,15 @@ class TestSegmentationPlugin:
         """Test that SegmentationPlugin base class raises NotImplementedError when methods are called."""
         # With pluggy, we can instantiate the base class but methods should raise NotImplementedError
         plugin = SegmentationPlugin()
-        
+
         test_image = np.random.rand(10, 10).astype(np.float32)
-        
+
         with pytest.raises(NotImplementedError):
             plugin.segment(test_image)
-        
+
         with pytest.raises(NotImplementedError):
             plugin.segmentation_plugin_name()
-        
+
         with pytest.raises(NotImplementedError):
             plugin.segmentation_plugin_description()
 
