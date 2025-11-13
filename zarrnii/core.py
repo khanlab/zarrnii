@@ -3370,7 +3370,7 @@ class ZarrNii:
                 1,
                 json.dumps(channel_metadata).encode(
                     "utf-8"
-                ),  # code 1 seems to be unused
+                ),  # code 1 is reserved/unspecified in NIfTI standard, suitable for custom metadata
             )
             nifti_img.header.extensions.append(ext)
 
