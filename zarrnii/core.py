@@ -3674,7 +3674,7 @@ class ZarrNii:
                 ngff_image_to_save.data.compute()
             )  # Convert Dask array to numpy array
         else:
-            data = np.asarray(ngff_image_to_save)  # Handle numpy arrays directly
+            data = np.asarray(ngff_image_to_save.data)  # Handle numpy arrays directly
 
         # Handle dimensions: expect ZYX or CZYX
         if len(data.shape) == 4:
