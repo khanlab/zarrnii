@@ -3654,7 +3654,7 @@ class ZarrNii:
 
         # Determine the image to save
         if self.axes_order == "XYZ":
-            # Need to reorder data from XYZ to ZYX for OME-Zarr
+            # Need to reorder data from XYZ to ZYX for Imaris
             ngff_image_to_save = self._create_zyx_ngff_image()
         else:
             # Already in ZYX order
