@@ -36,6 +36,61 @@ from scipy.ndimage import zoom
 from .transform import AffineTransform, Transform
 
 
+def _to_primitive(obj: Any) -> Any:
+    """
+    Recursively convert obj to JSON-serializable primitives.
+
+    Handles:
+      - dataclasses (via asdict)
+      - pydantic / objects with .dict() or .to_dict()
+      - dict / list / tuple
+      - numpy scalars -> Python scalars
+      - enum.Enum -> .value
+      - plain objects via vars(obj)
+    """
+
+    import enum
+    from dataclasses import asdict, is_dataclass
+
+    # dataclasses
+    if is_dataclass(obj):
+        return _to_primitive(asdict(obj))
+
+    # dict
+    if isinstance(obj, dict):
+        return {str(k): _to_primitive(v) for k, v in obj.items()}
+
+    # list/tuple
+    if isinstance(obj, (list, tuple)):
+        return [_to_primitive(v) for v in obj]
+
+    # numpy scalars
+    if isinstance(obj, np.generic):
+        return obj.item()
+
+    # enums
+    if isinstance(obj, enum.Enum):
+        return obj.value
+
+    # pydantic models or other objects exposing dict()
+    if hasattr(obj, "dict") and callable(getattr(obj, "dict")):
+        try:
+            return _to_primitive(obj.dict())
+        except TypeError:
+            pass
+
+    # objects with to_dict
+    if hasattr(obj, "to_dict") and callable(getattr(obj, "to_dict")):
+        return _to_primitive(obj.to_dict())
+
+    # plain objects
+    if hasattr(obj, "__dict__"):
+        return _to_primitive(vars(obj))
+
+    # fallback: assume primitive already
+    return obj
+
+
 class MetadataInvalidError(Exception):
     """Raised when an operation would invalidate ZarrNii metadata."""
 
@@ -204,6 +259,7 @@ def save_ngff_image_with_ome_zarr(
     scale_factors: Optional[List[int]] = None,
     scaling_method: str = "local_mean",
     xyz_orientation: Optional[str] = None,
+    omero: nz.Omero = None,
     compute: bool = True,
     **kwargs: Any,
 ) -> None:
@@ -299,6 +355,7 @@ def save_ngff_image_with_ome_zarr(
                 coordinate_transformations=coordinate_transformations,
                 axes=axes,
                 fmt=fmt,
+                metadata={} if omero == None else {"omero": _to_primitive(omero)},
                 compute=compute,
                 **kwargs,
             )
@@ -330,6 +387,7 @@ def save_ngff_image_with_ome_zarr(
             coordinate_transformations=coordinate_transformations,
             axes=axes,
             fmt=fmt,
+            metadata={} if omero == None else {"omero": _to_primitive(omero)},
             compute=compute,
             **kwargs,
         )
@@ -2101,14 +2159,15 @@ class ZarrNii:
 
             for ext in nifti_img.header.extensions:
                 try:
-                    # Try to decode the extension content as JSON
-                    content = ext.get_content().decode("utf-8")
-                    metadata = json.loads(content)
+                    if ext.get_code() == 1:
+                        # Try to decode the extension content as JSON
+                        content = ext.get_content().decode("utf-8")
+                        metadata = json.loads(content)
 
-                    # Look for channel_labels in the metadata
-                    if "channel_labels" in metadata:
-                        channel_labels = metadata["channel_labels"]
-                        break
+                        # Look for channel_labels in the metadata
+                        if "channel_labels" in metadata:
+                            channel_labels = metadata["channel_labels"]
+                            break
                 except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
                     # Skip extensions that aren't JSON or can't be decoded
                     continue
@@ -3138,6 +3197,7 @@ class ZarrNii:
                 store_or_path,
                 max_layer,
                 scale_factors,
+                omero=self._omero,
                 xyz_orientation=(
                     self.xyz_orientation if hasattr(self, "xyz_orientation") else None
                 ),
@@ -3307,7 +3367,10 @@ class ZarrNii:
 
             channel_metadata = {"channel_labels": channel_labels}
             ext = nib.nifti1.Nifti1Extension(
-                0, json.dumps(channel_metadata).encode("utf-8")
+                1,
+                json.dumps(channel_metadata).encode(
+                    "utf-8"
+                ),  # code 1 seems to be unused
             )
             nifti_img.header.extensions.append(ext)
 
