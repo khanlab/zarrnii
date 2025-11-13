@@ -355,7 +355,7 @@ def save_ngff_image_with_ome_zarr(
                 coordinate_transformations=coordinate_transformations,
                 axes=axes,
                 fmt=fmt,
-                metadata={} if omero == None else {"omero": _to_primitive(omero)},
+                metadata={} if omero is None else {"omero": _to_primitive(omero)},
                 compute=compute,
                 **kwargs,
             )
