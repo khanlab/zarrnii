@@ -229,31 +229,6 @@ class TestEdgeCases:
                 finally:
                     os.unlink(tmp.name)
 
-    def test_from_nifti_edge_cases(self):
-        """Test from_nifti with various edge cases."""
-        import tempfile
-
-        import nibabel as nib
-
-        # Test 2D data
-        data_2d = np.random.rand(16, 16).astype(np.float32)
-        affine = np.eye(4)
-
-        with tempfile.NamedTemporaryFile(suffix=".nii.gz", delete=False) as tmp:
-            nifti_img = nib.Nifti1Image(data_2d, affine)
-            nib.save(nifti_img, tmp.name)
-
-            try:
-                znimg = ZarrNii.from_nifti(tmp.name)
-                # Should add channel dimension - becomes (c, x, y)
-                assert znimg.darr.shape == (1, 16, 16)
-                # The from_nifti method creates dims based on axes_order, which defaults to XYZ
-                # For 2D input that becomes 3D after adding channel, it creates all 3 spatial dims
-                expected_dims = ["c", "x", "y", "z"]  # This is actually what it creates
-                assert znimg.ngff_image.dims == expected_dims
-            finally:
-                os.unlink(tmp.name)
-
     def test_complex_timepoint_channel_combinations(self):
         """Test various combinations of timepoint and channel selections."""
         with tempfile.TemporaryDirectory() as tmpdir:

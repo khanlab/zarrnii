@@ -14,6 +14,7 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import ngff_zarr as nz
 import numpy as np
 import pandas as pd
 from attrs import define, field
@@ -444,7 +445,6 @@ class ZarrNiiAtlas(ZarrNii):
         """
         znii = super().from_file(path, **kwargs)
         labels_df = cls._import_itksnap_lut(lut_path)
-        print(labels_df)
         return cls(
             ngff_image=znii.ngff_image,
             axes_order=znii.axes_order,
@@ -627,8 +627,19 @@ class ZarrNiiAtlas(ZarrNii):
         # Create binary mask
         mask_data = (self.dseg.data == label).astype(np.uint8)
 
-        return ZarrNii.from_darr(
-            mask_data, affine=self.dseg.affine, axes_order=self.dseg.axes_order
+        mask_ngff = nz.NgffImage(
+            data=mask_data,
+            dims=self.dseg.ngff_image.dims.copy(),
+            scale=self.dseg.ngff_image.scale.copy(),
+            translation=self.dseg.ngff_image.translation.copy(),
+            name=f"{self.name}_masked",
+        )
+
+        return ZarrNii.from_ngff_image(
+            mask_ngff,
+            xyz_orientation=self.dseg.xyz_orientation,
+            axes_order=self.dseg.axes_order,
+            omero=self.dseg.omero,
         )
 
     def get_region_volume(self, region_id: Union[int, str]) -> float:
@@ -814,8 +825,19 @@ class ZarrNiiAtlas(ZarrNii):
         # broadcast the mapping in one go
         feature_map = dseg_data.map_blocks(lambda block: lut[block], dtype=np.float32)
 
-        return ZarrNii.from_darr(
-            feature_map, affine=self.dseg.affine, axes_order=self.dseg.axes_order
+        feature_map_ngff = nz.NgffImage(
+            data=feature_map,
+            dims=self.dseg.ngff_image.dims.copy(),
+            scale=self.dseg.ngff_image.scale.copy(),
+            translation=self.dseg.ngff_image.translation.copy(),
+            name=f"{self.name}_feature_map",
+        )
+
+        return ZarrNii.from_ngff_image(
+            feature_map_ngff,
+            xyz_orientation=self.dseg.xyz_orientation,
+            axes_order=self.dseg.axes_order,
+            omero=self.dseg.omero,
         )
 
     def get_region_bounding_box(
@@ -943,26 +965,23 @@ class ZarrNiiAtlas(ZarrNii):
         ]  # +1 for inclusive max
 
         # Now we have voxel coordinates in the order they appear in dims
-        # We need to convert to (x, y, z) order for physical coordinates
-        dim_to_voxel_range = {}
-        for i, spatial_idx in enumerate(spatial_indices):
-            dim_name = self.dseg.dims[spatial_idx].lower()
-            dim_to_voxel_range[dim_name] = (voxel_mins[i], voxel_maxs[i])
+        # We don't need to convert to (x, y, z) order for physical coordinates
+        #  since the affine should do this already..
 
-        # Build voxel coordinates in (x, y, z) order
+        # make homog coords so we can matrix mult
         voxel_min_xyz = np.array(
             [
-                dim_to_voxel_range["x"][0],
-                dim_to_voxel_range["y"][0],
-                dim_to_voxel_range["z"][0],
+                voxel_mins[0],
+                voxel_mins[1],
+                voxel_mins[2],
                 1.0,
             ]
         )
         voxel_max_xyz = np.array(
             [
-                dim_to_voxel_range["x"][1],
-                dim_to_voxel_range["y"][1],
-                dim_to_voxel_range["z"][1],
+                voxel_maxs[0],
+                voxel_maxs[1],
+                voxel_maxs[2],
                 1.0,
             ]
         )
