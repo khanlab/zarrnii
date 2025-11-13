@@ -14,6 +14,7 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import ngff_zarr as nz
 import numpy as np
 import pandas as pd
 from attrs import define, field
@@ -626,8 +627,19 @@ class ZarrNiiAtlas(ZarrNii):
         # Create binary mask
         mask_data = (self.dseg.data == label).astype(np.uint8)
 
-        return ZarrNii.from_darr(
-            mask_data, affine=self.dseg.affine, axes_order=self.dseg.axes_order
+        mask_ngff = nz.NgffImage(
+            data=mask_data,
+            dims=self.dseg.ngff_image.dims.copy(),
+            scale=self.dseg.ngff_image.scale.copy(),
+            translation=self.dseg.ngff_image.translation.copy(),
+            name=f"{self.name}_masked",
+        )
+
+        return ZarrNii.from_ngff_image(
+            mask_ngff,
+            xyz_orientation=self.dseg.xyz_orientation,
+            axes_order=self.dseg.axes_order,
+            omero=self.dseg.omero,
         )
 
     def get_region_volume(self, region_id: Union[int, str]) -> float:
@@ -813,8 +825,19 @@ class ZarrNiiAtlas(ZarrNii):
         # broadcast the mapping in one go
         feature_map = dseg_data.map_blocks(lambda block: lut[block], dtype=np.float32)
 
-        return ZarrNii.from_darr(
-            feature_map, affine=self.dseg.affine, axes_order=self.dseg.axes_order
+        feature_map_ngff = nz.NgffImage(
+            data=feature_map,
+            dims=self.dseg.ngff_image.dims.copy(),
+            scale=self.dseg.ngff_image.scale.copy(),
+            translation=self.dseg.ngff_image.translation.copy(),
+            name=f"{self.name}_feature_map",
+        )
+
+        return ZarrNii.from_ngff_image(
+            feature_map_ngff,
+            xyz_orientation=self.dseg.xyz_orientation,
+            axes_order=self.dseg.axes_order,
+            omero=self.dseg.omero,
         )
 
     def get_region_bounding_box(
