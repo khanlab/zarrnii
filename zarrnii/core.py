@@ -1493,7 +1493,6 @@ class ZarrNii:
     def from_darr(
         cls,
         darr: da.Array,
-        affine: Optional[AffineTransform] = None,
         axes_order: str = "ZYX",
         orientation: str = "RAS",
         spacing: Tuple[float, float, float] = (1.0, 1.0, 1.0),
@@ -1507,51 +1506,23 @@ class ZarrNii:
 
         Args:
             darr: Dask array containing image data
-            affine: Optional affine transformation
             axes_order: Spatial axes order
             orientation: Anatomical orientation string
-            spacing: Voxel spacing (used if no affine provided)
-            origin: Origin offset (used if no affine provided)
+            spacing: Voxel spacing, in axes_order
+            origin: Origin offset, in axes_order
             name: Image name
             omero: Optional omero metadata
 
         Returns:
             ZarrNii instance
         """
-        # Create scale and translation from affine if provided
-        if affine is not None:
-            # Extract scale and translation from affine matrix
-            affine_matrix = affine.matrix
-            if axes_order == "ZYX":
-                scale = {
-                    "z": affine_matrix[0, 0],
-                    "y": affine_matrix[1, 1],
-                    "x": affine_matrix[2, 2],
-                }
-                translation = {
-                    "z": affine_matrix[0, 3],
-                    "y": affine_matrix[1, 3],
-                    "x": affine_matrix[2, 3],
-                }
-            else:  # XYZ
-                scale = {
-                    "x": affine_matrix[0, 0],
-                    "y": affine_matrix[1, 1],
-                    "z": affine_matrix[2, 2],
-                }
-                translation = {
-                    "x": affine_matrix[0, 3],
-                    "y": affine_matrix[1, 3],
-                    "z": affine_matrix[2, 3],
-                }
-        else:
-            # Use spacing and origin
-            if axes_order == "ZYX":
-                scale = {"z": spacing[0], "y": spacing[1], "x": spacing[2]}
-                translation = {"z": origin[0], "y": origin[1], "x": origin[2]}
-            else:  # XYZ
-                scale = {"x": spacing[0], "y": spacing[1], "z": spacing[2]}
-                translation = {"x": origin[0], "y": origin[1], "z": origin[2]}
+        # Use spacing and origin
+        if axes_order == "ZYX":
+            scale = {"z": spacing[0], "y": spacing[1], "x": spacing[2]}
+            translation = {"z": origin[0], "y": origin[1], "x": origin[2]}
+        else:  # XYZ
+            scale = {"x": spacing[0], "y": spacing[1], "z": spacing[2]}
+            translation = {"x": origin[0], "y": origin[1], "z": origin[2]}
 
         # Create dimensions based on data shape after dimension adjustments
         final_ndim = len(darr.shape)
@@ -1581,12 +1552,14 @@ class ZarrNii:
     def __init__(
         self,
         darr=None,
-        affine=None,
         axes_order="ZYX",
         orientation="RAS",
         xyz_orientation=None,
         ngff_image=None,
-        _omero=None,
+        spacing: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        origin: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        name: str = "image",
+        _omero: Optional[object] = None,
         **kwargs,
     ):
         """
@@ -1608,9 +1581,12 @@ class ZarrNii:
             # Legacy signature - delegate to from_darr
             instance = self.from_darr(
                 darr=darr,
-                affine=affine,
                 axes_order=axes_order,
                 orientation=final_orientation,
+                spacing=spacing,
+                origin=origin,
+                name=name,
+                omero=_omero,
                 **kwargs,
             )
             object.__setattr__(self, "ngff_image", instance.ngff_image)
@@ -1992,24 +1968,25 @@ class ZarrNii:
         # infer orientation from the affine
         orientation = _affine_to_orientation(affine_matrix)
 
+        in_zooms = np.array(nifti_img.header.get_zooms())
+
         # Adjust shape and affine if zooms are provided
         if zooms is not None:
-            in_zooms = np.sqrt(
-                (affine_matrix[:3, :3] ** 2).sum(axis=0)
-            )  # Current voxel spacing
             scaling_factor = in_zooms / zooms
             new_shape = [
                 int(np.floor(shape[0] * scaling_factor[2])),  # Z
                 int(np.floor(shape[1] * scaling_factor[1])),  # Y
                 int(np.floor(shape[2] * scaling_factor[0])),  # X
             ]
-            np.fill_diagonal(affine_matrix[:3, :3], zooms)
+            # create affine by specifying orientation, scale and translation
+            affine_matrix = _axcodes2aff(orientation, zooms, affine_matrix[:3, 3])
+            in_zooms = zooms
         else:
             new_shape = shape
 
         if as_ref:
             # Create an empty dask array with the adjusted shape
-            darr = da.empty((1, *new_shape), chunks=chunks, dtype="float32")
+            darr = da.zeros((1, *new_shape), chunks=chunks, dtype="float32")
         else:
             # Load the NIfTI data and convert to a dask array
             array = nifti_img.get_fdata()
@@ -2044,13 +2021,13 @@ class ZarrNii:
             # Fallback for other cases
             dims = ["c"] + list(axes_order.lower())
 
-        # Extract scale and translation from affine
+        # Extract translation from affine, scale from the zooms
         scale = {}
         translation = {}
         spatial_dims = ["z", "y", "x"] if axes_order == "ZYX" else ["x", "y", "z"]
 
         for i, dim in enumerate(spatial_dims):
-            scale[dim] = np.sqrt((affine_matrix[i, :3] ** 2).sum())
+            scale[dim] = float(in_zooms[i])
             translation[dim] = affine_matrix[i, 3]
 
         # Create NgffImage
@@ -3675,6 +3652,14 @@ class ZarrNii:
                 "Install with: pip install zarrnii[imaris] or pip install h5py"
             )
 
+        # Determine the image to save
+        if self.axes_order == "XYZ":
+            # Need to reorder data from XYZ to ZYX for OME-Zarr
+            ngff_image_to_save = self._create_zyx_ngff_image()
+        else:
+            # Already in ZYX order
+            ngff_image_to_save = self.ngff_image
+
         # Ensure path has .ims extension
         if not path.endswith(".ims"):
             path = path + ".ims"
@@ -3684,24 +3669,12 @@ class ZarrNii:
             return np.array([c.encode() for c in s])
 
         # Get data and metadata
-        if hasattr(self.darr, "compute"):
-            data = self.darr.compute()  # Convert Dask array to numpy array
+        if hasattr(ngff_image_to_save.data, "compute"):
+            data = (
+                ngff_image_to_save.data.compute()
+            )  # Convert Dask array to numpy array
         else:
-            data = np.asarray(self.darr)  # Handle numpy arrays directly
-
-        # Reorder data from XYZ to ZYX if necessary (Imaris expects ZYX order)
-        if self.axes_order == "XYZ":
-            # Need to transpose spatial dimensions from XYZ to ZYX
-            if len(data.shape) == 4:
-                # CXYZ -> CZYX: transpose last 3 dimensions
-                data = data.transpose(0, 3, 2, 1)
-            elif len(data.shape) == 3:
-                # XYZ -> ZYX: reverse spatial dimensions
-                data = data.transpose(2, 1, 0)
-            else:
-                raise ValueError(
-                    f"Unsupported data shape: {data.shape}. Expected 3D or 4D"
-                )
+            data = np.asarray(ngff_image_to_save)  # Handle numpy arrays directly
 
         # Handle dimensions: expect ZYX or CZYX
         if len(data.shape) == 4:
@@ -3791,9 +3764,9 @@ class ZarrNii:
             try:
                 # Extract voxel sizes directly from ngff_image scale dictionary
                 # This ensures we get X, Y, Z in the correct order regardless of axes_order
-                sx = self.ngff_image.scale.get("x", 1.0)
-                sy = self.ngff_image.scale.get("y", 1.0)
-                sz = self.ngff_image.scale.get("z", 1.0)
+                sx = ngff_image_to_save.scale.get("x", 1.0)
+                sy = ngff_image_to_save.scale.get("y", 1.0)
+                sz = ngff_image_to_save.scale.get("z", 1.0)
             except:
                 sx = sy = sz = 1.0
 

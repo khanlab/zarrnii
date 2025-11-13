@@ -444,7 +444,6 @@ class ZarrNiiAtlas(ZarrNii):
         """
         znii = super().from_file(path, **kwargs)
         labels_df = cls._import_itksnap_lut(lut_path)
-        print(labels_df)
         return cls(
             ngff_image=znii.ngff_image,
             axes_order=znii.axes_order,
@@ -943,26 +942,23 @@ class ZarrNiiAtlas(ZarrNii):
         ]  # +1 for inclusive max
 
         # Now we have voxel coordinates in the order they appear in dims
-        # We need to convert to (x, y, z) order for physical coordinates
-        dim_to_voxel_range = {}
-        for i, spatial_idx in enumerate(spatial_indices):
-            dim_name = self.dseg.dims[spatial_idx].lower()
-            dim_to_voxel_range[dim_name] = (voxel_mins[i], voxel_maxs[i])
+        # We don't need to convert to (x, y, z) order for physical coordinates
+        #  since the affine should do this already..
 
-        # Build voxel coordinates in (x, y, z) order
+        # make homog coords so we can matrix mult
         voxel_min_xyz = np.array(
             [
-                dim_to_voxel_range["x"][0],
-                dim_to_voxel_range["y"][0],
-                dim_to_voxel_range["z"][0],
+                voxel_mins[0],
+                voxel_mins[1],
+                voxel_mins[2],
                 1.0,
             ]
         )
         voxel_max_xyz = np.array(
             [
-                dim_to_voxel_range["x"][1],
-                dim_to_voxel_range["y"][1],
-                dim_to_voxel_range["z"][1],
+                voxel_maxs[0],
+                voxel_maxs[1],
+                voxel_maxs[2],
                 1.0,
             ]
         )

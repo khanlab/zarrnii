@@ -31,12 +31,8 @@ class TestZarrNiiAtlas:
         # Region 3: right half bottom
         dseg_data[0, 5:, :, 5:] = 3
 
-        # Create affine matrix (1mm isotropic)
-        affine = AffineTransform.from_array(np.eye(4))
-
-        # Create ZarrNii from the data
-        dseg = ZarrNii.from_darr(dseg_data, affine=affine)
-
+        # Create ZarrNii from the data, default 1x1x1 spacing
+        dseg = ZarrNii.from_darr(dseg_data)
         labels_df = pd.DataFrame(
             {
                 "index": [0, 1, 2, 3],
@@ -179,7 +175,8 @@ class TestZarrNiiAtlas:
         img_data[dseg_data == 2] = 20.0  # Right top = 20
         img_data[dseg_data == 3] = 30.0  # Right bottom = 30
 
-        test_image = ZarrNii.from_darr(img_data, affine=atlas.dseg.affine)
+        # default 1x1x1 spacing
+        test_image = ZarrNii.from_darr(img_data)
 
         # Test mean aggregation
         result = atlas.aggregate_image_by_regions(test_image, aggregation_func="mean")
@@ -234,10 +231,10 @@ class TestZarrNiiAtlas:
         assert len(bbox_min) == 3
         assert len(bbox_max) == 3
 
-        # atlas is in ZYX ordering, so
+        # atlas is in ZYX ordering, but bounding box always in XYZ RAS
         # Region 1 is [:, :, :5], so in XYZ: x=[0, 10), y=[0, 10), z=[0, 5)
         assert bbox_min == (0.0, 0.0, 0.0)
-        assert bbox_max == (10.0, 10.0, 5.0)
+        assert bbox_max == (5.0, 10.0, 10.0)
 
     def test_get_region_bounding_box_by_name(self, sample_atlas):
         """Test getting bounding box by region name."""
@@ -247,7 +244,7 @@ class TestZarrNiiAtlas:
 
         # Should return same as by index
         assert bbox_min == (0.0, 0.0, 0.0)
-        assert bbox_max == (10.0, 10.0, 5.0)
+        assert bbox_max == (5.0, 10.0, 10.0)
 
     def test_get_region_bounding_box_by_abbreviation(self, sample_atlas):
         """Test getting bounding box by region abbreviation."""
@@ -256,8 +253,8 @@ class TestZarrNiiAtlas:
         bbox_min, bbox_max = atlas.get_region_bounding_box("RT")  # Right Top
 
         # Region 2 is [:5, :, 5:], so in XYZ: x=[5, 10), y=[0, 10), z=[0, 5)
-        assert bbox_min == (0.0, 0.0, 5.0)
-        assert bbox_max == (5.0, 10.0, 10.0)
+        assert bbox_min == (5.0, 0.0, 0.0)
+        assert bbox_max == (10.0, 10.0, 5.0)
 
     def test_get_region_bounding_box_multiple_regions(self, sample_atlas):
         """Test getting bounding box for multiple regions."""
@@ -269,7 +266,7 @@ class TestZarrNiiAtlas:
         # Region 2: [:5, :, 5:] (right half top)
         # Region 3: [5:, :, 5:] (right half bottom)
         # Union: [:, :, 5:], so in XYZ: x=[5, 10), y=[0, 10), z=[0, 10)
-        assert bbox_min == (0.0, 0.0, 5.0)
+        assert bbox_min == (5.0, 0.0, 0.0)
         assert bbox_max == (10.0, 10.0, 10.0)
 
     def test_get_region_bounding_box_regex(self, sample_atlas):
@@ -280,7 +277,8 @@ class TestZarrNiiAtlas:
         bbox_min, bbox_max = atlas.get_region_bounding_box(regex="Right.*")
 
         # Should match regions 2 and 3
-        assert bbox_min == (0.0, 0.0, 5.0)
+        # so in XYZ: x=[5, 10), y=[0, 10), z=[0, 10)
+        assert bbox_min == (5.0, 0.0, 0.0)
         assert bbox_max == (10.0, 10.0, 10.0)
 
     def test_get_region_bounding_box_regex_case_insensitive(self, sample_atlas):
@@ -291,7 +289,7 @@ class TestZarrNiiAtlas:
 
         # Should match "Left Region"
         assert bbox_min == (0.0, 0.0, 0.0)
-        assert bbox_max == (10.0, 10.0, 5.0)
+        assert bbox_max == (5.0, 10.0, 10.0)
 
     def test_get_region_bounding_box_with_crop(self, sample_atlas):
         """Test that bounding box output works with crop method."""

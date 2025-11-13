@@ -35,7 +35,12 @@ class TestCompatibilityMethods:
         )
         affine = AffineTransform.from_array(affine_matrix)
 
-        return ZarrNii(darr=data, affine=affine, axes_order="ZYX")
+        return ZarrNii(
+            darr=data,
+            spacing=[2.0, 1.0, 1.0],
+            origin=[10.0, 20.0, 30.0],
+            axes_order="ZYX",
+        )
 
     @pytest.fixture
     def sample_ngff_image(self):
@@ -171,11 +176,9 @@ class TestMigrationWorkflow:
         """Test a typical migration workflow from legacy to new API."""
         # Start with legacy ZarrNii workflow
         data = da.random.random((1, 32, 64, 64), chunks=(1, 16, 32, 32))
-        affine_matrix = np.eye(4)
-        affine_matrix[0, 0] = 2.0  # Z scale
-        affine = AffineTransform.from_array(affine_matrix)
+        spacing = [2.0, 1.0, 1.0]  # z scale 2.0, since axes_order="ZYX"
 
-        legacy_znimg = ZarrNii(darr=data, affine=affine, axes_order="ZYX")
+        legacy_znimg = ZarrNii(darr=data, spacing=spacing, axes_order="ZYX")
 
         # Migrate to new API
         ngff_image = legacy_znimg.to_ngff_image("migrated")
