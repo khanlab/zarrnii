@@ -449,3 +449,45 @@ class TestImarisIntegration:
         assert (
             znimg_transformed.darr.shape[1:] == downsampled.darr.shape[1:]
         )  # Compare spatial dimensions
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_xyz_axes_order_to_imaris(self):
+        """Test saving to Imaris with XYZ axes_order (e.g., from NIfTI)."""
+        # Create test data with a specific pattern to verify correct axis ordering
+        # Data shape: (X=10, Y=20, Z=30)
+        test_data = np.zeros((10, 20, 30), dtype=np.float32)
+        # Set a marker at X=5, Y=10, Z=15
+        test_data[5, 10, 15] = 100.0
+
+        # Create ZarrNii with XYZ axes_order (like NIfTI loading)
+        darr = da.from_array(test_data[np.newaxis, ...], chunks="auto")
+        znimg_xyz = ZarrNii.from_darr(darr, spacing=[1.0, 2.0, 3.0], axes_order="XYZ")
+
+        assert znimg_xyz.axes_order == "XYZ"
+        assert znimg_xyz.darr.shape == (1, 10, 20, 30)
+
+        # Save to Imaris
+        imaris_path = "test_xyz_order.ims"
+        znimg_xyz.to_imaris(imaris_path)
+
+        assert os.path.exists(imaris_path)
+
+        # Load back from Imaris (which uses ZYX order)
+        znimg_loaded = ZarrNii.from_imaris(imaris_path)
+
+        assert znimg_loaded.axes_order == "ZYX"
+        # Shape should be transposed: (1, Z=30, Y=20, X=10)
+        assert znimg_loaded.darr.shape == (1, 30, 20, 10)
+
+        # Verify the marker is at the correct position after reordering
+        loaded_data = znimg_loaded.darr.compute()[0]
+        marker_pos = np.unravel_index(np.argmax(loaded_data), loaded_data.shape)
+
+        # Marker should be at ZYX position: Z=15, Y=10, X=5
+        assert marker_pos == (15, 10, 5), f"Expected (15, 10, 5), got {marker_pos}"
+        assert loaded_data[15, 10, 5] == 100.0
+
+        # Verify the entire data was correctly transposed
+        original_data = znimg_xyz.darr.compute()[0]
+        # XYZ[x, y, z] should equal ZYX[z, y, x]
+        assert_array_equal(original_data[5, 10, 15], loaded_data[15, 10, 5])
