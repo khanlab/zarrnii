@@ -1499,6 +1499,7 @@ class ZarrNii:
         origin: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         name: str = "image",
         omero: Optional[object] = None,
+        affine: Optional[AffineTransform] = None,
         **kwargs,
     ) -> "ZarrNii":
         """
@@ -1512,10 +1513,23 @@ class ZarrNii:
             origin: Origin offset, in axes_order
             name: Image name
             omero: Optional omero metadata
+            affine: Deprecated parameter - no longer supported
 
         Returns:
             ZarrNii instance
+
+        Raises:
+            ValueError: If affine parameter is provided
         """
+        # Check for deprecated affine parameter
+        if affine is not None:
+            raise ValueError(
+                "The 'affine' parameter is no longer supported in from_darr(). "
+                "Please use 'spacing' and 'origin' parameters instead. "
+                "If you need to specify a full affine transformation, use from_nifti() "
+                "or construct the NgffImage directly."
+            )
+
         # Use spacing and origin
         if axes_order == "ZYX":
             scale = {"z": spacing[0], "y": spacing[1], "x": spacing[2]}
@@ -1560,11 +1574,24 @@ class ZarrNii:
         origin: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         name: str = "image",
         _omero: Optional[object] = None,
+        affine: Optional[AffineTransform] = None,
         **kwargs,
     ):
         """
         Constructor with backward compatibility for old signature.
+
+        Raises:
+            ValueError: If affine parameter is provided
         """
+        # Check for deprecated affine parameter
+        if affine is not None:
+            raise ValueError(
+                "The 'affine' parameter is no longer supported in ZarrNii(). "
+                "Please use 'spacing' and 'origin' parameters instead. "
+                "If you need to specify a full affine transformation, use from_nifti() "
+                "or construct the NgffImage directly."
+            )
+
         # Handle backwards compatibility: if xyz_orientation is provided, use it
         # Otherwise, use orientation for backwards compatibility
         final_orientation = (
