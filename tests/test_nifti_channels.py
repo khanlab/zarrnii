@@ -56,7 +56,7 @@ class TestNiftiChannelSupport:
 
             channel_metadata = {"channel_labels": ["DAPI", "GFP", "RFP"]}
             ext = nib.nifti1.Nifti1Extension(
-                0, json.dumps(channel_metadata).encode("utf-8")
+                1, json.dumps(channel_metadata).encode("utf-8")
             )
             nifti_img.header.extensions.append(ext)
             nib.save(nifti_img, nifti_path)
