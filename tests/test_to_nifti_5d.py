@@ -44,7 +44,8 @@ class TestToNifti5D:
 
         # Should raise error because we have 2 timepoints
         with pytest.raises(
-            ValueError, match="NIfTI format doesn't support non-singleton time dimension"
+            ValueError,
+            match="NIfTI format doesn't support non-singleton time dimension",
         ):
             with tempfile.NamedTemporaryFile(suffix=".nii") as tmp:
                 znimg.to_nifti(tmp.name)
@@ -91,14 +92,15 @@ class TestToNifti5D:
                 result = znimg.to_nifti(tmp.name)
                 assert result == tmp.name
                 assert os.path.exists(tmp.name)
-                
+
                 # Verify the saved file has correct shape (XYZC format)
                 import nibabel as nib
+
                 reloaded = nib.load(tmp.name)
                 # Shape should be (X, Y, Z, C) which is (16, 16, 8, 3)
                 # Note: TZYXC (1,8,16,16,3) -> squeeze T -> ZYXC -> transpose to XYZC
                 assert reloaded.shape == (16, 16, 8, 3)
-                
+
                 # Clean up
                 os.unlink(tmp.name)
 

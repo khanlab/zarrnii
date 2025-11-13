@@ -2023,7 +2023,7 @@ class ZarrNii:
         if as_ref:
             # Create an empty dask array with the adjusted shape
             # Already add channel dimension here
-            darr = da.zeros((1, *new_shape), chunks=chunks, dtype="float32") 
+            darr = da.zeros((1, *new_shape), chunks=chunks, dtype="float32")
 
             # Mark that we already added channel dimension
             has_channel_dim = True
@@ -2093,15 +2093,18 @@ class ZarrNii:
 
         # Extract channel labels from NIfTI header extensions if present
         channel_labels = None
-        if hasattr(nifti_img.header, "extensions") and len(nifti_img.header.extensions) > 0:
+        if (
+            hasattr(nifti_img.header, "extensions")
+            and len(nifti_img.header.extensions) > 0
+        ):
             import json
-            
+
             for ext in nifti_img.header.extensions:
                 try:
                     # Try to decode the extension content as JSON
                     content = ext.get_content().decode("utf-8")
                     metadata = json.loads(content)
-                    
+
                     # Look for channel_labels in the metadata
                     if "channel_labels" in metadata:
                         channel_labels = metadata["channel_labels"]
@@ -2116,25 +2119,25 @@ class ZarrNii:
         if channel_labels is not None and len(channel_labels) > 0:
             # Get the number of channels from the data
             num_channels = darr.shape[0] if "c" in dims else 1
-            
+
             # Only use channel labels if count matches
             if len(channel_labels) == num_channels:
                 # Create OMERO metadata with channel labels
                 try:
                     from ngff_zarr import Omero, OmeroChannel, OmeroWindow
-                    
+
                     # Create OMERO channels with labels
                     omero_channels = []
                     for label in channel_labels:
                         # Create a minimal channel object with label
                         # Use default color (white) and window values
                         window = OmeroWindow(min=0.0, max=1.0, start=0.0, end=1.0)
-                        omero_channels.append(OmeroChannel(
-                            color="FFFFFF",  # white
-                            window=window,
-                            label=label
-                        ))
-                    
+                        omero_channels.append(
+                            OmeroChannel(
+                                color="FFFFFF", window=window, label=label  # white
+                            )
+                        )
+
                     # Create OMERO metadata
                     omero_metadata = Omero(channels=omero_channels)
                 except (ImportError, AttributeError, TypeError):
@@ -2142,10 +2145,10 @@ class ZarrNii:
                     pass
 
         zarrnii_instance = cls(
-            ngff_image=ngff_image, 
-            axes_order=axes_order, 
+            ngff_image=ngff_image,
+            axes_order=axes_order,
             xyz_orientation=orientation,
-            _omero=omero_metadata
+            _omero=omero_metadata,
         )
 
         return zarrnii_instance
@@ -3169,7 +3172,7 @@ class ZarrNii:
         Converts the ZarrNii image to NIfTI-1 format, handling dimension
         reordering, singleton dimension removal, and spatial transformation
         conversion. NIfTI files are always written in XYZ axis order.
-        
+
         For multi-channel data, the 4th dimension is used for channels (XYZC),
         and channel labels are preserved in NIfTI header extensions.
 
@@ -3290,7 +3293,7 @@ class ZarrNii:
                 else:
                     # Fallback: assume CXYZ
                     data = data.transpose(1, 2, 3, 0)
-            
+
             affine_matrix = self.get_affine_matrix(axes_order="XYZ")
 
         # Create NIfTI image
@@ -3301,7 +3304,7 @@ class ZarrNii:
         if channel_labels and len(channel_labels) > 0 and data.ndim == 4:
             # Only add channel labels if we have multi-channel 4D data
             import json
-            
+
             channel_metadata = {"channel_labels": channel_labels}
             ext = nib.nifti1.Nifti1Extension(
                 0, json.dumps(channel_metadata).encode("utf-8")
