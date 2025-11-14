@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 
-from .base import SegmentationPlugin
+from .base import SegmentationPlugin, hookimpl
 
 
 class ThresholdSegmentation(SegmentationPlugin):
@@ -55,6 +55,7 @@ class ThresholdSegmentation(SegmentationPlugin):
         self.thresholds = sorted(self.thresholds)
         self.inclusive = inclusive
 
+    @hookimpl
     def segment(
         self, image: np.ndarray, metadata: Optional[Dict[str, Any]] = None
     ) -> np.ndarray:
@@ -90,16 +91,16 @@ class ThresholdSegmentation(SegmentationPlugin):
 
         return result
 
-    @property
-    def name(self) -> str:
+    @hookimpl
+    def segmentation_plugin_name(self) -> str:
         """Return the name of the segmentation algorithm."""
         if len(self.thresholds) == 1:
             return "Binary Threshold"
         else:
             return "Multi-level Threshold"
 
-    @property
-    def description(self) -> str:
+    @hookimpl
+    def segmentation_plugin_description(self) -> str:
         """Return a description of the segmentation algorithm."""
         if len(self.thresholds) == 1:
             op = ">=" if self.inclusive else ">"
@@ -114,6 +115,16 @@ class ThresholdSegmentation(SegmentationPlugin):
                 f"{self.thresholds}. Creates {len(self.thresholds) + 1} labeled regions based on "
                 f"which thresholds each pixel exceeds (using {op} comparison)."
             )
+
+    @property
+    def name(self) -> str:
+        """Return the name of the segmentation algorithm."""
+        return self.segmentation_plugin_name()
+
+    @property
+    def description(self) -> str:
+        """Return a description of the segmentation algorithm."""
+        return self.segmentation_plugin_description()
 
     def get_thresholds(self) -> List[float]:
         """

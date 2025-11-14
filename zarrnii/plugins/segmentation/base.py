@@ -1,24 +1,29 @@
 """
 Base class for segmentation plugins.
 
-This module defines the abstract interface that all segmentation plugins must implement.
+This module defines the interface that all segmentation plugins must implement
+using the pluggy framework.
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
 import numpy as np
+import pluggy
+
+hookimpl = pluggy.HookimplMarker("zarrnii")
 
 
-class SegmentationPlugin(ABC):
+class SegmentationPlugin:
     """
-    Abstract base class for segmentation plugins.
+    Base class for segmentation plugins using pluggy.
 
-    All segmentation plugins must inherit from this class and implement the
-    segment method. This ensures a consistent interface across different
+    All segmentation plugins should inherit from this class and implement the
+    required methods. This ensures a consistent interface across different
     segmentation algorithms.
+
+    The plugin methods are decorated with @hookimpl to work with pluggy.
     """
 
     def __init__(self, **kwargs):
@@ -30,7 +35,7 @@ class SegmentationPlugin(ABC):
         """
         self.params = kwargs
 
-    @abstractmethod
+    @hookimpl
     def segment(
         self, image: np.ndarray, metadata: Optional[Dict[str, Any]] = None
     ) -> np.ndarray:
@@ -48,29 +53,63 @@ class SegmentationPlugin(ABC):
         Raises:
             NotImplementedError: If the method is not implemented by the subclass
         """
-        pass
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement segment method"
+        )
 
-    @property
-    @abstractmethod
-    def name(self) -> str:
+    @hookimpl
+    def segmentation_plugin_name(self) -> str:
         """
         Return the name of the segmentation algorithm.
 
         Returns:
             String name of the algorithm
-        """
-        pass
 
-    @property
-    @abstractmethod
-    def description(self) -> str:
+        Raises:
+            NotImplementedError: If the method is not implemented by the subclass
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement segmentation_plugin_name method"
+        )
+
+    @hookimpl
+    def segmentation_plugin_description(self) -> str:
         """
         Return a description of the segmentation algorithm.
 
         Returns:
             String description of the algorithm
+
+        Raises:
+            NotImplementedError: If the method is not implemented by the subclass
         """
-        pass
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement segmentation_plugin_description method"
+        )
+
+    @property
+    def name(self) -> str:
+        """
+        Return the name of the segmentation algorithm.
+
+        This property provides backward compatibility.
+
+        Returns:
+            String name of the algorithm
+        """
+        return self.segmentation_plugin_name()
+
+    @property
+    def description(self) -> str:
+        """
+        Return a description of the segmentation algorithm.
+
+        This property provides backward compatibility.
+
+        Returns:
+            String description of the algorithm
+        """
+        return self.segmentation_plugin_description()
 
     def __repr__(self) -> str:
         """Return string representation of the plugin."""

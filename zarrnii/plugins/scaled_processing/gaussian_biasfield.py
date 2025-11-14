@@ -13,7 +13,7 @@ import dask.array as da
 import numpy as np
 from scipy import ndimage
 
-from .base import ScaledProcessingPlugin
+from .base import ScaledProcessingPlugin, hookimpl
 
 
 class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
@@ -42,6 +42,7 @@ class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
         self.sigma = sigma
         self.mode = mode
 
+    @hookimpl
     def lowres_func(self, lowres_array: np.ndarray) -> np.ndarray:
         """
         Estimate bias field from low-resolution data.
@@ -105,6 +106,7 @@ class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
 
         return smoothed
 
+    @hookimpl
     def highres_func(
         self, fullres_array: da.Array, upsampled_output: da.Array
     ) -> da.Array:
@@ -128,16 +130,26 @@ class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
 
         return corrected_array
 
-    @property
-    def name(self) -> str:
+    @hookimpl
+    def scaled_processing_plugin_name(self) -> str:
         """Return the name of the algorithm."""
         return "Gaussian Bias Field Correction"
 
-    @property
-    def description(self) -> str:
+    @hookimpl
+    def scaled_processing_plugin_description(self) -> str:
         """Return a description of the algorithm."""
         return (
             "Multi-resolution bias field correction. Estimates smooth bias field "
             "at low resolution using Gaussian smoothing and applies correction "
             "to full resolution data by division."
         )
+
+    @property
+    def name(self) -> str:
+        """Return the name of the algorithm."""
+        return self.scaled_processing_plugin_name()
+
+    @property
+    def description(self) -> str:
+        """Return a description of the algorithm."""
+        return self.scaled_processing_plugin_description()
