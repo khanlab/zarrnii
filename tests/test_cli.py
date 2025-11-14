@@ -155,13 +155,13 @@ class TestCLIScripts:
         output_nifti = tmp_path / "output.nii.gz"
 
         # Create multi-channel data
-        data = np.random.rand(3, 64, 64, 32).astype(np.float32)  # 3 channels
+        data = np.random.rand(32, 64, 64, 3).astype(np.float32)  # 3 channels
         affine = np.eye(4)
         img = nib.Nifti1Image(data, affine)
         img.to_filename(str(nifti_path))
 
         # Convert to zarr
-        znimg = ZarrNii.from_nifti(str(nifti_path), axes_order="ZYX")
+        znimg = ZarrNii.from_nifti(str(nifti_path))
         znimg.to_ome_zarr(str(zarr_path))
 
         # Convert back with channel selection (select single channel)

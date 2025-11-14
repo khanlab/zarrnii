@@ -36,6 +36,61 @@ from scipy.ndimage import zoom
 from .transform import AffineTransform, Transform
 
 
+def _to_primitive(obj: Any) -> Any:
+    """
+    Recursively convert obj to JSON-serializable primitives.
+
+    Handles:
+      - dataclasses (via asdict)
+      - pydantic / objects with .dict() or .to_dict()
+      - dict / list / tuple
+      - numpy scalars -> Python scalars
+      - enum.Enum -> .value
+      - plain objects via vars(obj)
+    """
+
+    import enum
+    from dataclasses import asdict, is_dataclass
+
+    # dataclasses
+    if is_dataclass(obj):
+        return _to_primitive(asdict(obj))
+
+    # dict
+    if isinstance(obj, dict):
+        return {str(k): _to_primitive(v) for k, v in obj.items()}
+
+    # list/tuple
+    if isinstance(obj, (list, tuple)):
+        return [_to_primitive(v) for v in obj]
+
+    # numpy scalars
+    if isinstance(obj, np.generic):
+        return obj.item()
+
+    # enums
+    if isinstance(obj, enum.Enum):
+        return obj.value
+
+    # pydantic models or other objects exposing dict()
+    if hasattr(obj, "dict") and callable(getattr(obj, "dict")):
+        try:
+            return _to_primitive(obj.dict())
+        except TypeError:
+            pass
+
+    # objects with to_dict
+    if hasattr(obj, "to_dict") and callable(getattr(obj, "to_dict")):
+        return _to_primitive(obj.to_dict())
+
+    # plain objects
+    if hasattr(obj, "__dict__"):
+        return _to_primitive(vars(obj))
+
+    # fallback: assume primitive already
+    return obj
+
+
 class MetadataInvalidError(Exception):
     """Raised when an operation would invalidate ZarrNii metadata."""
 
@@ -204,6 +259,7 @@ def save_ngff_image_with_ome_zarr(
     scale_factors: Optional[List[int]] = None,
     scaling_method: str = "local_mean",
     xyz_orientation: Optional[str] = None,
+    omero: nz.Omero = None,
     compute: bool = True,
     **kwargs: Any,
 ) -> None:
@@ -299,6 +355,7 @@ def save_ngff_image_with_ome_zarr(
                 coordinate_transformations=coordinate_transformations,
                 axes=axes,
                 fmt=fmt,
+                metadata={} if omero is None else {"omero": _to_primitive(omero)},
                 compute=compute,
                 **kwargs,
             )
@@ -330,6 +387,7 @@ def save_ngff_image_with_ome_zarr(
             coordinate_transformations=coordinate_transformations,
             axes=axes,
             fmt=fmt,
+            metadata={} if omero is None else {"omero": _to_primitive(omero)},
             compute=compute,
             **kwargs,
         )
@@ -1935,7 +1993,8 @@ class ZarrNii:
         Creates a ZarrNii instance from a NIfTI file, automatically converting
         the data to dask arrays and extracting spatial transformation information.
         Supports both full data loading and reference-only loading for memory
-        efficiency.
+        efficiency. For 4D NIfTI files, the 4th dimension is treated as channels
+        (XYZC ordering, analogous to CZYX in OME-Zarr).
 
         Args:
             path: File path to NIfTI file (.nii, .nii.gz, .img/.hdr)
@@ -1954,7 +2013,9 @@ class ZarrNii:
                 as_ref=True. Adjusts shape and affine accordingly
 
         Returns:
-            ZarrNii instance containing NIfTI data and spatial metadata
+            ZarrNii instance containing NIfTI data and spatial metadata. If the
+            NIfTI file contains channel labels in header extensions, they will be
+            preserved in OMERO metadata.
 
         Raises:
             ValueError: If zooms specified with as_ref=False, or invalid axes_order
@@ -1973,6 +2034,10 @@ class ZarrNii:
             ...     axes_order="ZYX"
             ... )
 
+            >>> # Load 4D NIfTI with multiple channels
+            >>> znii = ZarrNii.from_nifti("/path/to/multichannel.nii.gz")
+            >>> print(znii.list_channels())  # Shows channel labels if stored
+
             >>> # Create reference with target resolution
             >>> znii_ref = ZarrNii.from_nifti(
             ...     "/path/to/template.nii.gz",
@@ -1981,8 +2046,10 @@ class ZarrNii:
             ... )
 
         Notes:
-            The method automatically handles NIfTI orientation codes and converts
-            them to the specified axes_order for consistency with OME-Zarr workflows.
+            - The method automatically handles NIfTI orientation codes and converts
+              them to the specified axes_order for consistency with OME-Zarr workflows
+            - For 4D NIfTI files, the 4th dimension is interpreted as channels (XYZC)
+            - Channel labels stored in NIfTI header extensions are automatically loaded
         """
         if not as_ref and zooms is not None:
             raise ValueError("`zooms` can only be used when `as_ref=True`.")
@@ -2013,22 +2080,39 @@ class ZarrNii:
 
         if as_ref:
             # Create an empty dask array with the adjusted shape
+            # Already add channel dimension here
             darr = da.zeros((1, *new_shape), chunks=chunks, dtype="float32")
+
+            # Mark that we already added channel dimension
+            has_channel_dim = True
+
         else:
             # Load the NIfTI data and convert to a dask array
             array = nifti_img.get_fdata()
             darr = da.from_array(array, chunks=chunks)
+            has_channel_dim = False
 
-        # Add channel and time dimensions if not present
+        # NIfTI uses XYZ ordering, but we need to handle channels
+        # For 4D NIfTI: XYZC (4th dim is channels, analogous to CZYX in OME-Zarr)
         original_ndim = len(darr.shape)
 
-        if original_ndim == 3:
+        if has_channel_dim:
+            # Already has channel dimension from as_ref, don't modify
+            pass
+        elif original_ndim == 3:
             # 3D data: add channel dimension -> (c, z, y, x) or (c, x, y, z)
             darr = darr[np.newaxis, ...]
+            # If axes_order is to ultimately be ZYX, transpose spatial XYZ to ZYX
+            if axes_order == "ZYX":
+                darr = darr.transpose(0, 3, 2, 1)  # CXYZ -> CZYX
         elif original_ndim == 4:
-            # 4D data: could be (c, z, y, x) or (t, z, y, x) - assume channel by default
-            # User can specify if it's time by using appropriate axes_order
-            pass  # Keep as is - 4D is already handled
+            # 4D data: NIfTI stores as XYZC, we need CZYX or CXYZ
+            if axes_order == "ZYX":
+                # Transpose from XYZC to CZYX
+                darr = darr.transpose(3, 2, 1, 0)  # XYZC -> CZYX
+            else:
+                # Transpose from XYZC to CXYZ
+                darr = darr.transpose(3, 0, 1, 2)  # XYZC -> CXYZ
         elif original_ndim == 5:
             # 5D data: assume (t, z, y, x, c) and handle appropriately
             pass  # Keep as is - 5D is already the target format
@@ -2065,9 +2149,68 @@ class ZarrNii:
             data=darr, dims=dims, scale=scale, translation=translation, name=name
         )
 
-        return cls(
-            ngff_image=ngff_image, axes_order=axes_order, xyz_orientation=orientation
+        # Extract channel labels from NIfTI header extensions if present
+        channel_labels = None
+        if (
+            hasattr(nifti_img.header, "extensions")
+            and len(nifti_img.header.extensions) > 0
+        ):
+            import json
+
+            for ext in nifti_img.header.extensions:
+                try:
+                    if ext.get_code() == 1:
+                        # Try to decode the extension content as JSON
+                        content = ext.get_content().decode("utf-8")
+                        metadata = json.loads(content)
+
+                        # Look for channel_labels in the metadata
+                        if "channel_labels" in metadata:
+                            channel_labels = metadata["channel_labels"]
+                            break
+                except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+                    # Skip extensions that aren't JSON or can't be decoded
+                    continue
+
+        # Create ZarrNii instance
+        # Extract OMERO metadata for channel labels if present
+        omero_metadata = None
+        if channel_labels is not None and len(channel_labels) > 0:
+            # Get the number of channels from the data
+            num_channels = darr.shape[0] if "c" in dims else 1
+
+            # Only use channel labels if count matches
+            if len(channel_labels) == num_channels:
+                # Create OMERO metadata with channel labels
+                try:
+                    from ngff_zarr import Omero, OmeroChannel, OmeroWindow
+
+                    # Create OMERO channels with labels
+                    omero_channels = []
+                    for label in channel_labels:
+                        # Create a minimal channel object with label
+                        # Use default color (white) and window values
+                        window = OmeroWindow(min=0.0, max=1.0, start=0.0, end=1.0)
+                        omero_channels.append(
+                            OmeroChannel(
+                                color="FFFFFF", window=window, label=label  # white
+                            )
+                        )
+
+                    # Create OMERO metadata
+                    omero_metadata = Omero(channels=omero_channels)
+                except (ImportError, AttributeError, TypeError):
+                    # If OMERO classes aren't available or fail, skip
+                    pass
+
+        zarrnii_instance = cls(
+            ngff_image=ngff_image,
+            axes_order=axes_order,
+            xyz_orientation=orientation,
+            _omero=omero_metadata,
         )
+
+        return zarrnii_instance
 
     # Chainable operations - each returns a new ZarrNii instance
     def crop(
@@ -3054,6 +3197,7 @@ class ZarrNii:
                 store_or_path,
                 max_layer,
                 scale_factors,
+                omero=self._omero,
                 xyz_orientation=(
                     self.xyz_orientation if hasattr(self, "xyz_orientation") else None
                 ),
@@ -3089,6 +3233,9 @@ class ZarrNii:
         reordering, singleton dimension removal, and spatial transformation
         conversion. NIfTI files are always written in XYZ axis order.
 
+        For multi-channel data, the 4th dimension is used for channels (XYZC),
+        and channel labels are preserved in NIfTI header extensions.
+
         Args:
             filename: Output file path for saving. Supported extensions:
                 - .nii: Uncompressed NIfTI
@@ -3100,15 +3247,16 @@ class ZarrNii:
             If filename provided: path to saved file
 
         Raises:
-            ValueError: If data has non-singleton time or channel dimensions
-                (NIfTI doesn't support >4D data)
+            ValueError: If data has non-singleton time dimension (time is not
+                supported in NIfTI output, but multiple channels are supported)
             OSError: If unable to write to specified filename
 
         Notes:
             - Automatically reorders data from ZYX to XYZ if necessary
-            - Removes singleton time/channel dimensions automatically
+            - Removes singleton time dimensions automatically
+            - Supports multi-channel data via 4th dimension (XYZC ordering)
+            - Channel labels are saved in NIfTI header extensions as JSON
             - Spatial transformations are converted to NIfTI affine format
-            - For 5D data (T,C,Z,Y,X), only singleton T/C dimensions are supported
 
         Examples:
             >>> # Save to compressed NIfTI file
@@ -3118,8 +3266,12 @@ class ZarrNii:
             >>> nifti_img = znii.to_nifti()
             >>> print(nifti_img.shape)
 
-            >>> # Handle multi-channel data by selecting single channel first
-            >>> znii.select_channels([0]).to_nifti("channel0.nii.gz")
+            >>> # Save multi-channel data with channel labels preserved
+            >>> znii.to_nifti("multichannel.nii.gz")
+            >>> # Channel labels are automatically saved in header extensions
+
+            >>> # Select specific channels before saving
+            >>> znii.select_channels([0, 2]).to_nifti("selected.nii.gz")
 
         Warnings:
             Large images will be computed in memory during conversion.
@@ -3131,23 +3283,28 @@ class ZarrNii:
         dims = self.dims
 
         # Handle dimensional reduction for NIfTI compatibility
-        # NIfTI supports up to 4D, so we need to remove singleton dimensions
+        # NIfTI supports up to 4D, and we use 4th dimension for channels (XYZC)
         squeeze_axes = []
-        remaining_dims = []
+        new_dims = []
 
         for i, dim in enumerate(dims):
-            if dim in ["t", "c"] and data.shape[i] == 1:
-                # Remove singleton time or channel dimensions
+            if dim == "t" and data.shape[i] == 1:
+                # Remove singleton time dimension
                 squeeze_axes.append(i)
-            elif dim in ["t", "c"] and data.shape[i] > 1:
-                # Non-singleton time or channel dimensions - NIfTI can't handle this
+            elif dim == "t" and data.shape[i] > 1:
+                # Non-singleton time dimension - not supported
                 raise ValueError(
-                    f"NIfTI format doesn't support non-singleton {dim} dimension. "
-                    f"Dimension '{dim}' has size {data.shape[i]}. "
-                    f"Consider selecting specific timepoints/channels first."
+                    f"NIfTI format doesn't support non-singleton time dimension. "
+                    f"Dimension 't' has size {data.shape[i]}. "
+                    f"Consider selecting a specific timepoint first."
                 )
+            elif dim == "c" and data.shape[i] == 1:
+                # Singleton channel - can be squeezed
+                squeeze_axes.append(i)
+                # Don't add to new_dims
             else:
-                remaining_dims.append(dim)
+                # Keep this dimension (spatial or multi-channel)
+                new_dims.append(dim)
 
         # Squeeze out singleton dimensions
         if squeeze_axes:
@@ -3160,25 +3317,62 @@ class ZarrNii:
             )
 
         # Now handle spatial reordering based on axes_order
+        # We need to reorder to XYZC for NIfTI (or XYZ for 3D)
         if self.axes_order == "ZYX":
             # Data spatial dimensions are in ZYX order, need to transpose to XYZ
             if data.ndim == 3:
                 # Pure spatial data: ZYX -> XYZ
                 data = data.transpose(2, 1, 0)
             elif data.ndim == 4:
-                # 4D data with one non-spatial dimension remaining
-                # Could be (T,Z,Y,X) or (C,Z,Y,X) - spatial part needs ZYX->XYZ
-                # The non-spatial dimension stays first
-                data = data.transpose(0, 3, 2, 1)
+                # Check what the dimension order is
+                if new_dims == ["c", "z", "y", "x"]:
+                    # CZYX -> XYZC
+                    data = data.transpose(3, 2, 1, 0)
+                elif new_dims == ["z", "y", "x", "c"]:
+                    # ZYXC -> XYZC
+                    data = data.transpose(2, 1, 0, 3)
+                else:
+                    # Fallback: assume CZYX
+                    data = data.transpose(3, 2, 1, 0)
 
             # Get affine matrix in XYZ order
             affine_matrix = self.get_affine_matrix(axes_order="XYZ")
         else:
-            # Data is already in XYZ order
+            # Data is in XYZ order
+            if data.ndim == 3:
+                # Pure spatial data: XYZ (no change needed)
+                pass
+            elif data.ndim == 4:
+                # Check what the dimension order is
+                if new_dims == ["c", "x", "y", "z"]:
+                    # CXYZ -> XYZC
+                    data = data.transpose(1, 2, 3, 0)
+                elif new_dims == ["x", "y", "z", "c"]:
+                    # XYZC -> XYZC (already correct!)
+                    pass
+                else:
+                    # Fallback: assume CXYZ
+                    data = data.transpose(1, 2, 3, 0)
+
             affine_matrix = self.get_affine_matrix(axes_order="XYZ")
 
         # Create NIfTI image
         nifti_img = nib.Nifti1Image(data, affine_matrix)
+
+        # Add channel labels to NIfTI header extensions if available
+        channel_labels = self.list_channels()
+        if channel_labels and len(channel_labels) > 0 and data.ndim == 4:
+            # Only add channel labels if we have multi-channel 4D data
+            import json
+
+            channel_metadata = {"channel_labels": channel_labels}
+            ext = nib.nifti1.Nifti1Extension(
+                1,
+                json.dumps(channel_metadata).encode(
+                    "utf-8"
+                ),  # code 1 is reserved/unspecified in NIfTI standard, suitable for custom metadata
+            )
+            nifti_img.header.extensions.append(ext)
 
         if filename is not None:
             nib.save(nifti_img, filename)

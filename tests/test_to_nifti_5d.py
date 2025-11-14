@@ -44,7 +44,8 @@ class TestToNifti5D:
 
         # Should raise error because we have 2 timepoints
         with pytest.raises(
-            ValueError, match="NIfTI format doesn't support non-singleton t dimension"
+            ValueError,
+            match="NIfTI format doesn't support non-singleton time dimension",
         ):
             with tempfile.NamedTemporaryFile(suffix=".nii") as tmp:
                 znimg.to_nifti(tmp.name)
@@ -77,8 +78,8 @@ class TestToNifti5D:
                 assert result == tmp.name
                 assert os.path.exists(tmp.name)
 
-    def test_to_nifti_multiple_channels_error(self):
-        """Test that to_nifti raises error with multiple channels."""
+    def test_to_nifti_multiple_channels_success(self):
+        """Test that to_nifti works with multiple channels (new feature)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             store_path = os.path.join(tmpdir, "test_channels.zarr")
             # Create dataset with multiple channels
@@ -86,13 +87,22 @@ class TestToNifti5D:
 
             znimg = ZarrNii.from_ome_zarr(store_path)
 
-            # Should raise error because we have 3 channels
-            with pytest.raises(
-                ValueError,
-                match="NIfTI format doesn't support non-singleton c dimension",
-            ):
-                with tempfile.NamedTemporaryFile(suffix=".nii") as tmp:
-                    znimg.to_nifti(tmp.name)
+            # Should now work - multi-channel support added
+            with tempfile.NamedTemporaryFile(suffix=".nii", delete=False) as tmp:
+                result = znimg.to_nifti(tmp.name)
+                assert result == tmp.name
+                assert os.path.exists(tmp.name)
+
+                # Verify the saved file has correct shape (XYZC format)
+                import nibabel as nib
+
+                reloaded = nib.load(tmp.name)
+                # Shape should be (X, Y, Z, C) which is (16, 16, 8, 3)
+                # Note: TZYXC (1,8,16,16,3) -> squeeze T -> ZYXC -> transpose to XYZC
+                assert reloaded.shape == (16, 16, 8, 3)
+
+                # Clean up
+                os.unlink(tmp.name)
 
     def test_to_nifti_single_channel_selection(self):
         """Test to_nifti with single channel selection from multichannel data."""

@@ -101,8 +101,8 @@ Examples:
     parser.add_argument(
         "--orientation",
         type=str,
-        default="RAS",
-        help="Anatomical orientation string (default: RAS)",
+        default=None,
+        help="Anatomical orientation string (default: None)",
     )
     parser.add_argument(
         "--downsample-near-isotropic",
