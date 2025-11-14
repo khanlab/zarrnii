@@ -2102,7 +2102,7 @@ class ZarrNii:
         elif original_ndim == 3:
             # 3D data: add channel dimension -> (c, z, y, x) or (c, x, y, z)
             darr = darr[np.newaxis, ...]
-            # If axes_order is ZYX, transpose spatial XYZ to ZYX
+            # If axes_order is to ultimately be ZYX, transpose spatial XYZ to ZYX
             if axes_order == "ZYX":
                 darr = darr.transpose(0, 3, 2, 1)  # CXYZ -> CZYX
         elif original_ndim == 4:
