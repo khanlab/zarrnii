@@ -750,7 +750,7 @@ def test_chunk_preservation_to_ome_zarr():
     zn1.to_ome_zarr("test_chunks_64.ome.zarr")
 
     # Verify the saved chunks match the input
-    z1 = zarr.open("test_chunks_64.ome.zarr/scale0/image", mode="r")
+    z1 = zarr.open("test_chunks_64.ome.zarr/0", mode="r")
     assert z1.chunks == (
         1,
         64,
@@ -766,7 +766,7 @@ def test_chunk_preservation_to_ome_zarr():
     zn2.to_ome_zarr("test_chunks_32.ome.zarr")
 
     # Verify the saved chunks match the input
-    z2 = zarr.open("test_chunks_32.ome.zarr/scale0/image", mode="r")
+    z2 = zarr.open("test_chunks_32.ome.zarr/0", mode="r")
     assert z2.chunks == (
         1,
         32,
@@ -783,7 +783,7 @@ def test_chunk_preservation_to_ome_zarr():
     zn3.to_ome_zarr("test_chunks_96.ome.zarr")
 
     # Verify the saved chunks match the input (not the old default of 128)
-    z3 = zarr.open("test_chunks_96.ome.zarr/scale0/image", mode="r")
+    z3 = zarr.open("test_chunks_96.ome.zarr/0", mode="r")
     assert z3.chunks == (
         1,
         96,
