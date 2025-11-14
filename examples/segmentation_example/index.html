@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.21">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.2a3383ac.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
       
       
 
@@ -675,6 +675,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#plugin-architecture-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Plugin Architecture Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#basic-otsu-segmentation" class="md-nav__link">
     <span class="md-ellipsis">
       Basic Otsu Segmentation
@@ -698,6 +707,57 @@
       Creating Custom Segmentation Plugins
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#external-segmentation-plugin-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      External Segmentation Plugin Development
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="External Segmentation Plugin Development">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-create-your-plugin-package-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 1: Create Your Plugin Package Structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-implement-your-segmentation-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 2: Implement Your Segmentation Plugin
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-configure-package-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 3: Configure Package Discovery
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-use-your-external-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 4: Use Your External Plugin
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -851,6 +911,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#plugin-architecture-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Plugin Architecture Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#basic-otsu-segmentation" class="md-nav__link">
     <span class="md-ellipsis">
       Basic Otsu Segmentation
@@ -874,6 +943,57 @@
       Creating Custom Segmentation Plugins
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#external-segmentation-plugin-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      External Segmentation Plugin Development
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="External Segmentation Plugin Development">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-create-your-plugin-package-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 1: Create Your Plugin Package Structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-implement-your-segmentation-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 2: Implement Your Segmentation Plugin
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-configure-package-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 3: Configure Package Discovery
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-use-your-external-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 4: Use Your External Plugin
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -912,7 +1032,12 @@
 
 
 <h1 id="segmentation-plugin-example">Segmentation Plugin Example</h1>
-<p>This example demonstrates how to use the segmentation plugin system in ZarrNii.</p>
+<p>This example demonstrates how to use the segmentation plugin system in ZarrNii. The plugin system is built on the <a href="https://pluggy.readthedocs.io/">pluggy</a> framework, providing a flexible and extensible architecture for implementing custom segmentation algorithms.</p>
+<h2 id="plugin-architecture-overview">Plugin Architecture Overview</h2>
+<p>ZarrNii's segmentation plugins use pluggy hook specifications and implementations:
+- <strong>Hook specifications</strong> define the interface that all plugins must implement
+- <strong>Hook implementations</strong> (using <code>@hookimpl</code> decorator) provide the actual functionality
+- Plugins can be used directly or registered with the plugin manager for discovery</p>
 <h2 id="basic-otsu-segmentation">Basic Otsu Segmentation</h2>
 <pre><code class="language-python">import numpy as np
 import dask.array as da
@@ -957,33 +1082,201 @@ segmented = znimg.segment_otsu(chunk_size=custom_chunks)
 result_data = segmented.data.compute()
 </code></pre>
 <h2 id="creating-custom-segmentation-plugins">Creating Custom Segmentation Plugins</h2>
-<p>You can create your own segmentation plugins by inheriting from <code>SegmentationPlugin</code>:</p>
-<pre><code class="language-python">from zarrnii.plugins.segmentation import SegmentationPlugin
+<p>You can create your own segmentation plugins by inheriting from <code>SegmentationPlugin</code> and implementing the required hook methods with the <code>@hookimpl</code> decorator:</p>
+<pre><code class="language-python">from zarrnii.plugins import SegmentationPlugin
+from zarrnii.plugins.segmentation.base import hookimpl
 import numpy as np
 
 class ThresholdSegmentation(SegmentationPlugin):
     &quot;&quot;&quot;Simple threshold-based segmentation plugin.&quot;&quot;&quot;
 
     def __init__(self, threshold: float = 0.5, **kwargs):
+        &quot;&quot;&quot;Initialize the plugin.
+
+        Args:
+            threshold: Threshold value for segmentation
+        &quot;&quot;&quot;
         super().__init__(threshold=threshold, **kwargs)
         self.threshold = threshold
 
+    @hookimpl
     def segment(self, image: np.ndarray, metadata=None) -&gt; np.ndarray:
-        &quot;&quot;&quot;Apply threshold segmentation.&quot;&quot;&quot;
+        &quot;&quot;&quot;Apply threshold segmentation.
+
+        Args:
+            image: Input image as numpy array
+            metadata: Optional metadata dictionary
+
+        Returns:
+            Binary segmentation mask
+        &quot;&quot;&quot;
         binary_mask = image &gt; self.threshold
         return binary_mask.astype(np.uint8)
 
-    @property
-    def name(self) -&gt; str:
+    @hookimpl
+    def segmentation_plugin_name(self) -&gt; str:
+        &quot;&quot;&quot;Return the name of the plugin.&quot;&quot;&quot;
         return &quot;Threshold Segmentation&quot;
 
-    @property
-    def description(self) -&gt; str:
+    @hookimpl
+    def segmentation_plugin_description(self) -&gt; str:
+        &quot;&quot;&quot;Return a description of the plugin.&quot;&quot;&quot;
         return f&quot;Simple thresholding at value {self.threshold}&quot;
 
-# Use your custom plugin
+# Method 1: Direct usage with ZarrNii (recommended for simple cases)
 custom_plugin = ThresholdSegmentation(threshold=0.3)
 segmented = znimg.segment(custom_plugin)
+
+# Method 2: Using the plugin manager (recommended for external plugins)
+from zarrnii.plugins import get_plugin_manager
+
+pm = get_plugin_manager()
+plugin = ThresholdSegmentation(threshold=0.3)
+pm.register(plugin)
+
+# Now the plugin is available through the plugin manager
+# and can be discovered by other tools
+registered_plugins = pm.get_plugins()
+print(f&quot;Registered {len(registered_plugins)} plugins&quot;)
+</code></pre>
+<h2 id="external-segmentation-plugin-development">External Segmentation Plugin Development</h2>
+<p>External plugins allow you to package and distribute your custom segmentation algorithms as separate Python packages. Here's a complete example:</p>
+<h3 id="step-1-create-your-plugin-package-structure">Step 1: Create Your Plugin Package Structure</h3>
+<pre><code>my_segmentation_plugin/
+├── pyproject.toml
+└── my_segmentation_plugin/
+    ├── __init__.py
+    └── adaptive_threshold.py
+</code></pre>
+<h3 id="step-2-implement-your-segmentation-plugin">Step 2: Implement Your Segmentation Plugin</h3>
+<p>In <code>adaptive_threshold.py</code>:</p>
+<pre><code class="language-python">&quot;&quot;&quot;Adaptive threshold segmentation plugin.&quot;&quot;&quot;
+from zarrnii.plugins import SegmentationPlugin
+from zarrnii.plugins.segmentation.base import hookimpl
+import numpy as np
+from skimage.filters import threshold_local
+
+class AdaptiveThresholdSegmentation(SegmentationPlugin):
+    &quot;&quot;&quot;Adaptive thresholding segmentation for images with varying illumination.&quot;&quot;&quot;
+
+    def __init__(self, block_size=35, offset=10, method='gaussian', **kwargs):
+        &quot;&quot;&quot;Initialize adaptive threshold segmentation.
+
+        Args:
+            block_size: Size of pixel neighborhood for threshold calculation
+            offset: Constant subtracted from weighted mean
+            method: Method for computing threshold ('gaussian' or 'mean')
+        &quot;&quot;&quot;
+        super().__init__(
+            block_size=block_size,
+            offset=offset,
+            method=method,
+            **kwargs
+        )
+        self.block_size = block_size
+        self.offset = offset
+        self.method = method
+
+    @hookimpl
+    def segment(self, image: np.ndarray, metadata=None) -&gt; np.ndarray:
+        &quot;&quot;&quot;Segment image using adaptive thresholding.
+
+        Args:
+            image: Input image as numpy array
+            metadata: Optional metadata (unused)
+
+        Returns:
+            Binary segmentation mask
+        &quot;&quot;&quot;
+        if image.size == 0:
+            raise ValueError(&quot;Input image is empty&quot;)
+
+        if image.ndim &lt; 2:
+            raise ValueError(&quot;Input image must be at least 2D&quot;)
+
+        # Work with 2D slice for threshold computation
+        work_image = image
+        if work_image.ndim &gt; 2:
+            # Use first channel/slice if multi-dimensional
+            if work_image.ndim == 3 and work_image.shape[0] &lt;= 4:
+                work_image = work_image[0]
+            elif work_image.ndim &gt; 3:
+                work_image = work_image.reshape(-1, *work_image.shape[-2:])[0]
+
+        # Compute adaptive threshold
+        threshold = threshold_local(
+            work_image,
+            block_size=self.block_size,
+            offset=self.offset,
+            method=self.method
+        )
+
+        # Apply threshold to original image
+        binary_mask = image &gt; threshold
+
+        return binary_mask.astype(np.uint8)
+
+    @hookimpl
+    def segmentation_plugin_name(self) -&gt; str:
+        &quot;&quot;&quot;Return the name of the plugin.&quot;&quot;&quot;
+        return &quot;Adaptive Threshold Segmentation&quot;
+
+    @hookimpl
+    def segmentation_plugin_description(self) -&gt; str:
+        &quot;&quot;&quot;Return a description of the plugin.&quot;&quot;&quot;
+        return (
+            f&quot;Adaptive thresholding using {self.method} method &quot;
+            f&quot;(block_size={self.block_size}, offset={self.offset})&quot;
+        )
+</code></pre>
+<h3 id="step-3-configure-package-discovery">Step 3: Configure Package Discovery</h3>
+<p>In <code>__init__.py</code>:</p>
+<pre><code class="language-python">&quot;&quot;&quot;My Segmentation Plugin Package.&quot;&quot;&quot;
+from .adaptive_threshold import AdaptiveThresholdSegmentation
+
+__all__ = [&quot;AdaptiveThresholdSegmentation&quot;]
+</code></pre>
+<p>In <code>pyproject.toml</code>:</p>
+<pre><code class="language-toml">[project]
+name = &quot;my-segmentation-plugin&quot;
+version = &quot;0.1.0&quot;
+description = &quot;Adaptive threshold segmentation plugin for ZarrNii&quot;
+dependencies = [
+    &quot;zarrnii&gt;=0.1.0&quot;,
+    &quot;scikit-image&gt;=0.21.0&quot;,
+]
+
+[project.entry-points.&quot;zarrnii.plugins&quot;]
+adaptive_threshold = &quot;my_segmentation_plugin:AdaptiveThresholdSegmentation&quot;
+</code></pre>
+<h3 id="step-4-use-your-external-plugin">Step 4: Use Your External Plugin</h3>
+<p>After installing (<code>pip install my-segmentation-plugin</code>):</p>
+<pre><code class="language-python">from zarrnii import ZarrNii
+from my_segmentation_plugin import AdaptiveThresholdSegmentation
+
+# Load your data
+znimg = ZarrNii.from_ome_zarr(&quot;input.ome.zarr&quot;)
+
+# Use the plugin directly
+segmented = znimg.segment(
+    AdaptiveThresholdSegmentation(block_size=51, offset=5)
+)
+
+# Or register with the plugin manager for discovery
+from zarrnii.plugins import get_plugin_manager
+
+pm = get_plugin_manager()
+plugin = AdaptiveThresholdSegmentation(block_size=51, offset=5)
+pm.register(plugin)
+
+# Call hooks through the plugin manager
+test_image = znimg.data.compute()
+results = pm.hook.segment(image=test_image)
+
+# Get plugin information
+names = pm.hook.segmentation_plugin_name()
+descriptions = pm.hook.segmentation_plugin_description()
+print(f&quot;Using: {names[0]} - {descriptions[0]}&quot;)
 </code></pre>
 <h2 id="working-with-multi-channel-images">Working with Multi-channel Images</h2>
 <p>The segmentation plugins automatically handle multi-channel images:</p>

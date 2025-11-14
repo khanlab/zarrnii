@@ -18,7 +18,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.21">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.2a3383ac.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
       
       
 
@@ -734,6 +734,24 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#scaled_processing_plugin_name-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      scaled_processing_plugin_name() -&gt; str
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaled_processing_plugin_description-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      scaled_processing_plugin_description() -&gt; str
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -787,6 +805,66 @@
       Creating Custom Plugins
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#external-plugin-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      External Plugin Development
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="External Plugin Development">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-create-your-plugin-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 1: Create Your Plugin Package
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-implement-your-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 2: Implement Your Plugin
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-make-your-plugin-discoverable" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 3: Make Your Plugin Discoverable
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-configure-your-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 4: Configure Your Package
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-use-your-external-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 5: Use Your External Plugin
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1013,6 +1091,24 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#scaled_processing_plugin_name-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      scaled_processing_plugin_name() -&gt; str
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaled_processing_plugin_description-str" class="md-nav__link">
+    <span class="md-ellipsis">
+      scaled_processing_plugin_description() -&gt; str
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1066,6 +1162,66 @@
       Creating Custom Plugins
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#external-plugin-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      External Plugin Development
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="External Plugin Development">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-create-your-plugin-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 1: Create Your Plugin Package
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-implement-your-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 2: Implement Your Plugin
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-make-your-plugin-discoverable" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 3: Make Your Plugin Discoverable
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-configure-your-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 4: Configure Your Package
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-use-your-external-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 5: Use Your External Plugin
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1173,12 +1329,17 @@
 <li>Denoising operations</li>
 <li>Global intensity normalization</li>
 </ul>
+<p>ZarrNii uses the <a href="https://pluggy.readthedocs.io/">pluggy</a> framework for its plugin system, providing a flexible and extensible architecture for creating custom processing plugins.</p>
 <h2 id="plugin-interface">Plugin Interface</h2>
-<p>All scaled processing plugins must inherit from <code>ScaledProcessingPlugin</code> and implement two key methods:</p>
+<p>All scaled processing plugins must inherit from <code>ScaledProcessingPlugin</code> and implement the required hook methods decorated with <code>@hookimpl</code>:</p>
 <h3 id="lowres_funclowres_array-npndarray-npndarray"><code>lowres_func(lowres_array: np.ndarray) -&gt; np.ndarray</code></h3>
 <p>This function processes the downsampled data and returns a result that will be upsampled and applied to the full-resolution data.</p>
 <h3 id="highres_funcfullres_array-daskarray-upsampled_output-daskarray-daskarray"><code>highres_func(fullres_array: dask.array, upsampled_output: dask.array) -&gt; dask.array</code></h3>
 <p>This function receives the full-resolution dask array and the upsampled output (already upsampled to match the full-resolution shape), and applies the operation blockwise. The upsampling is handled internally by the <code>apply_scaled_processing</code> method.</p>
+<h3 id="scaled_processing_plugin_name-str"><code>scaled_processing_plugin_name() -&gt; str</code></h3>
+<p>Returns the name of the plugin.</p>
+<h3 id="scaled_processing_plugin_description-str"><code>scaled_processing_plugin_description() -&gt; str</code></h3>
+<p>Returns a description of what the plugin does.</p>
 <h2 id="basic-usage">Basic Usage</h2>
 <pre><code class="language-python">from zarrnii import ZarrNii, GaussianBiasFieldCorrection
 
@@ -1237,42 +1398,182 @@ corrected = znimg.apply_scaled_processing(
 - <code>convergence</code>: Dictionary with 'iters' (list) and 'tol' (float) for convergence criteria (default: {'iters': [50], 'tol': 0.001})
 - <code>shrink_factor</code>: Shrink factor for processing (default: 1)</p>
 <h2 id="creating-custom-plugins">Creating Custom Plugins</h2>
-<p>You can create custom plugins by inheriting from <code>ScaledProcessingPlugin</code>:</p>
-<pre><code class="language-python">from zarrnii import ScaledProcessingPlugin
+<p>You can create custom plugins by inheriting from <code>ScaledProcessingPlugin</code> and implementing the required hook methods:</p>
+<pre><code class="language-python">from zarrnii.plugins import ScaledProcessingPlugin
+from zarrnii.plugins.scaled_processing.base import hookimpl
 import numpy as np
 import dask.array as da
 from scipy import ndimage
 
 class CustomPlugin(ScaledProcessingPlugin):
+    &quot;&quot;&quot;Custom scaled processing plugin example.&quot;&quot;&quot;
+
     def __init__(self, param1=1.0, **kwargs):
         super().__init__(param1=param1, **kwargs)
         self.param1 = param1
 
+    @hookimpl
     def lowres_func(self, lowres_array: np.ndarray) -&gt; np.ndarray:
+        &quot;&quot;&quot;Process low-resolution data.&quot;&quot;&quot;
         # Your low-resolution algorithm here
         # Example: compute some correction map
         correction_map = np.ones_like(lowres_array) * self.param1
         return correction_map
 
+    @hookimpl
     def highres_func(self, fullres_array: da.Array, upsampled_output: da.Array) -&gt; da.Array:
+        &quot;&quot;&quot;Apply correction to full-resolution data.&quot;&quot;&quot;
         # The upsampling is handled internally by apply_scaled_processing
         # This example shows a simple multiplication operation
-
         # Apply correction directly (both arrays are same size)
         result = fullres_array * upsampled_output
-
         return result
 
-    @property
-    def name(self) -&gt; str:
+    @hookimpl
+    def scaled_processing_plugin_name(self) -&gt; str:
+        &quot;&quot;&quot;Return the name of the plugin.&quot;&quot;&quot;
         return &quot;Custom Plugin&quot;
 
-    @property
-    def description(self) -&gt; str:
+    @hookimpl
+    def scaled_processing_plugin_description(self) -&gt; str:
+        &quot;&quot;&quot;Return a description of the plugin.&quot;&quot;&quot;
         return &quot;A custom multi-resolution processing plugin&quot;
 
-# Use your custom plugin
+# Method 1: Direct usage with ZarrNii (recommended for simple cases)
 result = znimg.apply_scaled_processing(CustomPlugin(param1=2.0))
+
+# Method 2: Using the plugin manager (recommended for external plugins)
+from zarrnii.plugins import get_plugin_manager
+
+pm = get_plugin_manager()
+plugin = CustomPlugin(param1=2.0)
+pm.register(plugin)
+
+# Now the plugin is available through the plugin manager
+# and can be discovered by other tools
+</code></pre>
+<h2 id="external-plugin-development">External Plugin Development</h2>
+<p>External plugins allow you to package and distribute your custom plugins as separate Python packages that can be discovered and used by ZarrNii. Here's a complete example of how to create an external plugin:</p>
+<h3 id="step-1-create-your-plugin-package">Step 1: Create Your Plugin Package</h3>
+<p>Create a new Python package with the following structure:</p>
+<pre><code>my_zarrnii_plugin/
+├── setup.py or pyproject.toml
+└── my_zarrnii_plugin/
+    ├── __init__.py
+    └── my_plugin.py
+</code></pre>
+<h3 id="step-2-implement-your-plugin">Step 2: Implement Your Plugin</h3>
+<p>In <code>my_plugin.py</code>:</p>
+<pre><code class="language-python">&quot;&quot;&quot;Custom external plugin for ZarrNii.&quot;&quot;&quot;
+from zarrnii.plugins import ScaledProcessingPlugin
+from zarrnii.plugins.scaled_processing.base import hookimpl
+import numpy as np
+import dask.array as da
+from scipy import ndimage
+
+class MyExternalPlugin(ScaledProcessingPlugin):
+    &quot;&quot;&quot;An example external plugin for demonstration.&quot;&quot;&quot;
+
+    def __init__(self, smoothing_sigma=2.0, scale_factor=1.5, **kwargs):
+        &quot;&quot;&quot;Initialize the plugin with custom parameters.
+
+        Args:
+            smoothing_sigma: Sigma for Gaussian smoothing
+            scale_factor: Scaling factor for the correction
+        &quot;&quot;&quot;
+        super().__init__(
+            smoothing_sigma=smoothing_sigma,
+            scale_factor=scale_factor,
+            **kwargs
+        )
+        self.smoothing_sigma = smoothing_sigma
+        self.scale_factor = scale_factor
+
+    @hookimpl
+    def lowres_func(self, lowres_array: np.ndarray) -&gt; np.ndarray:
+        &quot;&quot;&quot;Compute correction map at low resolution.&quot;&quot;&quot;
+        if lowres_array.size == 0:
+            raise ValueError(&quot;Input array is empty&quot;)
+
+        # Apply smoothing to estimate low-frequency components
+        smoothed = ndimage.gaussian_filter(
+            lowres_array.astype(np.float32),
+            sigma=self.smoothing_sigma
+        )
+
+        # Scale the correction map
+        correction_map = smoothed * self.scale_factor
+
+        return correction_map
+
+    @hookimpl
+    def highres_func(self, fullres_array: da.Array, upsampled_output: da.Array) -&gt; da.Array:
+        &quot;&quot;&quot;Apply the correction to full-resolution data.&quot;&quot;&quot;
+        # Apply the correction by division
+        epsilon = np.finfo(np.float32).eps
+        corrected = fullres_array / da.maximum(upsampled_output, epsilon)
+        return corrected
+
+    @hookimpl
+    def scaled_processing_plugin_name(self) -&gt; str:
+        &quot;&quot;&quot;Return plugin name.&quot;&quot;&quot;
+        return &quot;My External Plugin&quot;
+
+    @hookimpl
+    def scaled_processing_plugin_description(self) -&gt; str:
+        &quot;&quot;&quot;Return plugin description.&quot;&quot;&quot;
+        return (
+            f&quot;External plugin with smoothing (sigma={self.smoothing_sigma}) &quot;
+            f&quot;and scaling (factor={self.scale_factor})&quot;
+        )
+</code></pre>
+<h3 id="step-3-make-your-plugin-discoverable">Step 3: Make Your Plugin Discoverable</h3>
+<p>In <code>__init__.py</code>:</p>
+<pre><code class="language-python">&quot;&quot;&quot;My ZarrNii Plugin Package.&quot;&quot;&quot;
+from .my_plugin import MyExternalPlugin
+
+__all__ = [&quot;MyExternalPlugin&quot;]
+</code></pre>
+<h3 id="step-4-configure-your-package">Step 4: Configure Your Package</h3>
+<p>In <code>pyproject.toml</code>:</p>
+<pre><code class="language-toml">[project]
+name = &quot;my-zarrnii-plugin&quot;
+version = &quot;0.1.0&quot;
+description = &quot;My custom ZarrNii processing plugin&quot;
+dependencies = [
+    &quot;zarrnii&gt;=0.1.0&quot;,
+    &quot;scipy&gt;=1.11.0&quot;,
+]
+
+[project.entry-points.&quot;zarrnii.plugins&quot;]
+my_external_plugin = &quot;my_zarrnii_plugin:MyExternalPlugin&quot;
+</code></pre>
+<h3 id="step-5-use-your-external-plugin">Step 5: Use Your External Plugin</h3>
+<p>After installing your plugin package (<code>pip install my-zarrnii-plugin</code>):</p>
+<pre><code class="language-python">from zarrnii import ZarrNii
+from my_zarrnii_plugin import MyExternalPlugin
+
+# Load your data
+znimg = ZarrNii.from_nifti(&quot;input.nii&quot;)
+
+# Use the external plugin directly
+result = znimg.apply_scaled_processing(
+    MyExternalPlugin(smoothing_sigma=3.0, scale_factor=2.0),
+    downsample_factor=4
+)
+
+# Or register it with the plugin manager
+from zarrnii.plugins import get_plugin_manager
+
+pm = get_plugin_manager()
+plugin = MyExternalPlugin(smoothing_sigma=3.0, scale_factor=2.0)
+pm.register(plugin)
+
+# Query registered plugins
+for p in pm.get_plugins():
+    names = pm.hook.scaled_processing_plugin_name()
+    descriptions = pm.hook.scaled_processing_plugin_description()
+    print(f&quot;Plugin: {names[0]} - {descriptions[0]}&quot;)
 </code></pre>
 <h2 id="advanced-usage">Advanced Usage</h2>
 <h3 id="custom-downsampling-factors">Custom Downsampling Factors</h3>
