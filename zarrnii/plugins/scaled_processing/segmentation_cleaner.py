@@ -112,9 +112,7 @@ class SegmentationCleaner(ScaledProcessingPlugin):
                     mask_img = work_array[i] > self.mask_threshold
                     conncomp, nlabels = label(mask_img, return_num=True)
                     props = regionprops(conncomp)
-                    keep_labels = {
-                        r.label for r in props if r.extent < self.max_extent
-                    }
+                    keep_labels = {r.label for r in props if r.extent < self.max_extent}
                     batch_exclude = np.isin(conncomp, list(keep_labels))
                     exclude_mask[i] = batch_exclude.astype("uint8") * 100
             else:
