@@ -94,24 +94,37 @@ class SegmentationCleaner(ScaledProcessingPlugin):
             spatial_shape = work_array.shape[-3:]
             work_array = work_array.reshape(-1, *spatial_shape)
 
-        # Apply threshold to create binary mask
-        mask_img = work_array > self.mask_threshold
-
-        # Perform connected components analysis
-        conncomp, nlabels = label(mask_img, return_num=True)
-
-        # Calculate region properties
-        props = regionprops(conncomp)
-
-        # Filter by extent - keep objects with extent lower than threshold
-        # These are typically large artifactual objects
-        keep_labels = {r.label for r in props if r.extent < self.max_extent}
-
-        # Build exclusion mask - mark regions to exclude
-        exclude_mask = np.isin(conncomp, list(keep_labels))
-
-        # Convert to uint8 with value 100 for excluded regions
-        exclude_mask = exclude_mask.astype("uint8") * 100
+        # Process connected components and create exclusion mask
+        if work_array.ndim == 2:
+            # 2D case
+            mask_img = work_array > self.mask_threshold
+            conncomp, nlabels = label(mask_img, return_num=True)
+            props = regionprops(conncomp)
+            keep_labels = {r.label for r in props if r.extent < self.max_extent}
+            exclude_mask = np.isin(conncomp, list(keep_labels))
+            exclude_mask = exclude_mask.astype("uint8") * 100
+        else:
+            # 3D or batched 3D case
+            if work_array.ndim == 4:
+                # Batched 3D volumes - process each separately
+                exclude_mask = np.zeros_like(work_array, dtype="uint8")
+                for i in range(work_array.shape[0]):
+                    mask_img = work_array[i] > self.mask_threshold
+                    conncomp, nlabels = label(mask_img, return_num=True)
+                    props = regionprops(conncomp)
+                    keep_labels = {
+                        r.label for r in props if r.extent < self.max_extent
+                    }
+                    batch_exclude = np.isin(conncomp, list(keep_labels))
+                    exclude_mask[i] = batch_exclude.astype("uint8") * 100
+            else:
+                # Single 3D volume
+                mask_img = work_array > self.mask_threshold
+                conncomp, nlabels = label(mask_img, return_num=True)
+                props = regionprops(conncomp)
+                keep_labels = {r.label for r in props if r.extent < self.max_extent}
+                exclude_mask = np.isin(conncomp, list(keep_labels))
+                exclude_mask = exclude_mask.astype("uint8") * 100
 
         # Reshape back to original shape if needed
         if original_shape != exclude_mask.shape:

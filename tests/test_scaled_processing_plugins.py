@@ -554,20 +554,68 @@ class TestSegmentationCleaner:
 
         plugin = SegmentationCleaner(mask_threshold=50, max_extent=0.15)
 
-        # Create 3D test data with different objects
-        test_data = np.zeros((20, 30, 30), dtype=np.float32)
+        # Create 3D test data with a large sparse object
+        test_data = np.zeros((30, 40, 40), dtype=np.float32)
 
-        # Create a sparse object
-        for i in range(5, 15, 2):
-            for j in range(5, 25, 2):
-                for k in range(5, 25, 2):
-                    test_data[i, j, k] = 100
+        # Draw hollow 3D box
+        for i in range(10, 25):
+            test_data[i, 10, 10] = 100
+            test_data[i, 10, 30] = 100
+            test_data[i, 30, 10] = 100
+            test_data[i, 30, 30] = 100
+        for j in range(10, 31):
+            test_data[10, j, 10] = 100
+            test_data[10, j, 30] = 100
+            test_data[25, j, 10] = 100
+            test_data[25, j, 30] = 100
+        for k in range(10, 31):
+            test_data[10, 10, k] = 100
+            test_data[10, 30, k] = 100
+            test_data[25, 10, k] = 100
+            test_data[25, 30, k] = 100
 
         result = plugin.lowres_func(test_data)
 
         assert result.shape == test_data.shape
         assert result.dtype == np.uint8
         assert np.all(np.isin(result, [0, 100]))
+
+    def test_lowres_func_4d(self):
+        """Test the lowres_func with 4D (batched) segmentation input."""
+        from zarrnii.plugins.scaled_processing.segmentation_cleaner import (
+            SegmentationCleaner,
+        )
+
+        plugin = SegmentationCleaner(mask_threshold=50, max_extent=0.15)
+
+        # Create 4D test data (e.g., channel dimension + 3D spatial)
+        test_data = np.zeros((2, 30, 40, 40), dtype=np.float32)
+
+        # Add sparse object to first channel - hollow box with many edges
+        # Large bounding box but sparse coverage (low extent)
+        for i in range(10, 25):
+            for j in [10, 30]:
+                for k in [10, 30]:
+                    test_data[0, i, j, k] = 100
+        for j in range(10, 31):
+            for i in [10, 25]:
+                for k in [10, 30]:
+                    test_data[0, i, j, k] = 100
+        for k in range(10, 31):
+            for i in [10, 25]:
+                for j in [10, 30]:
+                    test_data[0, i, j, k] = 100
+
+        # Add compact object to second channel
+        test_data[1, 15:20, 15:20, 15:20] = 100
+
+        result = plugin.lowres_func(test_data)
+
+        assert result.shape == test_data.shape
+        assert result.dtype == np.uint8
+        assert np.all(np.isin(result, [0, 100]))
+        # Second channel should have no exclusions (compact object)
+        assert np.all(result[1] == 0)
 
     def test_lowres_func_edge_cases(self):
         """Test lowres_func with edge cases."""
