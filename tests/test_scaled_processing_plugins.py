@@ -484,3 +484,219 @@ class TestN4BiasFieldCorrection:
 
             assert "N4BiasFieldCorrection" in repr_str
             assert "shrink_factor=3" in repr_str
+
+
+class TestSegmentationCleaner:
+    """Test the SegmentationCleaner plugin."""
+
+    def test_segmentation_cleaner_plugin_initialization(self):
+        """Test SegmentationCleaner plugin initialization."""
+        from zarrnii.plugins.scaled_processing.segmentation_cleaner import (
+            SegmentationCleaner,
+        )
+
+        plugin = SegmentationCleaner(
+            mask_threshold=60, max_extent=0.2, exclusion_threshold=40
+        )
+
+        assert plugin.name == "Segmentation Cleaner"
+        assert "Multi-resolution segmentation cleaning" in plugin.description
+        assert plugin.mask_threshold == 60
+        assert plugin.max_extent == 0.2
+        assert plugin.exclusion_threshold == 40
+        assert plugin.params == {
+            "mask_threshold": 60,
+            "max_extent": 0.2,
+            "exclusion_threshold": 40,
+        }
+
+    def test_lowres_func_basic(self):
+        """Test the lowres_func with basic segmentation input."""
+        from zarrnii.plugins.scaled_processing.segmentation_cleaner import (
+            SegmentationCleaner,
+        )
+
+        plugin = SegmentationCleaner(mask_threshold=50, max_extent=0.15)
+
+        # Create test data: one LARGE object with low extent (sparse coverage)
+        # and one compact object with high extent
+        test_data = np.zeros((100, 100), dtype=np.float32)
+
+        # Create a large sparse object with low extent
+        # Draw a thin boundary box - bounding box 40x40=1600, but only ~160 pixels
+        # extent ~ 0.1
+        for i in range(20, 60):
+            test_data[i, 20] = 100  # Left edge
+            test_data[i, 59] = 100  # Right edge
+        for j in range(20, 60):
+            test_data[20, j] = 100  # Top edge
+            test_data[59, j] = 100  # Bottom edge
+
+        # Create a compact object (extent = 1.0, should NOT be excluded)
+        test_data[70:80, 70:80] = 100  # 10x10 solid block
+
+        result = plugin.lowres_func(test_data)
+
+        # Result should have the same shape
+        assert result.shape == test_data.shape
+        # Result should be uint8
+        assert result.dtype == np.uint8
+        # Result should only contain 0 or 100
+        assert np.all(np.isin(result, [0, 100]))
+        # The sparse object should be marked for exclusion
+        assert np.any(result > 0)
+
+    def test_lowres_func_3d(self):
+        """Test the lowres_func with 3D segmentation input."""
+        from zarrnii.plugins.scaled_processing.segmentation_cleaner import (
+            SegmentationCleaner,
+        )
+
+        plugin = SegmentationCleaner(mask_threshold=50, max_extent=0.15)
+
+        # Create 3D test data with different objects
+        test_data = np.zeros((20, 30, 30), dtype=np.float32)
+
+        # Create a sparse object
+        for i in range(5, 15, 2):
+            for j in range(5, 25, 2):
+                for k in range(5, 25, 2):
+                    test_data[i, j, k] = 100
+
+        result = plugin.lowres_func(test_data)
+
+        assert result.shape == test_data.shape
+        assert result.dtype == np.uint8
+        assert np.all(np.isin(result, [0, 100]))
+
+    def test_lowres_func_edge_cases(self):
+        """Test lowres_func with edge cases."""
+        from zarrnii.plugins.scaled_processing.segmentation_cleaner import (
+            SegmentationCleaner,
+        )
+
+        plugin = SegmentationCleaner()
+
+        # Test empty array
+        with pytest.raises(ValueError, match="Input array is empty"):
+            plugin.lowres_func(np.array([]))
+
+        # Test 1D array
+        with pytest.raises(ValueError, match="Input array must be at least 2D"):
+            plugin.lowres_func(np.array([1, 2, 3]))
+
+    def test_highres_func_application(self):
+        """Test the highres_func with upsampled exclusion mask."""
+        from zarrnii.plugins.scaled_processing.segmentation_cleaner import (
+            SegmentationCleaner,
+        )
+
+        plugin = SegmentationCleaner(exclusion_threshold=50)
+
+        # Create full-resolution segmentation data
+        fullres_data = da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 100
+
+        # Create upsampled exclusion mask
+        # Mark some regions for exclusion (value 100)
+        upsampled_mask = da.zeros((40, 40), chunks=(20, 20), dtype=np.uint8)
+        upsampled_mask = da.where(
+            (da.arange(40).reshape(-1, 1) < 20) & (da.arange(40).reshape(1, -1) < 20),
+            100,
+            0,
+        )
+
+        result = plugin.highres_func(fullres_data, upsampled_mask)
+
+        # Result should have same shape as full-res data
+        assert result.shape == fullres_data.shape
+
+        # Check that excluded regions are zeroed
+        result_computed = result.compute()
+        # Top-left quadrant should be zero (excluded)
+        assert np.all(result_computed[:20, :20] == 0)
+        # Other regions should remain at 100
+        assert np.all(result_computed[20:, :] == 100)
+        assert np.all(result_computed[:, 20:] == 100)
+
+    def test_highres_func_threshold_boundary(self):
+        """Test highres_func threshold behavior."""
+        from zarrnii.plugins.scaled_processing.segmentation_cleaner import (
+            SegmentationCleaner,
+        )
+
+        plugin = SegmentationCleaner(exclusion_threshold=50)
+
+        # Create full-resolution data
+        fullres_data = da.ones((20, 20), chunks=(10, 10), dtype=np.float32) * 100
+
+        # Create exclusion mask with values at threshold boundary
+        upsampled_mask = da.full((20, 20), 49, chunks=(10, 10), dtype=np.uint8)
+        upsampled_mask = da.where(
+            da.arange(20).reshape(-1, 1) < 10, 50, upsampled_mask
+        )  # Set half to exactly 50
+
+        result = plugin.highres_func(fullres_data, upsampled_mask)
+        result_computed = result.compute()
+
+        # Values >= 50 should be excluded (zeroed)
+        assert np.all(result_computed[:10, :] == 0)
+        # Values < 50 should be preserved
+        assert np.all(result_computed[10:, :] == 100)
+
+    def test_segmentation_cleaner_integration(self):
+        """Test complete segmentation cleaning workflow."""
+        from zarrnii.plugins.scaled_processing.segmentation_cleaner import (
+            SegmentationCleaner,
+        )
+
+        # Create synthetic segmentation with large sparse artifact
+        test_data = np.zeros((100, 100), dtype=np.float32)
+
+        # Add compact objects (high extent, should be kept)
+        test_data[10:20, 10:20] = 100  # Solid 10x10 block
+        test_data[30:40, 30:40] = 100  # Another solid block
+
+        # Add large sparse artifact (low extent ~0.1, should be removed)
+        # Draw hollow rectangle - large bounding box but sparse coverage
+        for i in range(50, 90):
+            test_data[i, 50] = 100  # Left edge
+            test_data[i, 89] = 100  # Right edge
+        for j in range(50, 90):
+            test_data[50, j] = 100  # Top edge
+            test_data[89, j] = 100  # Bottom edge
+
+        plugin = SegmentationCleaner(mask_threshold=50, max_extent=0.15)
+
+        # Test lowres function
+        lowres_result = plugin.lowres_func(test_data)
+        assert lowres_result.shape == test_data.shape
+        # Should have some exclusion mask
+        assert np.any(lowres_result > 0)
+
+        # Test highres function
+        fullres_data = da.from_array(test_data, chunks=(50, 50))
+        upsampled_mask = da.from_array(lowres_result, chunks=(50, 50))
+
+        highres_result = plugin.highres_func(fullres_data, upsampled_mask)
+        cleaned = highres_result.compute()
+
+        # Verify that data was cleaned
+        assert cleaned.shape == test_data.shape
+        # Some regions should have been zeroed out
+        assert np.sum(cleaned == 0) > np.sum(test_data == 0)
+
+    def test_plugin_repr(self):
+        """Test plugin string representation."""
+        from zarrnii.plugins.scaled_processing.segmentation_cleaner import (
+            SegmentationCleaner,
+        )
+
+        plugin = SegmentationCleaner(
+            mask_threshold=60, max_extent=0.2, exclusion_threshold=40
+        )
+        repr_str = repr(plugin)
+
+        assert "SegmentationCleaner" in repr_str
+        assert "mask_threshold=60" in repr_str
+        assert "max_extent=0.2" in repr_str
+        assert "exclusion_threshold=40" in repr_str
