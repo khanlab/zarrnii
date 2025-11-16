@@ -277,6 +277,7 @@ def create_mip_visualization(
     omero_metadata: Optional[Any] = None,
     channel_labels: Optional[List[str]] = None,
     return_slabs: bool = False,
+    scale_units: str = "mm",
 ) -> Union[List[np.ndarray], Tuple[List[np.ndarray], List[dict]]]:
     """
     Create Maximum Intensity Projection (MIP) visualizations across slabs.
@@ -289,8 +290,8 @@ def create_mip_visualization(
         image: Input dask array image with shape matching dims. Should include
             spatial dimensions (x, y, z) and optionally channel dimension (c).
         dims: List of dimension names matching image shape (e.g., ['c', 'z', 'y', 'x'])
-        scale: Dictionary mapping dimension names to spacing values in microns
-            (e.g., {'x': 1.0, 'y': 1.0, 'z': 2.0})
+        scale: Dictionary mapping dimension names to spacing values. Units determined
+            by scale_units parameter (e.g., {'x': 1.0, 'y': 1.0, 'z': 2.0})
         plane: Projection plane - one of 'axial', 'coronal', 'sagittal'.
             - 'axial': projects along z-axis (creates xy slices)
             - 'coronal': projects along y-axis (creates xz slices)
@@ -320,6 +321,10 @@ def create_mip_visualization(
         return_slabs: If True, returns tuple of (mip_list, slab_info_list) where
             slab_info_list contains metadata about each slab. If False (default),
             returns only the mip_list.
+        scale_units: Units for scale values. Either "mm" (millimeters, default) or
+            "um" (microns). When "mm", scale values are converted to microns internally
+            (multiplied by 1000). This parameter reflects the NGFF/NIfTI convention
+            where scale values are typically in millimeters.
 
     Returns:
         If return_slabs is False (default):
@@ -355,9 +360,9 @@ def create_mip_visualization(
         >>> # Create test data with 2 channels
         >>> data = da.random.random((2, 100, 100, 100), chunks=(1, 50, 50, 50))
         >>> dims = ['c', 'z', 'y', 'x']
-        >>> scale = {'z': 2.0, 'y': 1.0, 'x': 1.0}  # 2 micron z-spacing
+        >>> scale = {'z': 0.002, 'y': 0.001, 'x': 0.001}  # 2mm z, 1mm x/y in mm
         >>>
-        >>> # Create axial MIPs with custom intensity ranges
+        >>> # Create axial MIPs with custom intensity ranges and 100 micron slabs (scale in mm by default)
         >>> mips = create_mip_visualization(
         ...     data, dims, scale,
         ...     plane='axial',
@@ -367,6 +372,17 @@ def create_mip_visualization(
         ...     channel_ranges=[(0.0, 0.8), (0.2, 1.0)]
         ... )
         >>>
+        >>> # Or if scale is already in microns, specify scale_units='um'
+        >>> scale_um = {'z': 2.0, 'y': 1.0, 'x': 1.0}  # 2um z, 1um x/y
+        >>> mips = create_mip_visualization(
+        ...     data, dims, scale_um,
+        ...     plane='axial',
+        ...     slab_thickness_um=100.0,
+        ...     scale_units='um'
+        ... )
+        >>>
+        >>> # Get slab metadata
+        >>> mips, slab_info = create_mip_visualization(
         >>> # Use OMERO metadata for colors and ranges
         >>> mips = create_mip_visualization(
         ...     data, dims, scale,
@@ -386,6 +402,23 @@ def create_mip_visualization(
     valid_planes = ["axial", "coronal", "sagittal"]
     if plane not in valid_planes:
         raise ValueError(f"plane must be one of {valid_planes}, got '{plane}'")
+
+    # Validate and handle scale units
+    valid_units = ["mm", "um"]
+    if scale_units not in valid_units:
+        raise ValueError(
+            f"scale_units must be one of {valid_units}, got '{scale_units}'"
+        )
+
+    # Convert scale to microns if needed
+    # NGFF/NIfTI convention: scale values are in millimeters
+    # But slab parameters are in microns for better precision
+    if scale_units == "mm":
+        # Convert mm to um (1 mm = 1000 um)
+        scale_um = {k: v * 1000.0 for k, v in scale.items()}
+    else:
+        # Already in microns
+        scale_um = scale
 
     # Map plane to axis dimension
     plane_axis_map = {
@@ -602,11 +635,11 @@ def create_mip_visualization(
     # Get projection axis index and size
     proj_axis_idx = dims.index(projection_axis)
     proj_axis_size = image.shape[proj_axis_idx]
-    proj_axis_spacing = scale.get(projection_axis, 1.0)
+    proj_axis_spacing_um = scale_um.get(projection_axis, 1000.0)  # Default 1mm = 1000um
 
-    # Calculate slab parameters
-    slab_thickness_idx = int(np.ceil(slab_thickness_um / proj_axis_spacing))
-    slab_spacing_idx = int(np.round(slab_spacing_um / proj_axis_spacing))
+    # Calculate slab parameters (now both in microns)
+    slab_thickness_idx = int(np.ceil(slab_thickness_um / proj_axis_spacing_um))
+    slab_spacing_idx = int(np.round(slab_spacing_um / proj_axis_spacing_um))
 
     # Generate slab positions
     slab_centers_idx = []
@@ -629,11 +662,11 @@ def create_mip_visualization(
         start_idx = max(0, center_idx - half_thickness)
         end_idx = min(proj_axis_size, center_idx + half_thickness)
 
-        # Store slab info
+        # Store slab info (positions in microns)
         slab_info = {
-            "start_um": start_idx * proj_axis_spacing,
-            "end_um": end_idx * proj_axis_spacing,
-            "center_um": center_idx * proj_axis_spacing,
+            "start_um": start_idx * proj_axis_spacing_um,
+            "end_um": end_idx * proj_axis_spacing_um,
+            "center_um": center_idx * proj_axis_spacing_um,
             "start_idx": start_idx,
             "end_idx": end_idx,
         }

@@ -4866,6 +4866,7 @@ class ZarrNii:
         channel_ranges: Optional[List[Tuple[float, float]]] = None,
         channel_labels: Optional[List[str]] = None,
         return_slabs: bool = False,
+        scale_units: str = "mm",
     ) -> Union[List[np.ndarray], Tuple[List[np.ndarray], List[dict]]]:
         """
         Create Maximum Intensity Projection (MIP) visualizations across slabs.
@@ -4896,6 +4897,9 @@ class ZarrNii:
             return_slabs: If True, returns tuple of (mip_list, slab_info_list) where
                 slab_info_list contains metadata about each slab. If False (default),
                 returns only the mip_list.
+            scale_units: Units for scale values. Either "mm" (millimeters, default) or
+                "um" (microns). The ZarrNii scale values from NGFF/NIfTI are in millimeters
+                by default, so this should typically be left as "mm".
 
         Returns:
             If return_slabs is False (default):
@@ -4948,6 +4952,7 @@ class ZarrNii:
             omero_metadata=self.omero,
             channel_labels=channel_labels,
             return_slabs=return_slabs,
+            scale_units=scale_units,
         )
 
     def apply_scaled_processing(

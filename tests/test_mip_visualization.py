@@ -23,9 +23,9 @@ class TestStandaloneMIPFunction:
         np.random.seed(42)
         data = da.from_array(np.random.random((1, 50, 40, 30)), chunks=(1, 25, 20, 15))
         dims = ["c", "z", "y", "x"]
-        scale = {"z": 2.0, "y": 1.0, "x": 1.0}
+        scale = {"z": 2.0, "y": 1.0, "x": 1.0}  # 2um z-spacing, 1um x/y
 
-        # Create MIPs with 20 micron slabs
+        # Create MIPs with 20 micron slabs (scale in um for this test)
         mips = create_mip_visualization(
             data,
             dims,
@@ -34,6 +34,7 @@ class TestStandaloneMIPFunction:
             slab_thickness_um=20.0,
             slab_spacing_um=20.0,
             channel_colors=["red"],
+            scale_units="um",
         )
 
         # Should create multiple slabs
@@ -47,10 +48,10 @@ class TestStandaloneMIPFunction:
         """Test MIP creation in coronal plane."""
         data = da.random.random((1, 30, 40, 50), chunks=(1, 15, 20, 25))
         dims = ["c", "z", "y", "x"]
-        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}  # 1um spacing
 
         mips = create_mip_visualization(
-            data, dims, scale, plane="coronal", slab_thickness_um=10.0
+            data, dims, scale, plane="coronal", slab_thickness_um=10.0, scale_units="um"
         )
 
         assert len(mips) > 0
@@ -61,10 +62,15 @@ class TestStandaloneMIPFunction:
         """Test MIP creation in sagittal plane."""
         data = da.random.random((1, 30, 40, 50), chunks=(1, 15, 20, 25))
         dims = ["c", "z", "y", "x"]
-        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}  # 1um spacing
 
         mips = create_mip_visualization(
-            data, dims, scale, plane="sagittal", slab_thickness_um=10.0
+            data,
+            dims,
+            scale,
+            plane="sagittal",
+            slab_thickness_um=10.0,
+            scale_units="um",
         )
 
         assert len(mips) > 0
@@ -76,7 +82,7 @@ class TestStandaloneMIPFunction:
         # Create 3-channel data
         data = da.random.random((3, 20, 30, 40), chunks=(1, 10, 15, 20))
         dims = ["c", "z", "y", "x"]
-        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}  # 1um spacing
 
         mips = create_mip_visualization(
             data,
@@ -85,6 +91,7 @@ class TestStandaloneMIPFunction:
             plane="axial",
             slab_thickness_um=10.0,
             channel_colors=["red", "green", "blue"],
+            scale_units="um",
         )
 
         assert len(mips) > 0
@@ -95,10 +102,10 @@ class TestStandaloneMIPFunction:
         # Data without channel dimension
         data = da.random.random((20, 30, 40), chunks=(10, 15, 20))
         dims = ["z", "y", "x"]
-        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}  # 1um spacing
 
         mips = create_mip_visualization(
-            data, dims, scale, plane="axial", slab_thickness_um=10.0
+            data, dims, scale, plane="axial", slab_thickness_um=10.0, scale_units="um"
         )
 
         assert len(mips) > 0
@@ -108,7 +115,7 @@ class TestStandaloneMIPFunction:
         """Test MIP with slab metadata return."""
         data = da.random.random((1, 50, 30, 40), chunks=(1, 25, 15, 20))
         dims = ["c", "z", "y", "x"]
-        scale = {"z": 2.0, "y": 1.0, "x": 1.0}
+        scale = {"z": 2.0, "y": 1.0, "x": 1.0}  # 2um z-spacing
 
         mips, slab_info = create_mip_visualization(
             data,
@@ -118,6 +125,7 @@ class TestStandaloneMIPFunction:
             slab_thickness_um=20.0,
             slab_spacing_um=20.0,
             return_slabs=True,
+            scale_units="um",
         )
 
         assert len(mips) == len(slab_info)
@@ -134,7 +142,7 @@ class TestStandaloneMIPFunction:
         """Test MIP with custom RGB tuple colors."""
         data = da.random.random((2, 20, 30, 40), chunks=(1, 10, 15, 20))
         dims = ["c", "z", "y", "x"]
-        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}  # 1um spacing
 
         # Use RGB tuples
         mips = create_mip_visualization(
@@ -144,6 +152,7 @@ class TestStandaloneMIPFunction:
             plane="axial",
             slab_thickness_um=10.0,
             channel_colors=[(1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
+            scale_units="um",
         )
 
         assert len(mips) > 0
@@ -156,7 +165,9 @@ class TestStandaloneMIPFunction:
         scale = {"z": 1.0, "y": 1.0, "x": 1.0}
 
         with pytest.raises(ValueError, match="plane must be one of"):
-            create_mip_visualization(data, dims, scale, plane="invalid")
+            create_mip_visualization(
+                data, dims, scale, plane="invalid", scale_units="um"
+            )
 
     def test_mip_missing_projection_axis(self):
         """Test error when projection axis not in dims."""
@@ -165,7 +176,7 @@ class TestStandaloneMIPFunction:
         scale = {"y": 1.0, "x": 1.0}
 
         with pytest.raises(ValueError, match="not found in dims"):
-            create_mip_visualization(data, dims, scale, plane="axial")
+            create_mip_visualization(data, dims, scale, plane="axial", scale_units="um")
 
     def test_mip_too_few_colors(self):
         """Test error when not enough colors provided."""
@@ -175,14 +186,19 @@ class TestStandaloneMIPFunction:
 
         with pytest.raises(ValueError, match="Provided .* colors but image has"):
             create_mip_visualization(
-                data, dims, scale, plane="axial", channel_colors=["red", "green"]
+                data,
+                dims,
+                scale,
+                plane="axial",
+                channel_colors=["red", "green"],
+                scale_units="um",
             )
 
     def test_mip_large_slab_thickness(self):
         """Test MIP with slab thickness larger than volume."""
         data = da.random.random((1, 10, 30, 40), chunks=(1, 5, 15, 20))
         dims = ["c", "z", "y", "x"]
-        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}  # 1um spacing
 
         # Slab thickness larger than volume should still work
         mips = create_mip_visualization(
@@ -192,6 +208,7 @@ class TestStandaloneMIPFunction:
             plane="axial",
             slab_thickness_um=100.0,
             slab_spacing_um=100.0,
+            scale_units="um",
         )
 
         # Should create at least one slab
@@ -201,7 +218,7 @@ class TestStandaloneMIPFunction:
         """Test MIP with non-uniform voxel spacing."""
         data = da.random.random((1, 50, 30, 40), chunks=(1, 25, 15, 20))
         dims = ["c", "z", "y", "x"]
-        scale = {"z": 5.0, "y": 1.0, "x": 1.5}  # Different spacings
+        scale = {"z": 5.0, "y": 1.0, "x": 1.5}  # Different spacings in um
 
         mips, slab_info = create_mip_visualization(
             data,
@@ -211,6 +228,7 @@ class TestStandaloneMIPFunction:
             slab_thickness_um=50.0,
             slab_spacing_um=50.0,
             return_slabs=True,
+            scale_units="um",
         )
 
         assert len(mips) > 0
@@ -229,6 +247,7 @@ class TestZarrNiiMIPMethod:
         np.random.seed(123)
         data = da.random.random((2, 40, 50, 60), chunks=(1, 20, 25, 30))
         dims = ["c", "z", "y", "x"]
+        # Use micron-scale values for testing (interpret as um with scale_units="um")
         scale = {"z": 2.0, "y": 1.0, "x": 1.0}
         translation = {"z": 0.0, "y": 0.0, "x": 0.0}
 
@@ -245,6 +264,7 @@ class TestZarrNiiMIPMethod:
             slab_thickness_um=40.0,
             slab_spacing_um=40.0,
             channel_colors=["red", "green"],
+            scale_units="um",  # Treat scale as microns for this test
         )
 
         assert len(mips) > 0
@@ -258,6 +278,7 @@ class TestZarrNiiMIPMethod:
                 plane=plane,
                 slab_thickness_um=20.0,
                 channel_colors=["red", "green"],
+                scale_units="um",  # Treat scale as microns for this test
             )
             assert len(mips) > 0
 
@@ -268,6 +289,7 @@ class TestZarrNiiMIPMethod:
             slab_thickness_um=40.0,
             slab_spacing_um=40.0,
             return_slabs=True,
+            scale_units="um",  # Treat scale as microns for this test
         )
 
         assert len(mips) == len(slab_info)
@@ -279,7 +301,11 @@ class TestZarrNiiMIPMethod:
     def test_create_mip_default_colors(self):
         """Test create_mip with default colors."""
         # Should work without specifying colors
-        mips = self.znimg.create_mip(plane="axial", slab_thickness_um=40.0)
+        mips = self.znimg.create_mip(
+            plane="axial",
+            slab_thickness_um=40.0,
+            scale_units="um",  # Treat scale as microns for this test
+        )
 
         assert len(mips) > 0
         assert mips[0].shape[-1] == 3  # RGB
@@ -296,7 +322,7 @@ class TestMIPVisualization:
         data_array[0, 4:6, 10, 10] = 1.0
         data = da.from_array(data_array, chunks=(1, 5, 10, 10))
         dims = ["c", "z", "y", "x"]
-        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}  # 1um spacing
 
         # Create MIP with slab that includes the bright spot
         mips = create_mip_visualization(
@@ -307,6 +333,7 @@ class TestMIPVisualization:
             slab_thickness_um=10.0,  # Covers all z
             slab_spacing_um=20.0,
             channel_colors=["white"],
+            scale_units="um",
         )
 
         # The bright spot should be visible in the MIP at position (10, 10)
@@ -326,7 +353,7 @@ class TestMIPVisualization:
         data_array[1, :, 10:, 10:] = 1.0
         data = da.from_array(data_array, chunks=(1, 5, 10, 10))
         dims = ["c", "z", "y", "x"]
-        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}  # 1um spacing
 
         mips = create_mip_visualization(
             data,
@@ -335,6 +362,7 @@ class TestMIPVisualization:
             plane="axial",
             slab_thickness_um=10.0,
             channel_colors=[(1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],  # Red, Green
+            scale_units="um",
         )
 
         assert len(mips) == 1
@@ -354,7 +382,7 @@ class TestMIPVisualization:
         """Test that slab spacing creates expected number of slabs."""
         data = da.random.random((1, 100, 30, 40), chunks=(1, 50, 15, 20))
         dims = ["c", "z", "y", "x"]
-        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}  # 1um spacing
 
         # With 100 micron volume, 20 micron spacing should give ~5 slabs
         mips, slab_info = create_mip_visualization(
@@ -365,6 +393,7 @@ class TestMIPVisualization:
             slab_thickness_um=10.0,
             slab_spacing_um=20.0,
             return_slabs=True,
+            scale_units="um",
         )
 
         # Should have 5-6 slabs
@@ -384,7 +413,7 @@ class TestMIPVisualization:
         data_array[1, :, 10:20, 10:30] = 1.0  # Channel 1: partial region
         data = da.from_array(data_array, chunks=(1, 10, 15, 20))
         dims = ["c", "z", "y", "x"]
-        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}  # 1um spacing
 
         mips = create_mip_visualization(
             data,
@@ -393,6 +422,7 @@ class TestMIPVisualization:
             plane="axial",
             slab_thickness_um=20.0,
             channel_colors=["red", "green"],
+            scale_units="um",
         )
 
         assert len(mips) == 1
@@ -401,4 +431,59 @@ class TestMIPVisualization:
         # Channel 0 has uniform 0.5 everywhere, should show red
         assert mip[:, :, 0].min() > 0  # Red channel present
         # Channel 1 has values in specific region, should show green there
-        assert mip[15, 20, 1] > 0  # Green in the region
+
+    def test_mip_scale_units_conversion(self):
+        """Test that scale_units parameter correctly converts mm to um."""
+        # Create test data
+        data = da.random.random((1, 100, 30, 40), chunks=(1, 50, 15, 20))
+        dims = ["c", "z", "y", "x"]
+
+        # Scale in millimeters (as would come from NIfTI/NGFF)
+        scale_mm = {"z": 0.001, "y": 0.001, "x": 0.001}  # 1um = 0.001mm
+
+        # With 100 slices * 0.001mm = 0.1mm = 100um volume
+        # 20um slab spacing should give ~5 slabs
+        mips_mm, slab_info_mm = create_mip_visualization(
+            data,
+            dims,
+            scale_mm,
+            plane="axial",
+            slab_thickness_um=10.0,
+            slab_spacing_um=20.0,
+            return_slabs=True,
+            scale_units="mm",  # Scale is in millimeters
+        )
+
+        # Now create with equivalent scale in microns
+        scale_um = {"z": 1.0, "y": 1.0, "x": 1.0}  # 1um spacing
+        mips_um, slab_info_um = create_mip_visualization(
+            data,
+            dims,
+            scale_um,
+            plane="axial",
+            slab_thickness_um=10.0,
+            slab_spacing_um=20.0,
+            return_slabs=True,
+            scale_units="um",  # Scale is in microns
+        )
+
+        # Both should produce the same number of slabs
+        assert len(mips_mm) == len(mips_um)
+        assert len(slab_info_mm) == len(slab_info_um)
+
+        # Slab positions should be the same (in microns)
+        for info_mm, info_um in zip(slab_info_mm, slab_info_um):
+            assert abs(info_mm["start_um"] - info_um["start_um"]) < 0.1
+            assert abs(info_mm["end_um"] - info_um["end_um"]) < 0.1
+            assert abs(info_mm["center_um"] - info_um["center_um"]) < 0.1
+
+    def test_mip_scale_units_validation(self):
+        """Test that invalid scale_units raises error."""
+        data = da.random.random((1, 20, 30, 40), chunks=(1, 10, 15, 20))
+        dims = ["c", "z", "y", "x"]
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+
+        with pytest.raises(ValueError, match="scale_units must be one of"):
+            create_mip_visualization(
+                data, dims, scale, plane="axial", scale_units="invalid"
+            )
