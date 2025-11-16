@@ -49,7 +49,9 @@ def create_sample_multichannel_data():
 
     # Create ZarrNii object
     dims = ["c", "z", "y", "x"]
-    scale = {"z": 2.0, "y": 1.0, "x": 1.0}  # 2 micron z-spacing
+    # Note: In real NGFF/NIfTI files, scale would be in mm (e.g., 0.002 for 2um)
+    # For this demo, we use micron values directly and specify scale_units='um'
+    scale = {"z": 2.0, "y": 1.0, "x": 1.0}  # 2um z-spacing, 1um x/y
     translation = {"z": 0.0, "y": 0.0, "x": 0.0}
 
     ngff_image = nz.NgffImage(
@@ -71,7 +73,9 @@ def demonstrate_standalone_function():
     # Create simple test data
     data = da.random.random((2, 50, 60, 70), chunks=(1, 25, 30, 35))
     dims = ["c", "z", "y", "x"]
-    scale = {"z": 2.0, "y": 1.0, "x": 1.0}
+    # Note: In real NGFF/NIfTI files, scale would be in mm (e.g., 0.002 for 2um)
+    # For this demo, we use micron values and specify scale_units='um'
+    scale = {"z": 2.0, "y": 1.0, "x": 1.0}  # 2um z-spacing
 
     # Create MIPs with metadata
     mips, slab_info = create_mip_visualization(
@@ -83,6 +87,7 @@ def demonstrate_standalone_function():
         slab_spacing_um=40.0,
         channel_colors=["red", "green"],
         return_slabs=True,
+        scale_units="um",  # Specify that our scale is in microns
     )
 
     print(f"✅ Created {len(mips)} MIP slabs")
@@ -107,6 +112,7 @@ def demonstrate_zarrnii_method(znimg):
         slab_thickness_um=40.0,
         slab_spacing_um=40.0,
         channel_colors=["red", "green", "blue"],
+        scale_units="um",  # Demo uses micron-scale values
     )
     print(f"     ✅ Created {len(axial_mips)} axial MIPs, shape: {axial_mips[0].shape}")
 
@@ -117,6 +123,7 @@ def demonstrate_zarrnii_method(znimg):
         slab_thickness_um=30.0,
         slab_spacing_um=30.0,
         channel_colors=["red", "green", "blue"],
+        scale_units="um",  # Demo uses micron-scale values
     )
     print(
         f"     ✅ Created {len(coronal_mips)} coronal MIPs, shape: {coronal_mips[0].shape}"
@@ -129,6 +136,7 @@ def demonstrate_zarrnii_method(znimg):
         slab_thickness_um=30.0,
         slab_spacing_um=30.0,
         channel_colors=["red", "green", "blue"],
+        scale_units="um",  # Demo uses micron-scale values
     )
     print(
         f"     ✅ Created {len(sagittal_mips)} sagittal MIPs, shape: {sagittal_mips[0].shape}"
@@ -144,7 +152,7 @@ def demonstrate_custom_colors():
     # Create test data
     data = da.random.random((2, 40, 50, 60), chunks=(1, 20, 25, 30))
     dims = ["c", "z", "y", "x"]
-    scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+    scale = {"z": 1.0, "y": 1.0, "x": 1.0}  # 1um spacing
 
     # Using RGB tuples
     print("  🎨 Using RGB tuples...")
@@ -155,6 +163,7 @@ def demonstrate_custom_colors():
         plane="axial",
         slab_thickness_um=20.0,
         channel_colors=[(1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],  # Pure red, pure green
+        scale_units="um",
     )
     print(f"     ✅ Created {len(mips_rgb)} MIPs with RGB tuple colors")
 
@@ -167,6 +176,7 @@ def demonstrate_custom_colors():
         plane="axial",
         slab_thickness_um=20.0,
         channel_colors=["cyan", "magenta"],
+        scale_units="um",
     )
     print(f"     ✅ Created {len(mips_named)} MIPs with named colors")
 
@@ -206,6 +216,7 @@ def demonstrate_thick_vs_thin_slabs(znimg):
         slab_thickness_um=20.0,
         slab_spacing_um=40.0,
         channel_colors=["red", "green", "blue"],
+        scale_units="um",
     )
     print(f"  🔍 Thin slabs (20 µm): {len(thin_mips)} MIPs")
 
@@ -215,6 +226,7 @@ def demonstrate_thick_vs_thin_slabs(znimg):
         slab_thickness_um=80.0,
         slab_spacing_um=80.0,
         channel_colors=["red", "green", "blue"],
+        scale_units="um",
     )
     print(f"  🔬 Thick slabs (80 µm): {len(thick_mips)} MIPs")
 
@@ -228,7 +240,7 @@ def demonstrate_slab_metadata():
     # Create simple data
     data = da.random.random((1, 100, 60, 80), chunks=(1, 50, 30, 40))
     dims = ["c", "z", "y", "x"]
-    scale = {"z": 2.0, "y": 1.0, "x": 1.0}
+    scale = {"z": 2.0, "y": 1.0, "x": 1.0}  # 2um z-spacing
 
     mips, slab_info = create_mip_visualization(
         data,
@@ -238,6 +250,7 @@ def demonstrate_slab_metadata():
         slab_thickness_um=40.0,
         slab_spacing_um=40.0,
         return_slabs=True,
+        scale_units="um",
     )
 
     print(f"  📊 Generated {len(slab_info)} slabs:")
