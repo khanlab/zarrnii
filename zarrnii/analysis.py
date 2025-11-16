@@ -418,8 +418,7 @@ def compute_centroids(
                 # overlapped_slices[dim].start is global start of overlapped chunk
                 # so global_coord = overlapped_slices[dim].start + centroid[dim]
                 global_centroid = [
-                    overlapped_slices[dim].start + centroid[dim]
-                    for dim in range(ndim)
+                    overlapped_slices[dim].start + centroid[dim] for dim in range(ndim)
                 ]
                 all_centroids.append(global_centroid)
 
