@@ -374,3 +374,31 @@ class TestMIPVisualization:
         if len(slab_info) >= 2:
             spacing = slab_info[1]["center_um"] - slab_info[0]["center_um"]
             assert 18.0 <= spacing <= 22.0  # Allow some tolerance
+
+    def test_mip_uniform_intensity_channel(self):
+        """Test MIP with channel having uniform intensity."""
+        # Create data where one channel has uniform intensity
+        # This tests the edge case where ch_min == ch_max
+        data_array = np.zeros((2, 20, 30, 40))
+        data_array[0, :, :, :] = 0.5  # Channel 0: uniform 0.5
+        data_array[1, :, 10:20, 10:30] = 1.0  # Channel 1: partial region
+        data = da.from_array(data_array, chunks=(1, 10, 15, 20))
+        dims = ["c", "z", "y", "x"]
+        scale = {"z": 1.0, "y": 1.0, "x": 1.0}
+
+        mips = create_mip_visualization(
+            data,
+            dims,
+            scale,
+            plane="axial",
+            slab_thickness_um=20.0,
+            channel_colors=["red", "green"],
+        )
+
+        assert len(mips) == 1
+        mip = mips[0]
+
+        # Channel 0 has uniform 0.5 everywhere, should show red
+        assert mip[:, :, 0].min() > 0  # Red channel present
+        # Channel 1 has values in specific region, should show green there
+        assert mip[15, 20, 1] > 0  # Green in the region
