@@ -309,3 +309,103 @@ class TestComputeCentroidsEdgeCases:
         # Should find exactly one object (not fragmented)
         assert centroids.shape == (1, 3)
         assert_array_almost_equal(centroids[0], [30.0, 30.0, 30.0], decimal=0)
+
+
+class TestComputeCentroidsCZYX:
+    """Test compute_centroids with 4D CZYX data (channel dimension)."""
+
+    def test_single_channel_single_object(self):
+        """Test 4D data with single channel (C=1) and single object."""
+        # Create a 4D binary image with a single channel
+        img = np.zeros((1, 50, 50, 50), dtype=np.uint8)
+        img[0, 20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(1, 25, 25, 25))
+        affine = np.eye(4)
+
+        # Should automatically squeeze channel dimension and process as 3D
+        centroids = compute_centroids(dask_img, affine, depth=5)
+
+        assert centroids.shape == (1, 3)
+        assert_array_almost_equal(centroids[0], [24.5, 24.5, 24.5], decimal=1)
+
+    def test_single_channel_multiple_objects(self):
+        """Test 4D data with single channel and multiple objects."""
+        img = np.zeros((1, 60, 60, 60), dtype=np.uint8)
+
+        # Add multiple objects
+        img[0, 8:13, 8:13, 8:13] = 1
+        img[0, 28:33, 28:33, 28:33] = 1
+        img[0, 48:53, 48:53, 48:53] = 1
+
+        dask_img = da.from_array(img, chunks=(1, 30, 30, 30))
+        affine = np.eye(4)
+
+        centroids = compute_centroids(dask_img, affine, depth=5)
+
+        # Should find three centroids
+        assert centroids.shape == (3, 3)
+
+        # Check approximate locations
+        expected_centroids = np.array(
+            [[10.0, 10.0, 10.0], [30.0, 30.0, 30.0], [50.0, 50.0, 50.0]]
+        )
+        centroids_sorted = centroids[np.argsort(centroids[:, 0])]
+        expected_sorted = expected_centroids[np.argsort(expected_centroids[:, 0])]
+        assert_array_almost_equal(centroids_sorted, expected_sorted, decimal=0)
+
+    def test_single_channel_with_affine_transform(self):
+        """Test 4D data with single channel and affine transform."""
+        img = np.zeros((1, 40, 40, 40), dtype=np.uint8)
+        img[0, 18:23, 18:23, 18:23] = 1
+
+        dask_img = da.from_array(img, chunks=(1, 20, 20, 20))
+
+        # Affine with 2mm spacing and 10mm offset
+        affine = np.array(
+            [[2.0, 0, 0, 10], [0, 2.0, 0, 10], [0, 0, 2.0, 10], [0, 0, 0, 1]]
+        )
+
+        centroids = compute_centroids(dask_img, affine, depth=3)
+
+        # Voxel centroid is at (20, 20, 20), physical = 2.0 * 20 + 10 = 50
+        expected = np.array([[50.0, 50.0, 50.0]])
+
+        assert centroids.shape == (1, 3)
+        assert_array_almost_equal(centroids, expected, decimal=1)
+
+    def test_single_channel_empty_image(self):
+        """Test 4D data with single channel and no objects."""
+        img = np.zeros((1, 50, 50, 50), dtype=np.uint8)
+
+        dask_img = da.from_array(img, chunks=(1, 25, 25, 25))
+        affine = np.eye(4)
+
+        centroids = compute_centroids(dask_img, affine, depth=5)
+
+        # Should return empty array with correct shape
+        assert centroids.shape == (0, 3)
+
+    def test_multi_channel_raises_error(self):
+        """Test that multi-channel images raise informative error."""
+        # Create image with 3 channels
+        img = np.zeros((3, 50, 50, 50), dtype=np.uint8)
+        img[0, 20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(1, 25, 25, 25))
+        affine = np.eye(4)
+
+        # Should raise ValueError with informative message
+        with pytest.raises(ValueError, match="compute_centroids only supports 3D"):
+            compute_centroids(dask_img, affine, depth=5)
+
+    def test_five_dimensional_raises_error(self):
+        """Test that 5D images raise informative error."""
+        img = np.zeros((2, 2, 50, 50, 50), dtype=np.uint8)
+
+        dask_img = da.from_array(img, chunks=(1, 1, 25, 25, 25))
+        affine = np.eye(4)
+
+        # Should raise ValueError for unsupported dimensionality
+        with pytest.raises(ValueError, match="Image must be 1D, 2D, 3D, or 4D"):
+            compute_centroids(dask_img, affine, depth=5)

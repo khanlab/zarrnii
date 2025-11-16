@@ -281,7 +281,9 @@ def compute_centroids(
 
     Args:
         image: Input binary dask array (typically 0/1 values) at highest resolution.
-            Should be 3D with shape (z, y, x) or (x, y, z) depending on axes order.
+            Should be 3D with shape (z, y, x) or (x, y, z) depending on axes order,
+            or 4D with shape (c, z, y, x) where c=1 (single channel). Multi-channel
+            images (c>1) are not supported - process each channel separately.
         affine: 4x4 affine transformation matrix to convert voxel coordinates
             to physical coordinates. Can be a numpy array or AffineTransform object.
         depth: Number of elements of overlap between chunks. Can be:
@@ -341,6 +343,25 @@ def compute_centroids(
     # Validate affine matrix shape
     if affine_matrix.shape != (4, 4):
         raise ValueError(f"Affine matrix must be 4x4, got shape {affine_matrix.shape}")
+
+    # Handle 4D images with channel dimension (CZYX format)
+    if image.ndim == 4:
+        # Check if first dimension is channel dimension (size 1 is common)
+        if image.shape[0] == 1:
+            # Squeeze the channel dimension to get 3D image
+            image = image[0]
+        else:
+            # Multiple channels - raise informative error for now
+            raise ValueError(
+                f"Image has {image.ndim}D shape {image.shape} with {image.shape[0]} channels. "
+                "compute_centroids only supports 3D images or 4D images with a single channel "
+                "(channel dimension size = 1). For multi-channel images, please process each "
+                "channel separately or squeeze/select a single channel before calling this function."
+            )
+    elif image.ndim not in [1, 2, 3]:
+        raise ValueError(
+            f"Image must be 1D, 2D, 3D, or 4D (with single channel), got {image.ndim}D with shape {image.shape}"
+        )
 
     # Rechunk if requested
     if rechunk is not None:
