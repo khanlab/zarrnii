@@ -497,7 +497,11 @@ def create_mip_visualization(
                 ch_max = channel_data.max()
                 if ch_max > ch_min:
                     channel_normalized = (channel_data - ch_min) / (ch_max - ch_min)
+                elif ch_max > 0:
+                    # Uniform non-zero values - keep them
+                    channel_normalized = np.ones_like(channel_data)
                 else:
+                    # All zeros - keep as zeros
                     channel_normalized = np.zeros_like(channel_data)
 
                 # Apply color (multiply by RGB color values)
@@ -515,7 +519,11 @@ def create_mip_visualization(
             ch_max = mip_computed.max()
             if ch_max > ch_min:
                 normalized = (mip_computed - ch_min) / (ch_max - ch_min)
+            elif ch_max > 0:
+                # Uniform non-zero values - keep them
+                normalized = np.ones_like(mip_computed)
             else:
+                # All zeros - keep as zeros
                 normalized = np.zeros_like(mip_computed)
 
             # Apply first color
