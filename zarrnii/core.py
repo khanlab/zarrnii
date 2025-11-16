@@ -1446,12 +1446,29 @@ class ZarrNii:
                             zarr_shape = zarr_array.shape
                             dask_shape = self.shape
 
-                            # Check if shapes match
-                            if zarr_shape != dask_shape:
+                            # Check if spatial dimensions match
+                            # Extract indices of spatial dimensions (x, y, z)
+                            spatial_dims = ["x", "y", "z"]
+                            spatial_indices = [
+                                i
+                                for i, dim in enumerate(self.dims)
+                                if dim.lower() in spatial_dims
+                            ]
+
+                            # Compare only spatial dimensions
+                            zarr_spatial_shape = tuple(
+                                zarr_shape[i] for i in spatial_indices
+                            )
+                            dask_spatial_shape = tuple(
+                                dask_shape[i] for i in spatial_indices
+                            )
+
+                            if zarr_spatial_shape != dask_spatial_shape:
                                 raise ValueError(
                                     f"Cannot use direct zarr access for apply_transform: "
                                     f"the floating image has lazy operations that change its shape. "
                                     f"Zarr array shape: {zarr_shape}, but dask array shape: {dask_shape}. "
+                                    f"Spatial dimensions - Zarr: {zarr_spatial_shape}, Dask: {dask_spatial_shape}. "
                                     f"This typically happens when using downsample levels beyond what exists "
                                     f"in the zarr store, or when using downsample_near_isotropic option. "
                                     f"To fix this, save the floating image to an intermediate zarr file first:\n"

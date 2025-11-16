@@ -343,3 +343,43 @@ def test_zarrnii_valid_shape_no_error():
         # Verify result
         assert isinstance(result, ZarrNii)
         assert result.shape == ref_znimg.shape
+
+
+def test_zarrnii_apply_transform_channel_selection():
+    """Test that channel selection doesn't break zarr-backed apply_transform.
+
+    This tests the fix for the issue where shape validation was checking
+    all dimensions including channels, but should only check spatial dims.
+    """
+    # Create a temporary zarr store with multi-channel OME-NGFF metadata
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store_path = os.path.join(tmpdir, "test.zarr")
+
+        # Create data with 3 channels and save using to_ome_zarr
+        data = da.random.random((3, 20, 20, 20), chunks=(1, 10, 10, 10))
+        data = data.astype("f4")
+        temp_znimg = ZarrNii.from_darr(data)
+        temp_znimg.to_ome_zarr(store_path, max_layer=1)
+
+        # Load back from zarr store
+        flo_znimg = ZarrNii.from_ome_zarr(store_path, level=0)
+
+        # Simulate channel selection by slicing the data array
+        # This changes the channel dimension but keeps spatial dims the same
+        flo_znimg.ngff_image.data = flo_znimg.data[0:1, :, :, :]
+
+        # Verify the shape changed for channels but spatial dims are the same
+        assert flo_znimg.shape == (1, 20, 20, 20)
+
+        # Create reference image
+        ref_data = da.zeros((1, 10, 10, 10), chunks=(1, 5, 5, 5), dtype="f4")
+        ref_znimg = ZarrNii.from_darr(ref_data)
+
+        # Apply identity transform
+        # This should work now that we only check spatial dimensions
+        transform = AffineTransform.identity()
+        result = flo_znimg.apply_transform(transform, ref_znimg=ref_znimg)
+
+        # Verify result
+        assert isinstance(result, ZarrNii)
+        assert result.shape == ref_znimg.shape
