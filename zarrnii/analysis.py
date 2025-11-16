@@ -270,7 +270,12 @@ def create_mip_visualization(
     plane: str = "axial",
     slab_thickness_um: float = 100.0,
     slab_spacing_um: float = 100.0,
-    channel_colors: Optional[List[Union[str, Tuple[float, float, float]]]] = None,
+    channel_colors: Optional[
+        List[Union[str, Tuple[float, float, float], Tuple[float, float, float, float]]]
+    ] = None,
+    channel_ranges: Optional[List[Tuple[float, float]]] = None,
+    omero_metadata: Optional[Any] = None,
+    channel_labels: Optional[List[str]] = None,
     return_slabs: bool = False,
     scale_units: str = "mm",
 ) -> Union[List[np.ndarray], Tuple[List[np.ndarray], List[dict]]]:
@@ -296,7 +301,23 @@ def create_mip_visualization(
         channel_colors: Optional list of colors for each channel. Each color can be:
             - Color name string (e.g., 'red', 'green', 'blue')
             - RGB tuple with values 0-1 (e.g., (1.0, 0.0, 0.0) for red)
-            If None, uses default colors: ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
+            - RGBA tuple with values 0-1 (e.g., (1.0, 0.0, 0.0, 0.5) for
+                semi-transparent red)
+            If None and omero_metadata is provided, uses OMERO channel
+                colors.
+            Otherwise uses default colors: ['red', 'green', 'blue', 'cyan',
+                'magenta', 'yellow']
+        channel_ranges: Optional list of (min, max) tuples specifying
+            intensity range for each channel. If None and omero_metadata is
+            provided, uses OMERO window settings. Otherwise uses auto-scaling
+            based on data min/max.
+        omero_metadata: Optional OMERO metadata object containing channel
+            information. Used to extract default colors and intensity ranges
+            when channel_colors or channel_ranges are not explicitly provided.
+        channel_labels: Optional list of channel label names to use for
+            selecting channels from OMERO metadata. If provided, channels are
+            filtered and reordered to match these labels. Requires
+            omero_metadata to be provided.
         return_slabs: If True, returns tuple of (mip_list, slab_info_list) where
             slab_info_list contains metadata about each slab. If False (default),
             returns only the mip_list.
@@ -307,13 +328,15 @@ def create_mip_visualization(
 
     Returns:
         If return_slabs is False (default):
-            List of 2D numpy arrays, each containing an RGB MIP visualization for one slab.
-            Each array has shape (height, width, 3) with RGB values in range [0, 1].
+            List of 2D numpy arrays, each containing an RGB MIP
+            visualization for one slab. Each array has shape (height, width,
+            3) with RGB values in range [0, 1].
 
         If return_slabs is True:
             Tuple of (mip_list, slab_info_list) where:
             - mip_list: List of 2D RGB arrays as described above
-            - slab_info_list: List of dictionaries with slab metadata including:
+            - slab_info_list: List of dictionaries with slab metadata
+                including:
                 - 'start_um': Start position of slab in microns
                 - 'end_um': End position of slab in microns
                 - 'center_um': Center position of slab in microns
@@ -323,7 +346,12 @@ def create_mip_visualization(
     Raises:
         ValueError: If plane is not one of 'axial', 'coronal', 'sagittal'
         ValueError: If required spatial dimensions are not in dims
-        ValueError: If number of channels exceeds number of colors and channel_colors not provided
+        ValueError: If number of channels exceeds number of colors and
+            channel_colors not provided
+        ValueError: If channel_labels specified but omero_metadata not
+            provided
+        ValueError: If channel_labels contains labels not found in
+            omero_metadata
 
     Examples:
         >>> import dask.array as da
@@ -334,13 +362,14 @@ def create_mip_visualization(
         >>> dims = ['c', 'z', 'y', 'x']
         >>> scale = {'z': 0.002, 'y': 0.001, 'x': 0.001}  # 2mm z, 1mm x/y in mm
         >>>
-        >>> # Create axial MIPs with 100 micron slabs (scale in mm by default)
+        >>> # Create axial MIPs with custom intensity ranges and 100 micron slabs (scale in mm by default)
         >>> mips = create_mip_visualization(
         ...     data, dims, scale,
         ...     plane='axial',
         ...     slab_thickness_um=100.0,
         ...     slab_spacing_um=100.0,
-        ...     channel_colors=['red', 'green']
+        ...     channel_colors=['red', 'green'],
+        ...     channel_ranges=[(0.0, 0.8), (0.2, 1.0)]
         ... )
         >>>
         >>> # Or if scale is already in microns, specify scale_units='um'
@@ -354,9 +383,19 @@ def create_mip_visualization(
         >>>
         >>> # Get slab metadata
         >>> mips, slab_info = create_mip_visualization(
+        >>> # Use OMERO metadata for colors and ranges
+        >>> mips = create_mip_visualization(
         ...     data, dims, scale,
-        ...     plane='coronal',
-        ...     return_slabs=True
+        ...     plane='axial',
+        ...     omero_metadata=omero,
+        ...     channel_labels=['DAPI', 'GFP']
+        ... )
+        >>>
+        >>> # Use alpha transparency
+        >>> mips = create_mip_visualization(
+        ...     data, dims, scale,
+        ...     plane='axial',
+        ...     channel_colors=[(1.0, 0.0, 0.0, 0.7), (0.0, 1.0, 0.0, 0.5)]
         ... )
     """
     # Validate plane
@@ -403,7 +442,134 @@ def create_mip_visualization(
     else:
         n_channels = 1
 
-    # Set up default colors if not provided
+    # Handle channel_labels if provided
+    channel_indices = None
+    if channel_labels is not None:
+        if omero_metadata is None:
+            raise ValueError(
+                "channel_labels specified but omero_metadata not provided. "
+                "OMERO metadata is required to map channel labels to indices."
+            )
+        if not hasattr(omero_metadata, "channels"):
+            raise ValueError(
+                "omero_metadata does not have 'channels' attribute. "
+                "Please provide valid OMERO metadata."
+            )
+
+        # Extract channel labels from OMERO metadata
+        omero_channels = omero_metadata.channels
+        available_labels = []
+        for ch in omero_channels:
+            if isinstance(ch, dict):
+                available_labels.append(ch.get("label", ""))
+            else:
+                available_labels.append(getattr(ch, "label", ""))
+
+        # Map requested labels to indices
+        channel_indices = []
+        for label in channel_labels:
+            try:
+                idx = available_labels.index(label)
+                channel_indices.append(idx)
+            except ValueError:
+                raise ValueError(
+                    f"Channel label '{label}' not found in OMERO metadata. "
+                    f"Available labels: {available_labels}"
+                )
+
+        # Update n_channels to match requested channels
+        n_channels = len(channel_indices)
+
+    # Extract colors from OMERO metadata if not provided
+    if (
+        channel_colors is None
+        and omero_metadata is not None
+        and hasattr(omero_metadata, "channels")
+    ):
+        omero_channels = omero_metadata.channels
+        channel_colors = []
+
+        # Get indices to use (either filtered by channel_labels or all)
+        indices_to_use = (
+            channel_indices
+            if channel_indices is not None
+            else range(len(omero_channels))
+        )
+
+        for idx in indices_to_use:
+            if idx < len(omero_channels):
+                ch = omero_channels[idx]
+                # Extract color from OMERO channel
+                if isinstance(ch, dict):
+                    color_hex = ch.get("color", "FFFFFF")
+                else:
+                    color_hex = getattr(ch, "color", "FFFFFF")
+
+                # Convert hex color to RGB tuple
+                if color_hex:
+                    # Remove leading # if present
+                    color_hex = color_hex.lstrip("#")
+                    # Convert hex to RGB (0-1 range)
+                    r = int(color_hex[0:2], 16) / 255.0
+                    g = int(color_hex[2:4], 16) / 255.0
+                    b = int(color_hex[4:6], 16) / 255.0
+                    channel_colors.append((r, g, b))
+                else:
+                    # Fallback to default colors
+                    default_colors = [
+                        "red",
+                        "green",
+                        "blue",
+                        "cyan",
+                        "magenta",
+                        "yellow",
+                    ]
+                    channel_colors.append(default_colors[idx % len(default_colors)])
+
+    # Extract intensity ranges from OMERO metadata if not provided
+    if (
+        channel_ranges is None
+        and omero_metadata is not None
+        and hasattr(omero_metadata, "channels")
+    ):
+        omero_channels = omero_metadata.channels
+        channel_ranges = []
+
+        # Get indices to use (either filtered by channel_labels or all)
+        indices_to_use = (
+            channel_indices
+            if channel_indices is not None
+            else range(len(omero_channels))
+        )
+
+        for idx in indices_to_use:
+            if idx < len(omero_channels):
+                ch = omero_channels[idx]
+                # Extract window from OMERO channel
+                if isinstance(ch, dict):
+                    window = ch.get("window", {})
+                    if isinstance(window, dict):
+                        window_start = window.get("start", None)
+                        window_end = window.get("end", None)
+                    else:
+                        window_start = getattr(window, "start", None)
+                        window_end = getattr(window, "end", None)
+                else:
+                    window = getattr(ch, "window", None)
+                    if window is not None:
+                        window_start = getattr(window, "start", None)
+                        window_end = getattr(window, "end", None)
+                    else:
+                        window_start = None
+                        window_end = None
+
+                # Use window range if available
+                if window_start is not None and window_end is not None:
+                    channel_ranges.append((float(window_start), float(window_end)))
+                else:
+                    channel_ranges.append(None)  # Use auto-scaling
+
+    # Set up default colors if still not provided
     if channel_colors is None:
         default_colors = ["red", "green", "blue", "cyan", "magenta", "yellow"]
         if n_channels > len(default_colors):
@@ -417,15 +583,24 @@ def create_mip_visualization(
             f"Provided {len(channel_colors)} colors but image has {n_channels} channels"
         )
 
-    # Convert color names to RGB tuples
-    def color_to_rgb(color):
-        """Convert color name or tuple to RGB tuple."""
+    # Validate channel_ranges if provided
+    if channel_ranges is not None:
+        if len(channel_ranges) < n_channels:
+            raise ValueError(
+                f"Provided {len(channel_ranges)} intensity ranges but image has "
+                f"{n_channels} channels"
+            )
+
+    # Convert color names to RGBA tuples (with alpha support)
+    def color_to_rgba(color):
+        """Convert color name or tuple to RGBA tuple."""
         if isinstance(color, str):
             # Import matplotlib for color conversion
             try:
                 import matplotlib.colors as mcolors
 
-                return mcolors.to_rgb(color)
+                rgb = mcolors.to_rgb(color)
+                return rgb + (1.0,)  # Add full opacity
             except ImportError:
                 # Fallback to basic colors if matplotlib not available
                 basic_colors = {
@@ -438,15 +613,24 @@ def create_mip_visualization(
                     "white": (1.0, 1.0, 1.0),
                 }
                 if color.lower() in basic_colors:
-                    return basic_colors[color.lower()]
+                    rgb = basic_colors[color.lower()]
+                    return rgb + (1.0,)  # Add full opacity
                 else:
                     raise ValueError(
                         f"Color '{color}' not recognized. Install matplotlib for "
                         f"full color support or use: {list(basic_colors.keys())}"
                     )
-        return tuple(color)
+        # Handle tuple colors (RGB or RGBA)
+        if len(color) == 3:
+            return color + (1.0,)  # Add full opacity to RGB
+        elif len(color) == 4:
+            return tuple(color)  # Already RGBA
+        else:
+            raise ValueError(
+                f"Color tuple must have 3 (RGB) or 4 (RGBA) values, got {len(color)}"
+            )
 
-    rgb_colors = [color_to_rgb(c) for c in channel_colors]
+    rgba_colors = [color_to_rgba(c) for c in channel_colors]
 
     # Get projection axis index and size
     proj_axis_idx = dims.index(projection_axis)
@@ -504,12 +688,21 @@ def create_mip_visualization(
             # Process each channel and combine with colors
             mip_computed = mip_data.compute()  # Compute dask array
 
-            # Normalize each channel to [0, 1]
-            # Move channel axis to first position for easier iteration
-            channel_axis_after_max = (
-                channel_idx if channel_idx < proj_axis_idx else channel_idx - 1
-            )
-            mip_channels = np.moveaxis(mip_computed, channel_axis_after_max, 0)
+            # If channel_indices is specified, we need to select those channels
+            if channel_indices is not None:
+                # Move channel axis to first position for easier iteration
+                channel_axis_after_max = (
+                    channel_idx if channel_idx < proj_axis_idx else channel_idx - 1
+                )
+                mip_computed = np.moveaxis(mip_computed, channel_axis_after_max, 0)
+                # Select only the requested channels
+                mip_channels = mip_computed[channel_indices]
+            else:
+                # Move channel axis to first position for easier iteration
+                channel_axis_after_max = (
+                    channel_idx if channel_idx < proj_axis_idx else channel_idx - 1
+                )
+                mip_channels = np.moveaxis(mip_computed, channel_axis_after_max, 0)
 
             # Get spatial dimensions after removing projection axis
             spatial_shape = mip_channels.shape[1:]
@@ -520,11 +713,21 @@ def create_mip_visualization(
             # Combine channels with their colors
             for ch_idx in range(n_channels):
                 channel_data = mip_channels[ch_idx]
+
+                # Determine intensity range for normalization
+                if channel_ranges is not None and channel_ranges[ch_idx] is not None:
+                    # Use custom intensity range
+                    ch_min, ch_max = channel_ranges[ch_idx]
+                else:
+                    # Use auto-scaling based on data
+                    ch_min = channel_data.min()
+                    ch_max = channel_data.max()
+
                 # Normalize to [0, 1]
-                ch_min = channel_data.min()
-                ch_max = channel_data.max()
                 if ch_max > ch_min:
                     channel_normalized = (channel_data - ch_min) / (ch_max - ch_min)
+                    # Clip to [0, 1] range in case data extends beyond specified range
+                    channel_normalized = np.clip(channel_normalized, 0.0, 1.0)
                 elif ch_max > 0:
                     # Uniform non-zero values - keep them
                     channel_normalized = np.ones_like(channel_data)
@@ -532,10 +735,13 @@ def create_mip_visualization(
                     # All zeros - keep as zeros
                     channel_normalized = np.zeros_like(channel_data)
 
-                # Apply color (multiply by RGB color values)
-                color_rgb = rgb_colors[ch_idx]
+                # Apply color with alpha blending (multiply by RGBA color values)
+                color_rgba = rgba_colors[ch_idx]
+                alpha = color_rgba[3]  # Extract alpha value
                 for rgb_idx in range(3):
-                    rgb_image[..., rgb_idx] += channel_normalized * color_rgb[rgb_idx]
+                    rgb_image[..., rgb_idx] += (
+                        channel_normalized * color_rgba[rgb_idx] * alpha
+                    )
 
             # Clip to [0, 1] range
             rgb_image = np.clip(rgb_image, 0.0, 1.0)
@@ -543,10 +749,21 @@ def create_mip_visualization(
         else:
             # Single channel - compute and normalize
             mip_computed = mip_data.compute()
-            ch_min = mip_computed.min()
-            ch_max = mip_computed.max()
+
+            # Determine intensity range for normalization
+            if channel_ranges is not None and channel_ranges[0] is not None:
+                # Use custom intensity range
+                ch_min, ch_max = channel_ranges[0]
+            else:
+                # Use auto-scaling based on data
+                ch_min = mip_computed.min()
+                ch_max = mip_computed.max()
+
+            # Normalize to [0, 1]
             if ch_max > ch_min:
                 normalized = (mip_computed - ch_min) / (ch_max - ch_min)
+                # Clip to [0, 1] range in case data extends beyond specified range
+                normalized = np.clip(normalized, 0.0, 1.0)
             elif ch_max > 0:
                 # Uniform non-zero values - keep them
                 normalized = np.ones_like(mip_computed)
@@ -554,11 +771,12 @@ def create_mip_visualization(
                 # All zeros - keep as zeros
                 normalized = np.zeros_like(mip_computed)
 
-            # Apply first color
-            color_rgb = rgb_colors[0]
+            # Apply first color with alpha
+            color_rgba = rgba_colors[0]
+            alpha = color_rgba[3]
             rgb_image = np.zeros(mip_computed.shape + (3,), dtype=np.float32)
             for rgb_idx in range(3):
-                rgb_image[..., rgb_idx] = normalized * color_rgb[rgb_idx]
+                rgb_image[..., rgb_idx] = normalized * color_rgba[rgb_idx] * alpha
 
         mip_list.append(rgb_image)
 

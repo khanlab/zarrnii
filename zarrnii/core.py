@@ -4856,7 +4856,15 @@ class ZarrNii:
         plane: str = "axial",
         slab_thickness_um: float = 100.0,
         slab_spacing_um: float = 100.0,
-        channel_colors: Optional[List[Union[str, Tuple[float, float, float]]]] = None,
+        channel_colors: Optional[
+            List[
+                Union[
+                    str, Tuple[float, float, float], Tuple[float, float, float, float]
+                ]
+            ]
+        ] = None,
+        channel_ranges: Optional[List[Tuple[float, float]]] = None,
+        channel_labels: Optional[List[str]] = None,
         return_slabs: bool = False,
         scale_units: str = "mm",
     ) -> Union[List[np.ndarray], Tuple[List[np.ndarray], List[dict]]]:
@@ -4877,7 +4885,15 @@ class ZarrNii:
             channel_colors: Optional list of colors for each channel. Each color can be:
                 - Color name string (e.g., 'red', 'green', 'blue')
                 - RGB tuple with values 0-1 (e.g., (1.0, 0.0, 0.0) for red)
-                If None, uses default colors: ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
+                - RGBA tuple with values 0-1 (e.g., (1.0, 0.0, 0.0, 0.5) for semi-transparent red)
+                If None and OMERO metadata is available, uses OMERO channel colors.
+                Otherwise uses default colors: ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
+            channel_ranges: Optional list of (min, max) tuples specifying intensity range
+                for each channel. If None and OMERO metadata is available, uses OMERO window
+                settings. Otherwise uses auto-scaling based on data min/max.
+            channel_labels: Optional list of channel label names to use for selecting
+                channels from OMERO metadata. If provided, channels are filtered and
+                reordered to match these labels. Requires OMERO metadata to be available.
             return_slabs: If True, returns tuple of (mip_list, slab_info_list) where
                 slab_info_list contains metadata about each slab. If False (default),
                 returns only the mip_list.
@@ -4901,24 +4917,26 @@ class ZarrNii:
                     - 'end_idx': End index in array coordinates
 
         Examples:
-            >>> # Create axial MIPs with 100 micron slabs
+            >>> # Create axial MIPs with custom intensity ranges
             >>> mips = znimg.create_mip(
             ...     plane='axial',
             ...     slab_thickness_um=100.0,
             ...     slab_spacing_um=100.0,
-            ...     channel_colors=['red', 'green']
+            ...     channel_colors=['red', 'green'],
+            ...     channel_ranges=[(0.0, 1000.0), (0.0, 5000.0)]
             ... )
             >>>
-            >>> # Get slab metadata
-            >>> mips, slab_info = znimg.create_mip(
-            ...     plane='coronal',
-            ...     return_slabs=True
+            >>> # Use OMERO metadata for colors and ranges
+            >>> mips = znimg.create_mip(
+            ...     plane='axial',
+            ...     channel_labels=['DAPI', 'GFP']
             ... )
             >>>
-            >>> # Save MIPs as images
-            >>> import matplotlib.pyplot as plt
-            >>> for i, mip in enumerate(mips):
-            ...     plt.imsave(f'mip_{i}.png', mip)
+            >>> # Use alpha transparency
+            >>> mips = znimg.create_mip(
+            ...     plane='axial',
+            ...     channel_colors=[(1.0, 0.0, 0.0, 0.7), (0.0, 1.0, 0.0, 0.5)]
+            ... )
         """
         from .analysis import create_mip_visualization
 
@@ -4930,6 +4948,9 @@ class ZarrNii:
             slab_thickness_um=slab_thickness_um,
             slab_spacing_um=slab_spacing_um,
             channel_colors=channel_colors,
+            channel_ranges=channel_ranges,
+            omero_metadata=self.omero,
+            channel_labels=channel_labels,
             return_slabs=return_slabs,
             scale_units=scale_units,
         )
