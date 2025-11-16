@@ -136,9 +136,7 @@ class TestComputeCentroidsStandalone:
         affine = np.eye(4)
 
         # Rechunk to smaller chunks
-        centroids = compute_centroids(
-            dask_img, affine, depth=5, rechunk=(25, 25, 25)
-        )
+        centroids = compute_centroids(dask_img, affine, depth=5, rechunk=(25, 25, 25))
 
         assert centroids.shape == (1, 3)
         assert_array_almost_equal(centroids[0], [24.5, 24.5, 24.5], decimal=1)
