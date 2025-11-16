@@ -2,7 +2,7 @@
 Image analysis functions for zarrnii.
 
 This module provides functions for image analysis operations such as
-histogram computation and threshold calculation.
+histogram computation, threshold calculation, and MIP visualization.
 """
 
 from __future__ import annotations
@@ -261,3 +261,272 @@ def compute_otsu_thresholds(
     else:
         # Default: return only thresholds
         return result
+
+
+def create_mip_visualization(
+    image: da.Array,
+    dims: List[str],
+    scale: dict,
+    plane: str = "axial",
+    slab_thickness_um: float = 100.0,
+    slab_spacing_um: float = 100.0,
+    channel_colors: Optional[List[Union[str, Tuple[float, float, float]]]] = None,
+    return_slabs: bool = False,
+) -> Union[List[np.ndarray], Tuple[List[np.ndarray], List[dict]]]:
+    """
+    Create Maximum Intensity Projection (MIP) visualizations across slabs.
+
+    This function generates MIP visualizations by dividing the volume into slabs
+    along the specified plane, computing the maximum intensity projection within
+    each slab using dask operations, then rendering with channel-specific colors.
+
+    Args:
+        image: Input dask array image with shape matching dims. Should include
+            spatial dimensions (x, y, z) and optionally channel dimension (c).
+        dims: List of dimension names matching image shape (e.g., ['c', 'z', 'y', 'x'])
+        scale: Dictionary mapping dimension names to spacing values in microns
+            (e.g., {'x': 1.0, 'y': 1.0, 'z': 2.0})
+        plane: Projection plane - one of 'axial', 'coronal', 'sagittal'.
+            - 'axial': projects along z-axis (creates xy slices)
+            - 'coronal': projects along y-axis (creates xz slices)
+            - 'sagittal': projects along x-axis (creates yz slices)
+        slab_thickness_um: Thickness of each slab in microns (default: 100.0)
+        slab_spacing_um: Spacing between slab centers in microns (default: 100.0)
+        channel_colors: Optional list of colors for each channel. Each color can be:
+            - Color name string (e.g., 'red', 'green', 'blue')
+            - RGB tuple with values 0-1 (e.g., (1.0, 0.0, 0.0) for red)
+            If None, uses default colors: ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
+        return_slabs: If True, returns tuple of (mip_list, slab_info_list) where
+            slab_info_list contains metadata about each slab. If False (default),
+            returns only the mip_list.
+
+    Returns:
+        If return_slabs is False (default):
+            List of 2D numpy arrays, each containing an RGB MIP visualization for one slab.
+            Each array has shape (height, width, 3) with RGB values in range [0, 1].
+
+        If return_slabs is True:
+            Tuple of (mip_list, slab_info_list) where:
+            - mip_list: List of 2D RGB arrays as described above
+            - slab_info_list: List of dictionaries with slab metadata including:
+                - 'start_um': Start position of slab in microns
+                - 'end_um': End position of slab in microns
+                - 'center_um': Center position of slab in microns
+                - 'start_idx': Start index in array coordinates
+                - 'end_idx': End index in array coordinates
+
+    Raises:
+        ValueError: If plane is not one of 'axial', 'coronal', 'sagittal'
+        ValueError: If required spatial dimensions are not in dims
+        ValueError: If number of channels exceeds number of colors and channel_colors not provided
+
+    Examples:
+        >>> import dask.array as da
+        >>> from zarrnii.analysis import create_mip_visualization
+        >>>
+        >>> # Create test data with 2 channels
+        >>> data = da.random.random((2, 100, 100, 100), chunks=(1, 50, 50, 50))
+        >>> dims = ['c', 'z', 'y', 'x']
+        >>> scale = {'z': 2.0, 'y': 1.0, 'x': 1.0}  # 2 micron z-spacing
+        >>>
+        >>> # Create axial MIPs with 100 micron slabs
+        >>> mips = create_mip_visualization(
+        ...     data, dims, scale,
+        ...     plane='axial',
+        ...     slab_thickness_um=100.0,
+        ...     slab_spacing_um=100.0,
+        ...     channel_colors=['red', 'green']
+        ... )
+        >>>
+        >>> # Get slab metadata
+        >>> mips, slab_info = create_mip_visualization(
+        ...     data, dims, scale,
+        ...     plane='coronal',
+        ...     return_slabs=True
+        ... )
+    """
+    # Validate plane
+    valid_planes = ["axial", "coronal", "sagittal"]
+    if plane not in valid_planes:
+        raise ValueError(f"plane must be one of {valid_planes}, got '{plane}'")
+
+    # Map plane to axis dimension
+    plane_axis_map = {
+        "axial": "z",  # projects along z, shows xy
+        "coronal": "y",  # projects along y, shows xz
+        "sagittal": "x",  # projects along x, shows yz
+    }
+    projection_axis = plane_axis_map[plane]
+
+    # Validate that required dimensions exist
+    if projection_axis not in dims:
+        raise ValueError(
+            f"Projection axis '{projection_axis}' not found in dims {dims}"
+        )
+
+    # Check if image has channel dimension
+    has_channel = "c" in dims
+    if has_channel:
+        channel_idx = dims.index("c")
+        n_channels = image.shape[channel_idx]
+    else:
+        n_channels = 1
+
+    # Set up default colors if not provided
+    if channel_colors is None:
+        default_colors = ["red", "green", "blue", "cyan", "magenta", "yellow"]
+        if n_channels > len(default_colors):
+            raise ValueError(
+                f"Image has {n_channels} channels but only {len(default_colors)} "
+                f"default colors. Please provide channel_colors parameter."
+            )
+        channel_colors = default_colors[:n_channels]
+    elif len(channel_colors) < n_channels:
+        raise ValueError(
+            f"Provided {len(channel_colors)} colors but image has {n_channels} channels"
+        )
+
+    # Convert color names to RGB tuples
+    def color_to_rgb(color):
+        """Convert color name or tuple to RGB tuple."""
+        if isinstance(color, str):
+            # Import matplotlib for color conversion
+            try:
+                import matplotlib.colors as mcolors
+
+                return mcolors.to_rgb(color)
+            except ImportError:
+                # Fallback to basic colors if matplotlib not available
+                basic_colors = {
+                    "red": (1.0, 0.0, 0.0),
+                    "green": (0.0, 1.0, 0.0),
+                    "blue": (0.0, 0.0, 1.0),
+                    "cyan": (0.0, 1.0, 1.0),
+                    "magenta": (1.0, 0.0, 1.0),
+                    "yellow": (1.0, 1.0, 0.0),
+                    "white": (1.0, 1.0, 1.0),
+                }
+                if color.lower() in basic_colors:
+                    return basic_colors[color.lower()]
+                else:
+                    raise ValueError(
+                        f"Color '{color}' not recognized. Install matplotlib for "
+                        f"full color support or use: {list(basic_colors.keys())}"
+                    )
+        return tuple(color)
+
+    rgb_colors = [color_to_rgb(c) for c in channel_colors]
+
+    # Get projection axis index and size
+    proj_axis_idx = dims.index(projection_axis)
+    proj_axis_size = image.shape[proj_axis_idx]
+    proj_axis_spacing = scale.get(projection_axis, 1.0)
+
+    # Calculate total extent in microns
+    total_extent_um = proj_axis_size * proj_axis_spacing
+
+    # Calculate slab parameters
+    slab_thickness_idx = int(np.ceil(slab_thickness_um / proj_axis_spacing))
+    slab_spacing_idx = int(np.round(slab_spacing_um / proj_axis_spacing))
+
+    # Generate slab positions
+    slab_centers_idx = []
+    current_pos = slab_thickness_idx // 2  # Start from half slab thickness
+    while current_pos < proj_axis_size:
+        slab_centers_idx.append(current_pos)
+        current_pos += slab_spacing_idx
+
+    # If no slabs fit, create at least one centered slab
+    if len(slab_centers_idx) == 0:
+        slab_centers_idx = [proj_axis_size // 2]
+
+    # Generate MIPs for each slab
+    mip_list = []
+    slab_info_list = []
+
+    for center_idx in slab_centers_idx:
+        # Calculate slab bounds
+        half_thickness = slab_thickness_idx // 2
+        start_idx = max(0, center_idx - half_thickness)
+        end_idx = min(proj_axis_size, center_idx + half_thickness)
+
+        # Store slab info
+        slab_info = {
+            "start_um": start_idx * proj_axis_spacing,
+            "end_um": end_idx * proj_axis_spacing,
+            "center_um": center_idx * proj_axis_spacing,
+            "start_idx": start_idx,
+            "end_idx": end_idx,
+        }
+        slab_info_list.append(slab_info)
+
+        # Extract slab from image using slice along projection axis
+        slices = [slice(None)] * len(dims)
+        slices[proj_axis_idx] = slice(start_idx, end_idx)
+        slab_data = image[tuple(slices)]
+
+        # Compute MIP along projection axis
+        mip_data = slab_data.max(axis=proj_axis_idx)
+
+        # Now mip_data should have spatial dimensions (and channel if present)
+        # Shape after max: depends on dims without projection axis
+
+        # Create RGB visualization
+        if has_channel:
+            # Process each channel and combine with colors
+            mip_computed = mip_data.compute()  # Compute dask array
+
+            # Normalize each channel to [0, 1]
+            # Move channel axis to first position for easier iteration
+            channel_axis_after_max = (
+                channel_idx if channel_idx < proj_axis_idx else channel_idx - 1
+            )
+            mip_channels = np.moveaxis(mip_computed, channel_axis_after_max, 0)
+
+            # Get spatial dimensions after removing projection axis
+            spatial_shape = mip_channels.shape[1:]
+
+            # Initialize RGB image
+            rgb_image = np.zeros(spatial_shape + (3,), dtype=np.float32)
+
+            # Combine channels with their colors
+            for ch_idx in range(n_channels):
+                channel_data = mip_channels[ch_idx]
+                # Normalize to [0, 1]
+                ch_min = channel_data.min()
+                ch_max = channel_data.max()
+                if ch_max > ch_min:
+                    channel_normalized = (channel_data - ch_min) / (ch_max - ch_min)
+                else:
+                    channel_normalized = np.zeros_like(channel_data)
+
+                # Apply color (multiply by RGB color values)
+                color_rgb = rgb_colors[ch_idx]
+                for rgb_idx in range(3):
+                    rgb_image[..., rgb_idx] += channel_normalized * color_rgb[rgb_idx]
+
+            # Clip to [0, 1] range
+            rgb_image = np.clip(rgb_image, 0.0, 1.0)
+
+        else:
+            # Single channel - compute and normalize
+            mip_computed = mip_data.compute()
+            ch_min = mip_computed.min()
+            ch_max = mip_computed.max()
+            if ch_max > ch_min:
+                normalized = (mip_computed - ch_min) / (ch_max - ch_min)
+            else:
+                normalized = np.zeros_like(mip_computed)
+
+            # Apply first color
+            color_rgb = rgb_colors[0]
+            rgb_image = np.zeros(mip_computed.shape + (3,), dtype=np.float32)
+            for rgb_idx in range(3):
+                rgb_image[..., rgb_idx] = normalized * color_rgb[rgb_idx]
+
+        mip_list.append(rgb_image)
+
+    if return_slabs:
+        return mip_list, slab_info_list
+    else:
+        return mip_list

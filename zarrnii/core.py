@@ -4851,6 +4851,84 @@ class ZarrNii:
             return_figure=return_figure,
         )
 
+    def create_mip(
+        self,
+        plane: str = "axial",
+        slab_thickness_um: float = 100.0,
+        slab_spacing_um: float = 100.0,
+        channel_colors: Optional[List[Union[str, Tuple[float, float, float]]]] = None,
+        return_slabs: bool = False,
+    ) -> Union[List[np.ndarray], Tuple[List[np.ndarray], List[dict]]]:
+        """
+        Create Maximum Intensity Projection (MIP) visualizations across slabs.
+
+        This method generates MIP visualizations by dividing the volume into slabs
+        along the specified plane, computing the maximum intensity projection within
+        each slab, then rendering with channel-specific colors.
+
+        Args:
+            plane: Projection plane - one of 'axial', 'coronal', 'sagittal'.
+                - 'axial': projects along z-axis (creates xy slices)
+                - 'coronal': projects along y-axis (creates xz slices)
+                - 'sagittal': projects along x-axis (creates yz slices)
+            slab_thickness_um: Thickness of each slab in microns (default: 100.0)
+            slab_spacing_um: Spacing between slab centers in microns (default: 100.0)
+            channel_colors: Optional list of colors for each channel. Each color can be:
+                - Color name string (e.g., 'red', 'green', 'blue')
+                - RGB tuple with values 0-1 (e.g., (1.0, 0.0, 0.0) for red)
+                If None, uses default colors: ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
+            return_slabs: If True, returns tuple of (mip_list, slab_info_list) where
+                slab_info_list contains metadata about each slab. If False (default),
+                returns only the mip_list.
+
+        Returns:
+            If return_slabs is False (default):
+                List of 2D numpy arrays, each containing an RGB MIP visualization for one slab.
+                Each array has shape (height, width, 3) with RGB values in range [0, 1].
+
+            If return_slabs is True:
+                Tuple of (mip_list, slab_info_list) where:
+                - mip_list: List of 2D RGB arrays as described above
+                - slab_info_list: List of dictionaries with slab metadata including:
+                    - 'start_um': Start position of slab in microns
+                    - 'end_um': End position of slab in microns
+                    - 'center_um': Center position of slab in microns
+                    - 'start_idx': Start index in array coordinates
+                    - 'end_idx': End index in array coordinates
+
+        Examples:
+            >>> # Create axial MIPs with 100 micron slabs
+            >>> mips = znimg.create_mip(
+            ...     plane='axial',
+            ...     slab_thickness_um=100.0,
+            ...     slab_spacing_um=100.0,
+            ...     channel_colors=['red', 'green']
+            ... )
+            >>>
+            >>> # Get slab metadata
+            >>> mips, slab_info = znimg.create_mip(
+            ...     plane='coronal',
+            ...     return_slabs=True
+            ... )
+            >>>
+            >>> # Save MIPs as images
+            >>> import matplotlib.pyplot as plt
+            >>> for i, mip in enumerate(mips):
+            ...     plt.imsave(f'mip_{i}.png', mip)
+        """
+        from .analysis import create_mip_visualization
+
+        return create_mip_visualization(
+            image=self.darr,
+            dims=self.dims,
+            scale=self.scale,
+            plane=plane,
+            slab_thickness_um=slab_thickness_um,
+            slab_spacing_um=slab_spacing_um,
+            channel_colors=channel_colors,
+            return_slabs=return_slabs,
+        )
+
     def apply_scaled_processing(
         self,
         plugin,

@@ -1,3 +1,4 @@
+from .analysis import create_mip_visualization
 from .atlas import ZarrNiiAtlas
 from .core import (
     MetadataInvalidError,
@@ -15,4 +16,5 @@ __all__ = [
     "MetadataInvalidError",
     "save_ngff_image",
     "save_ngff_image_with_ome_zarr",
+    "create_mip_visualization",
 ]
