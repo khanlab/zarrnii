@@ -18,6 +18,7 @@ import ngff_zarr as nz
 import numpy as np
 import pandas as pd
 from attrs import define, field
+from scipy.interpolate import interpn
 
 try:
     import templateflow.api as tflow
@@ -1176,3 +1177,136 @@ class ZarrNiiAtlas(ZarrNii):
             centers.append(center)
 
         return centers
+
+    def label_centroids(
+        self,
+        centroids: np.ndarray,
+        include_names: bool = True,
+    ) -> pd.DataFrame:
+        """Map centroids to atlas labels using nearest neighbor interpolation.
+
+        This method takes a set of centroids (typically from compute_centroids)
+        and determines which atlas region each centroid falls into. It uses
+        nearest neighbor interpolation to assign labels, making it robust to
+        small coordinate mismatches.
+
+        Args:
+            centroids: Nx3 numpy array of centroid coordinates in physical space
+                (typically output from compute_centroids). Each row is [x, y, z]
+                in physical/world coordinates (mm). Can also be an empty array (0, 3).
+            include_names: If True, includes region names from the labels dataframe
+                in the output (default: True).
+
+        Returns:
+            pandas.DataFrame with columns:
+                - z, y, x: Physical coordinates (in mm) of each centroid
+                - label_index: Integer label index from the atlas
+                - name (optional): Region name if include_names=True
+
+        Notes:
+            - Input centroids must be in the same physical space as the atlas
+            - Points outside the atlas bounds receive label_index=0 (background)
+            - Uses scipy.interpolate.interpn with method='nearest' for label lookup
+            - The coordinate order in the output DataFrame is z, y, x (matching
+              the problem statement), while input centroids are x, y, z
+
+        Examples:
+            >>> # Compute centroids from a segmentation
+            >>> centroids = binary_seg.compute_centroids()
+            >>>
+            >>> # Map centroids to atlas labels
+            >>> labeled_df = atlas.label_centroids(centroids)
+            >>> print(labeled_df)
+            >>>
+            >>> # Filter to specific regions
+            >>> hippocampus_points = labeled_df[
+            ...     labeled_df['name'] == 'Hippocampus'
+            ... ]
+        """
+        # Handle empty centroids array
+        if centroids.shape[0] == 0:
+            columns = ["z", "y", "x", "label_index"]
+            if include_names:
+                columns.append("name")
+            return pd.DataFrame(columns=columns)
+
+        # Validate input shape
+        if centroids.ndim != 2 or centroids.shape[1] != 3:
+            raise ValueError(
+                f"centroids must be Nx3 array, got shape {centroids.shape}"
+            )
+
+        # Get atlas data and affine
+        dseg_data = self.dseg.data
+        if hasattr(dseg_data, "compute"):
+            dseg_data = dseg_data.compute()
+
+        affine_matrix = self.dseg.affine.matrix
+
+        # Convert physical coordinates to voxel coordinates
+        # centroids are in (x, y, z) order
+        # Create homogeneous coordinates
+        n_points = centroids.shape[0]
+        centroids_homogeneous = np.column_stack(
+            [centroids, np.ones((n_points, 1), dtype=np.float64)]
+        )
+
+        # Apply inverse affine transform
+        affine_inv = np.linalg.inv(affine_matrix)
+        voxel_coords_homogeneous = centroids_homogeneous @ affine_inv.T
+        voxel_coords = voxel_coords_homogeneous[:, :3]
+
+        # Create grid for interpn
+        # Grid should be in the order of the data array dimensions
+        # For ZarrNii, this is typically (z, y, x) or (c, z, y, x)
+        # Remove channel dimension if present
+        if dseg_data.ndim == 4:
+            dseg_data = dseg_data[0]  # Remove channel dimension
+
+        # Create coordinate grids for each dimension
+        # interpn expects a tuple of 1D arrays representing the grid coordinates
+        shape = dseg_data.shape
+        grid = tuple(np.arange(s) for s in shape)
+
+        # The inverse affine transform already converted physical (x, y, z) coordinates
+        # to voxel coordinates in the order matching the data array dimensions (z, y, x).
+        # So voxel_coords is already in the correct order for interpn!
+
+        # Use interpn to get labels at the centroid locations
+        label_at_points = interpn(
+            grid,
+            dseg_data,
+            voxel_coords,  # Already in (z, y, x) order from affine inverse
+            method="nearest",
+            bounds_error=False,
+            fill_value=0,
+        )
+
+        # Convert to integer labels
+        label_at_points = label_at_points.astype(int)
+
+        # Create DataFrame with z, y, x columns (as specified in problem statement)
+        # centroids are in (x, y, z) order, so we need to reorder for output
+        df_data = {
+            "z": centroids[:, 2],  # z from centroids
+            "y": centroids[:, 1],  # y from centroids
+            "x": centroids[:, 0],  # x from centroids
+            "label_index": label_at_points,
+        }
+
+        # Add region names if requested
+        if include_names and self.labels_df is not None:
+            # Create a lookup from label_index to name
+            label_to_name = dict(
+                zip(
+                    self.labels_df[self.label_column],
+                    self.labels_df[self.name_column],
+                )
+            )
+            # Map labels to names, use 'Unknown' for labels not in lookup table
+            df_data["name"] = [
+                label_to_name.get(label, f"Unknown_Label_{label}")
+                for label in label_at_points
+            ]
+
+        return pd.DataFrame(df_data)
