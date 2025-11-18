@@ -675,7 +675,7 @@ class ZarrNiiAtlas(ZarrNii):
         image: ZarrNii,
         aggregation_func: str = "mean",
         background_label: int = 0,
-        column_suffix: str = "value",
+        column_name: str = "value",
     ) -> pd.DataFrame:
         """Aggregate image values by atlas regions.
 
@@ -683,10 +683,10 @@ class ZarrNiiAtlas(ZarrNii):
             image: Image to aggregate (must be compatible with atlas)
             aggregation_func: Aggregation function ('mean', 'sum', 'std', 'median', 'min', 'max')
             background_label: Label value to treat as background (excluded from results)
-            column_suffix: String suffix to append to column name. Name will be {agg_func}_{col_suffix}.
+            column_name: String to use for column name.
         Returns:
-            DataFrame with columns: index, name, {aggregation_func}_{column_suffix}, volume_mm3
-            (e.g., with defaults: index, name, mean_value, volume_mm3)
+            DataFrame with columns: index, name, {column_name}, volume
+            (e.g., with defaults: index, name, mean_value, volume)
 
         Raises:
             ValueError: If image and atlas are incompatible
@@ -762,11 +762,6 @@ class ZarrNiiAtlas(ZarrNii):
                         "Supported: mean, sum, std, median, min, max"
                     )
 
-            column_name = (
-                aggregation_func
-                if column_suffix is None
-                else f"{aggregation_func}_{column_suffix}"
-            )
 
             # Get region info
             try:
@@ -783,7 +778,7 @@ class ZarrNiiAtlas(ZarrNii):
                     self.label_column: int(label),
                     self.name_column: region_name,
                     column_name: agg_value,
-                    "volume_mm3": volume,
+                    "volume": volume,
                 }
             )
 
@@ -1198,17 +1193,17 @@ class ZarrNiiAtlas(ZarrNii):
                 in the output (default: True).
 
         Returns:
-            pandas.DataFrame with columns:
+            tuple of: 
+            centroids pandas.DataFrame with columns:
                 - z, y, x: Physical coordinates (in mm) of each centroid
-                - label_index: Integer label index from the atlas
+                - index: Integer label index from the atlas
                 - name (optional): Region name if include_names=True
+            counts pandas.DataFrame with columns index, name, and count
 
         Notes:
             - Input centroids must be in the same physical space as the atlas
-            - Points outside the atlas bounds receive label_index=0 (background)
+            - Points outside the atlas bounds receive index=0 (background)
             - Uses scipy.interpolate.interpn with method='nearest' for label lookup
-            - The coordinate order in the output DataFrame is z, y, x (matching
-              the problem statement), while input centroids are x, y, z
 
         Examples:
             >>> # Compute centroids from a segmentation
@@ -1225,7 +1220,7 @@ class ZarrNiiAtlas(ZarrNii):
         """
         # Handle empty centroids array
         if centroids.shape[0] == 0:
-            columns = ["z", "y", "x", "label_index"]
+            columns = ["x", "y", "z", "index"]
             if include_names:
                 columns.append("name")
             return pd.DataFrame(columns=columns)
@@ -1269,14 +1264,14 @@ class ZarrNiiAtlas(ZarrNii):
         grid = tuple(np.arange(s) for s in shape)
 
         # The inverse affine transform already converted physical (x, y, z) coordinates
-        # to voxel coordinates in the order matching the data array dimensions (z, y, x).
+        # to voxel coordinates in the order matching the data array axes_order.
         # So voxel_coords is already in the correct order for interpn!
 
         # Use interpn to get labels at the centroid locations
         label_at_points = interpn(
             grid,
             dseg_data,
-            voxel_coords,  # Already in (z, y, x) order from affine inverse
+            voxel_coords,  
             method="nearest",
             bounds_error=False,
             fill_value=0,
@@ -1288,15 +1283,15 @@ class ZarrNiiAtlas(ZarrNii):
         # Create DataFrame with z, y, x columns (as specified in problem statement)
         # centroids are in (x, y, z) order, so we need to reorder for output
         df_data = {
-            "z": centroids[:, 2],  # z from centroids
-            "y": centroids[:, 1],  # y from centroids
             "x": centroids[:, 0],  # x from centroids
-            "label_index": label_at_points,
+            "y": centroids[:, 1],  # y from centroids
+            "z": centroids[:, 2],  # z from centroids
+            "index": label_at_points,
         }
 
         # Add region names if requested
         if include_names and self.labels_df is not None:
-            # Create a lookup from label_index to name
+            # Create a lookup from index to name
             label_to_name = dict(
                 zip(
                     self.labels_df[self.label_column],
@@ -1309,4 +1304,15 @@ class ZarrNiiAtlas(ZarrNii):
                 for label in label_at_points
             ]
 
-        return pd.DataFrame(df_data)
+            df_centroids = pd.DataFrame(df_data)
+
+            df_counts = (
+                df_centroids.groupby(['index', 'name'])
+                  .size()
+                  .reset_index(name='count')
+            )
+
+
+
+
+        return (df_centroids, df_counts)
