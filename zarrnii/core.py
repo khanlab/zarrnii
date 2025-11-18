@@ -1446,12 +1446,29 @@ class ZarrNii:
                             zarr_shape = zarr_array.shape
                             dask_shape = self.shape
 
-                            # Check if shapes match
-                            if zarr_shape != dask_shape:
+                            # Check if spatial dimensions match
+                            # Extract indices of spatial dimensions (x, y, z)
+                            spatial_dims = ["x", "y", "z"]
+                            spatial_indices = [
+                                i
+                                for i, dim in enumerate(self.dims)
+                                if dim.lower() in spatial_dims
+                            ]
+
+                            # Compare only spatial dimensions
+                            zarr_spatial_shape = tuple(
+                                zarr_shape[i] for i in spatial_indices
+                            )
+                            dask_spatial_shape = tuple(
+                                dask_shape[i] for i in spatial_indices
+                            )
+
+                            if zarr_spatial_shape != dask_spatial_shape:
                                 raise ValueError(
                                     f"Cannot use direct zarr access for apply_transform: "
                                     f"the floating image has lazy operations that change its shape. "
                                     f"Zarr array shape: {zarr_shape}, but dask array shape: {dask_shape}. "
+                                    f"Spatial dimensions - Zarr: {zarr_spatial_shape}, Dask: {dask_spatial_shape}. "
                                     f"This typically happens when using downsample levels beyond what exists "
                                     f"in the zarr store, or when using downsample_near_isotropic option. "
                                     f"To fix this, save the floating image to an intermediate zarr file first:\n"
@@ -4955,6 +4972,80 @@ class ZarrNii:
             channel_labels=channel_labels,
             return_slabs=return_slabs,
             scale_units=scale_units,
+    def compute_centroids(
+        self,
+        depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,
+        boundary: str = "none",
+        rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
+    ) -> np.ndarray:
+        """
+        Compute centroids of binary segmentation objects in physical coordinates.
+
+        This method processes the binary image (typically output from a segmentation
+        plugin) to identify connected components and compute their centroids in
+        physical coordinates. It uses dask's map_overlap to efficiently process
+        large images in chunks with overlap to handle objects that span chunk
+        boundaries.
+
+        The input image should be binary (0/1 values) at the highest resolution.
+        The function will:
+        1. Optionally rechunk the data for better processing efficiency
+        2. Add overlap padding to chunks (customizable via depth parameter)
+        3. Within each chunk:
+           - Label connected components using scikit-image
+           - Compute centroids using regionprops
+           - Convert to global voxel coordinates using block offsets
+           - Filter out centroids in overlap regions to avoid duplicates
+           - Convert to physical coordinates using the affine transform
+
+        Args:
+            depth: Number of elements of overlap between chunks. Can be:
+                - int: same depth for all dimensions (default: 10)
+                - tuple: different depth per dimension
+                - dict: mapping dimension index to depth
+            boundary: How to handle boundaries when adding overlap. Options include
+                'none', 'reflect', 'periodic', 'nearest', or constant values.
+                Default is 'none' (no padding at array boundaries).
+            rechunk: Optional rechunking specification before processing. Can be:
+                - int: target chunk size for all dimensions
+                - tuple: target chunk size per dimension
+                - None: use existing chunks (default)
+
+        Returns:
+            numpy.ndarray: Nx3 array of physical coordinates for N detected objects,
+                where each row contains [x, y, z] coordinates in physical space.
+                The array has dtype float64.
+
+        Notes:
+            - This method expects a binary image (e.g., from segment_threshold).
+            - Objects with centroids in overlap regions are filtered to avoid duplicates.
+            - Uses 26-connectivity (connectivity=3) for 3D connected component labeling.
+            - Empty chunks contribute no coordinates to the result.
+            - The result is computed immediately (not lazy).
+
+        Examples:
+            >>> # Apply threshold segmentation and compute centroids
+            >>> binary = znimg.segment_threshold(0.5)
+            >>> centroids = binary.compute_centroids(depth=5)
+            >>> print(f"Found {len(centroids)} objects")
+            >>>
+            >>> # With custom chunking
+            >>> centroids = binary.compute_centroids(
+            ...     depth=15,
+            ...     rechunk=(64, 64, 64)
+            ... )
+            >>>
+            >>> # Save centroids to file
+            >>> np.savetxt('centroids.txt', centroids, fmt='%.6f')
+        """
+        from .analysis import compute_centroids
+
+        return compute_centroids(
+            self.darr,
+            affine=self.affine.matrix,
+            depth=depth,
+            boundary=boundary,
+            rechunk=rechunk,
         )
 
     def apply_scaled_processing(
