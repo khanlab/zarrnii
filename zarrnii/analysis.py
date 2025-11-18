@@ -10,7 +10,9 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dask.array as da
+
 import numpy as np
+
 from skimage.filters import threshold_multiotsu
 from skimage.measure import label, regionprops
 
@@ -331,7 +333,9 @@ def compute_centroids(
         >>> centroids = compute_centroids(binary_seg, affine, depth=5)
         >>> print(f"Found {len(centroids)} objects with shape {centroids.shape}")
     """
-    # Import AffineTransform to handle both numpy arrays and AffineTransform objects
+    # Import required modules
+    from dask.array.overlap import overlap, trim_overlap
+
     from .transform import AffineTransform
 
     # Convert affine to numpy array if it's an AffineTransform object
@@ -353,14 +357,18 @@ def compute_centroids(
         else:
             # Multiple channels - raise informative error for now
             raise ValueError(
-                f"Image has {image.ndim}D shape {image.shape} with {image.shape[0]} channels. "
-                "compute_centroids only supports 3D images or 4D images with a single channel "
-                "(channel dimension size = 1). For multi-channel images, please process each "
-                "channel separately or squeeze/select a single channel before calling this function."
+                f"Image has {image.ndim}D shape {image.shape} with "
+                f"{image.shape[0]} channels. "
+                "compute_centroids only supports 3D images or 4D images "
+                "with a single channel (channel dimension size = 1). "
+                "For multi-channel images, please process each channel "
+                "separately or squeeze/select a single channel before "
+                "calling this function."
             )
     elif image.ndim not in [1, 2, 3]:
         raise ValueError(
-            f"Image must be 1D, 2D, 3D, or 4D (with single channel), got {image.ndim}D with shape {image.shape}"
+            f"Image must be 1D, 2D, 3D, or 4D (with single channel), "
+            f"got {image.ndim}D with shape {image.shape}"
         )
 
     # Rechunk if requested
@@ -370,83 +378,147 @@ def compute_centroids(
     # Parse depth parameter
     ndim = image.ndim
     if isinstance(depth, int):
-        overlap_sizes = [depth] * ndim
+        depth_tuple = tuple([depth] * ndim)
     elif isinstance(depth, dict):
-        overlap_sizes = [depth.get(i, 0) for i in range(ndim)]
+        depth_tuple = tuple([depth.get(i, 0) for i in range(ndim)])
     else:
-        overlap_sizes = list(depth)
+        depth_tuple = tuple(depth)
 
-    # Process blocks manually to have full control over coordinates
-    from itertools import product
+    # Add overlap to the image
+    expanded = overlap(image, depth=depth_tuple, boundary=boundary)
 
-    all_centroids = []
+    # Define the processing function to run on each block
+    def detect_centroids(block, block_info=None):
+        """
+        Detect centroids in a block and store them with coordinates.
 
-    # Get the slices for each chunk
-    chunk_slices = [
-        [slice(sum(chunks[:i]), sum(chunks[: i + 1])) for i in range(len(chunks))]
-        for chunks in image.chunks
-    ]
+        This function labels connected components in the block, computes their
+        centroids, and stores the centroid coordinates in a structured output array.
+        Centroids in the overlap regions are excluded.
 
-    # Process each chunk
-    for chunk_indices in product(*[range(len(slices)) for slices in chunk_slices]):
-        # Get slices for this chunk (core region without overlap)
-        core_slices = tuple(
-            chunk_slices[dim][idx] for dim, idx in enumerate(chunk_indices)
-        )
+        Args:
+            block: Input block with overlap
+            block_info: Block metadata from map_blocks
 
-        # Add overlap to get the slices for fetching data
-        overlapped_slices = []
-        n_chunks_list = [len(cs) for cs in chunk_slices]
-        for dim, (s, _idx, _n_chunks) in enumerate(
-            zip(core_slices, chunk_indices, n_chunks_list)
-        ):
-            start = max(0, s.start - overlap_sizes[dim])
-            stop = min(image.shape[dim], s.stop + overlap_sizes[dim])
-            overlapped_slices.append(slice(start, stop))
+        Returns:
+            Array with same shape as block, with last dimension containing
+            centroid coordinates (padded with zeros for non-centroid locations)
+        """
+        # Get block location in the array
+        if block_info is None:
+            # No block info means we're testing the function
+            output_shape = block.shape + (
+                ndim + 1,
+            )  # Extra dimension for coords + marker
+            return np.zeros(output_shape, dtype=np.float32)
 
-        # Extract chunk with overlap
-        chunk_data = image[tuple(overlapped_slices)].compute()
+        # Label connected components
+        labeled = label(block, connectivity=3)
 
-        # Label and get centroids
-        labeled = label(chunk_data, connectivity=3)
+        # Create output array: same spatial dims + 1 extra dim for storing coordinates
+        # Shape: (...spatial..., ndim+1) where last dim is [marker, coord1, coord2, ...]
+        output_shape = block.shape + (ndim + 1,)
+        centroid_data = np.zeros(output_shape, dtype=np.float32)
+
+        # If no objects, return empty array
         if labeled.max() == 0:
-            continue
+            return centroid_data
 
+        # Get region properties
         regions = regionprops(labeled)
 
-        # Filter centroids to core region (not in overlap)
+        # Determine the core region (exclude overlap)
+        # Core region starts at depth_tuple and ends at shape - depth_tuple
+        core_slices = tuple(
+            slice(depth_tuple[i], block.shape[i] - depth_tuple[i]) for i in range(ndim)
+        )
+
+        # Process each region
         for region in regions:
             centroid = region.centroid
 
-            # Check if in core region
-            # Core region in overlapped chunk coordinates
-            in_core = True
-            for dim in range(ndim):
-                core_start_in_chunk = (
-                    core_slices[dim].start - overlapped_slices[dim].start
-                )
-                core_end_in_chunk = core_start_in_chunk + (
-                    core_slices[dim].stop - core_slices[dim].start
-                )
-
-                if not (core_start_in_chunk <= centroid[dim] < core_end_in_chunk):
-                    in_core = False
-                    break
+            # Check if centroid is in the core region
+            in_core = all(
+                core_slices[i].start <= centroid[i] < core_slices[i].stop
+                for i in range(ndim)
+            )
 
             if in_core:
-                # Convert to global coordinates
-                # centroid is in overlapped chunk coordinates
-                # overlapped_slices[dim].start is global start of overlapped chunk
-                # so global_coord = overlapped_slices[dim].start + centroid[dim]
-                global_centroid = [
-                    overlapped_slices[dim].start + centroid[dim] for dim in range(ndim)
-                ]
-                all_centroids.append(global_centroid)
+                # Store centroid at rounded location with marker=1 and local coordinates
+                # Round to nearest integer for indexing
+                centroid_idx = tuple(int(round(centroid[i])) for i in range(ndim))
+                # Ensure index is within bounds
+                if all(0 <= centroid_idx[i] < block.shape[i] for i in range(ndim)):
+                    # Mark this location as a centroid
+                    centroid_data[centroid_idx + (0,)] = 1.0
+                    # Store the LOCAL fractional coordinates
+                    # After trim_overlap, these will map to the correct global positions
+                    for i in range(ndim):
+                        centroid_data[centroid_idx + (i + 1,)] = centroid[i]
 
-    if len(all_centroids) == 0:
+        return centroid_data
+
+    # Apply the detection function to all blocks
+    centroid_array = expanded.map_blocks(
+        detect_centroids,
+        dtype=np.float32,
+        meta=np.array((), dtype=np.float32),
+        new_axis=ndim,  # Add one extra dimension for coordinates
+        chunks=expanded.chunks + ((ndim + 1,),),  # Chunks for spatial dims + coords dim
+    )
+
+    # Trim the overlap from the spatial dimensions (keep the coordinate dimension)
+    # Build the depth parameter for trim_overlap - only trim spatial dimensions
+    trim_depth = {i: depth_tuple[i] for i in range(ndim)}
+
+    centroid_array_trimmed = trim_overlap(
+        centroid_array, depth=trim_depth, boundary=boundary
+    )
+
+    # Compute the result
+    centroid_data_computed = centroid_array_trimmed.compute()
+
+    # Extract centroids: find all locations where marker (first channel) is > 0
+    marker_channel = centroid_data_computed[..., 0]
+    centroid_mask = marker_channel > 0
+
+    # Get integer indices where centroids are marked
+    centroid_integer_locations = np.argwhere(centroid_mask)
+
+    if len(centroid_integer_locations) == 0:
         return np.empty((0, 3), dtype=np.float64)
 
-    voxel_coords = np.array(all_centroids, dtype=np.float64)
+    # For each centroid, get the stored fractional offset and compute actual
+    # position. The stored coordinates are LOCAL to the overlapped block, but
+    # after trim_overlap, the integer indices give us the position in the
+    # trimmed array. We need to compute:
+    # trimmed_integer_index + (stored_local_coord - rounded(stored_local_coord))
+    voxel_coords = []
+    for int_loc in centroid_integer_locations:
+        # Get the stored local fractional coordinates
+        stored_coords = centroid_data_computed[
+            tuple(int_loc) + (slice(1, ndim + 1),)
+        ]
+
+        # The integer location int_loc is where we marked the centroid
+        # (rounded position). The actual centroid position should be
+        # reconstructed from int_loc. After trim_overlap, int_loc is in the
+        # coordinate system of the original (non-overlapped) array.
+        # The stored_coords contain the fractional part relative to the
+        # overlapped block. But we need to adjust: the true position is where
+        # the marker is in the trimmed array plus the fractional offset from
+        # rounding.
+
+        # Actually, after trim_overlap, the array indices directly correspond
+        # to original array indices. The stored_coords are in local
+        # (overlapped block) coordinates. We marked at round(local_coord),
+        # which after trim becomes the int_loc we found. The fractional
+        # offset is: stored_coords - round(stored_coords)
+        fractional_offset = stored_coords - np.round(stored_coords)
+        actual_coord = int_loc.astype(np.float64) + fractional_offset
+        voxel_coords.append(actual_coord)
+
+    voxel_coords = np.array(voxel_coords, dtype=np.float64)
 
     # Convert to physical coordinates
     n_points = voxel_coords.shape[0]
