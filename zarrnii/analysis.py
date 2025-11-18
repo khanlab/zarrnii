@@ -328,13 +328,14 @@ def create_mip_visualization(
 
     Returns:
         If return_slabs is False (default):
-            List of 2D numpy arrays, each containing an RGB MIP
+            List of 2D dask arrays, each containing an RGB MIP
             visualization for one slab. Each array has shape (height, width,
-            3) with RGB values in range [0, 1].
+            3) with RGB values in range [0, 1]. Arrays are lazy and will
+            only be computed when explicitly requested.
 
         If return_slabs is True:
             Tuple of (mip_list, slab_info_list) where:
-            - mip_list: List of 2D RGB arrays as described above
+            - mip_list: List of 2D RGB dask arrays as described above
             - slab_info_list: List of dictionaries with slab metadata
                 including:
                 - 'start_um': Start position of slab in microns
@@ -685,8 +686,8 @@ def create_mip_visualization(
 
         # Create RGB visualization
         if has_channel:
-            # Process each channel and combine with colors
-            mip_computed = mip_data.compute()  # Compute dask array
+            # Process each channel and combine with colors - using lazy dask operations
+            # Keep mip_data as dask array, don't compute yet
 
             # If channel_indices is specified, we need to select those channels
             if channel_indices is not None:
@@ -694,21 +695,25 @@ def create_mip_visualization(
                 channel_axis_after_max = (
                     channel_idx if channel_idx < proj_axis_idx else channel_idx - 1
                 )
-                mip_computed = np.moveaxis(mip_computed, channel_axis_after_max, 0)
+                mip_channels = da.moveaxis(mip_data, channel_axis_after_max, 0)
                 # Select only the requested channels
-                mip_channels = mip_computed[channel_indices]
+                mip_channels = mip_channels[channel_indices]
             else:
                 # Move channel axis to first position for easier iteration
                 channel_axis_after_max = (
                     channel_idx if channel_idx < proj_axis_idx else channel_idx - 1
                 )
-                mip_channels = np.moveaxis(mip_computed, channel_axis_after_max, 0)
+                mip_channels = da.moveaxis(mip_data, channel_axis_after_max, 0)
 
             # Get spatial dimensions after removing projection axis
             spatial_shape = mip_channels.shape[1:]
 
-            # Initialize RGB image
-            rgb_image = np.zeros(spatial_shape + (3,), dtype=np.float32)
+            # Initialize RGB image as dask array
+            rgb_image = da.zeros(
+                spatial_shape + (3,),
+                dtype=np.float32,
+                chunks=mip_channels.chunks[1:] + (-1,),
+            )
 
             # Combine channels with their colors
             for ch_idx in range(n_channels):
@@ -719,62 +724,65 @@ def create_mip_visualization(
                     # Use custom intensity range
                     ch_min, ch_max = channel_ranges[ch_idx]
                 else:
-                    # Use auto-scaling based on data
-                    ch_min = channel_data.min()
-                    ch_max = channel_data.max()
+                    # Use auto-scaling based on data - need to compute min/max
+                    # This is a minimal computation that's necessary for auto-scaling
+                    ch_min = float(channel_data.min().compute())
+                    ch_max = float(channel_data.max().compute())
 
                 # Normalize to [0, 1]
                 if ch_max > ch_min:
                     channel_normalized = (channel_data - ch_min) / (ch_max - ch_min)
                     # Clip to [0, 1] range in case data extends beyond specified range
-                    channel_normalized = np.clip(channel_normalized, 0.0, 1.0)
+                    channel_normalized = da.clip(channel_normalized, 0.0, 1.0)
                 elif ch_max > 0:
                     # Uniform non-zero values - keep them
-                    channel_normalized = np.ones_like(channel_data)
+                    channel_normalized = da.ones_like(channel_data)
                 else:
                     # All zeros - keep as zeros
-                    channel_normalized = np.zeros_like(channel_data)
+                    channel_normalized = da.zeros_like(channel_data)
 
                 # Apply color with alpha blending (multiply by RGBA color values)
                 color_rgba = rgba_colors[ch_idx]
                 alpha = color_rgba[3]  # Extract alpha value
                 for rgb_idx in range(3):
-                    rgb_image[..., rgb_idx] += (
+                    rgb_image[..., rgb_idx] = rgb_image[..., rgb_idx] + (
                         channel_normalized * color_rgba[rgb_idx] * alpha
                     )
 
             # Clip to [0, 1] range
-            rgb_image = np.clip(rgb_image, 0.0, 1.0)
+            rgb_image = da.clip(rgb_image, 0.0, 1.0)
 
         else:
-            # Single channel - compute and normalize
-            mip_computed = mip_data.compute()
+            # Single channel - use lazy dask operations
 
             # Determine intensity range for normalization
             if channel_ranges is not None and channel_ranges[0] is not None:
                 # Use custom intensity range
                 ch_min, ch_max = channel_ranges[0]
             else:
-                # Use auto-scaling based on data
-                ch_min = mip_computed.min()
-                ch_max = mip_computed.max()
+                # Use auto-scaling based on data - need to compute min/max
+                # This is a minimal computation that's necessary for auto-scaling
+                ch_min = float(mip_data.min().compute())
+                ch_max = float(mip_data.max().compute())
 
             # Normalize to [0, 1]
             if ch_max > ch_min:
-                normalized = (mip_computed - ch_min) / (ch_max - ch_min)
+                normalized = (mip_data - ch_min) / (ch_max - ch_min)
                 # Clip to [0, 1] range in case data extends beyond specified range
-                normalized = np.clip(normalized, 0.0, 1.0)
+                normalized = da.clip(normalized, 0.0, 1.0)
             elif ch_max > 0:
                 # Uniform non-zero values - keep them
-                normalized = np.ones_like(mip_computed)
+                normalized = da.ones_like(mip_data)
             else:
                 # All zeros - keep as zeros
-                normalized = np.zeros_like(mip_computed)
+                normalized = da.zeros_like(mip_data)
 
             # Apply first color with alpha
             color_rgba = rgba_colors[0]
             alpha = color_rgba[3]
-            rgb_image = np.zeros(mip_computed.shape + (3,), dtype=np.float32)
+            rgb_image = da.zeros(
+                mip_data.shape + (3,), dtype=np.float32, chunks=mip_data.chunks + (-1,)
+            )
             for rgb_idx in range(3):
                 rgb_image[..., rgb_idx] = normalized * color_rgba[rgb_idx] * alpha
 

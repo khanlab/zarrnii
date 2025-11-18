@@ -4867,13 +4867,14 @@ class ZarrNii:
         channel_labels: Optional[List[str]] = None,
         return_slabs: bool = False,
         scale_units: str = "mm",
-    ) -> Union[List[np.ndarray], Tuple[List[np.ndarray], List[dict]]]:
+    ) -> Union[List[da.Array], Tuple[List[da.Array], List[dict]]]:
         """
         Create Maximum Intensity Projection (MIP) visualizations across slabs.
 
         This method generates MIP visualizations by dividing the volume into slabs
         along the specified plane, computing the maximum intensity projection within
-        each slab, then rendering with channel-specific colors.
+        each slab, then rendering with channel-specific colors. Returns lazy dask
+        arrays that are computed only when explicitly requested.
 
         Args:
             plane: Projection plane - one of 'axial', 'coronal', 'sagittal'.
@@ -4903,12 +4904,13 @@ class ZarrNii:
 
         Returns:
             If return_slabs is False (default):
-                List of 2D numpy arrays, each containing an RGB MIP visualization for one slab.
+                List of 2D dask arrays, each containing an RGB MIP visualization for one slab.
                 Each array has shape (height, width, 3) with RGB values in range [0, 1].
+                Arrays are lazy and will only be computed when explicitly requested.
 
             If return_slabs is True:
                 Tuple of (mip_list, slab_info_list) where:
-                - mip_list: List of 2D RGB arrays as described above
+                - mip_list: List of 2D RGB dask arrays as described above
                 - slab_info_list: List of dictionaries with slab metadata including:
                     - 'start_um': Start position of slab in microns
                     - 'end_um': End position of slab in microns
