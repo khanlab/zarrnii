@@ -762,7 +762,6 @@ class ZarrNiiAtlas(ZarrNii):
                         "Supported: mean, sum, std, median, min, max"
                     )
 
-
             # Get region info
             try:
                 region_info = self.get_region_info(int(label))
@@ -1193,7 +1192,7 @@ class ZarrNiiAtlas(ZarrNii):
                 in the output (default: True).
 
         Returns:
-            tuple of: 
+            tuple of:
             centroids pandas.DataFrame with columns:
                 - z, y, x: Physical coordinates (in mm) of each centroid
                 - index: Integer label index from the atlas
@@ -1271,7 +1270,7 @@ class ZarrNiiAtlas(ZarrNii):
         label_at_points = interpn(
             grid,
             dseg_data,
-            voxel_coords,  
+            voxel_coords,
             method="nearest",
             bounds_error=False,
             fill_value=0,
@@ -1307,12 +1306,7 @@ class ZarrNiiAtlas(ZarrNii):
             df_centroids = pd.DataFrame(df_data)
 
             df_counts = (
-                df_centroids.groupby(['index', 'name'])
-                  .size()
-                  .reset_index(name='count')
+                df_centroids.groupby(["index", "name"]).size().reset_index(name="count")
             )
-
-
-
 
         return (df_centroids, df_counts)
