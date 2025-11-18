@@ -312,6 +312,7 @@ def compute_centroids(
         - Empty chunks (no objects detected) contribute empty arrays to the result.
         - This function computes the result immediately (not lazy) to return a
           concrete numpy array.
+        - Uses Dask's map_overlap for efficient parallel processing across chunks.
 
     Examples:
         >>> import dask.array as da
@@ -353,102 +354,173 @@ def compute_centroids(
         else:
             # Multiple channels - raise informative error for now
             raise ValueError(
-                f"Image has {image.ndim}D shape {image.shape} with {image.shape[0]} channels. "
-                "compute_centroids only supports 3D images or 4D images with a single channel "
-                "(channel dimension size = 1). For multi-channel images, please process each "
-                "channel separately or squeeze/select a single channel before calling this function."
+                f"Image has {image.ndim}D shape {image.shape} with "
+                f"{image.shape[0]} channels. compute_centroids only supports 3D "
+                "images or 4D images with a single channel (channel dimension "
+                "size = 1). For multi-channel images, please process each channel "
+                "separately or squeeze/select a single channel before calling "
+                "this function."
             )
     elif image.ndim not in [1, 2, 3]:
         raise ValueError(
-            f"Image must be 1D, 2D, 3D, or 4D (with single channel), got {image.ndim}D with shape {image.shape}"
+            f"Image must be 1D, 2D, 3D, or 4D (with single channel), "
+            f"got {image.ndim}D with shape {image.shape}"
         )
 
     # Rechunk if requested
     if rechunk is not None:
         image = image.rechunk(rechunk)
 
-    # Parse depth parameter
+    # Parse depth parameter to get overlap sizes
     ndim = image.ndim
     if isinstance(depth, int):
-        overlap_sizes = [depth] * ndim
+        overlap_sizes = tuple([depth] * ndim)
     elif isinstance(depth, dict):
-        overlap_sizes = [depth.get(i, 0) for i in range(ndim)]
+        overlap_sizes = tuple([depth.get(i, 0) for i in range(ndim)])
     else:
-        overlap_sizes = list(depth)
+        overlap_sizes = tuple(depth)
 
-    # Process blocks manually to have full control over coordinates
-    from itertools import product
+    def _block_centroids(block, block_info=None):
+        """
+        Process a single block to find centroids.
 
-    all_centroids = []
+        Args:
+            block: numpy array for this chunk (binary mask) with overlap
+            block_info: dict containing array location information from map_overlap
 
-    # Get the slices for each chunk
-    chunk_slices = [
-        [slice(sum(chunks[:i]), sum(chunks[: i + 1])) for i in range(len(chunks))]
-        for chunks in image.chunks
-    ]
+        Returns:
+            Object array matching block shape, with centroids stored in first element
+        """
+        # Create result array matching block shape
+        result = np.empty(block.shape, dtype=object)
 
-    # Process each chunk
-    for chunk_indices in product(*[range(len(slices)) for slices in chunk_slices]):
-        # Get slices for this chunk (core region without overlap)
-        core_slices = tuple(
-            chunk_slices[dim][idx] for dim, idx in enumerate(chunk_indices)
-        )
+        # Handle empty blocks or no block_info
+        if block.size == 0 or block_info is None:
+            result.fill([])
+            return result
 
-        # Add overlap to get the slices for fetching data
-        overlapped_slices = []
-        n_chunks_list = [len(cs) for cs in chunk_slices]
-        for dim, (s, _idx, _n_chunks) in enumerate(
-            zip(core_slices, chunk_indices, n_chunks_list)
-        ):
-            start = max(0, s.start - overlap_sizes[dim])
-            stop = min(image.shape[dim], s.stop + overlap_sizes[dim])
-            overlapped_slices.append(slice(start, stop))
+        # Label connected components
+        labeled = label(block > 0, connectivity=3)
 
-        # Extract chunk with overlap
-        chunk_data = image[tuple(overlapped_slices)].compute()
-
-        # Label and get centroids
-        labeled = label(chunk_data, connectivity=3)
         if labeled.max() == 0:
-            continue
+            # No objects found
+            result.fill([])
+            return result
 
-        regions = regionprops(labeled)
+        # Get original array location from block_info[None]
+        # block_info[0] contains info about the overlapped/extended array
+        # block_info[None] contains info about the ORIGINAL input array
+        original_info = block_info[None]
+        array_location = original_info["array-location"]
 
-        # Filter centroids to core region (not in overlap)
-        for region in regions:
-            centroid = region.centroid
+        # With map_overlap and trim=False, the block includes overlap regions
+        # We need to calculate the "core" region (non-overlap) within this block
+        # to avoid counting the same object multiple times across chunks
 
-            # Check if in core region
-            # Core region in overlapped chunk coordinates
+        # Determine core region boundaries within the block
+        # The core region is the part that maps to the original array coordinates
+        core_slices = []
+        for dim in range(len(array_location)):
+            global_start, global_end = array_location[dim]
+
+            # The block may have overlap on either or both sides
+            # Calculate where the "core" starts and ends within this block
+            #
+            # The core region size is (global_end - global_start)
+            # The block size may be larger due to overlap
+
+            core_size = global_end - global_start
+
+            # Determine how much overlap is before vs after
+            # With boundary='none', edge chunks don't get overlap on the edge side
+            # We can infer this from whether global_start is 0 (no overlap before)
+
+            if global_start == 0:
+                # First chunk - no overlap before
+                overlap_before = 0
+            else:
+                # Not first chunk - we have overlap before
+                overlap_before = overlap_sizes[dim]
+
+            core_start = overlap_before
+            core_end = core_start + core_size
+
+            core_slices.append((core_start, core_end))
+
+        # Process regions and filter to core
+        centroids = []
+        for region in regionprops(labeled):
+            centroid = np.array(region.centroid)
+
+            # Check if centroid is in core region
             in_core = True
-            for dim in range(ndim):
-                core_start_in_chunk = (
-                    core_slices[dim].start - overlapped_slices[dim].start
-                )
-                core_end_in_chunk = core_start_in_chunk + (
-                    core_slices[dim].stop - core_slices[dim].start
-                )
-
-                if not (core_start_in_chunk <= centroid[dim] < core_end_in_chunk):
+            for dim in range(len(centroid)):
+                core_start, core_end = core_slices[dim]
+                if not (core_start <= centroid[dim] < core_end):
                     in_core = False
                     break
 
             if in_core:
-                # Convert to global coordinates
-                # centroid is in overlapped chunk coordinates
-                # overlapped_slices[dim].start is global start of overlapped chunk
-                # so global_coord = overlapped_slices[dim].start + centroid[dim]
-                global_centroid = [
-                    overlapped_slices[dim].start + centroid[dim] for dim in range(ndim)
-                ]
-                all_centroids.append(global_centroid)
+                # Convert to global voxel coordinates
+                # The core region maps to [global_start, global_end) in the
+                # original array. Centroid is at position
+                # (centroid[dim] - core_start) within the core
+                # So global position is:
+                # global_start + (centroid[dim] - core_start)
+                global_centroid = []
+                for dim in range(len(centroid)):
+                    core_start, _ = core_slices[dim]
+                    global_start, _ = array_location[dim]
+                    global_centroid.append(global_start + (centroid[dim] - core_start))
 
-    if len(all_centroids) == 0:
+                centroids.append(tuple(global_centroid))
+
+        # Store all centroids for this block in the first element
+        # Fill rest with empty lists
+        result.fill([])
+        if len(centroids) > 0:
+            result.flat[0] = centroids
+
+        return result
+
+    # Apply block operation with overlap
+    # We need to use map_blocks instead of map_overlap to have proper control
+    # Actually, let's use map_overlap but return lists that will be collected
+    cents_blocks = image.map_overlap(
+        _block_centroids,
+        depth=overlap_sizes,
+        boundary=boundary,
+        trim=False,  # Don't trim - we handle filtering internally
+        dtype=object,
+        drop_axis=[],  # Keep dimensions initially
+    )
+
+    # Compute to get all centroid lists
+    # cents_blocks will be a dask array of object type containing lists
+    all_centroid_lists = cents_blocks.compute()
+
+    # Flatten and collect all centroids
+    centroid_list = []
+
+    # Handle different dimensionalities
+    if hasattr(all_centroid_lists, "flat"):
+        for item in all_centroid_lists.flat:
+            if isinstance(item, list):
+                centroid_list.extend(item)
+            elif isinstance(item, (tuple, np.ndarray)) and len(item) > 0:
+                centroid_list.append(tuple(item))
+    else:
+        # Single item
+        if isinstance(all_centroid_lists, list):
+            centroid_list = all_centroid_lists
+
+    if len(centroid_list) == 0:
         return np.empty((0, 3), dtype=np.float64)
 
-    voxel_coords = np.array(all_centroids, dtype=np.float64)
+    # Convert to numpy array
+    voxel_coords = np.array(centroid_list, dtype=np.float64)
 
-    # Convert to physical coordinates
+    # Convert to physical coordinates using affine transform
     n_points = voxel_coords.shape[0]
     voxel_homogeneous = np.column_stack(
         [voxel_coords, np.ones((n_points, 1), dtype=np.float64)]
