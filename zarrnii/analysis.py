@@ -484,8 +484,6 @@ def compute_centroids(
         return result
 
     # Apply block operation with overlap
-    # We need to use map_blocks instead of map_overlap to have proper control
-    # Actually, let's use map_overlap but return lists that will be collected
     cents_blocks = image.map_overlap(
         _block_centroids,
         depth=overlap_sizes,
@@ -495,24 +493,31 @@ def compute_centroids(
         drop_axis=[],  # Keep dimensions initially
     )
 
-    # Compute to get all centroid lists
-    # cents_blocks will be a dask array of object type containing lists
-    all_centroid_lists = cents_blocks.compute()
+    # Use to_delayed() to avoid materializing the full object array
+    # This computes each chunk separately and collects only the centroids
+    delayed_blocks = cents_blocks.to_delayed()
 
-    # Flatten and collect all centroids
-    centroid_list = []
-
-    # Handle different dimensionalities
-    if hasattr(all_centroid_lists, "flat"):
-        for item in all_centroid_lists.flat:
-            if isinstance(item, list):
-                centroid_list.extend(item)
-            elif isinstance(item, (tuple, np.ndarray)) and len(item) > 0:
-                centroid_list.append(tuple(item))
+    # Flatten the delayed blocks array to get a 1D list of delayed objects
+    if isinstance(delayed_blocks, np.ndarray):
+        delayed_flat = delayed_blocks.flatten()
     else:
-        # Single item
-        if isinstance(all_centroid_lists, list):
-            centroid_list = all_centroid_lists
+        delayed_flat = [delayed_blocks]
+
+    # Compute all delayed blocks in parallel
+    # Each block is a numpy array, but we only extract centroid data
+    import dask
+
+    computed_blocks = dask.compute(*delayed_flat)
+
+    # Collect all centroids from each block
+    # Each block is an object array where centroids are stored in the first element
+    centroid_list = []
+    for block_array in computed_blocks:
+        if isinstance(block_array, np.ndarray) and block_array.size > 0:
+            # Extract centroids from first element
+            first_elem = block_array.flat[0]
+            if isinstance(first_elem, list) and len(first_elem) > 0:
+                centroid_list.extend(first_elem)
 
     if len(centroid_list) == 0:
         return np.empty((0, 3), dtype=np.float64)
