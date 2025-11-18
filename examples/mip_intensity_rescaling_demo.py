@@ -9,7 +9,6 @@ This script shows how to:
 """
 
 import dask.array as da
-import numpy as np
 
 from zarrnii import ZarrNii
 from zarrnii.analysis import create_mip_visualization

@@ -279,7 +279,7 @@ def create_mip_visualization(
     channel_labels: Optional[List[str]] = None,
     return_slabs: bool = False,
     scale_units: str = "mm",
-) -> Union[List[np.ndarray], Tuple[List[np.ndarray], List[dict]]]:
+) -> Union[List[da.Array], Tuple[List[da.Array], List[dict]]]:
     """
     Create Maximum Intensity Projection (MIP) visualizations across slabs.
 
@@ -383,8 +383,6 @@ def create_mip_visualization(
         ...     scale_units='um'
         ... )
         >>>
-        >>> # Get slab metadata
-        >>> mips, slab_info = create_mip_visualization(
         >>> # Use OMERO metadata for colors and ranges
         >>> mips = create_mip_visualization(
         ...     data, dims, scale,
