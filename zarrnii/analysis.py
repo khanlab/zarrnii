@@ -793,6 +793,8 @@ def create_mip_visualization(
         return mip_list, slab_info_list
     else:
         return mip_list
+
+
 def compute_centroids(
     image: da.Array,
     affine: np.ndarray,

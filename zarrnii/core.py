@@ -4972,6 +4972,8 @@ class ZarrNii:
             channel_labels=channel_labels,
             return_slabs=return_slabs,
             scale_units=scale_units,
+        )
+
     def compute_centroids(
         self,
         depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,

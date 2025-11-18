@@ -1,4 +1,9 @@
-from .analysis import create_mip_visualization, compute_centroids, compute_histogram, compute_otsu_thresholds
+from .analysis import (
+    compute_centroids,
+    compute_histogram,
+    compute_otsu_thresholds,
+    create_mip_visualization,
+)
 from .atlas import ZarrNiiAtlas
 from .core import (
     MetadataInvalidError,
