@@ -86,7 +86,7 @@ def compute_histogram(
         if range is None:
             range = (data_min, data_max)
         if bins is None:
-            bins =  data_max - data_min + 1
+            bins = data_max - data_min + 1
 
         return da.histogram(image, bins=bins, range=range, **kwargs)
 
