@@ -4868,6 +4868,112 @@ class ZarrNii:
             return_figure=return_figure,
         )
 
+    def create_mip(
+        self,
+        plane: str = "axial",
+        slab_thickness_um: float = 100.0,
+        slab_spacing_um: float = 100.0,
+        channel_colors: Optional[
+            List[
+                Union[
+                    str, Tuple[float, float, float], Tuple[float, float, float, float]
+                ]
+            ]
+        ] = None,
+        channel_ranges: Optional[List[Tuple[float, float]]] = None,
+        channel_labels: Optional[List[str]] = None,
+        return_slabs: bool = False,
+        scale_units: str = "mm",
+    ) -> Union[List[da.Array], Tuple[List[da.Array], List[dict]]]:
+        """
+        Create Maximum Intensity Projection (MIP) visualizations across slabs.
+
+        This method generates MIP visualizations by dividing the volume into slabs
+        along the specified plane, computing the maximum intensity projection within
+        each slab, then rendering with channel-specific colors. Returns lazy dask
+        arrays that are computed only when explicitly requested.
+
+        Args:
+            plane: Projection plane - one of 'axial', 'coronal', 'sagittal'.
+                - 'axial': projects along z-axis (creates xy slices)
+                - 'coronal': projects along y-axis (creates xz slices)
+                - 'sagittal': projects along x-axis (creates yz slices)
+            slab_thickness_um: Thickness of each slab in microns (default: 100.0)
+            slab_spacing_um: Spacing between slab centers in microns (default: 100.0)
+            channel_colors: Optional list of colors for each channel. Each color can be:
+                - Color name string (e.g., 'red', 'green', 'blue')
+                - RGB tuple with values 0-1 (e.g., (1.0, 0.0, 0.0) for red)
+                - RGBA tuple with values 0-1 (e.g., (1.0, 0.0, 0.0, 0.5) for semi-transparent red)
+                If None and OMERO metadata is available, uses OMERO channel colors.
+                Otherwise uses default colors: ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
+            channel_ranges: Optional list of (min, max) tuples specifying intensity range
+                for each channel. If None and OMERO metadata is available, uses OMERO window
+                settings. Otherwise uses auto-scaling based on data min/max.
+            channel_labels: Optional list of channel label names to use for selecting
+                channels from OMERO metadata. If provided, channels are filtered and
+                reordered to match these labels. Requires OMERO metadata to be available.
+            return_slabs: If True, returns tuple of (mip_list, slab_info_list) where
+                slab_info_list contains metadata about each slab. If False (default),
+                returns only the mip_list.
+            scale_units: Units for scale values. Either "mm" (millimeters, default) or
+                "um" (microns). The ZarrNii scale values from NGFF/NIfTI are in millimeters
+                by default, so this should typically be left as "mm".
+
+        Returns:
+            If return_slabs is False (default):
+                List of 2D dask arrays, each containing an RGB MIP visualization for one slab.
+                Each array has shape (height, width, 3) with RGB values in range [0, 1].
+                Arrays are lazy and will only be computed when explicitly requested.
+
+            If return_slabs is True:
+                Tuple of (mip_list, slab_info_list) where:
+                - mip_list: List of 2D RGB dask arrays as described above
+                - slab_info_list: List of dictionaries with slab metadata including:
+                    - 'start_um': Start position of slab in microns
+                    - 'end_um': End position of slab in microns
+                    - 'center_um': Center position of slab in microns
+                    - 'start_idx': Start index in array coordinates
+                    - 'end_idx': End index in array coordinates
+
+        Examples:
+            >>> # Create axial MIPs with custom intensity ranges
+            >>> mips = znimg.create_mip(
+            ...     plane='axial',
+            ...     slab_thickness_um=100.0,
+            ...     slab_spacing_um=100.0,
+            ...     channel_colors=['red', 'green'],
+            ...     channel_ranges=[(0.0, 1000.0), (0.0, 5000.0)]
+            ... )
+            >>>
+            >>> # Use OMERO metadata for colors and ranges
+            >>> mips = znimg.create_mip(
+            ...     plane='axial',
+            ...     channel_labels=['DAPI', 'GFP']
+            ... )
+            >>>
+            >>> # Use alpha transparency
+            >>> mips = znimg.create_mip(
+            ...     plane='axial',
+            ...     channel_colors=[(1.0, 0.0, 0.0, 0.7), (0.0, 1.0, 0.0, 0.5)]
+            ... )
+        """
+        from .analysis import create_mip_visualization
+
+        return create_mip_visualization(
+            image=self.darr,
+            dims=self.dims,
+            scale=self.scale,
+            plane=plane,
+            slab_thickness_um=slab_thickness_um,
+            slab_spacing_um=slab_spacing_um,
+            channel_colors=channel_colors,
+            channel_ranges=channel_ranges,
+            omero_metadata=self.omero,
+            channel_labels=channel_labels,
+            return_slabs=return_slabs,
+            scale_units=scale_units,
+        )
+
     def compute_centroids(
         self,
         depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,
