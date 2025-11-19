@@ -14571,14 +14571,14 @@ f"{aggregation_func}_{column_suffix}".</p>
               <code><span title="pandas.DataFrame">DataFrame</span></code>
           –
           <div class="doc-md-description">
-            <p>DataFrame with columns: index, name, {column_name}, volume_mm3</p>
+            <p>DataFrame with columns: index, name, {column_name}, volume</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
               <code><span title="pandas.DataFrame">DataFrame</span></code>
           –
           <div class="doc-md-description">
-            <p>(e.g., with defaults: index, name, mean_value, volume_mm3)</p>
+            <p>(e.g., with defaults: index, name, mean_value, volume)</p>
           </div>
         </li>
     </ul>
@@ -14754,8 +14754,8 @@ f"{aggregation_func}_{column_suffix}".</p>
 <span class="sd">            f&quot;{aggregation_func}_{column_suffix}&quot;.</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        DataFrame with columns: index, name, {column_name}, volume_mm3</span>
-<span class="sd">        (e.g., with defaults: index, name, mean_value, volume_mm3)</span>
+<span class="sd">        DataFrame with columns: index, name, {column_name}, volume</span>
+<span class="sd">        (e.g., with defaults: index, name, mean_value, volume)</span>
 
 <span class="sd">    Raises:</span>
 <span class="sd">        ValueError: If image and atlas are incompatible</span>
@@ -14864,7 +14864,7 @@ f"{aggregation_func}_{column_suffix}".</p>
                 <span class="bp">self</span><span class="o">.</span><span class="n">label_column</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">label</span><span class="p">),</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">name_column</span><span class="p">:</span> <span class="n">region_name</span><span class="p">,</span>
                 <span class="n">column_name</span><span class="p">:</span> <span class="n">agg_value</span><span class="p">,</span>
-                <span class="s2">&quot;volume_mm3&quot;</span><span class="p">:</span> <span class="n">volume</span><span class="p">,</span>
+                <span class="s2">&quot;volume&quot;</span><span class="p">:</span> <span class="n">volume</span><span class="p">,</span>
             <span class="p">}</span>
         <span class="p">)</span>
 
