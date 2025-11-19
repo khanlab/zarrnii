@@ -667,6 +667,10 @@ def create_mip_visualization(
         start_idx = max(0, center_idx - half_thickness)
         end_idx = min(proj_axis_size, center_idx + half_thickness)
 
+        # Ensure we have at least one slice (handle edge case where thickness=1)
+        if end_idx <= start_idx:
+            end_idx = min(start_idx + 1, proj_axis_size)
+
         # Store slab info (positions in microns)
         slab_info = {
             "start_um": start_idx * proj_axis_spacing_um,
