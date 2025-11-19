@@ -640,7 +640,7 @@ def create_mip_visualization(
     # Calculate slab parameters (now both in microns)
     slab_thickness_idx = int(np.ceil(slab_thickness_um / proj_axis_spacing_um))
     slab_spacing_idx = int(np.round(slab_spacing_um / proj_axis_spacing_um))
-    
+
     # Ensure both are at least 1 to avoid issues
     # This can happen when slab thickness/spacing in microns is smaller than voxel spacing
     slab_thickness_idx = max(1, slab_thickness_idx)
