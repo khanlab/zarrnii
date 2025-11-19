@@ -75,7 +75,12 @@ def compute_histogram(
         if range is None:
             range = (data_min, data_max)
         if bins is None:
-            bins = int(data_max - data_min + 1)
+            calculated_bins = int(data_max - data_min + 1)
+            # Cap at a reasonable maximum to avoid memory issues
+            bins = min(calculated_bins, 65536)
+            # Ensure at least 2 bins for meaningful histogram
+            if bins < 2:
+                bins = 2
 
         return da.histogram(valid_data, bins=bins, range=range, **kwargs)
     else:
@@ -86,7 +91,12 @@ def compute_histogram(
         if range is None:
             range = (data_min, data_max)
         if bins is None:
-            bins = int(data_max - data_min + 1)
+            calculated_bins = int(data_max - data_min + 1)
+            # Cap at a reasonable maximum to avoid memory issues
+            bins = min(calculated_bins, 65536)
+            # Ensure at least 2 bins for meaningful histogram
+            if bins < 2:
+                bins = 2
 
         return da.histogram(image, bins=bins, range=range, **kwargs)
 
