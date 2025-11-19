@@ -675,7 +675,7 @@ class ZarrNiiAtlas(ZarrNii):
         image: ZarrNii,
         aggregation_func: str = "mean",
         background_label: int = 0,
-        column_name: str = "value",
+        column_name: str = None,
     ) -> pd.DataFrame:
         """Aggregate image values by atlas regions.
 
@@ -683,14 +683,18 @@ class ZarrNiiAtlas(ZarrNii):
             image: Image to aggregate (must be compatible with atlas)
             aggregation_func: Aggregation function ('mean', 'sum', 'std', 'median', 'min', 'max')
             background_label: Label value to treat as background (excluded from results)
-            column_name: String to use for column name.
+            column_name: String to use for column name. If None, uses f"{aggregation_func}_value"
         Returns:
-            DataFrame with columns: index, name, {column_name}, volume
-            (e.g., with defaults: index, name, mean_value, volume)
+            DataFrame with columns: index, name, {column_name}, volume_mm3
+            (e.g., with defaults: index, name, mean_value, volume_mm3)
 
         Raises:
             ValueError: If image and atlas are incompatible
         """
+        # Set default column name if not provided
+        if column_name is None:
+            column_name = f"{aggregation_func}_value"
+
         # Validate image compatibility
         if not np.array_equal(image.shape, self.dseg.shape):
             raise ValueError(
@@ -777,7 +781,7 @@ class ZarrNiiAtlas(ZarrNii):
                     self.label_column: int(label),
                     self.name_column: region_name,
                     column_name: agg_value,
-                    "volume": volume,
+                    "volume_mm3": volume,
                 }
             )
 
@@ -1192,12 +1196,10 @@ class ZarrNiiAtlas(ZarrNii):
                 in the output (default: True).
 
         Returns:
-            tuple of:
-            centroids pandas.DataFrame with columns:
-                - z, y, x: Physical coordinates (in mm) of each centroid
-                - index: Integer label index from the atlas
+            pandas.DataFrame with columns:
+                - x, y, z: Physical coordinates (in mm) of each centroid
+                - label_index: Integer label index from the atlas
                 - name (optional): Region name if include_names=True
-            counts pandas.DataFrame with columns index, name, and count
 
         Notes:
             - Input centroids must be in the same physical space as the atlas
@@ -1219,7 +1221,7 @@ class ZarrNiiAtlas(ZarrNii):
         """
         # Handle empty centroids array
         if centroids.shape[0] == 0:
-            columns = ["x", "y", "z", "index"]
+            columns = ["x", "y", "z", "label_index"]
             if include_names:
                 columns.append("name")
             return pd.DataFrame(columns=columns)
@@ -1285,7 +1287,7 @@ class ZarrNiiAtlas(ZarrNii):
             "x": centroids[:, 0],  # x from centroids
             "y": centroids[:, 1],  # y from centroids
             "z": centroids[:, 2],  # z from centroids
-            "index": label_at_points,
+            "label_index": label_at_points,
         }
 
         # Add region names if requested
@@ -1303,10 +1305,6 @@ class ZarrNiiAtlas(ZarrNii):
                 for label in label_at_points
             ]
 
-            df_centroids = pd.DataFrame(df_data)
+        df_centroids = pd.DataFrame(df_data)
 
-            df_counts = (
-                df_centroids.groupby(["index", "name"]).size().reset_index(name="count")
-            )
-
-        return (df_centroids, df_counts)
+        return df_centroids
