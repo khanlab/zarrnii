@@ -676,6 +676,7 @@ class ZarrNiiAtlas(ZarrNii):
         aggregation_func: str = "mean",
         background_label: int = 0,
         column_name: str = None,
+        column_suffix: str = None,
     ) -> pd.DataFrame:
         """Aggregate image values by atlas regions.
 
@@ -684,13 +685,31 @@ class ZarrNiiAtlas(ZarrNii):
             aggregation_func: Aggregation function ('mean', 'sum', 'std', 'median', 'min', 'max')
             background_label: Label value to treat as background (excluded from results)
             column_name: String to use for column name. If None, uses f"{aggregation_func}_value"
+            column_suffix: (Deprecated) String suffix to append to column name.
+                Use column_name instead. If provided, column_name will be set to
+                f"{aggregation_func}_{column_suffix}".
+
         Returns:
             DataFrame with columns: index, name, {column_name}, volume_mm3
             (e.g., with defaults: index, name, mean_value, volume_mm3)
 
         Raises:
             ValueError: If image and atlas are incompatible
+
+        .. deprecated:: 0.2.0
+            The `column_suffix` parameter is deprecated. Use `column_name` instead.
         """
+        # Handle deprecated column_suffix parameter
+        if column_suffix is not None:
+            warnings.warn(
+                "The 'column_suffix' parameter is deprecated and will be removed in a "
+                "future version. Use 'column_name' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if column_name is None:
+                column_name = f"{aggregation_func}_{column_suffix}"
+
         # Set default column name if not provided
         if column_name is None:
             column_name = f"{aggregation_func}_value"
