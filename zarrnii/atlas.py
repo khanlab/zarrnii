@@ -690,8 +690,8 @@ class ZarrNiiAtlas(ZarrNii):
                 f"{aggregation_func}_{column_suffix}".
 
         Returns:
-            DataFrame with columns: index, name, {column_name}, volume_mm3
-            (e.g., with defaults: index, name, mean_value, volume_mm3)
+            DataFrame with columns: index, name, {column_name}, volume
+            (e.g., with defaults: index, name, mean_value, volume)
 
         Raises:
             ValueError: If image and atlas are incompatible
@@ -800,7 +800,7 @@ class ZarrNiiAtlas(ZarrNii):
                     self.label_column: int(label),
                     self.name_column: region_name,
                     column_name: agg_value,
-                    "volume_mm3": volume,
+                    "volume": volume,
                 }
             )
 
