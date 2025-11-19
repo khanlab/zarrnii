@@ -1293,8 +1293,8 @@ class ZarrNiiAtlas(ZarrNii):
         # Convert to integer labels
         label_at_points = label_at_points.astype(int)
 
-        # Create DataFrame with z, y, x columns (as specified in problem statement)
-        # centroids are in (x, y, z) order, so we need to reorder for output
+        # Create DataFrame with x, y, z columns
+        # centroids are in (x, y, z) order, so we use that order for output
         df_data = {
             "x": centroids[:, 0],  # x from centroids
             "y": centroids[:, 1],  # y from centroids
