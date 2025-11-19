@@ -675,7 +675,7 @@ class ZarrNiiAtlas(ZarrNii):
         image: ZarrNii,
         aggregation_func: str = "mean",
         background_label: int = 0,
-        column_name: str = "value",
+        column_name: str = None,
     ) -> pd.DataFrame:
         """Aggregate image values by atlas regions.
 
@@ -683,14 +683,18 @@ class ZarrNiiAtlas(ZarrNii):
             image: Image to aggregate (must be compatible with atlas)
             aggregation_func: Aggregation function ('mean', 'sum', 'std', 'median', 'min', 'max')
             background_label: Label value to treat as background (excluded from results)
-            column_name: String to use for column name.
+            column_name: String to use for column name. If None, uses f"{aggregation_func}_value"
         Returns:
-            DataFrame with columns: index, name, {column_name}, volume
-            (e.g., with defaults: index, name, mean_value, volume)
+            DataFrame with columns: index, name, {column_name}, volume_mm3
+            (e.g., with defaults: index, name, mean_value, volume_mm3)
 
         Raises:
             ValueError: If image and atlas are incompatible
         """
+        # Set default column name if not provided
+        if column_name is None:
+            column_name = f"{aggregation_func}_value"
+
         # Validate image compatibility
         if not np.array_equal(image.shape, self.dseg.shape):
             raise ValueError(
@@ -777,7 +781,7 @@ class ZarrNiiAtlas(ZarrNii):
                     self.label_column: int(label),
                     self.name_column: region_name,
                     column_name: agg_value,
-                    "volume": volume,
+                    "volume_mm3": volume,
                 }
             )
 
@@ -1176,7 +1180,7 @@ class ZarrNiiAtlas(ZarrNii):
         self,
         centroids: np.ndarray,
         include_names: bool = True,
-    ) -> pd.DataFrame:
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Map centroids to atlas labels using nearest neighbor interpolation.
 
         This method takes a set of centroids (typically from compute_centroids)
@@ -1192,12 +1196,15 @@ class ZarrNiiAtlas(ZarrNii):
                 in the output (default: True).
 
         Returns:
-            tuple of:
-            centroids pandas.DataFrame with columns:
-                - z, y, x: Physical coordinates (in mm) of each centroid
-                - index: Integer label index from the atlas
-                - name (optional): Region name if include_names=True
-            counts pandas.DataFrame with columns index, name, and count
+            tuple of two pandas DataFrames:
+                1. centroids DataFrame with columns:
+                    - x, y, z: Physical coordinates (in mm) of each centroid
+                    - index: Integer label index from the atlas
+                    - name (optional): Region name if include_names=True
+                2. counts DataFrame with columns:
+                    - index: Integer label index from the atlas
+                    - name (optional): Region name if include_names=True
+                    - count: Number of centroids in each region
 
         Notes:
             - Input centroids must be in the same physical space as the atlas
@@ -1209,20 +1216,27 @@ class ZarrNiiAtlas(ZarrNii):
             >>> centroids = binary_seg.compute_centroids()
             >>>
             >>> # Map centroids to atlas labels
-            >>> labeled_df = atlas.label_centroids(centroids)
-            >>> print(labeled_df)
+            >>> df_centroids, df_counts = atlas.label_centroids(centroids)
+            >>> print(df_centroids)
+            >>> print(df_counts)
             >>>
             >>> # Filter to specific regions
-            >>> hippocampus_points = labeled_df[
-            ...     labeled_df['name'] == 'Hippocampus'
+            >>> hippocampus_points = df_centroids[
+            ...     df_centroids['name'] == 'Hippocampus'
             ... ]
         """
         # Handle empty centroids array
         if centroids.shape[0] == 0:
-            columns = ["x", "y", "z", "index"]
+            columns_centroids = ["x", "y", "z", "index"]
+            columns_counts = ["index"]
             if include_names:
-                columns.append("name")
-            return pd.DataFrame(columns=columns)
+                columns_centroids.append("name")
+                columns_counts.append("name")
+            columns_counts.append("count")
+            return (
+                pd.DataFrame(columns=columns_centroids),
+                pd.DataFrame(columns=columns_counts),
+            )
 
         # Validate input shape
         if centroids.ndim != 2 or centroids.shape[1] != 3:
@@ -1303,10 +1317,14 @@ class ZarrNiiAtlas(ZarrNii):
                 for label in label_at_points
             ]
 
-            df_centroids = pd.DataFrame(df_data)
+        df_centroids = pd.DataFrame(df_data)
 
+        # Create counts DataFrame - group by index and optionally name
+        if include_names and self.labels_df is not None:
             df_counts = (
                 df_centroids.groupby(["index", "name"]).size().reset_index(name="count")
             )
+        else:
+            df_counts = df_centroids.groupby(["index"]).size().reset_index(name="count")
 
         return (df_centroids, df_counts)
