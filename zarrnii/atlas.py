@@ -18,6 +18,7 @@ import ngff_zarr as nz
 import numpy as np
 import pandas as pd
 from attrs import define, field
+from scipy.interpolate import interpn
 
 try:
     import templateflow.api as tflow
@@ -674,7 +675,8 @@ class ZarrNiiAtlas(ZarrNii):
         image: ZarrNii,
         aggregation_func: str = "mean",
         background_label: int = 0,
-        column_suffix: str = "value",
+        column_name: str = None,
+        column_suffix: str = None,
     ) -> pd.DataFrame:
         """Aggregate image values by atlas regions.
 
@@ -682,14 +684,36 @@ class ZarrNiiAtlas(ZarrNii):
             image: Image to aggregate (must be compatible with atlas)
             aggregation_func: Aggregation function ('mean', 'sum', 'std', 'median', 'min', 'max')
             background_label: Label value to treat as background (excluded from results)
-            column_suffix: String suffix to append to column name. Name will be {agg_func}_{col_suffix}.
+            column_name: String to use for column name. If None, uses f"{aggregation_func}_value"
+            column_suffix: (Deprecated) String suffix to append to column name.
+                Use column_name instead. If provided, column_name will be set to
+                f"{aggregation_func}_{column_suffix}".
+
         Returns:
-            DataFrame with columns: index, name, {aggregation_func}_{column_suffix}, volume_mm3
+            DataFrame with columns: index, name, {column_name}, volume_mm3
             (e.g., with defaults: index, name, mean_value, volume_mm3)
 
         Raises:
             ValueError: If image and atlas are incompatible
+
+        .. deprecated:: 0.2.0
+            The `column_suffix` parameter is deprecated. Use `column_name` instead.
         """
+        # Handle deprecated column_suffix parameter
+        if column_suffix is not None:
+            warnings.warn(
+                "The 'column_suffix' parameter is deprecated and will be removed in a "
+                "future version. Use 'column_name' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if column_name is None:
+                column_name = f"{aggregation_func}_{column_suffix}"
+
+        # Set default column name if not provided
+        if column_name is None:
+            column_name = f"{aggregation_func}_value"
+
         # Validate image compatibility
         if not np.array_equal(image.shape, self.dseg.shape):
             raise ValueError(
@@ -760,12 +784,6 @@ class ZarrNiiAtlas(ZarrNii):
                         f"Unknown aggregation function: {aggregation_func}. "
                         "Supported: mean, sum, std, median, min, max"
                     )
-
-            column_name = (
-                aggregation_func
-                if column_suffix is None
-                else f"{aggregation_func}_{column_suffix}"
-            )
 
             # Get region info
             try:
@@ -1176,3 +1194,156 @@ class ZarrNiiAtlas(ZarrNii):
             centers.append(center)
 
         return centers
+
+    def label_centroids(
+        self,
+        centroids: np.ndarray,
+        include_names: bool = True,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Map centroids to atlas labels using nearest neighbor interpolation.
+
+        This method takes a set of centroids (typically from compute_centroids)
+        and determines which atlas region each centroid falls into. It uses
+        nearest neighbor interpolation to assign labels, making it robust to
+        small coordinate mismatches.
+
+        Args:
+            centroids: Nx3 numpy array of centroid coordinates in physical space
+                (typically output from compute_centroids). Each row is [x, y, z]
+                in physical/world coordinates (mm). Can also be an empty array (0, 3).
+            include_names: If True, includes region names from the labels dataframe
+                in the output (default: True).
+
+        Returns:
+            tuple of two pandas DataFrames:
+                1. centroids DataFrame with columns:
+                    - x, y, z: Physical coordinates (in mm) of each centroid
+                    - index: Integer label index from the atlas
+                    - name (optional): Region name if include_names=True
+                2. counts DataFrame with columns:
+                    - index: Integer label index from the atlas
+                    - name (optional): Region name if include_names=True
+                    - count: Number of centroids in each region
+
+        Notes:
+            - Input centroids must be in the same physical space as the atlas
+            - Points outside the atlas bounds receive index=0 (background)
+            - Uses scipy.interpolate.interpn with method='nearest' for label lookup
+
+        Examples:
+            >>> # Compute centroids from a segmentation
+            >>> centroids = binary_seg.compute_centroids()
+            >>>
+            >>> # Map centroids to atlas labels
+            >>> df_centroids, df_counts = atlas.label_centroids(centroids)
+            >>> print(df_centroids)
+            >>> print(df_counts)
+            >>>
+            >>> # Filter to specific regions
+            >>> hippocampus_points = df_centroids[
+            ...     df_centroids['name'] == 'Hippocampus'
+            ... ]
+        """
+        # Handle empty centroids array
+        if centroids.shape[0] == 0:
+            columns_centroids = ["x", "y", "z", "index"]
+            columns_counts = ["index"]
+            if include_names:
+                columns_centroids.append("name")
+                columns_counts.append("name")
+            columns_counts.append("count")
+            return (
+                pd.DataFrame(columns=columns_centroids),
+                pd.DataFrame(columns=columns_counts),
+            )
+
+        # Validate input shape
+        if centroids.ndim != 2 or centroids.shape[1] != 3:
+            raise ValueError(
+                f"centroids must be Nx3 array, got shape {centroids.shape}"
+            )
+
+        # Get atlas data and affine
+        dseg_data = self.dseg.data
+        if hasattr(dseg_data, "compute"):
+            dseg_data = dseg_data.compute()
+
+        affine_matrix = self.dseg.affine.matrix
+
+        # Convert physical coordinates to voxel coordinates
+        # centroids are in (x, y, z) order
+        # Create homogeneous coordinates
+        n_points = centroids.shape[0]
+        centroids_homogeneous = np.column_stack(
+            [centroids, np.ones((n_points, 1), dtype=np.float64)]
+        )
+
+        # Apply inverse affine transform
+        affine_inv = np.linalg.inv(affine_matrix)
+        voxel_coords_homogeneous = centroids_homogeneous @ affine_inv.T
+        voxel_coords = voxel_coords_homogeneous[:, :3]
+
+        # Create grid for interpn
+        # Grid should be in the order of the data array dimensions
+        # For ZarrNii, this is typically (z, y, x) or (c, z, y, x)
+        # Remove channel dimension if present
+        if dseg_data.ndim == 4:
+            dseg_data = dseg_data[0]  # Remove channel dimension
+
+        # Create coordinate grids for each dimension
+        # interpn expects a tuple of 1D arrays representing the grid coordinates
+        shape = dseg_data.shape
+        grid = tuple(np.arange(s) for s in shape)
+
+        # The inverse affine transform already converted physical (x, y, z) coordinates
+        # to voxel coordinates in the order matching the data array axes_order.
+        # So voxel_coords is already in the correct order for interpn!
+
+        # Use interpn to get labels at the centroid locations
+        label_at_points = interpn(
+            grid,
+            dseg_data,
+            voxel_coords,
+            method="nearest",
+            bounds_error=False,
+            fill_value=0,
+        )
+
+        # Convert to integer labels
+        label_at_points = label_at_points.astype(int)
+
+        # Create DataFrame with x, y, z columns
+        # centroids are in (x, y, z) order, so we use that order for output
+        df_data = {
+            "x": centroids[:, 0],  # x from centroids
+            "y": centroids[:, 1],  # y from centroids
+            "z": centroids[:, 2],  # z from centroids
+            "index": label_at_points,
+        }
+
+        # Add region names if requested
+        if include_names and self.labels_df is not None:
+            # Create a lookup from index to name
+            label_to_name = dict(
+                zip(
+                    self.labels_df[self.label_column],
+                    self.labels_df[self.name_column],
+                )
+            )
+            # Map labels to names, use 'Unknown' for labels not in lookup table
+            df_data["name"] = [
+                label_to_name.get(label, f"Unknown_Label_{label}")
+                for label in label_at_points
+            ]
+
+        df_centroids = pd.DataFrame(df_data)
+
+        # Create counts DataFrame - group by index and optionally name
+        if include_names and self.labels_df is not None:
+            df_counts = (
+                df_centroids.groupby(["index", "name"]).size().reset_index(name="count")
+            )
+        else:
+            df_counts = df_centroids.groupby(["index"]).size().reset_index(name="count")
+
+        return (df_centroids, df_counts)
