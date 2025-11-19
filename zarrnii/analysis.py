@@ -641,6 +641,11 @@ def create_mip_visualization(
     slab_thickness_idx = int(np.ceil(slab_thickness_um / proj_axis_spacing_um))
     slab_spacing_idx = int(np.round(slab_spacing_um / proj_axis_spacing_um))
 
+    # Ensure both are at least 1 to avoid issues
+    # This can happen when slab thickness/spacing in microns is smaller than voxel spacing
+    slab_thickness_idx = max(1, slab_thickness_idx)
+    slab_spacing_idx = max(1, slab_spacing_idx)
+
     # Generate slab positions
     slab_centers_idx = []
     current_pos = slab_thickness_idx // 2  # Start from half slab thickness
@@ -661,6 +666,10 @@ def create_mip_visualization(
         half_thickness = slab_thickness_idx // 2
         start_idx = max(0, center_idx - half_thickness)
         end_idx = min(proj_axis_size, center_idx + half_thickness)
+
+        # Ensure we have at least one slice (handle edge case where thickness=1)
+        if end_idx <= start_idx:
+            end_idx = min(start_idx + 1, proj_axis_size)
 
         # Store slab info (positions in microns)
         slab_info = {

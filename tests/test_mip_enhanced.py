@@ -131,6 +131,7 @@ class TestIntensityRescaling:
             slab_thickness_um=10.0,
             channel_colors=[(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)],
             channel_ranges=[(0.0, 2000.0), (1000.0, 3000.0), (2000.0, 4000.0)],
+            scale_units="um",  # Scale values are in microns
         )
 
         assert len(mips) == 1
@@ -162,6 +163,7 @@ class TestIntensityRescaling:
             slab_thickness_um=10.0,
             channel_colors=["red"],
             channel_ranges=[(0.0, 2000.0)],
+            scale_units="um",  # Scale values are in microns
         )
 
         # Value 5000 should be clipped to max (2000) -> normalized to 1.0
@@ -183,6 +185,7 @@ class TestIntensityRescaling:
             slab_thickness_um=10.0,
             channel_colors=["red", "green"],
             channel_ranges=[(0.0, 0.5), None],
+            scale_units="um",  # Scale values are in microns
         )
 
         assert len(mips) == 1
@@ -296,6 +299,7 @@ class TestAlphaTransparency:
                 (1.0, 0.0, 0.0, 1.0),  # Full red
                 (0.0, 1.0, 0.0, 0.5),  # Half-transparent green
             ],
+            scale_units="um",  # Scale values are in microns
         )
 
         assert len(mips) == 1
@@ -325,6 +329,7 @@ class TestAlphaTransparency:
             plane="axial",
             slab_thickness_um=10.0,
             channel_colors=[(1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
+            scale_units="um",  # Scale values are in microns
         )
 
         assert len(mips) == 1
@@ -352,6 +357,7 @@ class TestAlphaTransparency:
                 (1.0, 0.0, 0.0, 0.5),  # Half-transparent red
                 (0.0, 0.0, 1.0, 0.5),  # Half-transparent blue
             ],
+            scale_units="um",  # Scale values are in microns
         )
 
         mip = mips[0]
@@ -378,6 +384,7 @@ class TestBackwardCompatibility:
             plane="axial",
             slab_thickness_um=10.0,
             channel_colors=["red", "green"],
+            scale_units="um",  # Scale values are in microns
         )
 
         assert len(mips) == 1
@@ -403,6 +410,7 @@ class TestBackwardCompatibility:
             plane="axial",
             slab_thickness_um=10.0,
             channel_colors=[(1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
+            scale_units="um",  # Scale values are in microns
         )
 
         # With auto-scaling and uniform values per channel, each channel
@@ -451,6 +459,7 @@ class TestEdgeCases:
             slab_thickness_um=10.0,
             channel_colors=["red"],
             channel_ranges=[(500.0, 500.0)],
+            scale_units="um",  # Scale values are in microns
         )
 
         # Should handle gracefully (avoid division by zero)
