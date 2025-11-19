@@ -12172,7 +12172,7 @@ If False, pixels &gt; threshold are labeled as foreground.</p>
 
 
 <h3 id="zarrnii.ZarrNii.compute_histogram" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">compute_histogram</span><span class="p">(</span><span class="n">bins</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="nb">range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">compute_histogram</span><span class="p">(</span><span class="n">bins</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
 
 </h3>
 
@@ -12189,12 +12189,12 @@ efficient processing of large datasets.</p>
     <ul>
         <li class="doc-section-item field-body">
             <b><code>bins</code></b>
-              (<code><span title="int">int</span></code>, default:
-                  <code>256</code>
+              (<code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>, default:
+                  <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>Number of histogram bins (default: 256)</p>
+            <p>Number of histogram bins (default: bin width 1, bins=max - min + 1)</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -12316,7 +12316,7 @@ where mask &gt; 0 are included in histogram computation</p>
 <span class="normal">4795</span>
 <span class="normal">4796</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_histogram</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
-    <span class="n">bins</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
+    <span class="n">bins</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="nb">range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">mask</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;ZarrNii&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
@@ -12329,7 +12329,7 @@ where mask &gt; 0 are included in histogram computation</p>
 <span class="sd">    efficient processing of large datasets.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        bins: Number of histogram bins (default: 256)</span>
+<span class="sd">        bins: Number of histogram bins (default: bin width 1, bins=max - min + 1)</span>
 <span class="sd">        range: Optional tuple (min, max) defining histogram range. If None,</span>
 <span class="sd">            uses the full range of the data</span>
 <span class="sd">        mask: Optional ZarrNii mask of same shape as image. Only pixels</span>
@@ -12365,7 +12365,7 @@ where mask &gt; 0 are included in histogram computation</p>
 
 
 <h3 id="zarrnii.ZarrNii.compute_otsu_thresholds" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">compute_otsu_thresholds</span><span class="p">(</span><span class="n">classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="nb">range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_figure</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">compute_otsu_thresholds</span><span class="p">(</span><span class="n">classes</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_figure</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
 </h3>
 
@@ -12393,12 +12393,12 @@ returns k-1 thresholds.</p>
         </li>
         <li class="doc-section-item field-body">
             <b><code>bins</code></b>
-              (<code><span title="int">int</span></code>, default:
-                  <code>256</code>
+              (<code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>, default:
+                  <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>Number of histogram bins (default: 256)</p>
+            <p>Number of histogram bins (default: bin width 1, bins=max - min + 1)</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -12560,7 +12560,7 @@ object showing the histogram with annotated threshold lines.</p>
 <span class="normal">4869</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_otsu_thresholds</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
-    <span class="n">bins</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
+    <span class="n">bins</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="nb">range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">mask</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;ZarrNii&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">return_figure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
@@ -12578,7 +12578,7 @@ object showing the histogram with annotated threshold lines.</p>
 <span class="sd">        classes: Number of classes to separate data into (default: 2).</span>
 <span class="sd">            Must be &gt;= 2. For classes=2, returns 1 threshold. For classes=k,</span>
 <span class="sd">            returns k-1 thresholds.</span>
-<span class="sd">        bins: Number of histogram bins (default: 256)</span>
+<span class="sd">        bins: Number of histogram bins (default: bin width 1, bins=max - min + 1)</span>
 <span class="sd">        range: Optional tuple (min, max) defining histogram range. If None,</span>
 <span class="sd">            uses the full range of the data</span>
 <span class="sd">        mask: Optional ZarrNii mask of same shape as image. Only pixels</span>
