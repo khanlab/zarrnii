@@ -636,31 +636,38 @@ class TestZarrNiiAtlas:
         )
 
         # Label the centroids
-        df = atlas.label_centroids(centroids, include_names=True)
+        df_centroids, df_counts = atlas.label_centroids(centroids, include_names=True)
 
         # Check DataFrame structure
-        assert isinstance(df, pd.DataFrame)
-        assert len(df) == 3
-        assert "z" in df.columns
-        assert "y" in df.columns
-        assert "x" in df.columns
-        assert "label_index" in df.columns
-        assert "name" in df.columns
+        assert isinstance(df_centroids, pd.DataFrame)
+        assert isinstance(df_counts, pd.DataFrame)
+        assert len(df_centroids) == 3
+        assert "z" in df_centroids.columns
+        assert "y" in df_centroids.columns
+        assert "x" in df_centroids.columns
+        assert "index" in df_centroids.columns
+        assert "name" in df_centroids.columns
+
+        # Check counts DataFrame
+        assert len(df_counts) == 3  # 3 unique regions
+        assert "index" in df_counts.columns
+        assert "name" in df_counts.columns
+        assert "count" in df_counts.columns
 
         # Check coordinate values (should match input, reordered to z, y, x)
-        assert df.iloc[0]["x"] == 2.5
-        assert df.iloc[0]["y"] == 5.0
-        assert df.iloc[0]["z"] == 5.0
+        assert df_centroids.iloc[0]["x"] == 2.5
+        assert df_centroids.iloc[0]["y"] == 5.0
+        assert df_centroids.iloc[0]["z"] == 5.0
 
         # Check label assignments
-        assert df.iloc[0]["label_index"] == 1
-        assert df.iloc[0]["name"] == "Left Region"
+        assert df_centroids.iloc[0]["index"] == 1
+        assert df_centroids.iloc[0]["name"] == "Left Region"
 
-        assert df.iloc[1]["label_index"] == 2
-        assert df.iloc[1]["name"] == "Right Top"
+        assert df_centroids.iloc[1]["index"] == 2
+        assert df_centroids.iloc[1]["name"] == "Right Top"
 
-        assert df.iloc[2]["label_index"] == 3
-        assert df.iloc[2]["name"] == "Right Bottom"
+        assert df_centroids.iloc[2]["index"] == 3
+        assert df_centroids.iloc[2]["name"] == "Right Bottom"
 
     def test_label_centroids_without_names(self, sample_atlas):
         """Test centroid labeling without including names."""
@@ -668,12 +675,17 @@ class TestZarrNiiAtlas:
 
         centroids = np.array([[2.5, 5.0, 5.0]])  # Should be in region 1
 
-        df = atlas.label_centroids(centroids, include_names=False)
+        df_centroids, df_counts = atlas.label_centroids(centroids, include_names=False)
 
         # Check that name column is not included
-        assert "name" not in df.columns
-        assert "label_index" in df.columns
-        assert df.iloc[0]["label_index"] == 1
+        assert "name" not in df_centroids.columns
+        assert "index" in df_centroids.columns
+        assert df_centroids.iloc[0]["index"] == 1
+
+        # Check counts DataFrame doesn't have name column
+        assert "name" not in df_counts.columns
+        assert "index" in df_counts.columns
+        assert "count" in df_counts.columns
 
     def test_label_centroids_empty_array(self, sample_atlas):
         """Test handling of empty centroids array."""
@@ -682,15 +694,21 @@ class TestZarrNiiAtlas:
         # Empty array with correct shape
         centroids = np.empty((0, 3))
 
-        df = atlas.label_centroids(centroids, include_names=True)
+        df_centroids, df_counts = atlas.label_centroids(centroids, include_names=True)
 
-        # Should return empty DataFrame with correct columns
-        assert len(df) == 0
-        assert "z" in df.columns
-        assert "y" in df.columns
-        assert "x" in df.columns
-        assert "label_index" in df.columns
-        assert "name" in df.columns
+        # Should return empty DataFrames with correct columns
+        assert len(df_centroids) == 0
+        assert "z" in df_centroids.columns
+        assert "y" in df_centroids.columns
+        assert "x" in df_centroids.columns
+        assert "index" in df_centroids.columns
+        assert "name" in df_centroids.columns
+
+        # Check counts DataFrame is also empty
+        assert len(df_counts) == 0
+        assert "index" in df_counts.columns
+        assert "name" in df_counts.columns
+        assert "count" in df_counts.columns
 
     def test_label_centroids_out_of_bounds(self, sample_atlas):
         """Test that points outside atlas bounds get label 0."""
@@ -705,11 +723,11 @@ class TestZarrNiiAtlas:
             ]
         )
 
-        df = atlas.label_centroids(centroids, include_names=True)
+        df_centroids, df_counts = atlas.label_centroids(centroids, include_names=True)
 
         # Points outside should get label 0 (fill_value)
-        assert df.iloc[0]["label_index"] == 0
-        assert df.iloc[1]["label_index"] == 0
+        assert df_centroids.iloc[0]["index"] == 0
+        assert df_centroids.iloc[1]["index"] == 0
 
     def test_label_centroids_background(self, sample_atlas):
         """Test centroids in background region (label 0)."""
@@ -720,10 +738,10 @@ class TestZarrNiiAtlas:
         # For now, test a point that should be in a labeled region
         centroids = np.array([[2.5, 5.0, 5.0]])  # In region 1
 
-        df = atlas.label_centroids(centroids)
+        df_centroids, df_counts = atlas.label_centroids(centroids)
 
         # This point should NOT be background
-        assert df.iloc[0]["label_index"] != 0
+        assert df_centroids.iloc[0]["index"] != 0
 
     def test_label_centroids_invalid_shape(self, sample_atlas):
         """Test error handling for invalid centroids shape."""
@@ -763,17 +781,19 @@ class TestZarrNiiAtlas:
         centroids = binary_znii.compute_centroids(depth=2)
 
         # Label them using the atlas
-        df = sample_atlas.label_centroids(centroids, include_names=True)
+        df_centroids, df_counts = sample_atlas.label_centroids(
+            centroids, include_names=True
+        )
 
         # Should have found 2 objects
-        assert len(df) == 2
+        assert len(df_centroids) == 2
 
         # Both should have valid labels (not 0)
-        assert all(df["label_index"] > 0)
+        assert all(df_centroids["index"] > 0)
 
         # Check that we got expected region assignments
         # Objects are at approximately (3, 3, 3) and (7, 7, 7) in voxel space
-        labels = set(df["label_index"].values)
+        labels = set(df_centroids["index"].values)
         # Should include regions 1 and 3 (or similar based on exact centroid positions)
         assert len(labels) <= 2  # At most 2 different labels
 
@@ -785,13 +805,13 @@ class TestZarrNiiAtlas:
         # This is a bit artificial, but tests the error handling
         centroids = np.array([[2.5, 5.0, 5.0]])
 
-        df = atlas.label_centroids(centroids, include_names=True)
+        df_centroids, df_counts = atlas.label_centroids(centroids, include_names=True)
 
         # Even if we got an unknown label, the function should handle it gracefully
         # (In this case, we should get a valid label from our test atlas)
-        assert "name" in df.columns
+        assert "name" in df_centroids.columns
         # The name should be from our test data or "Unknown_Label_X"
-        assert isinstance(df.iloc[0]["name"], str)
+        assert isinstance(df_centroids.iloc[0]["name"], str)
 
 
 class TestZarrNiiAtlasFileIO:
