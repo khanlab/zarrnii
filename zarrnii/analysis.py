@@ -826,7 +826,8 @@ def compute_centroids(
     depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,
     boundary: str = "none",
     rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
-) -> np.ndarray:
+    output_path: Optional[str] = None,
+) -> Optional[np.ndarray]:
     """
     Compute centroids of binary segmentation objects in physical coordinates.
 
@@ -834,6 +835,10 @@ def compute_centroids(
     a segmentation plugin) to identify connected components and compute their
     centroids in physical coordinates. It processes the image chunk-by-chunk
     with overlap to handle objects that span chunk boundaries efficiently.
+
+    For large datasets with many objects, use the output_path parameter to write
+    centroids directly to a Parquet file on disk instead of returning them as a
+    numpy array. This avoids memory issues when dealing with millions of objects.
 
     Args:
         image: Input binary dask array (typically 0/1 values) at highest resolution.
@@ -854,11 +859,18 @@ def compute_centroids(
             - tuple: target chunk size per dimension
             - None: use existing chunks
             Default is None (use existing chunks).
+        output_path: Optional path to write centroids to Parquet file instead of
+            returning them in memory. If provided, centroids are written to this
+            file path and None is returned. Use this for large datasets to avoid
+            memory issues. The Parquet file will contain columns 'x', 'y', 'z' with
+            physical coordinates. If None (default), centroids are returned as numpy
+            array.
 
     Returns:
-        numpy.ndarray: Nx3 array of physical coordinates for N detected objects,
-            where each row is [x, y, z] in physical space. The array has dtype
-            float64.
+        Optional[numpy.ndarray]: If output_path is None, returns Nx3 array of
+            physical coordinates for N detected objects, where each row is
+            [x, y, z] in physical space. The array has dtype float64.
+            If output_path is provided, writes to Parquet file and returns None.
 
     Notes:
         - Objects with centroids in the overlap regions are filtered out to
@@ -866,9 +878,10 @@ def compute_centroids(
         - The function uses scikit-image's label() with connectivity=3 (26-connectivity
           in 3D) to identify connected components.
         - Empty chunks (no objects detected) contribute empty arrays to the result.
-        - This function computes the result immediately (not lazy) to return a
-          concrete numpy array.
+        - This function computes the result immediately (not lazy).
         - Uses Dask's map_overlap for efficient parallel processing across chunks.
+        - When using output_path, centroids are written in batches to avoid
+          memory overflow, making it suitable for datasets with millions of objects.
 
     Examples:
         >>> import dask.array as da
@@ -884,9 +897,17 @@ def compute_centroids(
         >>> # Create an affine transform (e.g., 1mm isotropic voxels)
         >>> affine = np.eye(4)
         >>>
-        >>> # Compute centroids
+        >>> # Compute centroids and return as numpy array (default)
         >>> centroids = compute_centroids(binary_seg, affine, depth=5)
         >>> print(f"Found {len(centroids)} objects with shape {centroids.shape}")
+        >>>
+        >>> # For large datasets, write to Parquet file
+        >>> compute_centroids(binary_seg, affine, depth=5,
+        ...                   output_path='centroids.parquet')
+        >>> # Read back with pandas or pyarrow
+        >>> import pandas as pd
+        >>> df = pd.read_parquet('centroids.parquet')
+        >>> print(f"Found {len(df)} objects")
     """
     # Import AffineTransform to handle both numpy arrays and AffineTransform objects
     from .transform import AffineTransform
@@ -1071,7 +1092,23 @@ def compute_centroids(
             centroid_list = all_centroid_lists
 
     if len(centroid_list) == 0:
-        return np.empty((0, 3), dtype=np.float64)
+        # Handle empty case based on output mode
+        if output_path is not None:
+            # Write empty Parquet file
+            import pyarrow as pa
+            import pyarrow.parquet as pq
+
+            empty_table = pa.table(
+                {
+                    "x": pa.array([], type=pa.float64()),
+                    "y": pa.array([], type=pa.float64()),
+                    "z": pa.array([], type=pa.float64()),
+                }
+            )
+            pq.write_table(empty_table, output_path)
+            return None
+        else:
+            return np.empty((0, 3), dtype=np.float64)
 
     # Convert to numpy array
     voxel_coords = np.array(centroid_list, dtype=np.float64)
@@ -1085,4 +1122,23 @@ def compute_centroids(
     physical_homogeneous = voxel_homogeneous @ affine_matrix.T
     physical_coords = physical_homogeneous[:, :3]
 
-    return physical_coords
+    # Handle output based on output_path parameter
+    if output_path is not None:
+        # Write to Parquet file
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        # Create PyArrow table with x, y, z columns
+        table = pa.table(
+            {
+                "x": pa.array(physical_coords[:, 0], type=pa.float64()),
+                "y": pa.array(physical_coords[:, 1], type=pa.float64()),
+                "z": pa.array(physical_coords[:, 2], type=pa.float64()),
+            }
+        )
+
+        # Write to Parquet file
+        pq.write_table(table, output_path)
+        return None
+    else:
+        return physical_coords

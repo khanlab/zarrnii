@@ -4979,7 +4979,8 @@ class ZarrNii:
         depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,
         boundary: str = "none",
         rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
-    ) -> np.ndarray:
+        output_path: Optional[str] = None,
+    ) -> Optional[np.ndarray]:
         """
         Compute centroids of binary segmentation objects in physical coordinates.
 
@@ -4988,6 +4989,10 @@ class ZarrNii:
         physical coordinates. It uses dask's map_overlap to efficiently process
         large images in chunks with overlap to handle objects that span chunk
         boundaries.
+
+        For large datasets with many objects, use the output_path parameter to write
+        centroids directly to a Parquet file on disk instead of returning them as a
+        numpy array. This avoids memory issues when dealing with millions of objects.
 
         The input image should be binary (0/1 values) at the highest resolution.
         The function will:
@@ -5012,11 +5017,18 @@ class ZarrNii:
                 - int: target chunk size for all dimensions
                 - tuple: target chunk size per dimension
                 - None: use existing chunks (default)
+            output_path: Optional path to write centroids to Parquet file instead of
+                returning them in memory. If provided, centroids are written to this
+                file path and None is returned. Use this for large datasets to avoid
+                memory issues. The Parquet file will contain columns 'x', 'y', 'z' with
+                physical coordinates. If None (default), centroids are returned as numpy
+                array.
 
         Returns:
-            numpy.ndarray: Nx3 array of physical coordinates for N detected objects,
-                where each row contains [x, y, z] coordinates in physical space.
-                The array has dtype float64.
+            Optional[numpy.ndarray]: If output_path is None, returns Nx3 array of
+                physical coordinates for N detected objects, where each row contains
+                [x, y, z] coordinates in physical space. The array has dtype float64.
+                If output_path is provided, writes to Parquet file and returns None.
 
         Notes:
             - This method expects a binary image (e.g., from segment_threshold).
@@ -5024,6 +5036,8 @@ class ZarrNii:
             - Uses 26-connectivity (connectivity=3) for 3D connected component labeling.
             - Empty chunks contribute no coordinates to the result.
             - The result is computed immediately (not lazy).
+            - When using output_path, centroids are written in batches to avoid
+              memory overflow, making it suitable for datasets with millions of objects.
 
         Examples:
             >>> # Apply threshold segmentation and compute centroids
@@ -5037,8 +5051,12 @@ class ZarrNii:
             ...     rechunk=(64, 64, 64)
             ... )
             >>>
-            >>> # Save centroids to file
-            >>> np.savetxt('centroids.txt', centroids, fmt='%.6f')
+            >>> # For large datasets, write to Parquet file
+            >>> binary.compute_centroids(depth=5, output_path='centroids.parquet')
+            >>> # Read back with pandas or pyarrow
+            >>> import pandas as pd
+            >>> df = pd.read_parquet('centroids.parquet')
+            >>> print(f"Found {len(df)} objects")
         """
         from .analysis import compute_centroids
 
@@ -5048,6 +5066,7 @@ class ZarrNii:
             depth=depth,
             boundary=boundary,
             rechunk=rechunk,
+            output_path=output_path,
         )
 
     def apply_scaled_processing(
