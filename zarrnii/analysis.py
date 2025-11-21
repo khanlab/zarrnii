@@ -1074,23 +1074,16 @@ def compute_centroids(
     if output_path is not None:
         import pyarrow as pa
         import pyarrow.parquet as pq
+        from dask.delayed import delayed
 
-        # Process blocks incrementally and write to Parquet
-        # This avoids loading all centroids into memory at once
-        writer = None
-        schema = pa.schema(
-            [
-                pa.field("x", pa.float64()),
-                pa.field("y", pa.float64()),
-                pa.field("z", pa.float64()),
-            ]
-        )
-
-        # Iterate over blocks and process them one at a time
-        for block_idx in np.ndindex(cents_blocks.numblocks):
-            # Compute only this block
-            block_result = cents_blocks.blocks[block_idx].compute()
-
+        # Create a delayed function to process each block
+        # This enables parallel computation of blocks
+        @delayed
+        def process_block(block_result):
+            """
+            Process a single block and return centroids in physical coordinates.
+            This runs in parallel across blocks via Dask.
+            """
             # Extract centroids from this block
             block_centroids = []
             if hasattr(block_result, "flat"):
@@ -1103,7 +1096,7 @@ def compute_centroids(
                 block_centroids = block_result
 
             if len(block_centroids) == 0:
-                continue  # Skip empty blocks
+                return None  # Empty block
 
             # Convert to numpy array
             voxel_coords = np.array(block_centroids, dtype=np.float64)
@@ -1116,6 +1109,38 @@ def compute_centroids(
 
             physical_homogeneous = voxel_homogeneous @ affine_matrix.T
             physical_coords = physical_homogeneous[:, :3]
+
+            return physical_coords
+
+        # Create delayed tasks for all blocks (enables parallel computation)
+        delayed_results = []
+        for block_idx in np.ndindex(cents_blocks.numblocks):
+            block = cents_blocks.blocks[block_idx]
+            # Wrap block computation in delayed to enable parallel processing
+            result_delayed = process_block(block)
+            delayed_results.append(result_delayed)
+
+        # Compute all blocks in parallel using Dask's scheduler
+        # This is the key difference: blocks are computed in parallel, not sequentially
+        computed_results = da.compute(*delayed_results)
+
+        # Write results to Parquet file incrementally
+        # The writing is sequential, but computation was parallel
+        writer = None
+        schema = pa.schema(
+            [
+                pa.field("x", pa.float64()),
+                pa.field("y", pa.float64()),
+                pa.field("z", pa.float64()),
+            ]
+        )
+
+        has_data = False
+        for physical_coords in computed_results:
+            if physical_coords is None:
+                continue  # Skip empty blocks
+
+            has_data = True
 
             # Create PyArrow table for this batch
             table = pa.table(
