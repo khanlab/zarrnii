@@ -409,3 +409,149 @@ class TestComputeCentroidsCZYX:
         # Should raise ValueError for unsupported dimensionality
         with pytest.raises(ValueError, match="Image must be 1D, 2D, 3D, or 4D"):
             compute_centroids(dask_img, affine, depth=5)
+
+
+class TestComputeCentroidsParquet:
+    """Test the Parquet output functionality."""
+
+    def test_parquet_output_single_object(self, tmp_path):
+        """Test writing centroids to Parquet file with single object."""
+        import pandas as pd
+
+        # Create a binary image with a single blob at known location
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        # Write to Parquet file
+        output_file = tmp_path / "centroids.parquet"
+        result = compute_centroids(
+            dask_img, affine, depth=5, output_path=str(output_file)
+        )
+
+        # Should return None when output_path is specified
+        assert result is None
+
+        # Verify file exists
+        assert output_file.exists()
+
+        # Read back and verify contents
+        df = pd.read_parquet(output_file)
+        assert len(df) == 1
+        assert list(df.columns) == ["x", "y", "z"]
+        assert_array_almost_equal(df.iloc[0].values, [24.5, 24.5, 24.5], decimal=1)
+
+    def test_parquet_output_multiple_objects(self, tmp_path):
+        """Test writing multiple centroids to Parquet file."""
+        import pandas as pd
+
+        # Create a binary image with multiple blobs
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+        img[8:13, 8:13, 8:13] = 1
+        img[28:33, 28:33, 28:33] = 1
+        img[48:53, 48:53, 48:53] = 1
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+        affine = np.eye(4)
+
+        # Write to Parquet file
+        output_file = tmp_path / "centroids.parquet"
+        result = compute_centroids(
+            dask_img, affine, depth=5, output_path=str(output_file)
+        )
+
+        assert result is None
+        assert output_file.exists()
+
+        # Read back and verify
+        df = pd.read_parquet(output_file)
+        assert len(df) == 3
+        assert list(df.columns) == ["x", "y", "z"]
+
+        # Sort by x coordinate for comparison
+        df_sorted = df.sort_values("x").reset_index(drop=True)
+        expected = np.array(
+            [[10.0, 10.0, 10.0], [30.0, 30.0, 30.0], [50.0, 50.0, 50.0]]
+        )
+        assert_array_almost_equal(df_sorted.values, expected, decimal=0)
+
+    def test_parquet_output_with_affine_transform(self, tmp_path):
+        """Test Parquet output with affine transformation."""
+        import pandas as pd
+
+        img = np.zeros((40, 40, 40), dtype=np.uint8)
+        img[18:23, 18:23, 18:23] = 1
+
+        dask_img = da.from_array(img, chunks=(20, 20, 20))
+        affine = np.array(
+            [[2.0, 0, 0, 10], [0, 2.0, 0, 10], [0, 0, 2.0, 10], [0, 0, 0, 1]]
+        )
+
+        output_file = tmp_path / "centroids.parquet"
+        compute_centroids(dask_img, affine, depth=3, output_path=str(output_file))
+
+        df = pd.read_parquet(output_file)
+        assert len(df) == 1
+        expected = np.array([[50.0, 50.0, 50.0]])
+        assert_array_almost_equal(df.values, expected, decimal=1)
+
+    def test_parquet_output_empty_image(self, tmp_path):
+        """Test Parquet output with empty image (no objects)."""
+        import pandas as pd
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        output_file = tmp_path / "centroids.parquet"
+        result = compute_centroids(
+            dask_img, affine, depth=5, output_path=str(output_file)
+        )
+
+        assert result is None
+        assert output_file.exists()
+
+        # Read back and verify empty file
+        df = pd.read_parquet(output_file)
+        assert len(df) == 0
+        assert list(df.columns) == ["x", "y", "z"]
+
+    def test_parquet_via_zarrnii_method(self, tmp_path):
+        """Test Parquet output through ZarrNii method."""
+        import pandas as pd
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        znii = ZarrNii.from_darr(
+            dask_img, spacing=(1.0, 1.0, 1.0), origin=(0.0, 0.0, 0.0), axes_order="ZYX"
+        )
+
+        output_file = tmp_path / "centroids.parquet"
+        result = znii.compute_centroids(depth=5, output_path=str(output_file))
+
+        assert result is None
+        assert output_file.exists()
+
+        df = pd.read_parquet(output_file)
+        assert len(df) == 1
+        assert_array_almost_equal(df.iloc[0].values, [24.5, 24.5, 24.5], decimal=1)
+
+    def test_parquet_backward_compatibility(self):
+        """Test that default behavior (no output_path) still returns numpy array."""
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        # Without output_path, should return numpy array
+        result = compute_centroids(dask_img, affine, depth=5)
+
+        assert result is not None
+        assert isinstance(result, np.ndarray)
+        assert result.shape == (1, 3)
+        assert_array_almost_equal(result[0], [24.5, 24.5, 24.5], decimal=1)

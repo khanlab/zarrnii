@@ -183,7 +183,7 @@ class TestZarrNiiAtlas:
 
         assert len(result) == 3  # 3 regions (excluding background)
         assert "mean_value" in result.columns
-        assert "volume_mm3" in result.columns
+        assert "volume" in result.columns
 
         # Check values for specific regions
         left_row = result[result["index"] == 1].iloc[0]

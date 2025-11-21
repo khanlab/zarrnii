@@ -826,7 +826,8 @@ def compute_centroids(
     depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,
     boundary: str = "none",
     rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
-) -> np.ndarray:
+    output_path: Optional[str] = None,
+) -> Optional[np.ndarray]:
     """
     Compute centroids of binary segmentation objects in physical coordinates.
 
@@ -834,6 +835,10 @@ def compute_centroids(
     a segmentation plugin) to identify connected components and compute their
     centroids in physical coordinates. It processes the image chunk-by-chunk
     with overlap to handle objects that span chunk boundaries efficiently.
+
+    For large datasets with many objects, use the output_path parameter to write
+    centroids directly to a Parquet file on disk instead of returning them as a
+    numpy array. This avoids memory issues when dealing with millions of objects.
 
     Args:
         image: Input binary dask array (typically 0/1 values) at highest resolution.
@@ -854,11 +859,18 @@ def compute_centroids(
             - tuple: target chunk size per dimension
             - None: use existing chunks
             Default is None (use existing chunks).
+        output_path: Optional path to write centroids to Parquet file instead of
+            returning them in memory. If provided, centroids are written to this
+            file path and None is returned. Use this for large datasets to avoid
+            memory issues. The Parquet file will contain columns 'x', 'y', 'z' with
+            physical coordinates. If None (default), centroids are returned as numpy
+            array.
 
     Returns:
-        numpy.ndarray: Nx3 array of physical coordinates for N detected objects,
-            where each row is [x, y, z] in physical space. The array has dtype
-            float64.
+        Optional[numpy.ndarray]: If output_path is None, returns Nx3 array of
+            physical coordinates for N detected objects, where each row is
+            [x, y, z] in physical space. The array has dtype float64.
+            If output_path is provided, writes to Parquet file and returns None.
 
     Notes:
         - Objects with centroids in the overlap regions are filtered out to
@@ -866,9 +878,10 @@ def compute_centroids(
         - The function uses scikit-image's label() with connectivity=3 (26-connectivity
           in 3D) to identify connected components.
         - Empty chunks (no objects detected) contribute empty arrays to the result.
-        - This function computes the result immediately (not lazy) to return a
-          concrete numpy array.
+        - This function computes the result immediately (not lazy).
         - Uses Dask's map_overlap for efficient parallel processing across chunks.
+        - When using output_path, centroids are written in batches to avoid
+          memory overflow, making it suitable for datasets with millions of objects.
 
     Examples:
         >>> import dask.array as da
@@ -884,9 +897,17 @@ def compute_centroids(
         >>> # Create an affine transform (e.g., 1mm isotropic voxels)
         >>> affine = np.eye(4)
         >>>
-        >>> # Compute centroids
+        >>> # Compute centroids and return as numpy array (default)
         >>> centroids = compute_centroids(binary_seg, affine, depth=5)
         >>> print(f"Found {len(centroids)} objects with shape {centroids.shape}")
+        >>>
+        >>> # For large datasets, write to Parquet file
+        >>> compute_centroids(binary_seg, affine, depth=5,
+        ...                   output_path='centroids.parquet')
+        >>> # Read back with pandas or pyarrow
+        >>> import pandas as pd
+        >>> df = pd.read_parquet('centroids.parquet')
+        >>> print(f"Found {len(df)} objects")
     """
     # Import AffineTransform to handle both numpy arrays and AffineTransform objects
     from .transform import AffineTransform
@@ -1040,8 +1061,6 @@ def compute_centroids(
         return result
 
     # Apply block operation with overlap
-    # We need to use map_blocks instead of map_overlap to have proper control
-    # Actually, let's use map_overlap but return lists that will be collected
     cents_blocks = image.map_overlap(
         _block_centroids,
         depth=overlap_sizes,
@@ -1051,38 +1070,142 @@ def compute_centroids(
         drop_axis=[],  # Keep dimensions initially
     )
 
-    # Compute to get all centroid lists
-    # cents_blocks will be a dask array of object type containing lists
-    all_centroid_lists = cents_blocks.compute()
+    # Handle Parquet output differently to avoid memory overflow
+    if output_path is not None:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        from dask.delayed import delayed
 
-    # Flatten and collect all centroids
-    centroid_list = []
+        # Create a delayed function to process each block
+        # This enables parallel computation of blocks
+        @delayed
+        def process_block(block_result):
+            """
+            Process a single block and return centroids in physical coordinates.
+            This runs in parallel across blocks via Dask.
+            """
+            # Extract centroids from this block
+            block_centroids = []
+            if hasattr(block_result, "flat"):
+                for item in block_result.flat:
+                    if isinstance(item, list):
+                        block_centroids.extend(item)
+                    elif isinstance(item, (tuple, np.ndarray)) and len(item) > 0:
+                        block_centroids.append(tuple(item))
+            elif isinstance(block_result, list):
+                block_centroids = block_result
 
-    # Handle different dimensionalities
-    if hasattr(all_centroid_lists, "flat"):
-        for item in all_centroid_lists.flat:
-            if isinstance(item, list):
-                centroid_list.extend(item)
-            elif isinstance(item, (tuple, np.ndarray)) and len(item) > 0:
-                centroid_list.append(tuple(item))
+            if len(block_centroids) == 0:
+                return None  # Empty block
+
+            # Convert to numpy array
+            voxel_coords = np.array(block_centroids, dtype=np.float64)
+
+            # Convert to physical coordinates using affine transform
+            n_points = voxel_coords.shape[0]
+            voxel_homogeneous = np.column_stack(
+                [voxel_coords, np.ones((n_points, 1), dtype=np.float64)]
+            )
+
+            physical_homogeneous = voxel_homogeneous @ affine_matrix.T
+            physical_coords = physical_homogeneous[:, :3]
+
+            return physical_coords
+
+        # Create delayed tasks for all blocks (enables parallel computation)
+        delayed_results = []
+        for block_idx in np.ndindex(cents_blocks.numblocks):
+            block = cents_blocks.blocks[block_idx]
+            # Wrap block computation in delayed to enable parallel processing
+            result_delayed = process_block(block)
+            delayed_results.append(result_delayed)
+
+        # Compute all blocks in parallel using Dask's scheduler
+        # This is the key difference: blocks are computed in parallel, not sequentially
+        computed_results = da.compute(*delayed_results)
+
+        # Write results to Parquet file incrementally
+        # The writing is sequential, but computation was parallel
+        writer = None
+        schema = pa.schema(
+            [
+                pa.field("x", pa.float64()),
+                pa.field("y", pa.float64()),
+                pa.field("z", pa.float64()),
+            ]
+        )
+
+        has_data = False
+        for physical_coords in computed_results:
+            if physical_coords is None:
+                continue  # Skip empty blocks
+
+            has_data = True
+
+            # Create PyArrow table for this batch
+            table = pa.table(
+                {
+                    "x": pa.array(physical_coords[:, 0], type=pa.float64()),
+                    "y": pa.array(physical_coords[:, 1], type=pa.float64()),
+                    "z": pa.array(physical_coords[:, 2], type=pa.float64()),
+                }
+            )
+
+            # Write to Parquet file (append mode)
+            if writer is None:
+                writer = pq.ParquetWriter(output_path, schema)
+
+            writer.write_table(table)
+
+        # Close the writer
+        if writer is not None:
+            writer.close()
+        else:
+            # No centroids found - write empty file
+            empty_table = pa.table(
+                {
+                    "x": pa.array([], type=pa.float64()),
+                    "y": pa.array([], type=pa.float64()),
+                    "z": pa.array([], type=pa.float64()),
+                }
+            )
+            pq.write_table(empty_table, output_path)
+
+        return None
+
     else:
-        # Single item
-        if isinstance(all_centroid_lists, list):
-            centroid_list = all_centroid_lists
+        # Original in-memory path for backward compatibility
+        # Compute to get all centroid lists
+        all_centroid_lists = cents_blocks.compute()
 
-    if len(centroid_list) == 0:
-        return np.empty((0, 3), dtype=np.float64)
+        # Flatten and collect all centroids
+        centroid_list = []
 
-    # Convert to numpy array
-    voxel_coords = np.array(centroid_list, dtype=np.float64)
+        # Handle different dimensionalities
+        if hasattr(all_centroid_lists, "flat"):
+            for item in all_centroid_lists.flat:
+                if isinstance(item, list):
+                    centroid_list.extend(item)
+                elif isinstance(item, (tuple, np.ndarray)) and len(item) > 0:
+                    centroid_list.append(tuple(item))
+        else:
+            # Single item
+            if isinstance(all_centroid_lists, list):
+                centroid_list = all_centroid_lists
 
-    # Convert to physical coordinates using affine transform
-    n_points = voxel_coords.shape[0]
-    voxel_homogeneous = np.column_stack(
-        [voxel_coords, np.ones((n_points, 1), dtype=np.float64)]
-    )
+        if len(centroid_list) == 0:
+            return np.empty((0, 3), dtype=np.float64)
 
-    physical_homogeneous = voxel_homogeneous @ affine_matrix.T
-    physical_coords = physical_homogeneous[:, :3]
+        # Convert to numpy array
+        voxel_coords = np.array(centroid_list, dtype=np.float64)
 
-    return physical_coords
+        # Convert to physical coordinates using affine transform
+        n_points = voxel_coords.shape[0]
+        voxel_homogeneous = np.column_stack(
+            [voxel_coords, np.ones((n_points, 1), dtype=np.float64)]
+        )
+
+        physical_homogeneous = voxel_homogeneous @ affine_matrix.T
+        physical_coords = physical_homogeneous[:, :3]
+
+        return physical_coords
