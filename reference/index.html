@@ -13029,7 +13029,7 @@ Tuple of (mip_list, slab_info_list) where:
 
 
 <h3 id="zarrnii.ZarrNii.compute_centroids" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">compute_centroids</span><span class="p">(</span><span class="n">depth</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="s1">&#39;none&#39;</span><span class="p">,</span> <span class="n">rechunk</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">compute_centroids</span><span class="p">(</span><span class="n">depth</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="s1">&#39;none&#39;</span><span class="p">,</span> <span class="n">rechunk</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h3>
 
@@ -13042,6 +13042,9 @@ plugin) to identify connected components and compute their centroids in
 physical coordinates. It uses dask's map_overlap to efficiently process
 large images in chunks with overlap to handle objects that span chunk
 boundaries.</p>
+<p>For large datasets with many objects, use the output_path parameter to write
+centroids directly to a Parquet file on disk instead of returning them as a
+numpy array. This avoids memory issues when dealing with millions of objects.</p>
 <p>The input image should be binary (0/1 values) at the highest resolution.
 The function will:
 1. Optionally rechunk the data for better processing efficiency
@@ -13094,18 +13097,34 @@ Default is 'none' (no padding at array boundaries).</p>
 - None: use existing chunks (default)</p>
           </div>
         </li>
+        <li class="doc-section-item field-body">
+            <b><code>output_path</code></b>
+              (<code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Optional path to write centroids to Parquet file instead of
+returning them in memory. If provided, centroids are written to this
+file path and None is returned. Use this for large datasets to avoid
+memory issues. The Parquet file will contain columns 'x', 'y', 'z' with
+physical coordinates. If None (default), centroids are returned as numpy
+array.</p>
+          </div>
+        </li>
     </ul>
 
 
 <p><span class="doc-section-title">Returns:</span></p>
     <ul>
         <li class="doc-section-item field-body">
-              <code><span title="numpy.ndarray">ndarray</span></code>
+              <code><span title="typing.Optional">Optional</span>[<span title="numpy.ndarray">ndarray</span>]</code>
           –
           <div class="doc-md-description">
-            <p>numpy.ndarray: Nx3 array of physical coordinates for N detected objects,
-where each row contains [x, y, z] coordinates in physical space.
-The array has dtype float64.</p>
+            <p>Optional[numpy.ndarray]: If output_path is None, returns Nx3 array of
+physical coordinates for N detected objects, where each row contains
+[x, y, z] coordinates in physical space. The array has dtype float64.
+If output_path is provided, writes to Parquet file and returns None.</p>
           </div>
         </li>
     </ul>
@@ -13119,6 +13138,8 @@ The array has dtype float64.</p>
 <li>Uses 26-connectivity (connectivity=3) for 3D connected component labeling.</li>
 <li>Empty chunks contribute no coordinates to the result.</li>
 <li>The result is computed immediately (not lazy).</li>
+<li>When using output_path, centroids are written in batches to avoid
+  memory overflow, making it suitable for datasets with millions of objects.</li>
 </ul>
 </details>
 
@@ -13134,8 +13155,12 @@ The array has dtype float64.</p>
 <span class="gp">... </span>    <span class="n">rechunk</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
 <span class="gp">... </span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Save centroids to file</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="s1">&#39;centroids.txt&#39;</span><span class="p">,</span> <span class="n">centroids</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">%.6f</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># For large datasets, write to Parquet file</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">binary</span><span class="o">.</span><span class="n">compute_centroids</span><span class="p">(</span><span class="n">depth</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="s1">&#39;centroids.parquet&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Read back with pandas or pyarrow</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_parquet</span><span class="p">(</span><span class="s1">&#39;centroids.parquet&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)</span><span class="si">}</span><span class="s2"> objects&quot;</span><span class="p">)</span>
 </code></pre></div>
 
 
@@ -13215,12 +13240,32 @@ The array has dtype float64.</p>
 <span class="normal">5048</span>
 <span class="normal">5049</span>
 <span class="normal">5050</span>
-<span class="normal">5051</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_centroids</span><span class="p">(</span>
+<span class="normal">5051</span>
+<span class="normal">5052</span>
+<span class="normal">5053</span>
+<span class="normal">5054</span>
+<span class="normal">5055</span>
+<span class="normal">5056</span>
+<span class="normal">5057</span>
+<span class="normal">5058</span>
+<span class="normal">5059</span>
+<span class="normal">5060</span>
+<span class="normal">5061</span>
+<span class="normal">5062</span>
+<span class="normal">5063</span>
+<span class="normal">5064</span>
+<span class="normal">5065</span>
+<span class="normal">5066</span>
+<span class="normal">5067</span>
+<span class="normal">5068</span>
+<span class="normal">5069</span>
+<span class="normal">5070</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_centroids</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">depth</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
     <span class="n">boundary</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;none&quot;</span><span class="p">,</span>
     <span class="n">rechunk</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="n">output_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Compute centroids of binary segmentation objects in physical coordinates.</span>
 
@@ -13229,6 +13274,10 @@ The array has dtype float64.</p>
 <span class="sd">    physical coordinates. It uses dask&#39;s map_overlap to efficiently process</span>
 <span class="sd">    large images in chunks with overlap to handle objects that span chunk</span>
 <span class="sd">    boundaries.</span>
+
+<span class="sd">    For large datasets with many objects, use the output_path parameter to write</span>
+<span class="sd">    centroids directly to a Parquet file on disk instead of returning them as a</span>
+<span class="sd">    numpy array. This avoids memory issues when dealing with millions of objects.</span>
 
 <span class="sd">    The input image should be binary (0/1 values) at the highest resolution.</span>
 <span class="sd">    The function will:</span>
@@ -13253,11 +13302,18 @@ The array has dtype float64.</p>
 <span class="sd">            - int: target chunk size for all dimensions</span>
 <span class="sd">            - tuple: target chunk size per dimension</span>
 <span class="sd">            - None: use existing chunks (default)</span>
+<span class="sd">        output_path: Optional path to write centroids to Parquet file instead of</span>
+<span class="sd">            returning them in memory. If provided, centroids are written to this</span>
+<span class="sd">            file path and None is returned. Use this for large datasets to avoid</span>
+<span class="sd">            memory issues. The Parquet file will contain columns &#39;x&#39;, &#39;y&#39;, &#39;z&#39; with</span>
+<span class="sd">            physical coordinates. If None (default), centroids are returned as numpy</span>
+<span class="sd">            array.</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        numpy.ndarray: Nx3 array of physical coordinates for N detected objects,</span>
-<span class="sd">            where each row contains [x, y, z] coordinates in physical space.</span>
-<span class="sd">            The array has dtype float64.</span>
+<span class="sd">        Optional[numpy.ndarray]: If output_path is None, returns Nx3 array of</span>
+<span class="sd">            physical coordinates for N detected objects, where each row contains</span>
+<span class="sd">            [x, y, z] coordinates in physical space. The array has dtype float64.</span>
+<span class="sd">            If output_path is provided, writes to Parquet file and returns None.</span>
 
 <span class="sd">    Notes:</span>
 <span class="sd">        - This method expects a binary image (e.g., from segment_threshold).</span>
@@ -13265,6 +13321,8 @@ The array has dtype float64.</p>
 <span class="sd">        - Uses 26-connectivity (connectivity=3) for 3D connected component labeling.</span>
 <span class="sd">        - Empty chunks contribute no coordinates to the result.</span>
 <span class="sd">        - The result is computed immediately (not lazy).</span>
+<span class="sd">        - When using output_path, centroids are written in batches to avoid</span>
+<span class="sd">          memory overflow, making it suitable for datasets with millions of objects.</span>
 
 <span class="sd">    Examples:</span>
 <span class="sd">        &gt;&gt;&gt; # Apply threshold segmentation and compute centroids</span>
@@ -13278,8 +13336,12 @@ The array has dtype float64.</p>
 <span class="sd">        ...     rechunk=(64, 64, 64)</span>
 <span class="sd">        ... )</span>
 <span class="sd">        &gt;&gt;&gt;</span>
-<span class="sd">        &gt;&gt;&gt; # Save centroids to file</span>
-<span class="sd">        &gt;&gt;&gt; np.savetxt(&#39;centroids.txt&#39;, centroids, fmt=&#39;%.6f&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; # For large datasets, write to Parquet file</span>
+<span class="sd">        &gt;&gt;&gt; binary.compute_centroids(depth=5, output_path=&#39;centroids.parquet&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; # Read back with pandas or pyarrow</span>
+<span class="sd">        &gt;&gt;&gt; import pandas as pd</span>
+<span class="sd">        &gt;&gt;&gt; df = pd.read_parquet(&#39;centroids.parquet&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; print(f&quot;Found {len(df)} objects&quot;)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="n">compute_centroids</span>
 
@@ -13289,6 +13351,7 @@ The array has dtype float64.</p>
         <span class="n">depth</span><span class="o">=</span><span class="n">depth</span><span class="p">,</span>
         <span class="n">boundary</span><span class="o">=</span><span class="n">boundary</span><span class="p">,</span>
         <span class="n">rechunk</span><span class="o">=</span><span class="n">rechunk</span><span class="p">,</span>
+        <span class="n">output_path</span><span class="o">=</span><span class="n">output_path</span><span class="p">,</span>
     <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -13378,26 +13441,7 @@ The array has dtype float64.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5053</span>
-<span class="normal">5054</span>
-<span class="normal">5055</span>
-<span class="normal">5056</span>
-<span class="normal">5057</span>
-<span class="normal">5058</span>
-<span class="normal">5059</span>
-<span class="normal">5060</span>
-<span class="normal">5061</span>
-<span class="normal">5062</span>
-<span class="normal">5063</span>
-<span class="normal">5064</span>
-<span class="normal">5065</span>
-<span class="normal">5066</span>
-<span class="normal">5067</span>
-<span class="normal">5068</span>
-<span class="normal">5069</span>
-<span class="normal">5070</span>
-<span class="normal">5071</span>
-<span class="normal">5072</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5072</span>
 <span class="normal">5073</span>
 <span class="normal">5074</span>
 <span class="normal">5075</span>
@@ -13449,7 +13493,26 @@ The array has dtype float64.</p>
 <span class="normal">5121</span>
 <span class="normal">5122</span>
 <span class="normal">5123</span>
-<span class="normal">5124</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
+<span class="normal">5124</span>
+<span class="normal">5125</span>
+<span class="normal">5126</span>
+<span class="normal">5127</span>
+<span class="normal">5128</span>
+<span class="normal">5129</span>
+<span class="normal">5130</span>
+<span class="normal">5131</span>
+<span class="normal">5132</span>
+<span class="normal">5133</span>
+<span class="normal">5134</span>
+<span class="normal">5135</span>
+<span class="normal">5136</span>
+<span class="normal">5137</span>
+<span class="normal">5138</span>
+<span class="normal">5139</span>
+<span class="normal">5140</span>
+<span class="normal">5141</span>
+<span class="normal">5142</span>
+<span class="normal">5143</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">plugin</span><span class="p">,</span>
     <span class="n">downsample_factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
