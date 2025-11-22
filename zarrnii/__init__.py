@@ -5,7 +5,7 @@ from .analysis import (
     create_mip_visualization,
     density_from_points,
 )
-from .atlas import ZarrNiiAtlas
+from .atlas import ZarrNiiAtlas, visualize_atlas_regions
 from .core import (
     MetadataInvalidError,
     ZarrNii,
@@ -27,4 +27,5 @@ __all__ = [
     "compute_histogram",
     "compute_otsu_thresholds",
     "density_from_points",
+    "visualize_atlas_regions",
 ]
