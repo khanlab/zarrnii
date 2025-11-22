@@ -3,6 +3,7 @@ from .analysis import (
     compute_histogram,
     compute_otsu_thresholds,
     create_mip_visualization,
+    density_from_points,
 )
 from .atlas import ZarrNiiAtlas
 from .core import (
@@ -25,4 +26,5 @@ __all__ = [
     "compute_centroids",
     "compute_histogram",
     "compute_otsu_thresholds",
+    "density_from_points",
 ]
