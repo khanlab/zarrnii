@@ -2701,6 +2701,395 @@ class ZarrNii:
             _omero=self._omero,
         )
 
+    def visualize_atlas_regions(
+        self,
+        atlas: "ZarrNiiAtlas",
+        region_ids: List[Union[int, str]],
+        centroids: Optional[Union[str, np.ndarray, "pd.DataFrame"]] = None,
+        planes: List[str] = ["axial"],
+        max_patch_size: Optional[float] = None,
+        max_centroid_distance: float = 10.0,
+        opacity_function: str = "linear",
+        opacity_params: Optional[Dict[str, float]] = None,
+        cmap: str = "gray",
+        centroid_color: str = "red",
+        centroid_size: float = 10.0,
+        figsize: Tuple[float, float] = (8, 8),
+    ) -> List[Any]:
+        """Generate 2D visualizations of atlas regions for QC reports.
+
+        This method creates 2D slice visualizations centered on specified atlas regions,
+        optionally overlaying centroids with opacity based on out-of-plane distance.
+        The atlas parameter is used only to identify region centers/bounding boxes,
+        while the actual image data visualized comes from self.
+
+        This is useful for quality control reports and visual inspection of atlas-based
+        analyses where you want to visualize an image (e.g., a fluorescence channel)
+        in the context of atlas-defined regions.
+
+        Args:
+            atlas: ZarrNiiAtlas instance used to identify region locations and
+                bounding boxes. Only the atlas labels and metadata are used, not
+                the image data.
+            region_ids: List of region identifiers (integers or names) to visualize
+            centroids: Optional centroids to overlay on the slices. Can be:
+                - numpy array of shape (N, 3) with columns [x, y, z]
+                - str path to .npy file
+                - str path to .parquet file
+                - pandas DataFrame with columns ['x', 'y', 'z']
+            planes: List of 2D planes to visualize. Options: 'axial', 'sagittal', 'coronal'
+                Default is ['axial']
+            max_patch_size: Optional maximum patch size in physical units (same units as
+                the image spacing, typically mm). If None, uses the full region bounding box.
+            max_centroid_distance: Maximum distance (in physical units) from the slice plane
+                for centroids to be displayed. Centroids beyond this distance are filtered out.
+                Default is 10.0 (typically mm).
+            opacity_function: Transfer function for centroid opacity based on distance.
+                Options: 'linear', 'quadratic', 'exponential', 'gaussian'
+                Default is 'linear' (linear falloff from 1.0 to 0.0)
+            opacity_params: Optional parameters for the opacity function:
+                - For 'exponential': {'decay_rate': float} (default: 2.0)
+                - For 'gaussian': {'sigma_fraction': float} (default: 0.3)
+            cmap: Matplotlib colormap name for the image slice. Default is 'gray'
+            centroid_color: Color for centroid markers. Default is 'red'
+            centroid_size: Size of centroid markers. Default is 10.0
+            figsize: Figure size as (width, height) in inches. Default is (8, 8)
+
+        Returns:
+            List of matplotlib Figure objects, one for each (region, plane) combination
+
+        Raises:
+            ValueError: If region_ids is empty or contains invalid regions
+            ValueError: If planes contains invalid plane names
+            ImportError: If matplotlib is not available
+
+        Examples:
+            >>> from zarrnii import ZarrNii, ZarrNiiAtlas
+            >>>
+            >>> # Load atlas and image
+            >>> atlas = ZarrNiiAtlas.from_files("atlas.nii.gz", "labels.tsv")
+            >>> image = ZarrNii.from_ome_zarr("fluorescence.zarr")
+            >>>
+            >>> # Visualize fluorescence image in context of atlas regions
+            >>> figs = image.visualize_atlas_regions(
+            ...     atlas,
+            ...     region_ids=["Hippocampus", "Amygdala"],
+            ...     planes=["axial", "coronal"]
+            ... )
+            >>>
+            >>> # Visualize with centroids from file
+            >>> figs = image.visualize_atlas_regions(
+            ...     atlas,
+            ...     region_ids=[1, 2, 3],
+            ...     centroids="cell_centroids.parquet",
+            ...     max_centroid_distance=5.0,
+            ...     opacity_function="gaussian"
+            ... )
+            >>>
+            >>> # Save figures
+            >>> for i, fig in enumerate(figs):
+            ...     fig.savefig(f"qc_region_{i}.png", dpi=150, bbox_inches="tight")
+
+        Notes:
+            - The atlas parameter is only used to get region centers and bounding boxes
+            - The actual image data displayed is from self (the ZarrNii instance)
+            - This allows visualizing any image (e.g., fluorescence) in atlas context
+            - Uses physical coordinates throughout for proper spatial alignment
+        """
+        # Import here to avoid circular dependency
+        from .atlas import (
+            _compute_opacity_from_distance,
+            _compute_out_of_plane_distance,
+            _filter_centroids_by_distance,
+            _load_centroids_from_file,
+        )
+
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            raise ImportError(
+                "matplotlib is required for visualization. "
+                "Install with: pip install matplotlib"
+            )
+
+        # Validate inputs
+        if not region_ids:
+            raise ValueError("region_ids cannot be empty")
+
+        valid_planes = ["axial", "sagittal", "coronal"]
+        for plane in planes:
+            if plane not in valid_planes:
+                raise ValueError(
+                    f"Invalid plane '{plane}'. Must be one of {valid_planes}"
+                )
+
+        # Load centroids if provided
+        centroids_array = None
+        if centroids is not None:
+            centroids_array = _load_centroids_from_file(centroids)
+
+        # Generate figures for each region and plane
+        figures = []
+
+        for region_id in region_ids:
+            # Get region info for title (from atlas)
+            try:
+                if hasattr(atlas, "get_region_info"):
+                    region_info = atlas.get_region_info(region_id)
+                    region_name = region_info.get("name", str(region_id))
+                else:
+                    region_name = str(region_id)
+            except Exception:
+                region_name = str(region_id)
+
+            # Get bounding box for the region (from atlas)
+            if hasattr(atlas, "get_region_bounding_box"):
+                bbox_min, bbox_max = atlas.get_region_bounding_box(region_id)
+            else:
+                # Use full image extent
+                affine = atlas.get_affine_transform()
+                shape = atlas.shape
+                if len(shape) == 4:
+                    shape = shape[1:]  # Remove channel dimension
+                corners_voxel = np.array([[0, 0, 0], list(shape)]).T
+                corners_physical = affine.apply_transform(corners_voxel)
+                bbox_min = tuple(corners_physical[:, 0])
+                bbox_max = tuple(corners_physical[:, 1])
+
+            # Calculate center position for each plane
+            bbox_center = tuple((np.array(bbox_min) + np.array(bbox_max)) / 2.0)
+
+            for plane in planes:
+                # Determine slice position based on plane
+                plane_axis_map = {"axial": 2, "sagittal": 0, "coronal": 1}  # z, x, y
+                slice_axis_idx = plane_axis_map[plane]
+                slice_position = bbox_center[slice_axis_idx]
+
+                # Extract 2D slice from self (the image to visualize)
+                try:
+                    slice_data, slice_metadata = self._extract_2d_slice_from_image(
+                        slice_position, plane, max_patch_size
+                    )
+                except Exception as e:
+                    import warnings
+
+                    warnings.warn(
+                        f"Failed to extract slice for region {region_id}, "
+                        f"plane {plane}: {e}"
+                    )
+                    continue
+
+                # Create figure
+                fig, ax = plt.subplots(figsize=figsize)
+
+                # Display the slice
+                extent = slice_metadata["extent"]
+                im = ax.imshow(
+                    slice_data,
+                    cmap=cmap,
+                    extent=extent,
+                    origin="lower",
+                    aspect="auto",
+                    interpolation="nearest",
+                )
+
+                # Add colorbar
+                plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+                # Overlay centroids if provided
+                if centroids_array is not None and len(centroids_array) > 0:
+                    # Compute distances
+                    distances = _compute_out_of_plane_distance(
+                        centroids_array, slice_position, plane
+                    )
+
+                    # Filter by distance
+                    (
+                        filtered_centroids,
+                        filtered_distances,
+                    ) = _filter_centroids_by_distance(
+                        centroids_array, distances, max_centroid_distance
+                    )
+
+                    if len(filtered_centroids) > 0:
+                        # Compute opacities
+                        opacities = _compute_opacity_from_distance(
+                            filtered_distances,
+                            max_centroid_distance,
+                            opacity_function,
+                            opacity_params,
+                        )
+
+                        # Get x, y coordinates based on plane
+                        x_axis = slice_metadata["x_axis"]
+                        y_axis = slice_metadata["y_axis"]
+                        axis_to_idx = {"x": 0, "y": 1, "z": 2}
+
+                        x_coords = filtered_centroids[:, axis_to_idx[x_axis]]
+                        y_coords = filtered_centroids[:, axis_to_idx[y_axis]]
+
+                        # Plot centroids with varying opacity
+                        for x, y, alpha in zip(x_coords, y_coords, opacities):
+                            ax.scatter(
+                                x,
+                                y,
+                                c=centroid_color,
+                                s=centroid_size,
+                                alpha=alpha,
+                                edgecolors="none",
+                            )
+
+                # Set labels and title
+                x_axis = slice_metadata["x_axis"]
+                y_axis = slice_metadata["y_axis"]
+                ax.set_xlabel(f"{x_axis.upper()} (mm)", fontsize=12)
+                ax.set_ylabel(f"{y_axis.upper()} (mm)", fontsize=12)
+
+                title = (
+                    f"Region: {region_name}\n{plane.capitalize()} slice "
+                    f"at {slice_position:.2f} mm"
+                )
+                if centroids_array is not None:
+                    n_centroids = (
+                        len(filtered_centroids) if len(filtered_centroids) > 0 else 0
+                    )
+                    title += (
+                        f"\n{n_centroids} centroids within "
+                        f"{max_centroid_distance} mm"
+                    )
+                ax.set_title(title, fontsize=14, fontweight="bold")
+
+                ax.grid(True, alpha=0.3)
+                plt.tight_layout()
+
+                figures.append(fig)
+
+        return figures
+
+    def _extract_2d_slice_from_image(
+        self, slice_position: float, plane: str, max_patch_size: Optional[float] = None
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Extract 2D slice from this ZarrNii image.
+
+        Helper method for visualize_atlas_regions to extract a 2D slice at a
+        specified position and plane.
+
+        Args:
+            slice_position: Position of slice in physical coordinates
+            plane: Plane orientation - 'axial', 'sagittal', or 'coronal'
+            max_patch_size: Optional maximum patch size in physical units
+
+        Returns:
+            Tuple of (slice_data, slice_metadata) where:
+                - slice_data: 2D numpy array of the slice
+                - slice_metadata: Dict with extent, plane, position, axes info
+
+        Raises:
+            ValueError: If plane is not recognized
+        """
+        # Map plane to axis names
+        plane_axis_map = {
+            "axial": ("x", "y", "z"),  # slice along z, show x-y
+            "sagittal": ("y", "z", "x"),  # slice along x, show y-z
+            "coronal": ("x", "z", "y"),  # slice along y, show x-z
+        }
+
+        if plane not in plane_axis_map:
+            raise ValueError(
+                f"plane must be one of {list(plane_axis_map.keys())}, got '{plane}'"
+            )
+
+        x_axis, y_axis, slice_axis = plane_axis_map[plane]
+
+        # Get affine transform
+        affine_transform = self.get_affine_transform()
+
+        # Convert slice position to voxel index
+        point_physical = np.zeros(3)
+        axis_to_idx = {"x": 0, "y": 1, "z": 2}
+        point_physical[axis_to_idx[slice_axis]] = slice_position
+
+        # Transform to voxel coordinates
+        point_voxel = affine_transform.invert().apply_transform(
+            point_physical[:, np.newaxis]
+        )
+        slice_idx = int(np.round(point_voxel[axis_to_idx[slice_axis], 0]))
+
+        # Get image data
+        data = self.data
+        if hasattr(data, "compute"):
+            data = data.compute()
+
+        # Handle channel dimension if present
+        if data.ndim == 4:
+            data = data[0]  # Take first channel
+
+        # Extract slice based on plane
+        axes_order = self.axes_order
+        if axes_order == "ZYX":
+            axis_indices = {"x": 2, "y": 1, "z": 0}
+        elif axes_order == "XYZ":
+            axis_indices = {"x": 0, "y": 1, "z": 2}
+        else:
+            raise ValueError(f"Unsupported axes_order: {axes_order}")
+
+        slice_axis_idx = axis_indices[slice_axis]
+
+        # Extract the slice
+        if slice_axis_idx == 0:
+            slice_data = data[slice_idx, :, :]
+        elif slice_axis_idx == 1:
+            slice_data = data[:, slice_idx, :]
+        else:  # slice_axis_idx == 2
+            slice_data = data[:, :, slice_idx]
+
+        # Get the physical extent of the slice
+        shape = self.shape
+        if len(shape) == 4:
+            shape = shape[1:]  # Remove channel dimension
+
+        # Create corner points in voxel space
+        corners_voxel = np.array(
+            [
+                [0, 0, 0],
+                [
+                    shape[axis_indices["x"]],
+                    shape[axis_indices["y"]],
+                    shape[axis_indices["z"]],
+                ],
+            ]
+        ).T
+
+        # Transform to physical space
+        corners_physical = affine_transform.apply_transform(corners_voxel)
+
+        # Get extent for the display axes
+        x_extent = (
+            corners_physical[axis_to_idx[x_axis], 0],
+            corners_physical[axis_to_idx[x_axis], 1],
+        )
+        y_extent = (
+            corners_physical[axis_to_idx[y_axis], 0],
+            corners_physical[axis_to_idx[y_axis], 1],
+        )
+
+        # Compute aspect ratio
+        x_range = x_extent[1] - x_extent[0]
+        y_range = y_extent[1] - y_extent[0]
+        aspect = x_range / y_range if y_range > 0 else 1.0
+
+        metadata = {
+            "extent": (x_extent[0], x_extent[1], y_extent[0], y_extent[1]),
+            "plane": plane,
+            "position": slice_position,
+            "aspect": aspect,
+            "x_axis": x_axis,
+            "y_axis": y_axis,
+            "slice_axis": slice_axis,
+        }
+
+        return slice_data, metadata
+
     def downsample(
         self,
         factors: Optional[Union[int, List[int]]] = None,

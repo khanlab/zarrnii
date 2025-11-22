@@ -1113,10 +1113,10 @@ class TestAtlasVisualization:
 
     def test_extract_2d_slice_axial(self, sample_atlas):
         """Test extracting axial 2D slice."""
-        from zarrnii.atlas import _extract_2d_slice
-
         slice_position = 10.0  # mm
-        slice_data, metadata = _extract_2d_slice(sample_atlas, slice_position, "axial")
+        slice_data, metadata = sample_atlas._extract_2d_slice_from_image(
+            slice_position, "axial"
+        )
 
         # Check slice data shape (should be 2D)
         assert slice_data.ndim == 2
@@ -1132,11 +1132,9 @@ class TestAtlasVisualization:
 
     def test_extract_2d_slice_sagittal(self, sample_atlas):
         """Test extracting sagittal 2D slice."""
-        from zarrnii.atlas import _extract_2d_slice
-
         slice_position = 5.0
-        slice_data, metadata = _extract_2d_slice(
-            sample_atlas, slice_position, "sagittal"
+        slice_data, metadata = sample_atlas._extract_2d_slice_from_image(
+            slice_position, "sagittal"
         )
 
         assert slice_data.ndim == 2
@@ -1147,11 +1145,9 @@ class TestAtlasVisualization:
 
     def test_extract_2d_slice_coronal(self, sample_atlas):
         """Test extracting coronal 2D slice."""
-        from zarrnii.atlas import _extract_2d_slice
-
         slice_position = 10.0
-        slice_data, metadata = _extract_2d_slice(
-            sample_atlas, slice_position, "coronal"
+        slice_data, metadata = sample_atlas._extract_2d_slice_from_image(
+            slice_position, "coronal"
         )
 
         assert slice_data.ndim == 2
@@ -1162,18 +1158,14 @@ class TestAtlasVisualization:
 
     def test_extract_2d_slice_invalid_plane(self, sample_atlas):
         """Test error handling for invalid plane."""
-        from zarrnii.atlas import _extract_2d_slice
-
         with pytest.raises(ValueError, match="plane must be one of"):
-            _extract_2d_slice(sample_atlas, 10.0, "invalid")
+            sample_atlas._extract_2d_slice_from_image(10.0, "invalid")
 
     def test_visualize_atlas_regions_basic(self, sample_atlas):
         """Test basic atlas region visualization."""
-        from zarrnii.atlas import visualize_atlas_regions
-
         # Test with single region and single plane
-        figs = visualize_atlas_regions(
-            sample_atlas,
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
             region_ids=[1],
             planes=["axial"],
             figsize=(6, 6),
@@ -1189,10 +1181,8 @@ class TestAtlasVisualization:
 
     def test_visualize_atlas_regions_multiple(self, sample_atlas):
         """Test visualization with multiple regions and planes."""
-        from zarrnii.atlas import visualize_atlas_regions
-
-        figs = visualize_atlas_regions(
-            sample_atlas,
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
             region_ids=[1, 2],
             planes=["axial", "coronal"],
         )
@@ -1209,10 +1199,8 @@ class TestAtlasVisualization:
         self, sample_atlas, sample_centroids
     ):
         """Test visualization with centroid overlay."""
-        from zarrnii.atlas import visualize_atlas_regions
-
-        figs = visualize_atlas_regions(
-            sample_atlas,
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
             region_ids=[1],
             centroids=sample_centroids,
             planes=["axial"],
@@ -1231,15 +1219,13 @@ class TestAtlasVisualization:
         self, sample_atlas, sample_centroids, tmp_path
     ):
         """Test visualization with centroids from file."""
-        from zarrnii.atlas import visualize_atlas_regions
-
         # Save centroids to parquet
         parquet_file = tmp_path / "centroids.parquet"
         df = pd.DataFrame(sample_centroids, columns=["x", "y", "z"])
         df.to_parquet(parquet_file)
 
-        figs = visualize_atlas_regions(
-            sample_atlas,
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
             region_ids=[1],
             centroids=str(parquet_file),
             planes=["axial"],
@@ -1256,13 +1242,11 @@ class TestAtlasVisualization:
         self, sample_atlas, sample_centroids
     ):
         """Test different opacity transfer functions."""
-        from zarrnii.atlas import visualize_atlas_regions
-
         opacity_functions = ["linear", "quadratic", "exponential", "gaussian"]
 
         for func in opacity_functions:
-            figs = visualize_atlas_regions(
-                sample_atlas,
+            figs = sample_atlas.visualize_atlas_regions(
+                atlas=sample_atlas,
                 region_ids=[1],
                 centroids=sample_centroids,
                 planes=["axial"],
@@ -1279,10 +1263,8 @@ class TestAtlasVisualization:
         self, sample_atlas, sample_centroids
     ):
         """Test visualization with custom parameters."""
-        from zarrnii.atlas import visualize_atlas_regions
-
-        figs = visualize_atlas_regions(
-            sample_atlas,
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
             region_ids=[1],
             centroids=sample_centroids,
             planes=["axial"],
@@ -1304,22 +1286,20 @@ class TestAtlasVisualization:
 
     def test_visualize_atlas_regions_invalid_inputs(self, sample_atlas):
         """Test error handling for invalid inputs."""
-        from zarrnii.atlas import visualize_atlas_regions
-
         # Empty region list
         with pytest.raises(ValueError, match="region_ids cannot be empty"):
-            visualize_atlas_regions(sample_atlas, region_ids=[])
+            sample_atlas.visualize_atlas_regions(atlas=sample_atlas, region_ids=[])
 
         # Invalid plane
         with pytest.raises(ValueError, match="Invalid plane"):
-            visualize_atlas_regions(sample_atlas, region_ids=[1], planes=["invalid"])
+            sample_atlas.visualize_atlas_regions(
+                atlas=sample_atlas, region_ids=[1], planes=["invalid"]
+            )
 
     def test_visualize_atlas_regions_by_name(self, sample_atlas):
         """Test visualization using region names."""
-        from zarrnii.atlas import visualize_atlas_regions
-
-        figs = visualize_atlas_regions(
-            sample_atlas,
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
             region_ids=["Left Region"],
             planes=["axial"],
         )
@@ -1335,11 +1315,9 @@ class TestAtlasVisualization:
         self, sample_atlas, sample_centroids
     ):
         """Test visualization when no centroids are within distance."""
-        from zarrnii.atlas import visualize_atlas_regions
-
         # Use very small max distance to filter out all centroids
-        figs = visualize_atlas_regions(
-            sample_atlas,
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
             region_ids=[1],
             centroids=sample_centroids,
             planes=["axial"],
