@@ -1373,7 +1373,13 @@ def _load_centroids_from_file(
         if centroids.endswith(".npy"):
             centroids_array = np.load(centroids)
         elif centroids.endswith(".parquet"):
-            df = pd.read_parquet(centroids)
+            try:
+                df = pd.read_parquet(centroids)
+            except ImportError:
+                raise ImportError(
+                    "pandas and pyarrow are required to read parquet files. "
+                    "Install with: pip install pandas pyarrow"
+                )
             if not all(col in df.columns for col in ["x", "y", "z"]):
                 raise ValueError(
                     f"Parquet file must contain columns 'x', 'y', 'z'. "
