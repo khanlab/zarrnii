@@ -1364,9 +1364,14 @@ def density_from_points(
                     voxel_coords_axes_order[:, 0],  # z
                 ]
             )
-        else:  # XYZ
+        elif axes_order == "XYZ":
             # Already in (x, y, z) order
             voxel_coords = voxel_coords_axes_order
+        else:
+            raise ValueError(
+                f"Unsupported axes_order: {axes_order}. "
+                "Only 'ZYX' and 'XYZ' are currently supported."
+            )
     else:
         # Points are already in voxel coordinates
         # Assume they are provided in (x, y, z) order
@@ -1403,31 +1408,32 @@ def density_from_points(
         # Density is currently in (x, y, z) order
         # Need to add channel dimension: (c, x, y, z)
         density_with_channel = density[np.newaxis, :, :, :]
-    else:  # ZYX
+    elif axes_order == "ZYX":
         # Density is currently in (x, y, z) order
         # Need to reorder to (z, y, x) and add channel: (c, z, y, x)
         density_reordered = da.transpose(density, (2, 1, 0))  # (z, y, x)
         density_with_channel = density_reordered[np.newaxis, :, :, :]
+    else:
+        raise ValueError(
+            f"Unsupported axes_order: {axes_order}. "
+            "Only 'ZYX' and 'XYZ' are currently supported."
+        )
 
     # Get spacing and origin from reference
     scale = reference_zarrnii.scale
     translation = reference_zarrnii.translation
+
+    # Extract spacing and origin in axes_order
+    spacing = tuple(scale.get(dim.lower(), 1.0) for dim in axes_order)
+    origin = tuple(translation.get(dim.lower(), 0.0) for dim in axes_order)
 
     # Create new ZarrNii from the density array
     density_zarrnii = ZarrNii.from_darr(
         darr=density_with_channel,
         axes_order=axes_order,
         orientation=reference_zarrnii.xyz_orientation,
-        spacing=(
-            scale.get(axes_order[0].lower(), 1.0),
-            scale.get(axes_order[1].lower(), 1.0),
-            scale.get(axes_order[2].lower(), 1.0),
-        ),
-        origin=(
-            translation.get(axes_order[0].lower(), 0.0),
-            translation.get(axes_order[1].lower(), 0.0),
-            translation.get(axes_order[2].lower(), 0.0),
-        ),
+        spacing=spacing,
+        origin=origin,
         name="density_map",
     )
 
