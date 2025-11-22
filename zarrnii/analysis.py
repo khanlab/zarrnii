@@ -1209,3 +1209,232 @@ def compute_centroids(
         physical_coords = physical_homogeneous[:, :3]
 
         return physical_coords
+
+
+def density_from_points(
+    points: Union[np.ndarray, str],
+    reference_zarrnii: "ZarrNii",
+    in_physical_space: bool = True,
+) -> "ZarrNii":
+    """
+    Create a density map from a set of points in the space of a reference ZarrNii image.
+
+    This function takes a list of points (e.g., centroids from segmentation) and
+    computes a 3D density map by binning the points into voxels of the reference
+    image. The density map is returned as a new ZarrNii instance that can be
+    written to OME-Zarr format for multiscale visualization.
+
+    The function handles coordinate transformations automatically:
+    - If points are in physical space (default), they are transformed to voxel
+      indices using the inverse of the reference image's affine transformation
+    - If points are already in voxel space, they are used directly
+    - Uses dask.array.histogramdd for efficient computation on large datasets
+
+    Args:
+        points: Point coordinates to create density map from. Can be either:
+            - numpy array of shape (N, 3) with coordinates [x, y, z]
+            - str path to .npy file containing numpy array
+            - str path to .parquet file with columns ['x', 'y', 'z']
+        reference_zarrnii: ZarrNii instance defining the output image space
+            (dimensions, spacing, origin). The density map will have the same
+            spatial properties as this reference image.
+        in_physical_space: Whether input points are in physical coordinates
+            (default: True). If True, points are transformed to voxel indices
+            using the inverse affine. If False, points are assumed to already
+            be in voxel coordinates.
+
+    Returns:
+        ZarrNii: New ZarrNii instance containing the density map with the same
+            spatial properties (shape, spacing, origin) as the reference image.
+            The data type is float32, suitable for visualization and analysis.
+            Values represent the number of points falling in each voxel.
+
+    Raises:
+        ValueError: If points array doesn't have shape (N, 3)
+        ValueError: If reference_zarrnii is not 3D (after removing channel/time dims)
+        FileNotFoundError: If points path doesn't exist
+        ImportError: If pandas/pyarrow not installed for parquet support
+
+    Examples:
+        >>> import numpy as np
+        >>> from zarrnii import ZarrNii, density_from_points
+        >>>
+        >>> # Load reference image
+        >>> ref_img = ZarrNii.from_ome_zarr("reference.zarr")
+        >>>
+        >>> # Create density from centroids in physical space
+        >>> centroids = np.load("centroids.npy")  # Shape: (N, 3)
+        >>> density = density_from_points(centroids, ref_img)
+        >>>
+        >>> # Save as multiscale OME-Zarr
+        >>> density.to_ome_zarr("density_map.zarr")
+        >>>
+        >>> # Load from parquet file (e.g., from compute_centroids output)
+        >>> density = density_from_points("centroids.parquet", ref_img)
+        >>>
+        >>> # Use points already in voxel coordinates
+        >>> voxel_coords = np.array([[10, 20, 30], [15, 25, 35]])
+        >>> density = density_from_points(
+        ...     voxel_coords, ref_img, in_physical_space=False
+        ... )
+
+    Notes:
+        - The output density map has a single channel dimension (c=1)
+        - Points outside the image bounds are ignored
+        - Multiple points in the same voxel accumulate (sum)
+        - The density map preserves the reference image's orientation and spacing
+        - For large point sets, consider using parquet format for efficient I/O
+        - The function uses dask arrays for memory-efficient computation
+    """
+    # Import here to avoid circular dependency
+    from .core import ZarrNii
+    from .transform import AffineTransform
+
+    # Load points from file if string path provided
+    if isinstance(points, str):
+        if points.endswith(".npy"):
+            points = np.load(points)
+        elif points.endswith(".parquet"):
+            try:
+                import pandas as pd
+            except ImportError:
+                raise ImportError(
+                    "pandas is required to read parquet files. "
+                    "Install with: pip install pandas pyarrow"
+                )
+            df = pd.read_parquet(points)
+            # Expect columns: x, y, z
+            if not all(col in df.columns for col in ["x", "y", "z"]):
+                raise ValueError(
+                    f"Parquet file must contain columns 'x', 'y', 'z'. "
+                    f"Found: {list(df.columns)}"
+                )
+            points = df[["x", "y", "z"]].values
+        else:
+            raise ValueError(
+                f"Unsupported file format. Expected .npy or .parquet, got: {points}"
+            )
+
+    # Validate points shape
+    points = np.asarray(points, dtype=np.float64)
+    if points.ndim != 2 or points.shape[1] != 3:
+        raise ValueError(f"Points must have shape (N, 3), got shape {points.shape}")
+
+    # Get reference image properties
+    ref_data = reference_zarrnii.data
+    ref_dims = reference_zarrnii.dims
+    ref_shape_dict = dict(zip(ref_dims, ref_data.shape))
+
+    # Extract spatial dimensions (x, y, z)
+    spatial_dims = ["x", "y", "z"]
+    if not all(dim in ref_shape_dict for dim in spatial_dims):
+        raise ValueError(
+            f"Reference image must have spatial dimensions x, y, z. "
+            f"Found dims: {ref_dims}"
+        )
+
+    # Get spatial shape
+    Nx = ref_shape_dict["x"]
+    Ny = ref_shape_dict["y"]
+    Nz = ref_shape_dict["z"]
+
+    # Transform points from physical to voxel coordinates if needed
+    if in_physical_space:
+        # Get affine transform and invert it
+        # The affine maps from voxel coords in axes_order to physical (x, y, z)
+        # So the inverse maps from physical (x, y, z) to voxel coords in axes_order
+        affine = reference_zarrnii.get_affine_transform()
+        affine_inv = affine.invert()
+
+        # Convert points: (N, 3) array where each row is [x, y, z]
+        # apply_transform expects points in shape (3, N) for batch processing
+        points_transposed = points.T  # Shape: (3, N)
+        voxel_coords_transposed = affine_inv.apply_transform(points_transposed)
+        voxel_coords_axes_order = voxel_coords_transposed.T  # Shape: (N, 3)
+
+        # The voxel_coords are now in axes_order
+        # We need to reorder them to (x, y, z) for histogramdd
+        axes_order = reference_zarrnii.axes_order
+        if axes_order == "ZYX":
+            # voxel_coords_axes_order is (z, y, x), need to reorder to (x, y, z)
+            voxel_coords = np.column_stack(
+                [
+                    voxel_coords_axes_order[:, 2],  # x
+                    voxel_coords_axes_order[:, 1],  # y
+                    voxel_coords_axes_order[:, 0],  # z
+                ]
+            )
+        elif axes_order == "XYZ":
+            # Already in (x, y, z) order
+            voxel_coords = voxel_coords_axes_order
+        else:
+            raise ValueError(
+                f"Unsupported axes_order: {axes_order}. "
+                "Only 'ZYX' and 'XYZ' are currently supported."
+            )
+    else:
+        # Points are already in voxel coordinates
+        # Assume they are provided in (x, y, z) order
+        voxel_coords = points
+
+    # Convert to dask array for histogram computation
+    pts_dask = da.from_array(voxel_coords, chunks=(10000, 3))
+
+    # Define voxel edges for histogram
+    # histogramdd bins by [edge[i], edge[i+1]) so we need N+1 edges for N bins
+    # The edges span from 0 to N for each dimension
+    x_edges = np.linspace(0, Nx, Nx + 1)
+    y_edges = np.linspace(0, Ny, Ny + 1)
+    z_edges = np.linspace(0, Nz, Nz + 1)
+
+    # Note: histogramdd expects sample in shape (N, D) where D is number of dimensions
+    # and bins as a sequence of arrays defining bin edges for each dimension
+    # The order should match the point coordinate order: [x, y, z]
+    edges = [x_edges, y_edges, z_edges]
+
+    # Compute density histogram
+    # Returns tuple: (histogram, edges) where histogram has shape (Nx, Ny, Nz)
+    density, _ = da.histogramdd(pts_dask, bins=edges)
+
+    # Convert to float32 for better compatibility and smaller size
+    density = density.astype(np.float32)
+
+    # Create new ZarrNii instance with density data
+    # Add channel dimension to make it 4D: (c, x, y, z) or (c, z, y, x)
+    # depending on axes_order
+    axes_order = reference_zarrnii.axes_order
+
+    if axes_order == "XYZ":
+        # Density is currently in (x, y, z) order
+        # Need to add channel dimension: (c, x, y, z)
+        density_with_channel = density[np.newaxis, :, :, :]
+    elif axes_order == "ZYX":
+        # Density is currently in (x, y, z) order
+        # Need to reorder to (z, y, x) and add channel: (c, z, y, x)
+        density_reordered = da.transpose(density, (2, 1, 0))  # (z, y, x)
+        density_with_channel = density_reordered[np.newaxis, :, :, :]
+    else:
+        raise ValueError(
+            f"Unsupported axes_order: {axes_order}. "
+            "Only 'ZYX' and 'XYZ' are currently supported."
+        )
+
+    # Get spacing and origin from reference
+    scale = reference_zarrnii.scale
+    translation = reference_zarrnii.translation
+
+    # Extract spacing and origin in axes_order
+    spacing = tuple(scale.get(dim.lower(), 1.0) for dim in axes_order)
+    origin = tuple(translation.get(dim.lower(), 0.0) for dim in axes_order)
+
+    # Create new ZarrNii from the density array
+    density_zarrnii = ZarrNii.from_darr(
+        darr=density_with_channel,
+        axes_order=axes_order,
+        orientation=reference_zarrnii.xyz_orientation,
+        spacing=spacing,
+        origin=origin,
+        name="density_map",
+    )
+
+    return density_zarrnii
