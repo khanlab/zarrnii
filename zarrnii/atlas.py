@@ -824,6 +824,11 @@ class ZarrNiiAtlas(ZarrNii):
 
         Raises:
             ValueError: If required columns are missing
+
+        Notes:
+            Labels present in the dseg image but not in feature_data will be
+            mapped to 0.0. This can occur with downsampled dseg images or
+            small ROIs where some regions are not represented.
         """
         # Validate input
         required_cols = [label_column, feature_column]
@@ -833,8 +838,17 @@ class ZarrNiiAtlas(ZarrNii):
 
         dseg_data = self.dseg.data.astype("int")  # dask array of labels
 
-        # make a dense lookup array
-        max_label = int(feature_data[label_column].max())
+        # Get max label from feature_data
+        max_label_features = int(feature_data[label_column].max())
+
+        # Get max label from dseg image to ensure LUT is large enough
+        # for all labels that actually exist in the image
+        max_label_dseg = int(dseg_data.max().compute())
+
+        # Use the larger of the two to size the LUT
+        max_label = max(max_label_features, max_label_dseg)
+
+        # make a dense lookup array sized to handle all labels in dseg
         lut = np.zeros(max_label + 1, dtype=np.float32)
         lut[feature_data[label_column].to_numpy(dtype=int)] = feature_data[
             feature_column

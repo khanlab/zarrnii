@@ -218,6 +218,67 @@ class TestZarrNiiAtlas:
         assert np.all(map_data[dseg_data == 3] == 300.0)
         assert np.all(map_data[dseg_data == 0] == 0.0)  # Background value
 
+    def test_create_feature_map_with_missing_labels(self):
+        """Test create_feature_map when dseg has labels not in feature table.
+
+        This can occur with downsampled dseg images or small ROIs where some
+        regions are not represented in the feature table. Labels in the dseg
+        but not in the feature_data should map to 0.0.
+        """
+        # Create a dseg with labels 0, 1, 5, 10
+        shape = (1, 10, 10, 10)
+        dseg_data = da.zeros(shape, dtype=np.int32)
+
+        # Region 1: small region
+        dseg_data[0, 0:2, 0:2, 0:2] = 1
+
+        # Region 5: another region (label not sequential)
+        dseg_data[0, 5:7, 5:7, 5:7] = 5
+
+        # Region 10: another region (large label value)
+        dseg_data[0, 8:10, 8:10, 8:10] = 10
+
+        # Create ZarrNii from the data
+        dseg = ZarrNii.from_darr(dseg_data)
+
+        # Create labels dataframe with all regions
+        labels_df = pd.DataFrame(
+            {
+                "index": [0, 1, 5, 10],
+                "name": ["Background", "Region1", "Region5", "Region10"],
+            }
+        )
+
+        atlas = ZarrNiiAtlas.create_from_dseg(dseg, labels_df)
+
+        # Create feature DataFrame that only has labels 1 and 5 (missing 10!)
+        # This simulates the case where a label exists in dseg but not in the feature table
+        feature_df = pd.DataFrame(
+            {
+                "index": [1, 5],  # Missing label 10 which exists in dseg!
+                "feature_value": [100.0, 500.0],
+            }
+        )
+
+        # This should work without raising IndexError
+        feature_map = atlas.create_feature_map(feature_df, "feature_value")
+        map_data = feature_map.data.compute()
+
+        # Verify the expected values
+        dseg_computed = dseg_data.compute()
+
+        # Label 1 should map to 100.0
+        assert np.all(map_data[dseg_computed == 1] == 100.0)
+
+        # Label 5 should map to 500.0
+        assert np.all(map_data[dseg_computed == 5] == 500.0)
+
+        # Label 10 (not in feature table) should map to 0.0
+        assert np.all(map_data[dseg_computed == 10] == 0.0)
+
+        # Background (label 0) should map to 0.0
+        assert np.all(map_data[dseg_computed == 0] == 0.0)
+
     def test_get_region_bounding_box_single_region(self, sample_atlas):
         """Test getting bounding box for single region by index."""
         atlas = sample_atlas
