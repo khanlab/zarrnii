@@ -320,10 +320,6 @@ def save_ngff_image_with_ome_zarr(
     from ome_zarr.scale import Scaler
     from ome_zarr.writer import write_image
 
-    # Force use of OME-NGFF v0.4 format (Zarr v2) instead of v0.5 (Zarr v3)
-    # This ensures compatibility with existing tools and avoids .zarr.json files
-    fmt = FormatV04()
-
     # Note: ome-zarr's Scaler interprets max_layer as the highest pyramid level index
     # (not count), so max_layer=N creates N+1 levels: 0, 1, ..., N
     # To match save_ngff_image behavior where max_layer=N creates N total levels,
@@ -368,7 +364,6 @@ def save_ngff_image_with_ome_zarr(
                 scaler=scaler,
                 coordinate_transformations=coordinate_transformations,
                 axes=axes,
-                fmt=fmt,
                 metadata={} if omero is None else {"omero": _to_primitive(omero)},
                 compute=compute,
                 **kwargs,
@@ -400,7 +395,6 @@ def save_ngff_image_with_ome_zarr(
             scaler=scaler,
             coordinate_transformations=coordinate_transformations,
             axes=axes,
-            fmt=fmt,
             metadata={} if omero is None else {"omero": _to_primitive(omero)},
             compute=compute,
             **kwargs,
