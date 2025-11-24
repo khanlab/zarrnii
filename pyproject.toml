@@ -77,6 +77,7 @@ n2z = "zarrnii.cli:n2z"
 
 [tool.hatch.version]
 source = "vcs"
+raw-options = { local_scheme = "no-local-version" }
 
 [tool.hatch.build.hooks.vcs]
 version-file = "zarrnii/_version.py"
