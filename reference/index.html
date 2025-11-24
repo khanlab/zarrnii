@@ -15007,6 +15007,18 @@ f"{aggregation_func}_{column_suffix}".</p>
     </ul>
 
 
+<details class="notes" open>
+  <summary>Notes</summary>
+  <p>Labels present in the dseg image but not in feature_data will be
+mapped to 0.0. This can occur with downsampled dseg images or
+small ROIs where some regions are not represented.</p>
+<p>Performance: This method computes the maximum label in the dseg
+image to properly size the lookup table. For large images, this
+requires a single reduction pass over the data, which is
+acceptable given that the subsequent map_blocks operation will
+also scan the entire dataset.</p>
+</details>
+
             <details class="quote">
               <summary>Source code in <code>zarrnii/atlas.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">809</span>
@@ -15059,7 +15071,28 @@ f"{aggregation_func}_{column_suffix}".</p>
 <span class="normal">856</span>
 <span class="normal">857</span>
 <span class="normal">858</span>
-<span class="normal">859</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_feature_map</span><span class="p">(</span>
+<span class="normal">859</span>
+<span class="normal">860</span>
+<span class="normal">861</span>
+<span class="normal">862</span>
+<span class="normal">863</span>
+<span class="normal">864</span>
+<span class="normal">865</span>
+<span class="normal">866</span>
+<span class="normal">867</span>
+<span class="normal">868</span>
+<span class="normal">869</span>
+<span class="normal">870</span>
+<span class="normal">871</span>
+<span class="normal">872</span>
+<span class="normal">873</span>
+<span class="normal">874</span>
+<span class="normal">875</span>
+<span class="normal">876</span>
+<span class="normal">877</span>
+<span class="normal">878</span>
+<span class="normal">879</span>
+<span class="normal">880</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_feature_map</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">feature_data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">feature_column</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -15077,6 +15110,17 @@ f"{aggregation_func}_{column_suffix}".</p>
 
 <span class="sd">    Raises:</span>
 <span class="sd">        ValueError: If required columns are missing</span>
+
+<span class="sd">    Notes:</span>
+<span class="sd">        Labels present in the dseg image but not in feature_data will be</span>
+<span class="sd">        mapped to 0.0. This can occur with downsampled dseg images or</span>
+<span class="sd">        small ROIs where some regions are not represented.</span>
+
+<span class="sd">        Performance: This method computes the maximum label in the dseg</span>
+<span class="sd">        image to properly size the lookup table. For large images, this</span>
+<span class="sd">        requires a single reduction pass over the data, which is</span>
+<span class="sd">        acceptable given that the subsequent map_blocks operation will</span>
+<span class="sd">        also scan the entire dataset.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># Validate input</span>
     <span class="n">required_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">label_column</span><span class="p">,</span> <span class="n">feature_column</span><span class="p">]</span>
@@ -15086,8 +15130,18 @@ f"{aggregation_func}_{column_suffix}".</p>
 
     <span class="n">dseg_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dseg</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;int&quot;</span><span class="p">)</span>  <span class="c1"># dask array of labels</span>
 
-    <span class="c1"># make a dense lookup array</span>
-    <span class="n">max_label</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">feature_data</span><span class="p">[</span><span class="n">label_column</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+    <span class="c1"># Get max label from feature_data</span>
+    <span class="n">max_label_features</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">feature_data</span><span class="p">[</span><span class="n">label_column</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+
+    <span class="c1"># Get max label from dseg image to ensure LUT is large enough</span>
+    <span class="c1"># for all labels that actually exist in the image.</span>
+    <span class="c1"># This prevents IndexError when dseg contains labels not in feature_data.</span>
+    <span class="n">max_label_dseg</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">dseg_data</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="o">.</span><span class="n">compute</span><span class="p">())</span>
+
+    <span class="c1"># Use the larger of the two to size the LUT</span>
+    <span class="n">max_label</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">max_label_features</span><span class="p">,</span> <span class="n">max_label_dseg</span><span class="p">)</span>
+
+    <span class="c1"># make a dense lookup array sized to handle all labels in dseg</span>
     <span class="n">lut</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">max_label</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
     <span class="n">lut</span><span class="p">[</span><span class="n">feature_data</span><span class="p">[</span><span class="n">label_column</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)]</span> <span class="o">=</span> <span class="n">feature_data</span><span class="p">[</span>
         <span class="n">feature_column</span>
@@ -15238,28 +15292,7 @@ region_ids and regex are provided/omitted</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/atlas.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 861</span>
-<span class="normal"> 862</span>
-<span class="normal"> 863</span>
-<span class="normal"> 864</span>
-<span class="normal"> 865</span>
-<span class="normal"> 866</span>
-<span class="normal"> 867</span>
-<span class="normal"> 868</span>
-<span class="normal"> 869</span>
-<span class="normal"> 870</span>
-<span class="normal"> 871</span>
-<span class="normal"> 872</span>
-<span class="normal"> 873</span>
-<span class="normal"> 874</span>
-<span class="normal"> 875</span>
-<span class="normal"> 876</span>
-<span class="normal"> 877</span>
-<span class="normal"> 878</span>
-<span class="normal"> 879</span>
-<span class="normal"> 880</span>
-<span class="normal"> 881</span>
-<span class="normal"> 882</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 882</span>
 <span class="normal"> 883</span>
 <span class="normal"> 884</span>
 <span class="normal"> 885</span>
@@ -15393,7 +15426,28 @@ region_ids and regex are provided/omitted</p>
 <span class="normal">1013</span>
 <span class="normal">1014</span>
 <span class="normal">1015</span>
-<span class="normal">1016</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_region_bounding_box</span><span class="p">(</span>
+<span class="normal">1016</span>
+<span class="normal">1017</span>
+<span class="normal">1018</span>
+<span class="normal">1019</span>
+<span class="normal">1020</span>
+<span class="normal">1021</span>
+<span class="normal">1022</span>
+<span class="normal">1023</span>
+<span class="normal">1024</span>
+<span class="normal">1025</span>
+<span class="normal">1026</span>
+<span class="normal">1027</span>
+<span class="normal">1028</span>
+<span class="normal">1029</span>
+<span class="normal">1030</span>
+<span class="normal">1031</span>
+<span class="normal">1032</span>
+<span class="normal">1033</span>
+<span class="normal">1034</span>
+<span class="normal">1035</span>
+<span class="normal">1036</span>
+<span class="normal">1037</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_region_bounding_box</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">region_ids</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">regex</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -15708,28 +15762,7 @@ less than 1</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/atlas.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1018</span>
-<span class="normal">1019</span>
-<span class="normal">1020</span>
-<span class="normal">1021</span>
-<span class="normal">1022</span>
-<span class="normal">1023</span>
-<span class="normal">1024</span>
-<span class="normal">1025</span>
-<span class="normal">1026</span>
-<span class="normal">1027</span>
-<span class="normal">1028</span>
-<span class="normal">1029</span>
-<span class="normal">1030</span>
-<span class="normal">1031</span>
-<span class="normal">1032</span>
-<span class="normal">1033</span>
-<span class="normal">1034</span>
-<span class="normal">1035</span>
-<span class="normal">1036</span>
-<span class="normal">1037</span>
-<span class="normal">1038</span>
-<span class="normal">1039</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1039</span>
 <span class="normal">1040</span>
 <span class="normal">1041</span>
 <span class="normal">1042</span>
@@ -15886,7 +15919,28 @@ less than 1</p>
 <span class="normal">1193</span>
 <span class="normal">1194</span>
 <span class="normal">1195</span>
-<span class="normal">1196</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">sample_region_patches</span><span class="p">(</span>
+<span class="normal">1196</span>
+<span class="normal">1197</span>
+<span class="normal">1198</span>
+<span class="normal">1199</span>
+<span class="normal">1200</span>
+<span class="normal">1201</span>
+<span class="normal">1202</span>
+<span class="normal">1203</span>
+<span class="normal">1204</span>
+<span class="normal">1205</span>
+<span class="normal">1206</span>
+<span class="normal">1207</span>
+<span class="normal">1208</span>
+<span class="normal">1209</span>
+<span class="normal">1210</span>
+<span class="normal">1211</span>
+<span class="normal">1212</span>
+<span class="normal">1213</span>
+<span class="normal">1214</span>
+<span class="normal">1215</span>
+<span class="normal">1216</span>
+<span class="normal">1217</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">sample_region_patches</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">n_patches</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">region_ids</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -16162,28 +16216,7 @@ in the output (default: True).</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/atlas.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1198</span>
-<span class="normal">1199</span>
-<span class="normal">1200</span>
-<span class="normal">1201</span>
-<span class="normal">1202</span>
-<span class="normal">1203</span>
-<span class="normal">1204</span>
-<span class="normal">1205</span>
-<span class="normal">1206</span>
-<span class="normal">1207</span>
-<span class="normal">1208</span>
-<span class="normal">1209</span>
-<span class="normal">1210</span>
-<span class="normal">1211</span>
-<span class="normal">1212</span>
-<span class="normal">1213</span>
-<span class="normal">1214</span>
-<span class="normal">1215</span>
-<span class="normal">1216</span>
-<span class="normal">1217</span>
-<span class="normal">1218</span>
-<span class="normal">1219</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1219</span>
 <span class="normal">1220</span>
 <span class="normal">1221</span>
 <span class="normal">1222</span>
@@ -16313,7 +16346,28 @@ in the output (default: True).</p>
 <span class="normal">1346</span>
 <span class="normal">1347</span>
 <span class="normal">1348</span>
-<span class="normal">1349</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">label_centroids</span><span class="p">(</span>
+<span class="normal">1349</span>
+<span class="normal">1350</span>
+<span class="normal">1351</span>
+<span class="normal">1352</span>
+<span class="normal">1353</span>
+<span class="normal">1354</span>
+<span class="normal">1355</span>
+<span class="normal">1356</span>
+<span class="normal">1357</span>
+<span class="normal">1358</span>
+<span class="normal">1359</span>
+<span class="normal">1360</span>
+<span class="normal">1361</span>
+<span class="normal">1362</span>
+<span class="normal">1363</span>
+<span class="normal">1364</span>
+<span class="normal">1365</span>
+<span class="normal">1366</span>
+<span class="normal">1367</span>
+<span class="normal">1368</span>
+<span class="normal">1369</span>
+<span class="normal">1370</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">label_centroids</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">centroids</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
     <span class="n">include_names</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
