@@ -354,8 +354,7 @@ def save_ngff_image_with_ome_zarr(
         with tempfile.TemporaryDirectory() as tmpdir:
             # Save to temporary directory first
             temp_zarr_path = os.path.join(tmpdir, "temp.zarr")
-            # Use Zarr v2 format for compatibility with OME-NGFF v0.4
-            store = zarr.open_group(temp_zarr_path, mode="w", zarr_format=2)
+            store = zarr.open_group(temp_zarr_path, mode="w", zarr_format=3)
 
             # Write the data to OME-Zarr
             write_image(
@@ -383,8 +382,7 @@ def save_ngff_image_with_ome_zarr(
     else:
         # Write to zarr store directly
         if isinstance(store_or_path, str):
-            # Use Zarr v2 format for compatibility with OME-NGFF v0.4
-            store = zarr.open_group(store_or_path, mode="w", zarr_format=2)
+            store = zarr.open_group(store_or_path, mode="w", zarr_format=3)
         else:
             store = store_or_path
 
