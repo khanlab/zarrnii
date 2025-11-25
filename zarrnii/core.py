@@ -137,7 +137,6 @@ def _create_ome_zarr_zip(source_dir: str, zip_path: str) -> None:
     import json
     import os
     import zipfile
-    from collections import deque
 
     # Collect all files from the source directory
     all_files = []
@@ -192,11 +191,10 @@ def _create_ome_zarr_zip(source_dir: str, zip_path: str) -> None:
 
         for rel_path, full_path in ordered_files:
             if full_path is None:
-                # Directory entry
-                zf.writestr(
-                    zipfile.ZipInfo(rel_path),
-                    "",
-                )
+                # Directory entry - explicitly set compression type
+                info = zipfile.ZipInfo(rel_path)
+                info.compress_type = zipfile.ZIP_STORED
+                zf.writestr(info, "")
             else:
                 # File entry - read and write with no compression
                 zf.write(full_path, rel_path)
