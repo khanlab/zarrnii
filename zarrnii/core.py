@@ -97,6 +97,111 @@ class MetadataInvalidError(Exception):
     pass
 
 
+# OME-Zarr version for ZIP archive comment
+_OME_ZARR_VERSION = "0.5"
+
+
+def _is_ome_zarr_zip_path(path: str) -> bool:
+    """Check if a path should be treated as an OME-Zarr zip file.
+
+    Supports both the new .ozx extension and legacy .zip extension for
+    backward compatibility.
+
+    Args:
+        path: File path to check
+
+    Returns:
+        True if the path ends with .ozx or .zip
+    """
+    return path.endswith(".ozx") or path.endswith(".zip")
+
+
+def _create_ome_zarr_zip(source_dir: str, zip_path: str) -> None:
+    """Create an OME-Zarr zip file according to the approved spec.
+
+    This function creates a ZIP archive from an OME-Zarr directory following
+    the OME-Zarr single-file specification:
+    - Uses ZIP64 format extension
+    - Disables ZIP-level compression (uses STORED)
+    - Places root zarr.json as the first entry
+    - Orders other zarr.json files in breadth-first order after root
+    - Adds ZIP archive comment with OME-Zarr version JSON
+
+    Args:
+        source_dir: Path to the source OME-Zarr directory
+        zip_path: Path for the output ZIP file
+
+    Raises:
+        OSError: If unable to create the ZIP file
+    """
+    import json
+    import os
+    import zipfile
+    from collections import deque
+
+    # Collect all files from the source directory
+    all_files = []
+    for root, dirs, files in os.walk(source_dir):
+        for file in files:
+            full_path = os.path.join(root, file)
+            rel_path = os.path.relpath(full_path, source_dir)
+            all_files.append((rel_path, full_path))
+        # Also include directories (needed for proper archive structure)
+        for dir_name in dirs:
+            full_path = os.path.join(root, dir_name)
+            rel_path = os.path.relpath(full_path, source_dir) + "/"
+            all_files.append((rel_path, None))  # None indicates directory
+
+    # Separate zarr.json files from other files for proper ordering
+    zarr_json_files = []
+    other_files = []
+
+    for rel_path, full_path in all_files:
+        if rel_path.endswith("zarr.json"):
+            zarr_json_files.append((rel_path, full_path))
+        else:
+            other_files.append((rel_path, full_path))
+
+    # Sort zarr.json files in breadth-first order
+    # Root zarr.json first (shortest path), then by depth and name
+    def breadth_first_key(item):
+        rel_path = item[0]
+        depth = rel_path.count("/")
+        return (depth, rel_path)
+
+    zarr_json_files.sort(key=breadth_first_key)
+
+    # Sort other files for consistent ordering
+    other_files.sort(key=lambda x: x[0])
+
+    # Combine: zarr.json files first (breadth-first order), then other files
+    ordered_files = zarr_json_files + other_files
+
+    # Create ZIP archive comment with OME-Zarr version
+    archive_comment = json.dumps({"ome": {"version": _OME_ZARR_VERSION}})
+
+    # Create ZIP file with ZIP64 extension and no compression
+    with zipfile.ZipFile(
+        zip_path,
+        mode="w",
+        compression=zipfile.ZIP_STORED,  # No compression
+        allowZip64=True,  # Use ZIP64 format extension
+    ) as zf:
+        # Set the archive comment
+        zf.comment = archive_comment.encode("utf-8")
+
+        for rel_path, full_path in ordered_files:
+            if full_path is None:
+                # Directory entry
+                zf.writestr(
+                    zipfile.ZipInfo(rel_path),
+                    "",
+                )
+            else:
+                # File entry - read and write with no compression
+                zf.write(full_path, rel_path)
+
+
 # NgffImage-based function library
 # These functions operate directly on ngff_zarr.NgffImage objects
 
@@ -144,8 +249,8 @@ def load_ngff_image(
     """
     import zarr
 
-    # Handle ZIP files by creating a ZipStore
-    if isinstance(store_or_path, str) and store_or_path.endswith(".zip"):
+    # Handle OME-Zarr zip files by creating a ZipStore
+    if isinstance(store_or_path, str) and _is_ome_zarr_zip_path(store_or_path):
         store = zarr.storage.ZipStore(store_or_path, mode="r")
         multiscales = nz.from_ngff_zarr(store, storage_options=storage_options)
         store.close()
@@ -199,10 +304,17 @@ def save_ngff_image(
         >>> # Save with default pyramid levels
         >>> save_ngff_image(img, "/path/to/output.zarr")
 
-        >>> # Save to ZIP with custom pyramid
+        >>> # Save to OME-Zarr zip with custom pyramid (new .ozx extension)
+        >>> save_ngff_image(img, "/path/to/output.ozx",
+        ...                 scale_factors=[2, 4], xyz_orientation="RAS")
+
+        >>> # Save to ZIP with legacy extension (backward compatible)
         >>> save_ngff_image(img, "/path/to/output.zarr.zip",
         ...                 scale_factors=[2, 4], xyz_orientation="RAS")
     """
+    import os
+    import tempfile
+
     import zarr
 
     if scale_factors is None:
@@ -225,13 +337,10 @@ def save_ngff_image(
         ngff_image, scale_factors=scale_factors, chunks=chunks
     )
 
-    # Check if the target is a ZIP file (based on extension)
-    if isinstance(store_or_path, str) and store_or_path.endswith(".zip"):
-        # For ZIP files, use temp directory approach due to zarr v3.x ZipStore compatibility issues
-        import os
-        import shutil
-        import tempfile
-
+    # Check if the target is an OME-Zarr zip file (based on extension)
+    if isinstance(store_or_path, str) and _is_ome_zarr_zip_path(store_or_path):
+        # For OME-Zarr zip files, use temp directory approach
+        # then create spec-compliant ZIP archive
         with tempfile.TemporaryDirectory() as tmpdir:
             # Save to temporary directory first
             temp_zarr_path = os.path.join(tmpdir, "temp.zarr")
@@ -246,9 +355,8 @@ def save_ngff_image(
                     # If we can't write orientation metadata, that's not critical
                     pass
 
-            # Create ZIP file from the directory
-            zip_base_path = store_or_path.replace(".zip", "")
-            shutil.make_archive(zip_base_path, "zip", temp_zarr_path)
+            # Create OME-Zarr zip file according to spec
+            _create_ome_zarr_zip(temp_zarr_path, store_or_path)
     else:
         # Write to zarr store directly
         nz.to_ngff_zarr(store_or_path, multiscales, **kwargs)
@@ -286,7 +394,7 @@ def save_ngff_image_with_ome_zarr(
     Args:
         ngff_image: NgffImage object to save containing data and metadata
         store_or_path: Target store or path. Supports local paths, remote URLs,
-            and .zip extensions for ZipStore creation
+            and .ozx or .zip extensions for OME-Zarr zip creation
         max_layer: Maximum number of pyramid levels to create (including level 0)
         scale_factors: Custom scale factors for each pyramid level. If None,
             uses powers of 2: [2, 4, 8, ...]
@@ -306,7 +414,11 @@ def save_ngff_image_with_ome_zarr(
         >>> # Save with default pyramid levels
         >>> save_ngff_image_with_ome_zarr(img, "/path/to/output.zarr")
 
-        >>> # Save to ZIP with custom pyramid
+        >>> # Save to OME-Zarr zip with custom pyramid (new .ozx extension)
+        >>> save_ngff_image_with_ome_zarr(img, "/path/to/output.ozx",
+        ...                                scale_factors=[2, 4], xyz_orientation="RAS")
+
+        >>> # Save to ZIP with legacy extension (backward compatible)
         >>> save_ngff_image_with_ome_zarr(img, "/path/to/output.zarr.zip",
         ...                                scale_factors=[2, 4], xyz_orientation="RAS")
 
@@ -315,8 +427,10 @@ def save_ngff_image_with_ome_zarr(
         >>> client = Client()
         >>> save_ngff_image_with_ome_zarr(img, "/path/to/output.zarr", compute=True)
     """
+    import os
+    import tempfile
+
     import zarr
-    from ome_zarr.format import FormatV04
     from ome_zarr.scale import Scaler
     from ome_zarr.writer import write_image
 
@@ -344,13 +458,10 @@ def save_ngff_image_with_ome_zarr(
         # ome-zarr max_layer is the highest index, so max_layer-1 for N total levels
         scaler = Scaler(max_layer=max_layer - 1, method=scaling_method)
 
-    # Check if the target is a ZIP file (based on extension)
-    if isinstance(store_or_path, str) and store_or_path.endswith(".zip"):
-        # For ZIP files, use temp directory approach
-        import os
-        import shutil
-        import tempfile
-
+    # Check if the target is an OME-Zarr zip file (based on extension)
+    if isinstance(store_or_path, str) and _is_ome_zarr_zip_path(store_or_path):
+        # For OME-Zarr zip files, use temp directory approach
+        # then create spec-compliant ZIP archive
         with tempfile.TemporaryDirectory() as tmpdir:
             # Save to temporary directory first
             temp_zarr_path = os.path.join(tmpdir, "temp.zarr")
@@ -376,9 +487,8 @@ def save_ngff_image_with_ome_zarr(
                     # If we can't write orientation metadata, that's not critical
                     pass
 
-            # Create ZIP file from the directory
-            zip_base_path = store_or_path.replace(".zip", "")
-            shutil.make_archive(zip_base_path, "zip", temp_zarr_path)
+            # Create OME-Zarr zip file according to spec
+            _create_ome_zarr_zip(temp_zarr_path, store_or_path)
     else:
         # Write to zarr store directly
         if isinstance(store_or_path, str):
@@ -1063,7 +1173,7 @@ def get_bounded_subregion_from_zarr(
 
     # Open the zarr store and read the subregion directly
     try:
-        if store_path.endswith(".zip"):
+        if _is_ome_zarr_zip_path(store_path):
             store = zarr.storage.ZipStore(store_path, mode="r")
             root = zarr.open_group(store, mode="r")
         else:
@@ -1091,7 +1201,7 @@ def get_bounded_subregion_from_zarr(
 
     finally:
         # Close ZIP store if used
-        if store_path.endswith(".zip"):
+        if _is_ome_zarr_zip_path(store_path):
             store.close()
 
     # Generate grid points for interpolation
@@ -1424,7 +1534,7 @@ class ZarrNii:
                             store_path_str = str(store_path)
 
                             # Open the zarr store to get the actual array shape
-                            if store_path_str.endswith(".zip"):
+                            if _is_ome_zarr_zip_path(store_path_str):
                                 zarr_store = zarr.storage.ZipStore(
                                     store_path_str, mode="r"
                                 )
@@ -1538,7 +1648,7 @@ class ZarrNii:
     def from_file(cls, path, **kwargs):
         if path.endswith((".nii", ".nii.gz")):
             return cls.from_nifti(path, **kwargs)
-        elif path.endswith(".zarr") or path.endswith(".zip"):
+        elif path.endswith(".zarr") or _is_ome_zarr_zip_path(path):
             return cls.from_ome_zarr(path, **kwargs)
         else:
             raise ValueError(f"Unknown file extension: {path}")
@@ -1814,8 +1924,8 @@ class ZarrNii:
         # Load the multiscales object
         try:
             if isinstance(store_or_path, str):
-                # Handle ZIP files by creating a ZipStore
-                if store_or_path.endswith(".zip"):
+                # Handle OME-Zarr zip files by creating a ZipStore
+                if _is_ome_zarr_zip_path(store_or_path):
                     import zarr
 
                     store = zarr.storage.ZipStore(store_or_path, mode="r")
@@ -1832,7 +1942,7 @@ class ZarrNii:
         except Exception as e:
             # Fallback for older zarr/ngff_zarr versions
             if isinstance(store_or_path, str):
-                if store_or_path.endswith(".zip"):
+                if _is_ome_zarr_zip_path(store_or_path):
                     import zarr
 
                     store = zarr.storage.ZipStore(store_or_path, mode="r")
@@ -1850,7 +1960,7 @@ class ZarrNii:
             import zarr
 
             if isinstance(store_or_path, str):
-                if store_or_path.endswith(".zip"):
+                if _is_ome_zarr_zip_path(store_or_path):
                     zip_store = zarr.storage.ZipStore(store_or_path, mode="r")
                     group = zarr.open_group(zip_store, mode="r")
                     # Close zip store after getting group
@@ -1911,7 +2021,7 @@ class ZarrNii:
             if orientation is None:
 
                 if isinstance(store_or_path, str):
-                    if store_or_path.endswith(".zip"):
+                    if _is_ome_zarr_zip_path(store_or_path):
                         zip_store = zarr.storage.ZipStore(store_or_path, mode="r")
                         group = zarr.open_group(zip_store, mode="r")
                         # Check for new xyz_orientation first, then fallback to legacy orientation
@@ -3228,8 +3338,10 @@ class ZarrNii:
             )
 
         # Add orientation metadata to the zarr store (only for non-ZIP files)
-        # For ZIP files, orientation is handled inside save_ngff_image
-        if not (isinstance(store_or_path, str) and store_or_path.endswith(".zip")):
+        # For OME-Zarr zip files, orientation is handled inside save_ngff_image
+        if not (
+            isinstance(store_or_path, str) and _is_ome_zarr_zip_path(store_or_path)
+        ):
             try:
                 import zarr
 
