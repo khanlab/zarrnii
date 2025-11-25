@@ -143,12 +143,12 @@ def _create_ome_zarr_zip(source_dir: str, zip_path: str) -> None:
     for root, dirs, files in os.walk(source_dir):
         for file in files:
             full_path = os.path.join(root, file)
-            rel_path = os.path.relpath(full_path, source_dir).replace(os.sep, '/')
+            rel_path = os.path.relpath(full_path, source_dir).replace(os.sep, "/")
             all_files.append((rel_path, full_path))
         # Also include directories (needed for proper archive structure)
         for dir_name in dirs:
             full_path = os.path.join(root, dir_name)
-            rel_path = os.path.relpath(full_path, source_dir).replace(os.sep, '/') + "/"
+            rel_path = os.path.relpath(full_path, source_dir).replace(os.sep, "/") + "/"
             all_files.append((rel_path, None))  # None indicates directory
 
     # Separate zarr.json files from other files for proper ordering
