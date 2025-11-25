@@ -4263,9 +4263,10 @@ class ZarrNii:
         Returns:
             New ZarrNii with copied data
         """
-        # Copy dims - handles both tuple and list types
+        # Copy dims - tuples are immutable so can be used directly,
+        # lists need to be copied
         dims = self.ngff_image.dims
-        copied_dims = tuple(dims) if isinstance(dims, tuple) else list(dims)
+        copied_dims = dims if isinstance(dims, tuple) else list(dims)
 
         # Create a new NgffImage with the same properties
         copied_image = nz.NgffImage(
