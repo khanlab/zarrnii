@@ -4263,10 +4263,14 @@ class ZarrNii:
         Returns:
             New ZarrNii with copied data
         """
+        # Copy dims - handles both tuple and list types
+        dims = self.ngff_image.dims
+        copied_dims = tuple(dims) if isinstance(dims, tuple) else list(dims)
+
         # Create a new NgffImage with the same properties
         copied_image = nz.NgffImage(
             data=self.ngff_image.data,  # Dask arrays are lazy so this is efficient
-            dims=self.ngff_image.dims.copy(),
+            dims=copied_dims,
             scale=self.ngff_image.scale.copy(),
             translation=self.ngff_image.translation.copy(),
             name=self.ngff_image.name,

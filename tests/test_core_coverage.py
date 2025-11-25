@@ -157,6 +157,38 @@ def test_zarrnii_copy_method():
         assert copied.shape == znimg.shape
 
 
+def test_zarrnii_copy_method_with_tuple_dims():
+    """Test ZarrNii copy method with tuple dims from NgffImage.
+
+    This tests the fix for the bug where copy() failed when dims was a tuple
+    (from ngff-zarr update) instead of a list. See issue about AttributeError:
+    'tuple' object has no attribute 'copy'.
+    """
+    import ngff_zarr as nz
+
+    # Create an NgffImage directly with tuple dims (as ngff-zarr stores them)
+    data = da.from_array(np.zeros((1, 1, 10, 10, 10), dtype=np.float32), chunks="auto")
+    ngff_img = nz.NgffImage(
+        data=data,
+        dims=("t", "c", "z", "y", "x"),  # Tuple dims like ngff-zarr uses
+        scale={"z": 1.0, "y": 1.0, "x": 1.0},
+        translation={"z": 0.0, "y": 0.0, "x": 0.0},
+    )
+
+    # Create ZarrNii from NgffImage with tuple dims
+    znimg = ZarrNii(ngff_image=ngff_img)
+
+    # Verify that dims is a tuple (to confirm we're testing the right scenario)
+    assert isinstance(znimg.ngff_image.dims, tuple), "Test setup: dims should be tuple"
+
+    # Test that copy() works correctly even with tuple dims
+    copied = znimg.copy()
+    assert copied.shape == znimg.shape
+    assert copied.ngff_image.dims == znimg.ngff_image.dims
+    assert copied.ngff_image.scale == znimg.ngff_image.scale
+    assert copied.ngff_image.translation == znimg.ngff_image.translation
+
+
 def test_zarrnii_apply_transform_edge_cases():
     """Test apply_transform method with edge cases."""
     data = da.from_array(np.random.rand(1, 8, 8, 8), chunks=(1, 4, 4, 4))
