@@ -948,3 +948,446 @@ class TestAmbiguousTemplateFlowQueryError:
 
         # Check error message truncation for many files
         assert "..." in str(error)  # Should truncate file list
+
+
+class TestAtlasVisualization:
+    """Test suite for atlas visualization functions."""
+
+    @pytest.fixture
+    def sample_atlas(self):
+        """Create sample atlas for visualization testing."""
+        # Create a simple 3D atlas with 2 regions
+        shape = (1, 20, 20, 20)  # (c, z, y, x)
+        dseg_data = da.zeros(shape, dtype=np.int32)
+
+        # Region 1: left half
+        dseg_data[0, :, :, :10] = 1
+        # Region 2: right half
+        dseg_data[0, :, :, 10:] = 2
+
+        # Create ZarrNii with 1mm isotropic spacing
+        dseg = ZarrNii.from_darr(dseg_data)
+
+        labels_df = pd.DataFrame(
+            {
+                "index": [0, 1, 2],
+                "name": ["Background", "Left Region", "Right Region"],
+                "abbreviation": ["BG", "L", "R"],
+            }
+        )
+
+        return ZarrNiiAtlas.create_from_dseg(dseg, labels_df)
+
+    @pytest.fixture
+    def sample_centroids(self):
+        """Create sample centroids for testing."""
+        # Create centroids in physical space (mm)
+        # Spread across different z positions to test distance filtering
+        centroids = np.array(
+            [
+                [5.0, 10.0, 10.0],  # In left region, center z
+                [5.0, 10.0, 5.0],  # In left region, lower z
+                [5.0, 10.0, 15.0],  # In left region, upper z
+                [15.0, 10.0, 10.0],  # In right region, center z
+                [15.0, 10.0, 3.0],  # In right region, very low z
+            ]
+        )
+        return centroids
+
+    def test_load_centroids_from_array(self, sample_centroids):
+        """Test loading centroids from numpy array."""
+        from zarrnii.atlas import _load_centroids_from_file
+
+        result = _load_centroids_from_file(sample_centroids)
+        assert result.shape == sample_centroids.shape
+        assert np.allclose(result, sample_centroids)
+
+    def test_load_centroids_from_dataframe(self, sample_centroids):
+        """Test loading centroids from pandas DataFrame."""
+        from zarrnii.atlas import _load_centroids_from_file
+
+        df = pd.DataFrame(sample_centroids, columns=["x", "y", "z"])
+        result = _load_centroids_from_file(df)
+        assert result.shape == sample_centroids.shape
+        assert np.allclose(result, sample_centroids)
+
+    def test_load_centroids_from_npy_file(self, sample_centroids, tmp_path):
+        """Test loading centroids from .npy file."""
+        from zarrnii.atlas import _load_centroids_from_file
+
+        npy_file = tmp_path / "centroids.npy"
+        np.save(npy_file, sample_centroids)
+
+        result = _load_centroids_from_file(str(npy_file))
+        assert result.shape == sample_centroids.shape
+        assert np.allclose(result, sample_centroids)
+
+    def test_load_centroids_from_parquet_file(self, sample_centroids, tmp_path):
+        """Test loading centroids from .parquet file."""
+        from zarrnii.atlas import _load_centroids_from_file
+
+        parquet_file = tmp_path / "centroids.parquet"
+        df = pd.DataFrame(sample_centroids, columns=["x", "y", "z"])
+        df.to_parquet(parquet_file)
+
+        result = _load_centroids_from_file(str(parquet_file))
+        assert result.shape == sample_centroids.shape
+        assert np.allclose(result, sample_centroids)
+
+    def test_load_centroids_invalid_format(self, sample_centroids):
+        """Test error handling for invalid centroid format."""
+        from zarrnii.atlas import _load_centroids_from_file
+
+        # Test invalid file extension
+        with pytest.raises(ValueError, match="Unsupported file format"):
+            _load_centroids_from_file("invalid.txt")
+
+        # Test invalid shape
+        with pytest.raises(ValueError, match="must have shape"):
+            _load_centroids_from_file(np.array([1, 2, 3]))
+
+        # Test DataFrame missing columns
+        df = pd.DataFrame(sample_centroids, columns=["a", "b", "c"])
+        with pytest.raises(ValueError, match="must contain columns"):
+            _load_centroids_from_file(df)
+
+    def test_compute_out_of_plane_distance(self, sample_centroids):
+        """Test computation of out-of-plane distances."""
+        from zarrnii.atlas import _compute_out_of_plane_distance
+
+        # Test axial plane (z-axis)
+        slice_position = 10.0
+        distances = _compute_out_of_plane_distance(
+            sample_centroids, slice_position, "axial"
+        )
+        expected = np.abs(sample_centroids[:, 2] - slice_position)
+        assert np.allclose(distances, expected)
+
+        # Test sagittal plane (x-axis)
+        distances = _compute_out_of_plane_distance(
+            sample_centroids, slice_position, "sagittal"
+        )
+        expected = np.abs(sample_centroids[:, 0] - slice_position)
+        assert np.allclose(distances, expected)
+
+        # Test coronal plane (y-axis)
+        distances = _compute_out_of_plane_distance(
+            sample_centroids, slice_position, "coronal"
+        )
+        expected = np.abs(sample_centroids[:, 1] - slice_position)
+        assert np.allclose(distances, expected)
+
+        # Test invalid plane
+        with pytest.raises(ValueError, match="plane must be one of"):
+            _compute_out_of_plane_distance(sample_centroids, 10.0, "invalid")
+
+    def test_filter_centroids_by_distance(self, sample_centroids):
+        """Test filtering centroids by distance threshold."""
+        from zarrnii.atlas import _filter_centroids_by_distance
+
+        distances = np.array([1.0, 5.0, 10.0, 15.0, 20.0])
+        max_distance = 10.0
+
+        filtered_centroids, filtered_distances = _filter_centroids_by_distance(
+            sample_centroids, distances, max_distance
+        )
+
+        assert len(filtered_centroids) == 3  # Only distances <= 10.0
+        assert len(filtered_distances) == 3
+        assert np.all(filtered_distances <= max_distance)
+
+    def test_compute_opacity_linear(self):
+        """Test linear opacity transfer function."""
+        from zarrnii.atlas import _compute_opacity_from_distance
+
+        distances = np.array([0.0, 5.0, 10.0, 15.0, 20.0])
+        max_distance = 10.0
+
+        opacities = _compute_opacity_from_distance(distances, max_distance, "linear")
+
+        # Check expected behavior
+        assert opacities[0] == 1.0  # At distance 0, full opacity
+        assert opacities[2] == 0.0  # At max distance, zero opacity
+        assert opacities[1] == 0.5  # At half distance, half opacity
+        assert np.all((opacities >= 0.0) & (opacities <= 1.0))
+
+    def test_compute_opacity_quadratic(self):
+        """Test quadratic opacity transfer function."""
+        from zarrnii.atlas import _compute_opacity_from_distance
+
+        distances = np.array([0.0, 5.0, 10.0])
+        max_distance = 10.0
+
+        opacities = _compute_opacity_from_distance(distances, max_distance, "quadratic")
+
+        assert opacities[0] == 1.0
+        assert opacities[2] == 0.0
+        assert opacities[1] > 0.5  # Quadratic stays higher longer
+        assert np.all((opacities >= 0.0) & (opacities <= 1.0))
+
+    def test_compute_opacity_exponential(self):
+        """Test exponential opacity transfer function."""
+        from zarrnii.atlas import _compute_opacity_from_distance
+
+        distances = np.array([0.0, 5.0, 10.0])
+        max_distance = 10.0
+
+        opacities = _compute_opacity_from_distance(
+            distances, max_distance, "exponential"
+        )
+
+        assert opacities[0] == 1.0
+        assert opacities[2] < 0.5  # Exponential decays quickly
+        assert np.all((opacities >= 0.0) & (opacities <= 1.0))
+
+        # Test with custom decay rate
+        opacities_fast = _compute_opacity_from_distance(
+            distances, max_distance, "exponential", {"decay_rate": 5.0}
+        )
+        assert opacities_fast[1] < opacities[1]  # Faster decay
+
+    def test_compute_opacity_gaussian(self):
+        """Test gaussian opacity transfer function."""
+        from zarrnii.atlas import _compute_opacity_from_distance
+
+        distances = np.array([0.0, 5.0, 10.0])
+        max_distance = 10.0
+
+        opacities = _compute_opacity_from_distance(distances, max_distance, "gaussian")
+
+        assert opacities[0] == 1.0
+        assert np.all((opacities >= 0.0) & (opacities <= 1.0))
+
+        # Test with custom sigma
+        opacities_narrow = _compute_opacity_from_distance(
+            distances, max_distance, "gaussian", {"sigma_fraction": 0.1}
+        )
+        assert opacities_narrow[1] < opacities[1]  # Narrower spread
+
+    def test_compute_opacity_invalid_function(self):
+        """Test error handling for invalid opacity function."""
+        from zarrnii.atlas import _compute_opacity_from_distance
+
+        distances = np.array([0.0, 5.0, 10.0])
+        with pytest.raises(ValueError, match="Unknown opacity function"):
+            _compute_opacity_from_distance(distances, 10.0, "invalid")
+
+    def test_extract_2d_slice_axial(self, sample_atlas):
+        """Test extracting axial 2D slice."""
+        slice_position = 10.0  # mm
+        slice_data, metadata = sample_atlas._extract_2d_slice_from_image(
+            slice_position, "axial"
+        )
+
+        # Check slice data shape (should be 2D)
+        assert slice_data.ndim == 2
+        assert slice_data.shape == (20, 20)  # y, x dimensions
+
+        # Check metadata
+        assert metadata["plane"] == "axial"
+        assert metadata["position"] == slice_position
+        assert "extent" in metadata
+        assert metadata["x_axis"] == "x"
+        assert metadata["y_axis"] == "y"
+        assert metadata["slice_axis"] == "z"
+
+    def test_extract_2d_slice_sagittal(self, sample_atlas):
+        """Test extracting sagittal 2D slice."""
+        slice_position = 5.0
+        slice_data, metadata = sample_atlas._extract_2d_slice_from_image(
+            slice_position, "sagittal"
+        )
+
+        assert slice_data.ndim == 2
+        assert metadata["plane"] == "sagittal"
+        assert metadata["x_axis"] == "y"
+        assert metadata["y_axis"] == "z"
+        assert metadata["slice_axis"] == "x"
+
+    def test_extract_2d_slice_coronal(self, sample_atlas):
+        """Test extracting coronal 2D slice."""
+        slice_position = 10.0
+        slice_data, metadata = sample_atlas._extract_2d_slice_from_image(
+            slice_position, "coronal"
+        )
+
+        assert slice_data.ndim == 2
+        assert metadata["plane"] == "coronal"
+        assert metadata["x_axis"] == "x"
+        assert metadata["y_axis"] == "z"
+        assert metadata["slice_axis"] == "y"
+
+    def test_extract_2d_slice_invalid_plane(self, sample_atlas):
+        """Test error handling for invalid plane."""
+        with pytest.raises(ValueError, match="plane must be one of"):
+            sample_atlas._extract_2d_slice_from_image(10.0, "invalid")
+
+    def test_visualize_atlas_regions_basic(self, sample_atlas):
+        """Test basic atlas region visualization."""
+        # Test with single region and single plane
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
+            region_ids=[1],
+            planes=["axial"],
+            figsize=(6, 6),
+        )
+
+        assert len(figs) == 1
+        assert hasattr(figs[0], "axes")
+
+        # Clean up
+        import matplotlib.pyplot as plt
+
+        plt.close("all")
+
+    def test_visualize_atlas_regions_multiple(self, sample_atlas):
+        """Test visualization with multiple regions and planes."""
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
+            region_ids=[1, 2],
+            planes=["axial", "coronal"],
+        )
+
+        # Should have 2 regions * 2 planes = 4 figures
+        assert len(figs) == 4
+
+        # Clean up
+        import matplotlib.pyplot as plt
+
+        plt.close("all")
+
+    def test_visualize_atlas_regions_with_centroids(
+        self, sample_atlas, sample_centroids
+    ):
+        """Test visualization with centroid overlay."""
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
+            region_ids=[1],
+            centroids=sample_centroids,
+            planes=["axial"],
+            max_centroid_distance=5.0,
+            opacity_function="gaussian",
+        )
+
+        assert len(figs) == 1
+
+        # Clean up
+        import matplotlib.pyplot as plt
+
+        plt.close("all")
+
+    def test_visualize_atlas_regions_with_centroid_file(
+        self, sample_atlas, sample_centroids, tmp_path
+    ):
+        """Test visualization with centroids from file."""
+        # Save centroids to parquet
+        parquet_file = tmp_path / "centroids.parquet"
+        df = pd.DataFrame(sample_centroids, columns=["x", "y", "z"])
+        df.to_parquet(parquet_file)
+
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
+            region_ids=[1],
+            centroids=str(parquet_file),
+            planes=["axial"],
+        )
+
+        assert len(figs) == 1
+
+        # Clean up
+        import matplotlib.pyplot as plt
+
+        plt.close("all")
+
+    def test_visualize_atlas_regions_opacity_functions(
+        self, sample_atlas, sample_centroids
+    ):
+        """Test different opacity transfer functions."""
+        opacity_functions = ["linear", "quadratic", "exponential", "gaussian"]
+
+        for func in opacity_functions:
+            figs = sample_atlas.visualize_atlas_regions(
+                atlas=sample_atlas,
+                region_ids=[1],
+                centroids=sample_centroids,
+                planes=["axial"],
+                opacity_function=func,
+            )
+            assert len(figs) == 1
+
+        # Clean up
+        import matplotlib.pyplot as plt
+
+        plt.close("all")
+
+    def test_visualize_atlas_regions_custom_params(
+        self, sample_atlas, sample_centroids
+    ):
+        """Test visualization with custom parameters."""
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
+            region_ids=[1],
+            centroids=sample_centroids,
+            planes=["axial"],
+            max_centroid_distance=8.0,
+            opacity_function="exponential",
+            opacity_params={"decay_rate": 3.0},
+            cmap="viridis",
+            centroid_color="blue",
+            centroid_size=20.0,
+            figsize=(10, 10),
+        )
+
+        assert len(figs) == 1
+
+        # Clean up
+        import matplotlib.pyplot as plt
+
+        plt.close("all")
+
+    def test_visualize_atlas_regions_invalid_inputs(self, sample_atlas):
+        """Test error handling for invalid inputs."""
+        # Empty region list
+        with pytest.raises(ValueError, match="region_ids cannot be empty"):
+            sample_atlas.visualize_atlas_regions(atlas=sample_atlas, region_ids=[])
+
+        # Invalid plane
+        with pytest.raises(ValueError, match="Invalid plane"):
+            sample_atlas.visualize_atlas_regions(
+                atlas=sample_atlas, region_ids=[1], planes=["invalid"]
+            )
+
+    def test_visualize_atlas_regions_by_name(self, sample_atlas):
+        """Test visualization using region names."""
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
+            region_ids=["Left Region"],
+            planes=["axial"],
+        )
+
+        assert len(figs) == 1
+
+        # Clean up
+        import matplotlib.pyplot as plt
+
+        plt.close("all")
+
+    def test_visualize_atlas_regions_no_centroids_in_range(
+        self, sample_atlas, sample_centroids
+    ):
+        """Test visualization when no centroids are within distance."""
+        # Use very small max distance to filter out all centroids
+        figs = sample_atlas.visualize_atlas_regions(
+            atlas=sample_atlas,
+            region_ids=[1],
+            centroids=sample_centroids,
+            planes=["axial"],
+            max_centroid_distance=0.1,  # Very small
+        )
+
+        assert len(figs) == 1  # Should still create figure
+
+        # Clean up
+        import matplotlib.pyplot as plt
+
+        plt.close("all")

@@ -1368,3 +1368,165 @@ class ZarrNiiAtlas(ZarrNii):
             df_counts = df_centroids.groupby(["index"]).size().reset_index(name="count")
 
         return (df_centroids, df_counts)
+
+
+def _load_centroids_from_file(
+    centroids: Union[str, np.ndarray, pd.DataFrame],
+) -> np.ndarray:
+    """Load centroids from various input formats.
+
+    Args:
+        centroids: Can be:
+            - numpy array of shape (N, 3) with columns [x, y, z]
+            - str path to .npy file
+            - str path to .parquet file
+            - pandas DataFrame with columns ['x', 'y', 'z']
+
+    Returns:
+        numpy array of shape (N, 3) with columns [x, y, z]
+
+    Raises:
+        ValueError: If input format is invalid
+        FileNotFoundError: If file path doesn't exist
+        ImportError: If pandas not available for parquet files
+    """
+    if isinstance(centroids, str):
+        if centroids.endswith(".npy"):
+            centroids_array = np.load(centroids)
+        elif centroids.endswith(".parquet"):
+            try:
+                df = pd.read_parquet(centroids)
+            except ImportError:
+                raise ImportError(
+                    "pandas and pyarrow are required to read parquet files. "
+                    "Install with: pip install pandas pyarrow"
+                )
+            if not all(col in df.columns for col in ["x", "y", "z"]):
+                raise ValueError(
+                    f"Parquet file must contain columns 'x', 'y', 'z'. "
+                    f"Found: {list(df.columns)}"
+                )
+            centroids_array = df[["x", "y", "z"]].values
+        else:
+            raise ValueError(
+                f"Unsupported file format. Expected .npy or .parquet, got: {centroids}"
+            )
+    elif isinstance(centroids, pd.DataFrame):
+        if not all(col in centroids.columns for col in ["x", "y", "z"]):
+            raise ValueError(
+                f"DataFrame must contain columns 'x', 'y', 'z'. "
+                f"Found: {list(centroids.columns)}"
+            )
+        centroids_array = centroids[["x", "y", "z"]].values
+    else:
+        centroids_array = np.asarray(centroids)
+
+    # Validate shape
+    if centroids_array.ndim != 2 or centroids_array.shape[1] != 3:
+        raise ValueError(
+            f"Centroids must have shape (N, 3), got shape {centroids_array.shape}"
+        )
+
+    return centroids_array
+
+
+def _compute_out_of_plane_distance(
+    centroids: np.ndarray, slice_position: float, plane: str
+) -> np.ndarray:
+    """Compute out-of-plane distance for centroids relative to a slice.
+
+    Args:
+        centroids: Nx3 array of centroid coordinates [x, y, z] in physical space
+        slice_position: Position of the slice plane in physical coordinates
+        plane: Plane orientation - 'axial', 'sagittal', or 'coronal'
+
+    Returns:
+        Array of distances from each centroid to the slice plane
+
+    Raises:
+        ValueError: If plane is not one of 'axial', 'sagittal', 'coronal'
+    """
+    # Map plane to axis index in [x, y, z] ordering
+    plane_axis_map = {
+        "axial": 2,  # z-axis
+        "sagittal": 0,  # x-axis
+        "coronal": 1,  # y-axis
+    }
+
+    if plane not in plane_axis_map:
+        raise ValueError(
+            f"plane must be one of {list(plane_axis_map.keys())}, got '{plane}'"
+        )
+
+    axis_idx = plane_axis_map[plane]
+    distances = np.abs(centroids[:, axis_idx] - slice_position)
+    return distances
+
+
+def _filter_centroids_by_distance(
+    centroids: np.ndarray, distances: np.ndarray, max_distance: float
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Filter centroids by maximum distance from plane.
+
+    Args:
+        centroids: Nx3 array of centroid coordinates
+        distances: Array of out-of-plane distances
+        max_distance: Maximum distance threshold
+
+    Returns:
+        Tuple of (filtered_centroids, filtered_distances)
+    """
+    mask = distances <= max_distance
+    return centroids[mask], distances[mask]
+
+
+def _compute_opacity_from_distance(
+    distances: np.ndarray,
+    max_distance: float,
+    opacity_function: str = "linear",
+    opacity_params: Optional[Dict[str, float]] = None,
+) -> np.ndarray:
+    """Compute opacity values from out-of-plane distances.
+
+    Args:
+        distances: Array of out-of-plane distances
+        max_distance: Maximum distance (distance at opacity = 0)
+        opacity_function: Transfer function type:
+            - 'linear': Linear falloff from 1.0 to 0.0
+            - 'quadratic': Quadratic falloff (stays high longer)
+            - 'exponential': Exponential decay
+            - 'gaussian': Gaussian falloff
+        opacity_params: Optional parameters for the opacity function:
+            - For 'exponential': {'decay_rate': float} (default: 2.0)
+            - For 'gaussian': {'sigma_fraction': float} (default: 0.3)
+
+    Returns:
+        Array of opacity values in range [0, 1]
+
+    Raises:
+        ValueError: If opacity_function is not recognized
+    """
+    if opacity_params is None:
+        opacity_params = {}
+
+    # Normalize distances to [0, 1] range
+    normalized_distances = distances / max_distance
+
+    if opacity_function == "linear":
+        opacities = 1.0 - normalized_distances
+    elif opacity_function == "quadratic":
+        opacities = 1.0 - normalized_distances**2
+    elif opacity_function == "exponential":
+        decay_rate = opacity_params.get("decay_rate", 2.0)
+        opacities = np.exp(-decay_rate * normalized_distances)
+    elif opacity_function == "gaussian":
+        sigma_fraction = opacity_params.get("sigma_fraction", 0.3)
+        sigma = max_distance * sigma_fraction
+        opacities = np.exp(-0.5 * (distances / sigma) ** 2)
+    else:
+        raise ValueError(
+            f"Unknown opacity function: {opacity_function}. "
+            "Supported: 'linear', 'quadratic', 'exponential', 'gaussian'"
+        )
+
+    return np.clip(opacities, 0.0, 1.0)
