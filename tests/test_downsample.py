@@ -1,3 +1,4 @@
+import ngff_zarr as nz
 import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
@@ -159,26 +160,25 @@ def test_near_isotropic_downsampling(nifti_nib):
     # Create an OME-Zarr with anisotropic voxels
     znimg.to_ome_zarr("test_anisotropic.ome.zarr", max_layer=0)
 
-    # Manually modify the scale to create anisotropic data
+    # Use ngff-zarr to modify the scale to create anisotropic data
     # We'll make z scale much smaller (higher resolution) than x and y
-    import zarr
+    multiscales = nz.from_ngff_zarr("test_anisotropic.ome.zarr")
+    original_image = multiscales.images[0]
 
-    store = zarr.open("test_anisotropic.ome.zarr", mode="r+")
-    multiscales = store.attrs["multiscales"]
+    # Create a new NgffImage with anisotropic scales
+    # z is very fine (0.1), x and y are coarse (0.4)
+    modified_image = nz.NgffImage(
+        data=original_image.data,
+        dims=list(original_image.dims),
+        scale={"c": 1.0, "z": 0.1, "y": 0.4, "x": 0.4},
+        translation=original_image.translation,
+        name=original_image.name,
+        axes_units=original_image.axes_units,
+    )
 
-    # Modify the scale to make z resolution 4x finer than x and y
-    original_transforms = multiscales[0]["datasets"][0]["coordinateTransformations"]
-    for transform in original_transforms:
-        if transform["type"] == "scale":
-            # Make z scale much smaller (finer resolution) than x and y
-            if len(transform["scale"]) >= 4:  # [c, z, y, x] for ZYX
-                # Set specific scales to ensure z is the finest
-                transform["scale"][-3] = 0.1  # z dimension - very fine
-                transform["scale"][-2] = 0.4  # y dimension - coarse
-                transform["scale"][-1] = 0.4  # x dimension - coarse
-
-    # Update the multiscales metadata
-    store.attrs["multiscales"] = multiscales
+    # Save the modified image back to the same path
+    new_multiscales = nz.to_multiscales(modified_image)
+    nz.to_ngff_zarr("test_anisotropic.ome.zarr", new_multiscales, overwrite=True)
 
     # Load without downsampling
     znimg_normal = ZarrNii.from_ome_zarr(
@@ -240,23 +240,23 @@ def test_near_isotropic_downsampling_no_effect(nifti_nib):
     # Create an OME-Zarr and manually set isotropic scales
     znimg.to_ome_zarr("test_isotropic.ome.zarr", max_layer=0)
 
-    # Manually modify the scale to ensure isotropy
-    import zarr
+    # Use ngff-zarr to modify the scale to ensure isotropy
+    multiscales = nz.from_ngff_zarr("test_isotropic.ome.zarr")
+    original_image = multiscales.images[0]
 
-    store = zarr.open("test_isotropic.ome.zarr", mode="r+")
-    multiscales = store.attrs["multiscales"]
+    # Create a new NgffImage with isotropic scales
+    modified_image = nz.NgffImage(
+        data=original_image.data,
+        dims=list(original_image.dims),
+        scale={"c": 1.0, "z": 1.0, "y": 1.0, "x": 1.0},
+        translation=original_image.translation,
+        name=original_image.name,
+        axes_units=original_image.axes_units,
+    )
 
-    original_transforms = multiscales[0]["datasets"][0]["coordinateTransformations"]
-    for transform in original_transforms:
-        if transform["type"] == "scale":
-            # Set all spatial dimensions to the same scale
-            if len(transform["scale"]) >= 4:  # [c, z, y, x] for ZYX
-                transform["scale"][-3] = 1.0  # z dimension
-                transform["scale"][-2] = 1.0  # y dimension
-                transform["scale"][-1] = 1.0  # x dimension
-
-    # Update the multiscales metadata
-    store.attrs["multiscales"] = multiscales
+    # Save the modified image back to the same path
+    new_multiscales = nz.to_multiscales(modified_image)
+    nz.to_ngff_zarr("test_isotropic.ome.zarr", new_multiscales, overwrite=True)
 
     # Load without downsampling
     znimg_normal = ZarrNii.from_ome_zarr(
