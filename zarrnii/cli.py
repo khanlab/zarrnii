@@ -48,6 +48,7 @@ def z2n():
         epilog="""
 Examples:
   z2n input.ome.zarr output.nii.gz
+  z2n input.ozx output.nii.gz --level 1
   z2n input.ome.zarr.zip output.nii.gz --level 1
   z2n input.ome.zarr output.nii.gz --channels 0,2 --axes-order ZYX
   
@@ -238,6 +239,7 @@ def n2z():
         epilog="""
 Examples:
   n2z input.nii.gz output.ome.zarr
+  n2z input.nii.gz output.ozx --max-layer 6
   n2z input.nii.gz output.ome.zarr.zip --max-layer 6
   n2z input.nii.gz output.ome.zarr --axes-order XYZ --as-ref
         """,
