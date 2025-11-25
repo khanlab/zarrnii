@@ -110,7 +110,13 @@ def configure_logging(
 
     # Convert string level to int if needed
     if isinstance(level, str):
-        level = getattr(logging, level.upper())
+        level_upper = level.upper()
+        if not hasattr(logging, level_upper):
+            valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+            raise ValueError(
+                f"Invalid logging level: '{level}'. Valid levels: {valid_levels}"
+            )
+        level = getattr(logging, level_upper)
 
     # Get the root zarrnii logger
     logger = logging.getLogger(LIBRARY_LOGGER_NAME)

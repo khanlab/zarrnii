@@ -78,6 +78,13 @@ class TestConfigureLogging:
         logger = logging.getLogger(LIBRARY_LOGGER_NAME)
         assert logger.level == logging.DEBUG
 
+    def test_configure_logging_invalid_string_level(self):
+        """Test configure_logging raises ValueError for invalid string level."""
+        with pytest.raises(ValueError) as excinfo:
+            configure_logging(level="invalid_level")
+        assert "Invalid logging level" in str(excinfo.value)
+        assert "invalid_level" in str(excinfo.value)
+
     def test_configure_logging_creates_handler(self):
         """Test configure_logging creates a StreamHandler."""
         configure_logging(level=logging.DEBUG)

@@ -5274,16 +5274,18 @@ class ZarrNii:
         logger.debug("Upsampling to target shape: %s", self.shape)
 
         upsampled_data = lowres_znimg.upsample(to_shape=self.shape)
+        upsampled_dask_arr = upsampled_data.data
         logger.debug(
             "Upsampled dask array - shape: %s, chunks: %s, npartitions: %d",
             upsampled_data.shape,
-            upsampled_data.data.chunksize,
-            upsampled_data.data.npartitions,
+            upsampled_dask_arr.chunksize,
+            upsampled_dask_arr.npartitions,
         )
+        upsampled_graph = upsampled_dask_arr.__dask_graph__()
         logger.debug(
             "Upsampled dask graph layers: %d, total tasks: %d",
-            len(upsampled_data.data.__dask_graph__().layers),
-            len(upsampled_data.data.__dask_graph__()),
+            len(upsampled_graph.layers),
+            len(upsampled_graph),
         )
 
         upsampled_data.to_ome_zarr(upsampled_ome_zarr_path, max_layer=1)
@@ -5309,16 +5311,18 @@ class ZarrNii:
         logger.debug("Applying highres_func...")
         corrected_znimg.data = plugin.highres_func(rechunked_data, upsampled_znimg.data)
 
+        corrected_dask_arr = corrected_znimg.data
         logger.debug(
             "Final corrected dask array - shape: %s, chunks: %s, npartitions: %d",
             corrected_znimg.shape,
-            corrected_znimg.data.chunksize,
-            corrected_znimg.data.npartitions,
+            corrected_dask_arr.chunksize,
+            corrected_dask_arr.npartitions,
         )
+        corrected_graph = corrected_dask_arr.__dask_graph__()
         logger.debug(
             "Final dask graph layers: %d, total tasks: %d",
-            len(corrected_znimg.data.__dask_graph__().layers),
-            len(corrected_znimg.data.__dask_graph__()),
+            len(corrected_graph.layers),
+            len(corrected_graph),
         )
 
         logger.info("Scaled processing complete with plugin: %s", plugin.name)
