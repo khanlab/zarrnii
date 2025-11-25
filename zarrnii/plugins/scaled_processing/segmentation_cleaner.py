@@ -13,7 +13,12 @@ import dask.array as da
 import numpy as np
 from skimage.measure import label, regionprops
 
+from zarrnii.logging import get_logger
+
 from .base import ScaledProcessingPlugin, hookimpl
+
+# Module-level logger for this plugin
+logger = get_logger(__name__)
 
 
 class SegmentationCleaner(ScaledProcessingPlugin):
@@ -62,6 +67,13 @@ class SegmentationCleaner(ScaledProcessingPlugin):
         self.mask_threshold = mask_threshold
         self.max_extent = max_extent
         self.exclusion_threshold = exclusion_threshold
+        logger.debug(
+            "Initialized SegmentationCleaner with mask_threshold=%.2f, "
+            "max_extent=%.2f, exclusion_threshold=%.2f",
+            mask_threshold,
+            max_extent,
+            exclusion_threshold,
+        )
 
     @hookimpl
     def lowres_func(self, lowres_array: np.ndarray) -> np.ndarray:
@@ -78,6 +90,12 @@ class SegmentationCleaner(ScaledProcessingPlugin):
         Returns:
             Exclusion mask at low resolution (uint8, values 0 or 100)
         """
+        logger.debug(
+            "SegmentationCleaner.lowres_func - input shape: %s, dtype: %s",
+            lowres_array.shape,
+            lowres_array.dtype,
+        )
+
         if lowres_array.size == 0:
             raise ValueError("Input array is empty")
 
@@ -93,8 +111,16 @@ class SegmentationCleaner(ScaledProcessingPlugin):
             # Flatten leading dimensions and work with spatial dimensions
             spatial_shape = work_array.shape[-3:]
             work_array = work_array.reshape(-1, *spatial_shape)
+            logger.debug(
+                "Reshaped array for processing - new shape: %s", work_array.shape
+            )
 
         # Process connected components and create exclusion mask
+        logger.debug(
+            "Running connected components analysis with mask_threshold=%.2f",
+            self.mask_threshold,
+        )
+
         if work_array.ndim == 2:
             # 2D case
             mask_img = work_array > self.mask_threshold
@@ -103,6 +129,12 @@ class SegmentationCleaner(ScaledProcessingPlugin):
             keep_labels = {r.label for r in props if r.extent < self.max_extent}
             exclude_mask = np.isin(conncomp, list(keep_labels))
             exclude_mask = exclude_mask.astype("uint8") * 100
+            logger.debug(
+                "2D analysis - found %d labels, %d marked for exclusion (extent < %.2f)",
+                nlabels,
+                len(keep_labels),
+                self.max_extent,
+            )
         else:
             # 3D or batched 3D case
             if work_array.ndim == 4:
@@ -115,6 +147,13 @@ class SegmentationCleaner(ScaledProcessingPlugin):
                     keep_labels = {r.label for r in props if r.extent < self.max_extent}
                     batch_exclude = np.isin(conncomp, list(keep_labels))
                     exclude_mask[i] = batch_exclude.astype("uint8") * 100
+                    logger.debug(
+                        "Volume %d/%d - found %d labels, %d marked for exclusion",
+                        i + 1,
+                        work_array.shape[0],
+                        nlabels,
+                        len(keep_labels),
+                    )
             else:
                 # Single 3D volume
                 mask_img = work_array > self.mask_threshold
@@ -123,10 +162,25 @@ class SegmentationCleaner(ScaledProcessingPlugin):
                 keep_labels = {r.label for r in props if r.extent < self.max_extent}
                 exclude_mask = np.isin(conncomp, list(keep_labels))
                 exclude_mask = exclude_mask.astype("uint8") * 100
+                logger.debug(
+                    "3D analysis - found %d labels, %d marked for exclusion (extent < %.2f)",
+                    nlabels,
+                    len(keep_labels),
+                    self.max_extent,
+                )
 
         # Reshape back to original shape if needed
         if original_shape != exclude_mask.shape:
             exclude_mask = exclude_mask.reshape(original_shape)
+            logger.debug("Reshaped output back to: %s", original_shape)
+
+        logger.debug(
+            "SegmentationCleaner.lowres_func - output shape: %s, "
+            "excluded pixels: %d (%.2f%%)",
+            exclude_mask.shape,
+            np.sum(exclude_mask > 0),
+            100.0 * np.sum(exclude_mask > 0) / exclude_mask.size,
+        )
 
         return exclude_mask
 
@@ -147,12 +201,27 @@ class SegmentationCleaner(ScaledProcessingPlugin):
         Returns:
             Cleaned full-resolution segmentation array
         """
+        logger.debug(
+            "SegmentationCleaner.highres_func - fullres shape: %s, "
+            "chunks: %s, upsampled shape: %s, chunks: %s",
+            fullres_array.shape,
+            fullres_array.chunksize,
+            upsampled_output.shape,
+            upsampled_output.chunksize,
+        )
+
         # Threshold the upsampled exclusion mask
         # Values >= exclusion_threshold (e.g., 50) indicate regions to exclude
         exclusion_mask = upsampled_output >= self.exclusion_threshold
 
         # Apply mask: set excluded regions to zero
         cleaned_array = da.where(exclusion_mask, 0, fullres_array)
+
+        logger.debug(
+            "Exclusion mask applied - output chunks: %s, npartitions: %d",
+            cleaned_array.chunksize,
+            cleaned_array.npartitions,
+        )
 
         return cleaned_array
 

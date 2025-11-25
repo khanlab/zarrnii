@@ -33,7 +33,11 @@ from attrs import define
 from scipy.interpolate import interpn
 from scipy.ndimage import zoom
 
+from .logging import get_logger
 from .transform import AffineTransform, Transform
+
+# Module-level logger for core functionality
+logger = get_logger(__name__)
 
 
 def _to_primitive(obj: Any) -> Any:
@@ -5213,17 +5217,49 @@ class ZarrNii:
                 "Plugin must be an instance or subclass of ScaledProcessingPlugin"
             )
 
+        logger.info(
+            "Starting scaled processing with plugin: %s (downsample_factor=%d)",
+            plugin.name,
+            downsample_factor,
+        )
+        logger.debug(
+            "Input zarr - shape: %s, chunks: %s, dtype: %s",
+            self.shape,
+            self.data.chunksize,
+            self.data.dtype,
+        )
+
         # Step 1: Downsample the data for low-resolution processing
         lowres_znimg = self.downsample(level=int(np.log2(downsample_factor)))
 
+        logger.debug(
+            "After downsampling - shape: %s, chunks: %s",
+            lowres_znimg.shape,
+            lowres_znimg.data.chunksize,
+        )
+
         # Convert to numpy array for lowres processing
+        logger.debug("Computing lowres data for plugin processing...")
         lowres_array = lowres_znimg.data.compute()
+        logger.debug(
+            "Lowres array computed - shape: %s, dtype: %s, size: %.2f MB",
+            lowres_array.shape,
+            lowres_array.dtype,
+            lowres_array.nbytes / (1024 * 1024),
+        )
 
         # Step 2: Apply low-resolution function and prepare for upsampling
         # Use chunk_size parameter for the low-res processing chunks
         lowres_chunks = chunk_size if chunk_size is not None else (1, 10, 10, 10)
-        lowres_znimg.data = da.from_array(
-            plugin.lowres_func(lowres_array), chunks=lowres_chunks
+        logger.debug("Applying lowres_func with chunks: %s", lowres_chunks)
+
+        lowres_result = plugin.lowres_func(lowres_array)
+        lowres_znimg.data = da.from_array(lowres_result, chunks=lowres_chunks)
+
+        logger.debug(
+            "Lowres result - shape: %s, chunks: %s",
+            lowres_znimg.shape,
+            lowres_znimg.data.chunksize,
         )
 
         # Use temporary OME-Zarr to break up dask graph for performance
@@ -5232,20 +5268,60 @@ class ZarrNii:
         if upsampled_ome_zarr_path is None:
             upsampled_ome_zarr_path = tempfile.mkdtemp(suffix="_SPIM.ome.zarr")
 
+        logger.debug("Intermediate OME-Zarr path: %s", upsampled_ome_zarr_path)
+
         # Step 3: Upsample using dask-based upsampling, save to ome zarr
-        lowres_znimg.upsample(to_shape=self.shape).to_ome_zarr(
-            upsampled_ome_zarr_path, max_layer=1
+        logger.debug("Upsampling to target shape: %s", self.shape)
+
+        upsampled_data = lowres_znimg.upsample(to_shape=self.shape)
+        logger.debug(
+            "Upsampled dask array - shape: %s, chunks: %s, npartitions: %d",
+            upsampled_data.shape,
+            upsampled_data.data.chunksize,
+            upsampled_data.data.npartitions,
+        )
+        logger.debug(
+            "Upsampled dask graph layers: %d, total tasks: %d",
+            len(upsampled_data.data.__dask_graph__().layers),
+            len(upsampled_data.data.__dask_graph__()),
         )
 
+        upsampled_data.to_ome_zarr(upsampled_ome_zarr_path, max_layer=1)
+
         upsampled_znimg = ZarrNii.from_ome_zarr(upsampled_ome_zarr_path)
+        logger.debug(
+            "Loaded upsampled zarr - shape: %s, chunks: %s",
+            upsampled_znimg.shape,
+            upsampled_znimg.data.chunksize,
+        )
 
         corrected_znimg = self.copy()
 
         # Step 4: Apply high-resolution function
         # rechunk original data to use same chunksize as upsampled_data, before multiplying
-        corrected_znimg.data = plugin.highres_func(
-            self.data.rechunk(upsampled_znimg.data.chunks), upsampled_znimg.data
+        rechunked_data = self.data.rechunk(upsampled_znimg.data.chunks)
+        logger.debug(
+            "Rechunked input data - chunks: %s, npartitions: %d",
+            rechunked_data.chunksize,
+            rechunked_data.npartitions,
         )
+
+        logger.debug("Applying highres_func...")
+        corrected_znimg.data = plugin.highres_func(rechunked_data, upsampled_znimg.data)
+
+        logger.debug(
+            "Final corrected dask array - shape: %s, chunks: %s, npartitions: %d",
+            corrected_znimg.shape,
+            corrected_znimg.data.chunksize,
+            corrected_znimg.data.npartitions,
+        )
+        logger.debug(
+            "Final dask graph layers: %d, total tasks: %d",
+            len(corrected_znimg.data.__dask_graph__().layers),
+            len(corrected_znimg.data.__dask_graph__()),
+        )
+
+        logger.info("Scaled processing complete with plugin: %s", plugin.name)
 
         return corrected_znimg
 
