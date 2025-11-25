@@ -197,7 +197,7 @@ def _create_ome_zarr_zip(source_dir: str, zip_path: str) -> None:
                 zf.writestr(info, "")
             else:
                 # File entry - read and write with no compression
-                zf.write(full_path, rel_path)
+                zf.write(full_path, rel_path, compress_type=zipfile.ZIP_STORED)
 
 
 # NgffImage-based function library
