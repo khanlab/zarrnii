@@ -1003,9 +1003,19 @@ def compute_centroids(
 
             core_slices.append((core_start, core_end))
 
+        min_pixels=30
+
+
         # Process regions and filter to core
         centroids = []
         for region in regionprops(labeled):
+
+            
+            # --- NEW: skip small regions ---
+            if region.area < min_pixels:
+                continue
+            # --------------------------------
+
             centroid = np.array(region.centroid)
 
             # Check if centroid is in core region
