@@ -5087,6 +5087,7 @@ class ZarrNii:
         boundary: str = "none",
         rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
         output_path: Optional[str] = None,
+        region_filters: Optional[Dict[str, Tuple[str, Any]]] = None,
     ) -> Optional[np.ndarray]:
         """
         Compute centroids of binary segmentation objects in physical coordinates.
@@ -5130,6 +5131,14 @@ class ZarrNii:
                 memory issues. The Parquet file will contain columns 'x', 'y', 'z' with
                 physical coordinates. If None (default), centroids are returned as numpy
                 array.
+            region_filters: Optional dictionary specifying filters to apply to detected
+                regions based on scikit-image regionprops properties. Each key is a
+                property name (e.g., 'area', 'perimeter', 'eccentricity'), and the value
+                is a tuple of (operator, threshold) where operator is one of:
+                '>', '>=', '<', '<=', '==', '!='.
+                Regions that don't satisfy ALL filters are excluded.
+                Example: {'area': ('>=', 30), 'eccentricity': ('<', 0.9)}
+                If None (default), no filtering is applied.
 
         Returns:
             Optional[numpy.ndarray]: If output_path is None, returns Nx3 array of
@@ -5145,6 +5154,11 @@ class ZarrNii:
             - The result is computed immediately (not lazy).
             - When using output_path, centroids are written in batches to avoid
               memory overflow, making it suitable for datasets with millions of objects.
+            - Available regionprops properties include: 'area', 'bbox_area', 'centroid',
+              'eccentricity', 'equivalent_diameter', 'euler_number', 'extent',
+              'feret_diameter_max', 'filled_area', 'major_axis_length',
+              'minor_axis_length', 'moments', 'perimeter', 'solidity', and more.
+              See scikit-image regionprops documentation for full list.
 
         Examples:
             >>> # Apply threshold segmentation and compute centroids
@@ -5156,6 +5170,18 @@ class ZarrNii:
             >>> centroids = binary.compute_centroids(
             ...     depth=15,
             ...     rechunk=(64, 64, 64)
+            ... )
+            >>>
+            >>> # Filter by minimum area (voxels)
+            >>> centroids = binary.compute_centroids(
+            ...     depth=5,
+            ...     region_filters={'area': ('>=', 30)}
+            ... )
+            >>>
+            >>> # Multiple filters: minimum area AND maximum eccentricity
+            >>> centroids = binary.compute_centroids(
+            ...     depth=5,
+            ...     region_filters={'area': ('>=', 30), 'eccentricity': ('<', 0.9)}
             ... )
             >>>
             >>> # For large datasets, write to Parquet file
@@ -5174,6 +5200,7 @@ class ZarrNii:
             boundary=boundary,
             rechunk=rechunk,
             output_path=output_path,
+            region_filters=region_filters,
         )
 
     def apply_scaled_processing(
