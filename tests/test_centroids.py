@@ -794,13 +794,15 @@ class TestComputeRegionProperties:
 
         props = compute_region_properties(dask_img, affine, depth=5)
 
-        # Should have x, y, z keys for centroid
-        assert "x" in props
-        assert "y" in props
-        assert "z" in props
-        assert len(props["x"]) == 1
+        # Should have centroid_x, centroid_y, centroid_z keys for centroid
+        assert "centroid_x" in props
+        assert "centroid_y" in props
+        assert "centroid_z" in props
+        assert len(props["centroid_x"]) == 1
         assert_array_almost_equal(
-            [props["x"][0], props["y"][0], props["z"][0]], [24.5, 24.5, 24.5], decimal=1
+            [props["centroid_x"][0], props["centroid_y"][0], props["centroid_z"][0]],
+            [24.5, 24.5, 24.5],
+            decimal=1,
         )
 
     def test_compute_region_properties_multiple_properties(self):
@@ -821,14 +823,14 @@ class TestComputeRegionProperties:
         )
 
         # Should have centroid coordinates and scalar properties
-        assert "x" in props
-        assert "y" in props
-        assert "z" in props
+        assert "centroid_x" in props
+        assert "centroid_y" in props
+        assert "centroid_z" in props
         assert "area" in props
         assert "equivalent_diameter_area" in props
 
         # Verify values
-        assert len(props["x"]) == 1
+        assert len(props["centroid_x"]) == 1
         assert props["area"][0] == 1000  # 10x10x10 cube
         assert props["equivalent_diameter_area"][0] > 0
 
@@ -848,9 +850,9 @@ class TestComputeRegionProperties:
 
         # Should only have area, no centroid
         assert "area" in props
-        assert "x" not in props
-        assert "y" not in props
-        assert "z" not in props
+        assert "centroid_x" not in props
+        assert "centroid_y" not in props
+        assert "centroid_z" not in props
         assert len(props["area"]) == 1
         assert props["area"][0] == 125
 
@@ -874,7 +876,7 @@ class TestComputeRegionProperties:
         )
 
         # Should find both objects
-        assert len(props["x"]) == 2
+        assert len(props["centroid_x"]) == 2
         assert len(props["area"]) == 2
 
         # Check areas (sorted by area)
@@ -907,7 +909,7 @@ class TestComputeRegionProperties:
         )
 
         # Should only find the large object
-        assert len(props["x"]) == 1
+        assert len(props["centroid_x"]) == 1
         assert props["area"][0] == 1000
 
     def test_compute_region_properties_with_affine(self):
@@ -929,9 +931,9 @@ class TestComputeRegionProperties:
         )
 
         # Physical coord = 2.0 * 20 + 10 = 50
-        assert_array_almost_equal([props["x"][0]], [50.0], decimal=1)
-        assert_array_almost_equal([props["y"][0]], [50.0], decimal=1)
-        assert_array_almost_equal([props["z"][0]], [50.0], decimal=1)
+        assert_array_almost_equal([props["centroid_x"][0]], [50.0], decimal=1)
+        assert_array_almost_equal([props["centroid_y"][0]], [50.0], decimal=1)
+        assert_array_almost_equal([props["centroid_z"][0]], [50.0], decimal=1)
 
     def test_compute_region_properties_empty_image(self):
         """Test with empty image returns empty arrays."""
@@ -946,9 +948,9 @@ class TestComputeRegionProperties:
         )
 
         # Should return empty arrays with correct structure
-        assert len(props["x"]) == 0
-        assert len(props["y"]) == 0
-        assert len(props["z"]) == 0
+        assert len(props["centroid_x"]) == 0
+        assert len(props["centroid_y"]) == 0
+        assert len(props["centroid_z"]) == 0
         assert len(props["area"]) == 0
 
     def test_compute_region_properties_parquet_output(self, tmp_path):
@@ -979,9 +981,9 @@ class TestComputeRegionProperties:
         # Read back and verify
         df = pd.read_parquet(output_file)
         assert len(df) == 1
-        assert "x" in df.columns
-        assert "y" in df.columns
-        assert "z" in df.columns
+        assert "centroid_x" in df.columns
+        assert "centroid_y" in df.columns
+        assert "centroid_z" in df.columns
         assert "area" in df.columns
         assert "equivalent_diameter_area" in df.columns
         assert df["area"].iloc[0] == 1000
@@ -1008,7 +1010,7 @@ class TestComputeRegionProperties:
         assert output_file.exists()
         df = pd.read_parquet(output_file)
         assert len(df) == 0
-        assert "x" in df.columns
+        assert "centroid_x" in df.columns
         assert "area" in df.columns
 
     def test_compute_region_properties_invalid_properties(self):
@@ -1059,9 +1061,9 @@ class TestZarrNiiComputeRegionProperties:
             output_properties=["centroid", "area"], depth=5
         )
 
-        assert "x" in props
+        assert "centroid_x" in props
         assert "area" in props
-        assert len(props["x"]) == 1
+        assert len(props["centroid_x"]) == 1
         assert props["area"][0] == 1000
 
     def test_compute_region_properties_method_with_filtering(self):
@@ -1085,6 +1087,6 @@ class TestZarrNiiComputeRegionProperties:
         )
 
         # Should only include large object
-        assert len(props["x"]) == 1
+        assert len(props["centroid_x"]) == 1
         assert props["area"][0] == 1000
         assert props["equivalent_diameter_area"][0] > 0

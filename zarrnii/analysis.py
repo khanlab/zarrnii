@@ -1248,10 +1248,10 @@ def compute_region_properties(
                     physical_coords = _transform_coordinate_to_physical(
                         voxel_coords, affine_matrix
                     )
-                    # Split into x, y, z
-                    processed_data["x"] = physical_coords[:, 0]
-                    processed_data["y"] = physical_coords[:, 1]
-                    processed_data["z"] = physical_coords[:, 2]
+                    # Split into prefixed x, y, z columns
+                    processed_data[f"{prop_name}_x"] = physical_coords[:, 0]
+                    processed_data[f"{prop_name}_y"] = physical_coords[:, 1]
+                    processed_data[f"{prop_name}_z"] = physical_coords[:, 2]
                 else:
                     # Non-coordinate properties
                     values = [region_data[prop_name] for region_data in block_data]
@@ -1273,20 +1273,13 @@ def compute_region_properties(
         schema_fields = []
         for prop_name in output_properties:
             if prop_name in COORDINATE_PROPERTIES:
-                schema_fields.append(pa.field("x", pa.float64()))
-                schema_fields.append(pa.field("y", pa.float64()))
-                schema_fields.append(pa.field("z", pa.float64()))
+                schema_fields.append(pa.field(f"{prop_name}_x", pa.float64()))
+                schema_fields.append(pa.field(f"{prop_name}_y", pa.float64()))
+                schema_fields.append(pa.field(f"{prop_name}_z", pa.float64()))
             else:
                 schema_fields.append(pa.field(prop_name, pa.float64()))
 
-        # Remove duplicates (e.g., if multiple coordinate props)
-        seen_fields = set()
-        unique_fields = []
-        for field in schema_fields:
-            if field.name not in seen_fields:
-                seen_fields.add(field.name)
-                unique_fields.append(field)
-        schema = pa.schema(unique_fields)
+        schema = pa.schema(schema_fields)
 
         # Write results to Parquet file
         writer = None
@@ -1296,7 +1289,7 @@ def compute_region_properties(
 
             # Create PyArrow table for this batch
             table_data = {}
-            for field in unique_fields:
+            for field in schema_fields:
                 if field.name in processed_data:
                     table_data[field.name] = pa.array(
                         processed_data[field.name], type=pa.float64()
@@ -1315,7 +1308,7 @@ def compute_region_properties(
         else:
             # No data found - write empty file
             empty_data = {
-                field.name: pa.array([], type=pa.float64()) for field in unique_fields
+                field.name: pa.array([], type=pa.float64()) for field in schema_fields
             }
             empty_table = pa.table(empty_data)
             pq.write_table(empty_table, output_path)
@@ -1342,9 +1335,9 @@ def compute_region_properties(
             result = {}
             for prop_name in output_properties:
                 if prop_name in COORDINATE_PROPERTIES:
-                    result["x"] = np.empty((0,), dtype=np.float64)
-                    result["y"] = np.empty((0,), dtype=np.float64)
-                    result["z"] = np.empty((0,), dtype=np.float64)
+                    result[f"{prop_name}_x"] = np.empty((0,), dtype=np.float64)
+                    result[f"{prop_name}_y"] = np.empty((0,), dtype=np.float64)
+                    result[f"{prop_name}_z"] = np.empty((0,), dtype=np.float64)
                 else:
                     result[prop_name] = np.empty((0,), dtype=np.float64)
             return result
@@ -1363,10 +1356,10 @@ def compute_region_properties(
                 physical_coords = _transform_coordinate_to_physical(
                     voxel_coords, affine_matrix
                 )
-                # Split into x, y, z
-                result["x"] = physical_coords[:, 0]
-                result["y"] = physical_coords[:, 1]
-                result["z"] = physical_coords[:, 2]
+                # Split into prefixed x, y, z columns
+                result[f"{prop_name}_x"] = physical_coords[:, 0]
+                result[f"{prop_name}_y"] = physical_coords[:, 1]
+                result[f"{prop_name}_z"] = physical_coords[:, 2]
             else:
                 # Non-coordinate properties
                 values = [region_data[prop_name] for region_data in all_region_data]
@@ -1490,7 +1483,56 @@ def compute_centroids(
         >>> df = pd.read_parquet('centroids.parquet')
         >>> print(f"Found {len(df)} objects")
     """
-    # Use compute_region_properties with centroid-only output
+    # Handle Parquet output specially to maintain backward compatible column names
+    if output_path is not None:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        # Use compute_region_properties for in-memory computation
+        result = compute_region_properties(
+            image=image,
+            affine=affine,
+            output_properties=["centroid"],
+            depth=depth,
+            boundary=boundary,
+            rechunk=rechunk,
+            output_path=None,  # Get in-memory result first
+            region_filters=region_filters,
+        )
+
+        # Write to Parquet with backward-compatible column names (x, y, z)
+        schema = pa.schema(
+            [
+                pa.field("x", pa.float64()),
+                pa.field("y", pa.float64()),
+                pa.field("z", pa.float64()),
+            ]
+        )
+
+        if result is None or len(result.get("centroid_x", [])) == 0:
+            # Empty result
+            empty_table = pa.table(
+                {
+                    "x": pa.array([], type=pa.float64()),
+                    "y": pa.array([], type=pa.float64()),
+                    "z": pa.array([], type=pa.float64()),
+                }
+            )
+            pq.write_table(empty_table, output_path)
+        else:
+            # Write with renamed columns
+            table = pa.table(
+                {
+                    "x": pa.array(result["centroid_x"], type=pa.float64()),
+                    "y": pa.array(result["centroid_y"], type=pa.float64()),
+                    "z": pa.array(result["centroid_z"], type=pa.float64()),
+                }
+            )
+            pq.write_table(table, output_path)
+
+        return None
+
+    # Use compute_region_properties for in-memory result
     result = compute_region_properties(
         image=image,
         affine=affine,
@@ -1498,19 +1540,18 @@ def compute_centroids(
         depth=depth,
         boundary=boundary,
         rechunk=rechunk,
-        output_path=output_path,
+        output_path=None,
         region_filters=region_filters,
     )
 
-    if output_path is not None:
-        # Parquet output - already written, return None
-        return None
-
     # Convert dict result to Nx3 array for backward compatibility
-    if result is None or len(result.get("x", [])) == 0:
+    # Note: compute_region_properties returns centroid_x, centroid_y, centroid_z
+    if result is None or len(result.get("centroid_x", [])) == 0:
         return np.empty((0, 3), dtype=np.float64)
 
-    return np.column_stack([result["x"], result["y"], result["z"]])
+    return np.column_stack(
+        [result["centroid_x"], result["centroid_y"], result["centroid_z"]]
+    )
 
 
 def density_from_points(
