@@ -815,7 +815,10 @@ class ZarrNiiAtlas(ZarrNii):
         """Create feature map by assigning values to atlas regions.
 
         Args:
-            feature_data: DataFrame with region labels and feature values
+            feature_data: DataFrame with region labels and feature values.
+                If multiple rows share the same label index (e.g., from
+                regionprops tables), their feature values are aggregated
+                using the mean before mapping.
             feature_column: Column name containing feature values to map
             label_column: Column name containing region labels
 
@@ -826,6 +829,11 @@ class ZarrNiiAtlas(ZarrNii):
             ValueError: If required columns are missing
 
         Notes:
+            When multiple rows in feature_data have the same atlas label,
+            their feature values are aggregated using the mean. This is
+            useful when working with regionprops tables where each region
+            may have multiple entries.
+
             Labels present in the dseg image but not in feature_data will be
             mapped to 0.0. This can occur with downsampled dseg images or
             small ROIs where some regions are not represented.
@@ -842,10 +850,15 @@ class ZarrNiiAtlas(ZarrNii):
         if missing_cols:
             raise ValueError(f"Missing columns in feature_data: {missing_cols}")
 
+        # Aggregate feature values by label using mean when multiple rows exist
+        aggregated_data = (
+            feature_data.groupby(label_column)[feature_column].mean().reset_index()
+        )
+
         dseg_data = self.dseg.data.astype("int")  # dask array of labels
 
         # Get max label from feature_data
-        max_label_features = int(feature_data[label_column].max())
+        max_label_features = int(aggregated_data[label_column].max())
 
         # Get max label from dseg image to ensure LUT is large enough
         # for all labels that actually exist in the image.
@@ -857,7 +870,7 @@ class ZarrNiiAtlas(ZarrNii):
 
         # make a dense lookup array sized to handle all labels in dseg
         lut = np.zeros(max_label + 1, dtype=np.float32)
-        lut[feature_data[label_column].to_numpy(dtype=int)] = feature_data[
+        lut[aggregated_data[label_column].to_numpy(dtype=int)] = aggregated_data[
             feature_column
         ].to_numpy(dtype=float)
 

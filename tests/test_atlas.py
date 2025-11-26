@@ -279,6 +279,53 @@ class TestZarrNiiAtlas:
         # Background (label 0) should map to 0.0
         assert np.all(map_data[dseg_computed == 0] == 0.0)
 
+    def test_create_feature_map_with_duplicate_labels(self, sample_atlas):
+        """Test create_feature_map aggregates using mean when duplicate labels exist.
+
+        This can occur when creating feature maps from regionprops tables
+        where each region may have multiple entries. The feature values
+        should be aggregated using mean for each unique label.
+        """
+        atlas = sample_atlas
+
+        # Create feature DataFrame with duplicate labels
+        # Region 1 has 3 entries: 90, 100, 110 -> mean = 100.0
+        # Region 2 has 2 entries: 190, 210 -> mean = 200.0
+        # Region 3 has 1 entry: 300.0 -> mean = 300.0
+        feature_df = pd.DataFrame(
+            {
+                "index": [1, 1, 1, 2, 2, 3],
+                "feature_value": [90.0, 100.0, 110.0, 190.0, 210.0, 300.0],
+            }
+        )
+
+        # Create feature map - should aggregate by mean
+        feature_map = atlas.create_feature_map(feature_df, "feature_value")
+
+        assert isinstance(feature_map, ZarrNii)
+        assert feature_map.shape == atlas.dseg.shape
+
+        # Check feature values after mean aggregation
+        map_data = feature_map.data
+        if hasattr(map_data, "compute"):
+            map_data = map_data.compute()
+
+        dseg_data = atlas.dseg.data
+        if hasattr(dseg_data, "compute"):
+            dseg_data = dseg_data.compute()
+
+        # Region 1: mean of [90, 100, 110] = 100.0
+        assert np.allclose(map_data[dseg_data == 1], 100.0)
+
+        # Region 2: mean of [190, 210] = 200.0
+        assert np.allclose(map_data[dseg_data == 2], 200.0)
+
+        # Region 3: single value 300.0
+        assert np.allclose(map_data[dseg_data == 3], 300.0)
+
+        # Background should still be 0.0
+        assert np.all(map_data[dseg_data == 0] == 0.0)
+
     def test_get_region_bounding_box_single_region(self, sample_atlas):
         """Test getting bounding box for single region by index."""
         atlas = sample_atlas
