@@ -3183,13 +3183,8 @@ class ZarrNii:
         # Append the inverse of the current image's affine
         tfms_to_apply.append(self.affine.invert())
 
-        # Create new NgffImage from ref image
-        interp_ngff_image = nz.NgffImage(
-            data=ref_znimg.data,
-            dims=ref_znimg.ngff_image.dims.copy(),
-            scale=ref_znimg.ngff_image.scale.copy(),
-            translation=ref_znimg.ngff_image.translation.copy(),
-            name=f"{self.name}_transformed_to_{ref_znimg.name}",
+        interp_znimg = ref_znimg.copy(
+            name=f"{self.name}_transformed_to_{ref_znimg.name}"
         )
 
         # Try to get zarr store information for direct access (avoids nested compute)
@@ -3198,7 +3193,7 @@ class ZarrNii:
         # Lazily apply the transformations using dask
         if store_info is not None:
             # Use direct zarr access to avoid nested compute() calls
-            interp_ngff_image.data = da.map_blocks(
+            interp_znimg.data = da.map_blocks(
                 interp_by_block,  # Function to interpolate each block
                 ref_znimg.data,  # Reference image data
                 dtype=np.float32,  # Output data type
@@ -3210,7 +3205,7 @@ class ZarrNii:
             )
         else:
             # Fall back to passing ZarrNii instance (legacy behavior with nested compute)
-            interp_ngff_image.data = da.map_blocks(
+            interp_znimg.data = da.map_blocks(
                 interp_by_block,  # Function to interpolate each block
                 ref_znimg.data,  # Reference image data
                 dtype=np.float32,  # Output data type
@@ -3218,12 +3213,7 @@ class ZarrNii:
                 flo_znimg=self,  # Floating image to align (legacy)
             )
 
-        return ZarrNii.from_ngff_image(
-            interp_ngff_image,
-            axes_order=ref_znimg.axes_order,
-            xyz_orientation=ref_znimg.xyz_orientation,
-            omero=self.omero,
-        )
+        return interp_znimg
 
     # I/O operations
     def to_ome_zarr(
@@ -4364,7 +4354,7 @@ class ZarrNii:
 
         return zyx_image
 
-    def copy(self) -> "ZarrNii":
+    def copy(self, name=None) -> "ZarrNii":
         """
         Create a copy of this ZarrNii.
 
@@ -4382,7 +4372,7 @@ class ZarrNii:
             dims=copied_dims,
             scale=self.ngff_image.scale.copy(),
             translation=self.ngff_image.translation.copy(),
-            name=self.ngff_image.name,
+            name=self.ngff_image.name if name is None else name,
         )
         return ZarrNii(
             ngff_image=copied_image,
@@ -4786,21 +4776,14 @@ class ZarrNii:
             meta=np.array([], dtype=np.uint8),  # Provide meta information
         )
 
-        # Create new NgffImage with segmented data
-        new_ngff_image = nz.NgffImage(
-            data=segmented_data,
-            dims=self.dims.copy(),
-            scale=self.scale.copy(),
-            translation=self.translation.copy(),
-            name=f"{self.name}_segmented_{plugin.name.lower().replace(' ', '_')}",
+        # Create copy with segmented data
+        segmented_znimg = self.copy(
+            name=f"{self.name}_segmented_{plugin.name.lower().replace(' ', '_')}"
         )
+        segmented_znimg.data = segmented_data
 
         # Return new ZarrNii instance
-        return ZarrNii(
-            ngff_image=new_ngff_image,
-            axes_order=self.axes_order,
-            xyz_orientation=self.xyz_orientation,
-        )
+        return segmented_znimg
 
     def segment_otsu(
         self, nbins: int = 256, chunk_size: Optional[Tuple[int, ...]] = None
@@ -5081,39 +5064,44 @@ class ZarrNii:
             scale_units=scale_units,
         )
 
-    def compute_centroids(
+    def compute_region_properties(
         self,
+        output_properties: Optional[Union[List[str], Dict[str, str]]] = None,
         depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,
         boundary: str = "none",
         rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
         output_path: Optional[str] = None,
         region_filters: Optional[Dict[str, Tuple[str, Any]]] = None,
-    ) -> Optional[np.ndarray]:
+    ) -> Optional[Dict[str, np.ndarray]]:
         """
-        Compute centroids of binary segmentation objects in physical coordinates.
+        Compute properties of binary segmentation objects with coordinate transformation.
 
         This method processes the binary image (typically output from a segmentation
-        plugin) to identify connected components and compute their centroids in
-        physical coordinates. It uses dask's map_overlap to efficiently process
-        large images in chunks with overlap to handle objects that span chunk
-        boundaries.
+        plugin) to identify connected components and compute their properties using
+        scikit-image's regionprops. Coordinate-based properties (like centroid) are
+        automatically transformed to physical coordinates. The method processes the
+        image chunk-by-chunk with overlap to handle objects that span chunk boundaries.
 
-        For large datasets with many objects, use the output_path parameter to write
-        centroids directly to a Parquet file on disk instead of returning them as a
-        numpy array. This avoids memory issues when dealing with millions of objects.
+        This is a generalized method that allows extraction of any combination of
+        regionprops properties, enabling downstream quantification and filtering.
 
-        The input image should be binary (0/1 values) at the highest resolution.
-        The function will:
-        1. Optionally rechunk the data for better processing efficiency
-        2. Add overlap padding to chunks (customizable via depth parameter)
-        3. Within each chunk:
-           - Label connected components using scikit-image
-           - Compute centroids using regionprops
-           - Convert to global voxel coordinates using block offsets
-           - Filter out centroids in overlap regions to avoid duplicates
-           - Convert to physical coordinates using the affine transform
+        For large datasets, use the output_path parameter to write properties directly
+        to a Parquet file on disk instead of returning them in memory.
 
         Args:
+            output_properties: Properties to extract. Can be either:
+                - List of regionprops property names to extract. Property names are
+                  used as output keys.
+                - Dict mapping regionprops property names to custom output names.
+                  Example: {'area': 'nvoxels', 'equivalent_diameter_area': 'equivdiam'}
+                Coordinate properties ('centroid', 'centroid_weighted') are automatically
+                transformed to physical coordinates and split into separate x, y, z
+                columns. When using a dict, coordinate property output names are suffixed
+                with '_x', '_y', '_z' (e.g., {'centroid': 'loc'} gives 'loc_x', 'loc_y',
+                'loc_z').
+                Default is ['centroid'].
+                Example list: ['centroid', 'area', 'equivalent_diameter_area']
+                Example dict: {'area': 'nvoxels', 'centroid': 'position'}
             depth: Number of elements of overlap between chunks. Can be:
                 - int: same depth for all dimensions (default: 10)
                 - tuple: different depth per dimension
@@ -5125,12 +5113,10 @@ class ZarrNii:
                 - int: target chunk size for all dimensions
                 - tuple: target chunk size per dimension
                 - None: use existing chunks (default)
-            output_path: Optional path to write centroids to Parquet file instead of
-                returning them in memory. If provided, centroids are written to this
-                file path and None is returned. Use this for large datasets to avoid
-                memory issues. The Parquet file will contain columns 'x', 'y', 'z' with
-                physical coordinates. If None (default), centroids are returned as numpy
-                array.
+            output_path: Optional path to write properties to Parquet file instead of
+                returning them in memory. If provided, properties are written to this
+                file path and None is returned. Use this for large datasets.
+                If None (default), properties are returned as a dict.
             region_filters: Optional dictionary specifying filters to apply to detected
                 regions based on scikit-image regionprops properties. Each key is a
                 property name (e.g., 'area', 'perimeter', 'eccentricity'), and the value
@@ -5141,61 +5127,65 @@ class ZarrNii:
                 If None (default), no filtering is applied.
 
         Returns:
-            Optional[numpy.ndarray]: If output_path is None, returns Nx3 array of
-                physical coordinates for N detected objects, where each row contains
-                [x, y, z] coordinates in physical space. The array has dtype float64.
+            Optional[Dict[str, numpy.ndarray]]: If output_path is None, returns a
+                dictionary mapping property names (or custom names if dict was used)
+                to numpy arrays. For coordinate properties like 'centroid', the keys
+                are suffixed with _x, _y, _z (e.g., 'centroid_x' or 'custom_name_x')
+                containing physical coordinates.
+                Scalar properties have their name (or custom name) as the key.
                 If output_path is provided, writes to Parquet file and returns None.
 
         Notes:
             - This method expects a binary image (e.g., from segment_threshold).
             - Objects with centroids in overlap regions are filtered to avoid duplicates.
             - Uses 26-connectivity (connectivity=3) for 3D connected component labeling.
-            - Empty chunks contribute no coordinates to the result.
-            - The result is computed immediately (not lazy).
-            - When using output_path, centroids are written in batches to avoid
-              memory overflow, making it suitable for datasets with millions of objects.
-            - Available regionprops properties include: 'area', 'bbox_area', 'centroid',
-              'eccentricity', 'equivalent_diameter', 'euler_number', 'extent',
-              'feret_diameter_max', 'filled_area', 'major_axis_length',
-              'minor_axis_length', 'moments', 'perimeter', 'solidity', and more.
-              See scikit-image regionprops documentation for full list.
+            - Coordinate properties ('centroid', 'centroid_weighted') are transformed
+              to physical coordinates and split into suffixed columns (e.g.,
+              'centroid_x', 'centroid_y', 'centroid_z' or when renamed via dict,
+              'custom_name_x', 'custom_name_y', 'custom_name_z').
+            - Scalar properties are included directly without transformation.
+            - Available regionprops properties include: 'area', 'area_bbox', 'centroid',
+              'eccentricity', 'equivalent_diameter_area', 'euler_number', 'extent',
+              'feret_diameter_max', 'axis_major_length', 'axis_minor_length',
+              'moments', 'perimeter', 'solidity', and more.
 
         Examples:
-            >>> # Apply threshold segmentation and compute centroids
-            >>> binary = znimg.segment_threshold(0.5)
-            >>> centroids = binary.compute_centroids(depth=5)
-            >>> print(f"Found {len(centroids)} objects")
-            >>>
-            >>> # With custom chunking
-            >>> centroids = binary.compute_centroids(
-            ...     depth=15,
-            ...     rechunk=(64, 64, 64)
+            >>> # Extract centroid and area
+            >>> props = binary.compute_region_properties(
+            ...     output_properties=['centroid', 'area'],
+            ...     depth=5
             ... )
+            >>> print(f"Found {len(props['centroid_x'])} objects")
+            >>> print(f"Areas: {props['area']}")
             >>>
-            >>> # Filter by minimum area (voxels)
-            >>> centroids = binary.compute_centroids(
+            >>> # Extract multiple properties with filtering
+            >>> props = binary.compute_region_properties(
+            ...     output_properties=['centroid', 'area', 'equivalent_diameter_area'],
             ...     depth=5,
             ...     region_filters={'area': ('>=', 30)}
             ... )
             >>>
-            >>> # Multiple filters: minimum area AND maximum eccentricity
-            >>> centroids = binary.compute_centroids(
-            ...     depth=5,
-            ...     region_filters={'area': ('>=', 30), 'eccentricity': ('<', 0.9)}
+            >>> # Use dict to rename output columns
+            >>> props = binary.compute_region_properties(
+            ...     output_properties={'area': 'nvoxels', 'centroid': 'position'},
+            ...     depth=5
             ... )
+            >>> print(f"Number of voxels: {props['nvoxels']}")
+            >>> print(f"Position X: {props['position_x']}")
             >>>
-            >>> # For large datasets, write to Parquet file
-            >>> binary.compute_centroids(depth=5, output_path='centroids.parquet')
-            >>> # Read back with pandas or pyarrow
-            >>> import pandas as pd
-            >>> df = pd.read_parquet('centroids.parquet')
-            >>> print(f"Found {len(df)} objects")
+            >>> # Write to Parquet for large datasets
+            >>> binary.compute_region_properties(
+            ...     output_properties=['centroid', 'area', 'eccentricity'],
+            ...     depth=5,
+            ...     output_path='region_props.parquet'
+            ... )
         """
-        from .analysis import compute_centroids
+        from .analysis import compute_region_properties
 
-        return compute_centroids(
+        return compute_region_properties(
             self.darr,
             affine=self.affine.matrix,
+            output_properties=output_properties,
             depth=depth,
             boundary=boundary,
             rechunk=rechunk,

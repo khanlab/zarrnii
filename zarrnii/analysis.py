@@ -867,26 +867,92 @@ def _apply_region_filter(region: Any, filters: Dict[str, Tuple[str, Any]]) -> bo
     return True
 
 
-def compute_centroids(
+# Properties that represent coordinates and need full affine transformation.
+# This includes all regionprops properties whose values are voxel coordinates
+# and should be mapped to physical space using the affine matrix.
+COORDINATE_PROPERTIES = frozenset(
+    [
+        "centroid",
+        "centroid_weighted",
+        "bbox",  # bounding box coordinates (min_row, min_col, min_plane, max_row, ...)
+        "centroid_local",  # centroid in local (bbox-relative) coordinates
+        "coords",  # all voxel coordinates for the region
+    ]
+)
+
+# Default output properties for compute_region_properties
+DEFAULT_OUTPUT_PROPERTIES = ["centroid"]
+
+
+def _transform_coordinate_to_physical(
+    voxel_coords: np.ndarray, affine_matrix: np.ndarray
+) -> np.ndarray:
+    """
+    Transform voxel coordinates to physical coordinates using affine matrix.
+
+    Args:
+        voxel_coords: Array of shape (N, 3) containing voxel coordinates
+        affine_matrix: 4x4 affine transformation matrix
+
+    Returns:
+        Array of shape (N, 3) containing physical coordinates
+    """
+    if voxel_coords.size == 0:
+        return voxel_coords
+
+    n_points = voxel_coords.shape[0]
+    voxel_homogeneous = np.column_stack(
+        [voxel_coords, np.ones((n_points, 1), dtype=np.float64)]
+    )
+    physical_homogeneous = voxel_homogeneous @ affine_matrix.T
+    return physical_homogeneous[:, :3]
+
+
+def _extract_region_property(region: Any, prop_name: str) -> Any:
+    """
+    Extract a property value from a regionprops region object.
+
+    Args:
+        region: A regionprops region object from scikit-image
+        prop_name: Name of the property to extract
+
+    Returns:
+        The property value (scalar, tuple, or array depending on property)
+
+    Raises:
+        ValueError: If the property name is invalid
+    """
+    try:
+        return getattr(region, prop_name)
+    except AttributeError:
+        raise ValueError(
+            f"Invalid regionprops property '{prop_name}'. "
+            "See scikit-image regionprops documentation for valid properties."
+        )
+
+
+def compute_region_properties(
     image: da.Array,
     affine: np.ndarray,
+    output_properties: Optional[Union[List[str], Dict[str, str]]] = None,
     depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,
     boundary: str = "none",
     rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
     output_path: Optional[str] = None,
     region_filters: Optional[Dict[str, Tuple[str, Any]]] = None,
-) -> Optional[np.ndarray]:
+) -> Optional[Dict[str, np.ndarray]]:
     """
-    Compute centroids of binary segmentation objects in physical coordinates.
+    Compute properties of binary segmentation objects with coordinate transformation.
 
-    This function processes a binary segmentation image (typically output from
-    a segmentation plugin) to identify connected components and compute their
-    centroids in physical coordinates. It processes the image chunk-by-chunk
-    with overlap to handle objects that span chunk boundaries efficiently.
+    This function processes a binary segmentation image to identify connected
+    components and compute their properties using scikit-image's regionprops.
+    Coordinate-based properties (like centroid) are automatically transformed to
+    physical coordinates. The function processes the image chunk-by-chunk with
+    overlap to handle objects that span chunk boundaries efficiently.
 
-    For large datasets with many objects, use the output_path parameter to write
-    centroids directly to a Parquet file on disk instead of returning them as a
-    numpy array. This avoids memory issues when dealing with millions of objects.
+    This is a generalized version of compute_centroids that allows extraction of
+    any combination of regionprops properties, enabling downstream quantification
+    and filtering based on the global Parquet output.
 
     Args:
         image: Input binary dask array (typically 0/1 values) at highest resolution.
@@ -895,6 +961,19 @@ def compute_centroids(
             images (c>1) are not supported - process each channel separately.
         affine: 4x4 affine transformation matrix to convert voxel coordinates
             to physical coordinates. Can be a numpy array or AffineTransform object.
+        output_properties: Properties to extract. Can be either:
+            - List of regionprops property names to extract. Property names are
+              used as output keys.
+            - Dict mapping regionprops property names to custom output names.
+              Example: {'area': 'nvoxels', 'equivalent_diameter_area': 'equivdiam'}
+            Coordinate properties ('centroid', 'centroid_weighted') are automatically
+            transformed to physical coordinates and split into separate x, y, z
+            columns. When using a dict, coordinate property output names are suffixed
+            with '_x', '_y', '_z' (e.g., {'centroid': 'loc'} gives 'loc_x', 'loc_y',
+            'loc_z').
+            Default is ['centroid'] for backward compatibility.
+            Example list: ['centroid', 'area', 'equivalent_diameter_area']
+            Example dict: {'area': 'nvoxels', 'centroid': 'position'}
         depth: Number of elements of overlap between chunks. Can be:
             - int: same depth for all dimensions
             - tuple: different depth per dimension
@@ -907,12 +986,10 @@ def compute_centroids(
             - tuple: target chunk size per dimension
             - None: use existing chunks
             Default is None (use existing chunks).
-        output_path: Optional path to write centroids to Parquet file instead of
-            returning them in memory. If provided, centroids are written to this
+        output_path: Optional path to write properties to Parquet file instead of
+            returning them in memory. If provided, properties are written to this
             file path and None is returned. Use this for large datasets to avoid
-            memory issues. The Parquet file will contain columns 'x', 'y', 'z' with
-            physical coordinates. If None (default), centroids are returned as numpy
-            array.
+            memory issues. If None (default), properties are returned as a dict.
         region_filters: Optional dictionary specifying filters to apply to detected
             regions based on scikit-image regionprops properties. Each key is a
             property name (e.g., 'area', 'perimeter', 'eccentricity'), and the value
@@ -923,9 +1000,12 @@ def compute_centroids(
             If None (default), no filtering is applied.
 
     Returns:
-        Optional[numpy.ndarray]: If output_path is None, returns Nx3 array of
-            physical coordinates for N detected objects, where each row is
-            [x, y, z] in physical space. The array has dtype float64.
+        Optional[Dict[str, numpy.ndarray]]: If output_path is None, returns a
+            dictionary mapping property names (or custom names if dict was used)
+            to numpy arrays. For coordinate properties like 'centroid', the keys
+            are suffixed with _x, _y, _z (e.g., 'centroid_x' or 'custom_name_x')
+            containing physical coordinates.
+            Scalar properties have their name (or custom name) as the key.
             If output_path is provided, writes to Parquet file and returns None.
 
     Notes:
@@ -933,57 +1013,95 @@ def compute_centroids(
           avoid duplicate detections across chunks.
         - The function uses scikit-image's label() with connectivity=3 (26-connectivity
           in 3D) to identify connected components.
+        - Coordinate properties ('centroid', 'centroid_weighted') are transformed
+          to physical coordinates and split into suffixed columns (e.g.,
+          'centroid_x', 'centroid_y', 'centroid_z' or when renamed via dict,
+          'custom_name_x', 'custom_name_y', 'custom_name_z').
+        - Scalar properties are included directly without transformation.
         - Empty chunks (no objects detected) contribute empty arrays to the result.
         - This function computes the result immediately (not lazy).
-        - Uses Dask's map_overlap for efficient parallel processing across chunks.
-        - When using output_path, centroids are written in batches to avoid
-          memory overflow, making it suitable for datasets with millions of objects.
-        - Available regionprops properties include: 'area', 'bbox_area', 'centroid',
-          'eccentricity', 'equivalent_diameter', 'euler_number', 'extent',
-          'feret_diameter_max', 'filled_area', 'major_axis_length',
-          'minor_axis_length', 'moments', 'perimeter', 'solidity', and more.
+        - Available regionprops properties include: 'area', 'area_bbox', 'centroid',
+          'eccentricity', 'equivalent_diameter_area', 'euler_number', 'extent',
+          'feret_diameter_max', 'axis_major_length', 'axis_minor_length',
+          'moments', 'perimeter', 'solidity', and more.
           See scikit-image regionprops documentation for full list.
 
     Examples:
         >>> import dask.array as da
         >>> import numpy as np
-        >>> from zarrnii import compute_centroids
+        >>> from zarrnii import compute_region_properties
         >>>
         >>> # Create a binary segmentation image
         >>> binary_seg = da.from_array(
         ...     np.random.random((100, 100, 100)) > 0.95,
         ...     chunks=(50, 50, 50)
         ... )
-        >>>
-        >>> # Create an affine transform (e.g., 1mm isotropic voxels)
         >>> affine = np.eye(4)
         >>>
-        >>> # Compute centroids and return as numpy array (default)
-        >>> centroids = compute_centroids(binary_seg, affine, depth=5)
-        >>> print(f"Found {len(centroids)} objects with shape {centroids.shape}")
+        >>> # Extract centroid and area (default properties)
+        >>> props = compute_region_properties(binary_seg, affine, depth=5)
+        >>> print(f"Found {len(props['centroid_x'])} objects")
         >>>
-        >>> # Filter by minimum area (voxels)
-        >>> centroids = compute_centroids(
+        >>> # Extract multiple properties for downstream analysis
+        >>> props = compute_region_properties(
         ...     binary_seg, affine, depth=5,
+        ...     output_properties=['centroid', 'area', 'equivalent_diameter_area']
+        ... )
+        >>> print(f"Areas: {props['area']}")
+        >>>
+        >>> # With filtering and multiple properties
+        >>> props = compute_region_properties(
+        ...     binary_seg, affine, depth=5,
+        ...     output_properties=['centroid', 'area', 'eccentricity'],
         ...     region_filters={'area': ('>=', 30)}
         ... )
         >>>
-        >>> # Multiple filters: minimum area AND maximum eccentricity
-        >>> centroids = compute_centroids(
+        >>> # Use dict to rename output columns
+        >>> props = compute_region_properties(
         ...     binary_seg, affine, depth=5,
-        ...     region_filters={'area': ('>=', 30), 'eccentricity': ('<', 0.9)}
+        ...     output_properties={'area': 'nvoxels', 'equivalent_diameter_area': 'equivdiam'}
         ... )
+        >>> print(f"Number of voxels: {props['nvoxels']}")
         >>>
-        >>> # For large datasets, write to Parquet file
-        >>> compute_centroids(binary_seg, affine, depth=5,
-        ...                   output_path='centroids.parquet')
-        >>> # Read back with pandas or pyarrow
-        >>> import pandas as pd
-        >>> df = pd.read_parquet('centroids.parquet')
-        >>> print(f"Found {len(df)} objects")
+        >>> # Write to Parquet for large datasets
+        >>> compute_region_properties(
+        ...     binary_seg, affine, depth=5,
+        ...     output_properties=['centroid', 'area', 'equivalent_diameter_area'],
+        ...     output_path='region_props.parquet'
+        ... )
     """
     # Import AffineTransform to handle both numpy arrays and AffineTransform objects
     from .transform import AffineTransform
+
+    # Set default output properties
+    if output_properties is None:
+        output_properties = list(DEFAULT_OUTPUT_PROPERTIES)
+
+    # Handle both list and dict input for output_properties
+    # Extract property names (keys) and optional rename mapping (values)
+    if isinstance(output_properties, dict):
+        if len(output_properties) == 0:
+            raise ValueError(
+                "output_properties must be a non-empty list or dict. "
+                f"Got: {output_properties}"
+            )
+        # Dict: keys are regionprops names, values are output names
+        property_names = list(output_properties.keys())
+        rename_mapping = output_properties
+    elif isinstance(output_properties, list):
+        if len(output_properties) == 0:
+            raise ValueError(
+                "output_properties must be a non-empty list or dict. "
+                f"Got: {output_properties}"
+            )
+        property_names = output_properties
+        # No renaming when list is used - use property names directly
+        rename_mapping = {name: name for name in property_names}
+    else:
+        raise ValueError(
+            "output_properties must be a non-empty list or dict. "
+            f"Got: {output_properties}"
+        )
 
     # Convert affine to numpy array if it's an AffineTransform object
     if isinstance(affine, AffineTransform):
@@ -1005,8 +1123,8 @@ def compute_centroids(
             # Multiple channels - raise informative error for now
             raise ValueError(
                 f"Image has {image.ndim}D shape {image.shape} with "
-                f"{image.shape[0]} channels. compute_centroids only supports 3D "
-                "images or 4D images with a single channel (channel dimension "
+                f"{image.shape[0]} channels. compute_region_properties only supports "
+                "3D images or 4D images with a single channel (channel dimension "
                 "size = 1). For multi-channel images, please process each channel "
                 "separately or squeeze/select a single channel before calling "
                 "this function."
@@ -1030,16 +1148,16 @@ def compute_centroids(
     else:
         overlap_sizes = tuple(depth)
 
-    def _block_centroids(block, block_info=None):
+    def _block_properties(block, block_info=None):
         """
-        Process a single block to find centroids.
+        Process a single block to find region properties.
 
         Args:
             block: numpy array for this chunk (binary mask) with overlap
             block_info: dict containing array location information from map_overlap
 
         Returns:
-            Object array matching block shape, with centroids stored in first element
+            Object array matching block shape, with properties stored in first element
         """
         # Create result array matching block shape
         result = np.empty(block.shape, dtype=object)
@@ -1058,38 +1176,18 @@ def compute_centroids(
             return result
 
         # Get original array location from block_info[None]
-        # block_info[0] contains info about the overlapped/extended array
-        # block_info[None] contains info about the ORIGINAL input array
         original_info = block_info[None]
         array_location = original_info["array-location"]
 
-        # With map_overlap and trim=False, the block includes overlap regions
-        # We need to calculate the "core" region (non-overlap) within this block
-        # to avoid counting the same object multiple times across chunks
-
         # Determine core region boundaries within the block
-        # The core region is the part that maps to the original array coordinates
         core_slices = []
         for dim in range(len(array_location)):
             global_start, global_end = array_location[dim]
-
-            # The block may have overlap on either or both sides
-            # Calculate where the "core" starts and ends within this block
-            #
-            # The core region size is (global_end - global_start)
-            # The block size may be larger due to overlap
-
             core_size = global_end - global_start
 
-            # Determine how much overlap is before vs after
-            # With boundary='none', edge chunks don't get overlap on the edge side
-            # We can infer this from whether global_start is 0 (no overlap before)
-
             if global_start == 0:
-                # First chunk - no overlap before
                 overlap_before = 0
             else:
-                # Not first chunk - we have overlap before
                 overlap_before = overlap_sizes[dim]
 
             core_start = overlap_before
@@ -1098,7 +1196,7 @@ def compute_centroids(
             core_slices.append((core_start, core_end))
 
         # Process regions and filter to core
-        centroids = []
+        region_data_list = []
         for region in regionprops(labeled):
             # Apply region filters if specified
             if region_filters is not None:
@@ -1116,36 +1214,44 @@ def compute_centroids(
                     break
 
             if in_core:
-                # Convert to global voxel coordinates
-                # The core region maps to [global_start, global_end) in the
-                # original array. Centroid is at position
-                # (centroid[dim] - core_start) within the core
-                # So global position is:
-                # global_start + (centroid[dim] - core_start)
-                global_centroid = []
-                for dim in range(len(centroid)):
-                    core_start, _ = core_slices[dim]
-                    global_start, _ = array_location[dim]
-                    global_centroid.append(global_start + (centroid[dim] - core_start))
+                # Extract all requested properties for this region
+                region_data = {}
 
-                centroids.append(tuple(global_centroid))
+                for prop_name in property_names:
+                    prop_value = _extract_region_property(region, prop_name)
 
-        # Store all centroids for this block in the first element
-        # Fill rest with empty lists
+                    if prop_name in COORDINATE_PROPERTIES:
+                        # Convert coordinate properties to global voxel coordinates
+                        coord = np.array(prop_value)
+                        global_coord = []
+                        for dim in range(len(coord)):
+                            core_start, _ = core_slices[dim]
+                            global_start, _ = array_location[dim]
+                            global_coord.append(
+                                global_start + (coord[dim] - core_start)
+                            )
+                        region_data[prop_name] = tuple(global_coord)
+                    else:
+                        # Non-coordinate properties are stored as-is
+                        region_data[prop_name] = prop_value
+
+                region_data_list.append(region_data)
+
+        # Store all region data for this block in the first element
         result.fill([])
-        if len(centroids) > 0:
-            result.flat[0] = centroids
+        if len(region_data_list) > 0:
+            result.flat[0] = region_data_list
 
         return result
 
     # Apply block operation with overlap
-    cents_blocks = image.map_overlap(
-        _block_centroids,
+    props_blocks = image.map_overlap(
+        _block_properties,
         depth=overlap_sizes,
         boundary=boundary,
-        trim=False,  # Don't trim - we handle filtering internally
+        trim=False,
         dtype=object,
-        drop_axis=[],  # Keep dimensions initially
+        drop_axis=[],
     )
 
     # Handle Parquet output differently to avoid memory overflow
@@ -1154,82 +1260,86 @@ def compute_centroids(
         import pyarrow.parquet as pq
         from dask.delayed import delayed
 
-        # Create a delayed function to process each block
-        # This enables parallel computation of blocks
         @delayed
         def process_block(block_result):
-            """
-            Process a single block and return centroids in physical coordinates.
-            This runs in parallel across blocks via Dask.
-            """
-            # Extract centroids from this block
-            block_centroids = []
+            """Process a single block and return properties with transformed coords."""
+            # Extract region data from this block
+            block_data = []
             if hasattr(block_result, "flat"):
                 for item in block_result.flat:
                     if isinstance(item, list):
-                        block_centroids.extend(item)
-                    elif isinstance(item, (tuple, np.ndarray)) and len(item) > 0:
-                        block_centroids.append(tuple(item))
+                        block_data.extend(item)
             elif isinstance(block_result, list):
-                block_centroids = block_result
+                block_data = block_result
 
-            if len(block_centroids) == 0:
-                return None  # Empty block
+            if len(block_data) == 0:
+                return None
 
-            # Convert to numpy array
-            voxel_coords = np.array(block_centroids, dtype=np.float64)
+            # Transform coordinate properties to physical coordinates
+            processed_data = {}
 
-            # Convert to physical coordinates using affine transform
-            n_points = voxel_coords.shape[0]
-            voxel_homogeneous = np.column_stack(
-                [voxel_coords, np.ones((n_points, 1), dtype=np.float64)]
-            )
+            for prop_name in property_names:
+                output_name = rename_mapping[prop_name]
+                if prop_name in COORDINATE_PROPERTIES:
+                    # Collect voxel coordinates
+                    voxel_coords = np.array(
+                        [region_data[prop_name] for region_data in block_data],
+                        dtype=np.float64,
+                    )
+                    # Transform to physical coordinates
+                    physical_coords = _transform_coordinate_to_physical(
+                        voxel_coords, affine_matrix
+                    )
+                    # Split into suffixed x, y, z columns with renamed output
+                    processed_data[f"{output_name}_x"] = physical_coords[:, 0]
+                    processed_data[f"{output_name}_y"] = physical_coords[:, 1]
+                    processed_data[f"{output_name}_z"] = physical_coords[:, 2]
+                else:
+                    # Non-coordinate properties
+                    values = [region_data[prop_name] for region_data in block_data]
+                    processed_data[output_name] = np.array(values, dtype=np.float64)
 
-            physical_homogeneous = voxel_homogeneous @ affine_matrix.T
-            physical_coords = physical_homogeneous[:, :3]
+            return processed_data
 
-            return physical_coords
-
-        # Create delayed tasks for all blocks (enables parallel computation)
+        # Create delayed tasks for all blocks
         delayed_results = []
-        for block_idx in np.ndindex(cents_blocks.numblocks):
-            block = cents_blocks.blocks[block_idx]
-            # Wrap block computation in delayed to enable parallel processing
+        for block_idx in np.ndindex(props_blocks.numblocks):
+            block = props_blocks.blocks[block_idx]
             result_delayed = process_block(block)
             delayed_results.append(result_delayed)
 
-        # Compute all blocks in parallel using Dask's scheduler
-        # This is the key difference: blocks are computed in parallel, not sequentially
+        # Compute all blocks in parallel
         computed_results = da.compute(*delayed_results)
 
-        # Write results to Parquet file incrementally
-        # The writing is sequential, but computation was parallel
+        # Build schema dynamically based on property_names and rename_mapping
+        schema_fields = []
+        for prop_name in property_names:
+            output_name = rename_mapping[prop_name]
+            if prop_name in COORDINATE_PROPERTIES:
+                schema_fields.append(pa.field(f"{output_name}_x", pa.float64()))
+                schema_fields.append(pa.field(f"{output_name}_y", pa.float64()))
+                schema_fields.append(pa.field(f"{output_name}_z", pa.float64()))
+            else:
+                schema_fields.append(pa.field(output_name, pa.float64()))
+
+        schema = pa.schema(schema_fields)
+
+        # Write results to Parquet file
         writer = None
-        schema = pa.schema(
-            [
-                pa.field("x", pa.float64()),
-                pa.field("y", pa.float64()),
-                pa.field("z", pa.float64()),
-            ]
-        )
-
-        has_data = False
-        for physical_coords in computed_results:
-            if physical_coords is None:
-                continue  # Skip empty blocks
-
-            has_data = True
+        for processed_data in computed_results:
+            if processed_data is None:
+                continue
 
             # Create PyArrow table for this batch
-            table = pa.table(
-                {
-                    "x": pa.array(physical_coords[:, 0], type=pa.float64()),
-                    "y": pa.array(physical_coords[:, 1], type=pa.float64()),
-                    "z": pa.array(physical_coords[:, 2], type=pa.float64()),
-                }
-            )
+            table_data = {}
+            for field in schema_fields:
+                if field.name in processed_data:
+                    table_data[field.name] = pa.array(
+                        processed_data[field.name], type=pa.float64()
+                    )
 
-            # Write to Parquet file (append mode)
+            table = pa.table(table_data)
+
             if writer is None:
                 writer = pq.ParquetWriter(output_path, schema)
 
@@ -1239,54 +1349,68 @@ def compute_centroids(
         if writer is not None:
             writer.close()
         else:
-            # No centroids found - write empty file
-            empty_table = pa.table(
-                {
-                    "x": pa.array([], type=pa.float64()),
-                    "y": pa.array([], type=pa.float64()),
-                    "z": pa.array([], type=pa.float64()),
-                }
-            )
+            # No data found - write empty file
+            empty_data = {
+                field.name: pa.array([], type=pa.float64()) for field in schema_fields
+            }
+            empty_table = pa.table(empty_data)
             pq.write_table(empty_table, output_path)
 
         return None
 
     else:
-        # Original in-memory path for backward compatibility
-        # Compute to get all centroid lists
-        all_centroid_lists = cents_blocks.compute()
+        # In-memory path
+        all_props_lists = props_blocks.compute()
 
-        # Flatten and collect all centroids
-        centroid_list = []
+        # Flatten and collect all region data
+        all_region_data = []
 
-        # Handle different dimensionalities
-        if hasattr(all_centroid_lists, "flat"):
-            for item in all_centroid_lists.flat:
+        if hasattr(all_props_lists, "flat"):
+            for item in all_props_lists.flat:
                 if isinstance(item, list):
-                    centroid_list.extend(item)
-                elif isinstance(item, (tuple, np.ndarray)) and len(item) > 0:
-                    centroid_list.append(tuple(item))
+                    all_region_data.extend(item)
         else:
-            # Single item
-            if isinstance(all_centroid_lists, list):
-                centroid_list = all_centroid_lists
+            if isinstance(all_props_lists, list):
+                all_region_data = all_props_lists
 
-        if len(centroid_list) == 0:
-            return np.empty((0, 3), dtype=np.float64)
+        if len(all_region_data) == 0:
+            # Return empty dict with correct structure
+            result = {}
+            for prop_name in property_names:
+                output_name = rename_mapping[prop_name]
+                if prop_name in COORDINATE_PROPERTIES:
+                    result[f"{output_name}_x"] = np.empty((0,), dtype=np.float64)
+                    result[f"{output_name}_y"] = np.empty((0,), dtype=np.float64)
+                    result[f"{output_name}_z"] = np.empty((0,), dtype=np.float64)
+                else:
+                    result[output_name] = np.empty((0,), dtype=np.float64)
+            return result
 
-        # Convert to numpy array
-        voxel_coords = np.array(centroid_list, dtype=np.float64)
+        # Transform coordinate properties and build result dict
+        result = {}
 
-        # Convert to physical coordinates using affine transform
-        n_points = voxel_coords.shape[0]
-        voxel_homogeneous = np.column_stack(
-            [voxel_coords, np.ones((n_points, 1), dtype=np.float64)]
-        )
+        for prop_name in property_names:
+            output_name = rename_mapping[prop_name]
+            if prop_name in COORDINATE_PROPERTIES:
+                # Collect voxel coordinates
+                voxel_coords = np.array(
+                    [region_data[prop_name] for region_data in all_region_data],
+                    dtype=np.float64,
+                )
+                # Transform to physical coordinates
+                physical_coords = _transform_coordinate_to_physical(
+                    voxel_coords, affine_matrix
+                )
+                # Split into suffixed x, y, z columns with renamed output
+                result[f"{output_name}_x"] = physical_coords[:, 0]
+                result[f"{output_name}_y"] = physical_coords[:, 1]
+                result[f"{output_name}_z"] = physical_coords[:, 2]
+            else:
+                # Non-coordinate properties
+                values = [region_data[prop_name] for region_data in all_region_data]
+                result[output_name] = np.array(values, dtype=np.float64)
 
-        physical_homogeneous = voxel_homogeneous @ affine_matrix.T
-        physical_coords = physical_homogeneous[:, :3]
-
-        return physical_coords
+        return result
 
 
 def density_from_points(

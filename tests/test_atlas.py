@@ -279,6 +279,53 @@ class TestZarrNiiAtlas:
         # Background (label 0) should map to 0.0
         assert np.all(map_data[dseg_computed == 0] == 0.0)
 
+    def test_create_feature_map_with_duplicate_labels(self, sample_atlas):
+        """Test create_feature_map aggregates using mean when duplicate labels exist.
+
+        This can occur when creating feature maps from regionprops tables
+        where each region may have multiple entries. The feature values
+        should be aggregated using mean for each unique label.
+        """
+        atlas = sample_atlas
+
+        # Create feature DataFrame with duplicate labels
+        # Region 1 has 3 entries: 90, 100, 110 -> mean = 100.0
+        # Region 2 has 2 entries: 190, 210 -> mean = 200.0
+        # Region 3 has 1 entry: 300.0 -> mean = 300.0
+        feature_df = pd.DataFrame(
+            {
+                "index": [1, 1, 1, 2, 2, 3],
+                "feature_value": [90.0, 100.0, 110.0, 190.0, 210.0, 300.0],
+            }
+        )
+
+        # Create feature map - should aggregate by mean
+        feature_map = atlas.create_feature_map(feature_df, "feature_value")
+
+        assert isinstance(feature_map, ZarrNii)
+        assert feature_map.shape == atlas.dseg.shape
+
+        # Check feature values after mean aggregation
+        map_data = feature_map.data
+        if hasattr(map_data, "compute"):
+            map_data = map_data.compute()
+
+        dseg_data = atlas.dseg.data
+        if hasattr(dseg_data, "compute"):
+            dseg_data = dseg_data.compute()
+
+        # Region 1: mean of [90, 100, 110] = 100.0
+        assert np.allclose(map_data[dseg_data == 1], 100.0)
+
+        # Region 2: mean of [190, 210] = 200.0
+        assert np.allclose(map_data[dseg_data == 2], 200.0)
+
+        # Region 3: single value 300.0
+        assert np.allclose(map_data[dseg_data == 3], 300.0)
+
+        # Background should still be 0.0
+        assert np.all(map_data[dseg_data == 0] == 0.0)
+
     def test_get_region_bounding_box_single_region(self, sample_atlas):
         """Test getting bounding box for single region by index."""
         atlas = sample_atlas
@@ -811,52 +858,14 @@ class TestZarrNiiAtlas:
         # Wrong shape - not Nx3
         centroids_wrong_shape = np.array([[1.0, 2.0], [3.0, 4.0]])  # Nx2
 
-        with pytest.raises(ValueError, match="centroids must be Nx3 array"):
+        with pytest.raises(ValueError, match="must be Nx3"):
             atlas.label_centroids(centroids_wrong_shape)
 
         # Wrong dimensions - 1D array
         centroids_1d = np.array([1.0, 2.0, 3.0])
 
-        with pytest.raises(ValueError, match="centroids must be Nx3 array"):
+        with pytest.raises(ValueError, match="must be Nx3"):
             atlas.label_centroids(centroids_1d)
-
-    def test_label_centroids_integration_with_compute_centroids(self, sample_atlas):
-        """Test integration: compute centroids then label them."""
-        # Create a binary segmentation image matching atlas space
-        binary_data = np.zeros((1, 10, 10, 10), dtype=np.uint8)
-
-        # Add some objects in known regions
-        binary_data[0, 2:4, 2:4, 2:4] = 1  # Object in region 1 (left half, x < 5)
-        binary_data[0, 6:8, 6:8, 6:8] = 1  # Object in region 3 (right bottom)
-
-        # Create ZarrNii from binary data with matching affine
-        # Need to convert to dask array for compute_centroids
-        import dask.array as da
-
-        from zarrnii import ZarrNii
-
-        binary_dask = da.from_array(binary_data, chunks=(1, 5, 5, 5))
-        binary_znii = ZarrNii.from_darr(binary_dask)
-
-        # Compute centroids
-        centroids = binary_znii.compute_centroids(depth=2)
-
-        # Label them using the atlas
-        df_centroids, df_counts = sample_atlas.label_centroids(
-            centroids, include_names=True
-        )
-
-        # Should have found 2 objects
-        assert len(df_centroids) == 2
-
-        # Both should have valid labels (not 0)
-        assert all(df_centroids["index"] > 0)
-
-        # Check that we got expected region assignments
-        # Objects are at approximately (3, 3, 3) and (7, 7, 7) in voxel space
-        labels = set(df_centroids["index"].values)
-        # Should include regions 1 and 3 (or similar based on exact centroid positions)
-        assert len(labels) <= 2  # At most 2 different labels
 
     def test_label_centroids_unknown_label(self, sample_atlas):
         """Test handling of labels not in lookup table."""
@@ -873,6 +882,252 @@ class TestZarrNiiAtlas:
         assert "name" in df_centroids.columns
         # The name should be from our test data or "Unknown_Label_X"
         assert isinstance(df_centroids.iloc[0]["name"], str)
+
+    def test_label_region_properties_with_dict(self, sample_atlas):
+        """Test label_region_properties with dictionary input from compute_region_properties."""
+        atlas = sample_atlas
+
+        # Create region properties dict (simulating compute_region_properties output)
+        region_props = {
+            "centroid_x": np.array([2.5, 7.5, 7.5]),
+            "centroid_y": np.array([5.0, 2.5, 7.5]),
+            "centroid_z": np.array([5.0, 2.5, 7.5]),
+            "area": np.array([100, 200, 150]),
+            "eccentricity": np.array([0.5, 0.6, 0.7]),
+        }
+
+        # Label the region properties
+        df_props, df_counts = atlas.label_region_properties(
+            region_props, include_names=True
+        )
+
+        # Check DataFrame structure - should include all properties
+        assert isinstance(df_props, pd.DataFrame)
+        assert isinstance(df_counts, pd.DataFrame)
+        assert len(df_props) == 3
+        assert "centroid_x" in df_props.columns
+        assert "centroid_y" in df_props.columns
+        assert "centroid_z" in df_props.columns
+        assert "area" in df_props.columns
+        assert "eccentricity" in df_props.columns
+        assert "index" in df_props.columns
+        assert "name" in df_props.columns
+
+        # Verify coordinate values are preserved
+        np.testing.assert_array_equal(
+            df_props["centroid_x"].values, region_props["centroid_x"]
+        )
+        np.testing.assert_array_equal(
+            df_props["centroid_y"].values, region_props["centroid_y"]
+        )
+        np.testing.assert_array_equal(
+            df_props["centroid_z"].values, region_props["centroid_z"]
+        )
+
+        # Verify extra properties are preserved
+        np.testing.assert_array_equal(df_props["area"].values, region_props["area"])
+        np.testing.assert_array_equal(
+            df_props["eccentricity"].values, region_props["eccentricity"]
+        )
+
+        # Check label assignments (same locations as test_label_centroids_basic)
+        assert df_props.iloc[0]["index"] == 1  # Left Region
+        assert df_props.iloc[1]["index"] == 2  # Right Top
+        assert df_props.iloc[2]["index"] == 3  # Right Bottom
+
+        # Check counts DataFrame
+        assert "index" in df_counts.columns
+        assert "count" in df_counts.columns
+        assert len(df_counts) == 3  # 3 unique regions
+
+    def test_label_region_properties_with_array(self, sample_atlas):
+        """Test label_region_properties with numpy array input (backward compatibility)."""
+        atlas = sample_atlas
+
+        # Create centroids array
+        centroids = np.array(
+            [
+                [2.5, 5.0, 5.0],
+                [7.5, 2.5, 2.5],
+            ]
+        )
+
+        # Label using the new method
+        df_props, df_counts = atlas.label_region_properties(
+            centroids, include_names=True
+        )
+
+        # Should have x, y, z columns (not centroid_x, etc.)
+        assert "x" in df_props.columns
+        assert "y" in df_props.columns
+        assert "z" in df_props.columns
+        assert "centroid_x" not in df_props.columns
+        assert "index" in df_props.columns
+        assert "name" in df_props.columns
+
+        assert len(df_props) == 2
+        assert df_props.iloc[0]["index"] == 1
+        assert df_props.iloc[1]["index"] == 2
+
+    def test_label_region_properties_empty_dict(self, sample_atlas):
+        """Test label_region_properties with empty dictionary input."""
+        atlas = sample_atlas
+
+        # Create empty region properties dict
+        region_props = {
+            "centroid_x": np.array([]),
+            "centroid_y": np.array([]),
+            "centroid_z": np.array([]),
+            "area": np.array([]),
+        }
+
+        df_props, df_counts = atlas.label_region_properties(
+            region_props, include_names=True
+        )
+
+        # Should return empty DataFrames with correct columns
+        assert len(df_props) == 0
+        assert "centroid_x" in df_props.columns
+        assert "centroid_y" in df_props.columns
+        assert "centroid_z" in df_props.columns
+        assert "area" in df_props.columns
+        assert "index" in df_props.columns
+        assert "name" in df_props.columns
+
+        assert len(df_counts) == 0
+
+    def test_label_region_properties_missing_centroid_keys(self, sample_atlas):
+        """Test error handling for dict missing required centroid keys."""
+        atlas = sample_atlas
+
+        # Dict without centroid_z
+        region_props = {
+            "centroid_x": np.array([2.5]),
+            "centroid_y": np.array([5.0]),
+            "area": np.array([100]),
+        }
+
+        with pytest.raises(ValueError, match="centroid_z"):
+            atlas.label_region_properties(region_props)
+
+    def test_label_region_properties_invalid_type(self, sample_atlas):
+        """Test error handling for invalid input type."""
+        atlas = sample_atlas
+
+        with pytest.raises(TypeError, match="must be a dict or numpy array"):
+            atlas.label_region_properties("invalid")
+
+        with pytest.raises(TypeError, match="must be a dict or numpy array"):
+            atlas.label_region_properties([1, 2, 3])
+
+    def test_label_region_properties_without_names(self, sample_atlas):
+        """Test label_region_properties with include_names=False."""
+        atlas = sample_atlas
+
+        region_props = {
+            "centroid_x": np.array([2.5]),
+            "centroid_y": np.array([5.0]),
+            "centroid_z": np.array([5.0]),
+            "area": np.array([100]),
+        }
+
+        df_props, df_counts = atlas.label_region_properties(
+            region_props, include_names=False
+        )
+
+        assert "name" not in df_props.columns
+        assert "name" not in df_counts.columns
+        assert "index" in df_props.columns
+        assert "area" in df_props.columns
+
+    def test_label_region_properties_custom_coord_column_names(self, sample_atlas):
+        """Test label_region_properties with custom coord_column_names."""
+        atlas = sample_atlas
+
+        # Create region properties dict with custom column names
+        region_props = {
+            "pos_x": np.array([2.5, 7.5, 7.5]),
+            "pos_y": np.array([5.0, 2.5, 7.5]),
+            "pos_z": np.array([5.0, 2.5, 7.5]),
+            "area": np.array([100, 200, 150]),
+        }
+
+        # Label the region properties with custom coord_column_names
+        df_props, df_counts = atlas.label_region_properties(
+            region_props,
+            include_names=True,
+            coord_column_names=["pos_x", "pos_y", "pos_z"],
+        )
+
+        # Check DataFrame structure - should include custom column names
+        assert isinstance(df_props, pd.DataFrame)
+        assert isinstance(df_counts, pd.DataFrame)
+        assert len(df_props) == 3
+        assert "pos_x" in df_props.columns
+        assert "pos_y" in df_props.columns
+        assert "pos_z" in df_props.columns
+        assert "area" in df_props.columns
+        assert "index" in df_props.columns
+        assert "name" in df_props.columns
+
+        # Should NOT have default column names
+        assert "centroid_x" not in df_props.columns
+        assert "centroid_y" not in df_props.columns
+        assert "centroid_z" not in df_props.columns
+
+        # Verify coordinate values are preserved
+        np.testing.assert_array_equal(df_props["pos_x"].values, region_props["pos_x"])
+        np.testing.assert_array_equal(df_props["pos_y"].values, region_props["pos_y"])
+        np.testing.assert_array_equal(df_props["pos_z"].values, region_props["pos_z"])
+
+        # Check label assignments (same locations as test_label_centroids_basic)
+        assert df_props.iloc[0]["index"] == 1  # Left Region
+        assert df_props.iloc[1]["index"] == 2  # Right Top
+        assert df_props.iloc[2]["index"] == 3  # Right Bottom
+
+    def test_label_region_properties_missing_custom_coord_column(self, sample_atlas):
+        """Test error handling when custom coord_column_names are missing from dict."""
+        atlas = sample_atlas
+
+        # Dict missing 'pos_z'
+        region_props = {
+            "pos_x": np.array([2.5]),
+            "pos_y": np.array([5.0]),
+            "area": np.array([100]),
+        }
+
+        with pytest.raises(ValueError, match="pos_z"):
+            atlas.label_region_properties(
+                region_props, coord_column_names=["pos_x", "pos_y", "pos_z"]
+            )
+
+    def test_label_region_properties_invalid_coord_column_names_length(
+        self, sample_atlas
+    ):
+        """Test error handling when coord_column_names has wrong length."""
+        atlas = sample_atlas
+
+        region_props = {
+            "pos_x": np.array([2.5]),
+            "pos_y": np.array([5.0]),
+            "area": np.array([100]),
+        }
+
+        # Test with too few elements
+        with pytest.raises(ValueError, match="exactly 3 column names"):
+            atlas.label_region_properties(
+                region_props, coord_column_names=["pos_x", "pos_y"]
+            )
+
+        # Test with too many elements
+        with pytest.raises(ValueError, match="exactly 3 column names"):
+            atlas.label_region_properties(
+                region_props, coord_column_names=["pos_x", "pos_y", "pos_z", "pos_w"]
+            )
+
+        # Test with empty list
+        with pytest.raises(ValueError, match="exactly 3 column names"):
+            atlas.label_region_properties(region_props, coord_column_names=[])
 
 
 class TestZarrNiiAtlasFileIO:

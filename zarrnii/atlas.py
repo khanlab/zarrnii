@@ -815,7 +815,10 @@ class ZarrNiiAtlas(ZarrNii):
         """Create feature map by assigning values to atlas regions.
 
         Args:
-            feature_data: DataFrame with region labels and feature values
+            feature_data: DataFrame with region labels and feature values.
+                If multiple rows share the same label index (e.g., from
+                regionprops tables), their feature values are aggregated
+                using the mean before mapping.
             feature_column: Column name containing feature values to map
             label_column: Column name containing region labels
 
@@ -826,6 +829,11 @@ class ZarrNiiAtlas(ZarrNii):
             ValueError: If required columns are missing
 
         Notes:
+            When multiple rows in feature_data have the same atlas label,
+            their feature values are aggregated using the mean. This is
+            useful when working with regionprops tables where each region
+            may have multiple entries.
+
             Labels present in the dseg image but not in feature_data will be
             mapped to 0.0. This can occur with downsampled dseg images or
             small ROIs where some regions are not represented.
@@ -842,10 +850,15 @@ class ZarrNiiAtlas(ZarrNii):
         if missing_cols:
             raise ValueError(f"Missing columns in feature_data: {missing_cols}")
 
+        # Aggregate feature values by label using mean when multiple rows exist
+        aggregated_data = (
+            feature_data.groupby(label_column)[feature_column].mean().reset_index()
+        )
+
         dseg_data = self.dseg.data.astype("int")  # dask array of labels
 
         # Get max label from feature_data
-        max_label_features = int(feature_data[label_column].max())
+        max_label_features = int(aggregated_data[label_column].max())
 
         # Get max label from dseg image to ensure LUT is large enough
         # for all labels that actually exist in the image.
@@ -857,7 +870,7 @@ class ZarrNiiAtlas(ZarrNii):
 
         # make a dense lookup array sized to handle all labels in dseg
         lut = np.zeros(max_label + 1, dtype=np.float32)
-        lut[feature_data[label_column].to_numpy(dtype=int)] = feature_data[
+        lut[aggregated_data[label_column].to_numpy(dtype=int)] = aggregated_data[
             feature_column
         ].to_numpy(dtype=float)
 
@@ -1216,12 +1229,266 @@ class ZarrNiiAtlas(ZarrNii):
 
         return centers
 
+    def label_region_properties(
+        self,
+        region_properties: Union[Dict[str, np.ndarray], np.ndarray],
+        include_names: bool = True,
+        coord_column_names: Optional[List[str]] = None,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Map region properties to atlas labels using nearest neighbor interpolation.
+
+        This method takes region properties (typically from compute_region_properties
+        or compute_centroids) and determines which atlas region each object falls
+        into based on its centroid coordinates. It uses nearest neighbor interpolation
+        to assign labels, making it robust to small coordinate mismatches.
+
+        This is a generalized version of the labeling functionality that preserves
+        all region properties in the output, not just centroid coordinates.
+
+        Args:
+            region_properties: Either:
+                - Dict[str, np.ndarray]: Output from compute_region_properties()
+                  with keys like 'centroid_x', 'centroid_y', 'centroid_z', 'area', etc.
+                  Must contain coordinate columns specified by coord_column_names for labeling.
+                - np.ndarray: Nx3 array of centroid coordinates in physical space
+                  (for backward compatibility with compute_centroids output).
+                  Each row is [x, y, z] in physical/world coordinates (mm).
+            include_names: If True, includes region names from the labels dataframe
+                in the output (default: True).
+            coord_column_names: List of column names for x, y, z coordinates respectively.
+                Defaults to ['centroid_x', 'centroid_y', 'centroid_z'].
+                Can be customized, e.g., ['pos_x', 'pos_y', 'pos_z'].
+
+        Returns:
+            tuple of two pandas DataFrames:
+                1. properties DataFrame with columns:
+                    - All input properties (centroid_x, centroid_y, centroid_z, area, etc.)
+                      OR x, y, z if input was an Nx3 array
+                    - index: Integer label index from the atlas
+                    - name (optional): Region name if include_names=True
+                2. counts DataFrame with columns:
+                    - index: Integer label index from the atlas
+                    - name (optional): Region name if include_names=True
+                    - count: Number of objects in each region
+
+        Notes:
+            - Input coordinates must be in the same physical space as the atlas
+            - Points outside the atlas bounds receive index=0 (background)
+            - Uses scipy.interpolate.interpn with method='nearest' for label lookup
+            - All properties from the input dictionary are preserved in the output
+
+        Examples:
+            >>> # Using compute_region_properties output (preferred)
+            >>> props = binary_seg.compute_region_properties(
+            ...     output_properties=['centroid', 'area', 'eccentricity']
+            ... )
+            >>> df_props, df_counts = atlas.label_region_properties(props)
+            >>> print(df_props.columns)  # centroid_x, centroid_y, centroid_z, area, ...
+            >>>
+            >>> # Using compute_centroids output (backward compatible)
+            >>> centroids = binary_seg.compute_centroids()
+            >>> df_props, df_counts = atlas.label_region_properties(centroids)
+            >>>
+            >>> # Using custom coordinate column names
+            >>> df_props, df_counts = atlas.label_region_properties(
+            ...     props, coord_column_names=['pos_x', 'pos_y', 'pos_z']
+            ... )
+            >>>
+            >>> # Filter to specific regions
+            >>> hippocampus_objects = df_props[df_props['name'] == 'Hippocampus']
+        """
+        # Set default coordinate column names
+        if coord_column_names is None:
+            coord_column_names = ["centroid_x", "centroid_y", "centroid_z"]
+
+        # Validate coord_column_names length
+        if len(coord_column_names) != 3:
+            raise ValueError(
+                f"coord_column_names must contain exactly 3 column names for x, y, z. "
+                f"Got {len(coord_column_names)} names: {coord_column_names}"
+            )
+
+        # Determine input type and extract coordinates
+        if isinstance(region_properties, dict):
+            # Input is from compute_region_properties
+            # Check for required centroid keys
+            required_keys = coord_column_names
+            missing_keys = [k for k in required_keys if k not in region_properties]
+            if missing_keys:
+                raise ValueError(
+                    f"region_properties dict must contain {required_keys}. "
+                    f"Missing: {missing_keys}. "
+                    "Ensure coordinate columns are present in the input dictionary."
+                )
+
+            # Get number of points
+            n_points = len(region_properties[coord_column_names[0]])
+
+            # Handle empty input
+            if n_points == 0:
+                columns_props = list(region_properties.keys()) + ["index"]
+                columns_counts = ["index"]
+                if include_names:
+                    columns_props.append("name")
+                    columns_counts.append("name")
+                columns_counts.append("count")
+                return (
+                    pd.DataFrame(columns=columns_props),
+                    pd.DataFrame(columns=columns_counts),
+                )
+
+            # Extract centroid coordinates for labeling
+            centroids = np.column_stack(
+                [
+                    region_properties[coord_column_names[0]],
+                    region_properties[coord_column_names[1]],
+                    region_properties[coord_column_names[2]],
+                ]
+            )
+
+            # Store all properties for later
+            extra_properties = {
+                k: v for k, v in region_properties.items() if k not in required_keys
+            }
+            use_dict_output = True
+        elif isinstance(region_properties, np.ndarray):
+            # Input is an Nx3 centroid array (backward compatibility)
+            centroids = region_properties
+
+            # Handle empty centroids array
+            if centroids.shape[0] == 0:
+                columns_props = ["x", "y", "z", "index"]
+                columns_counts = ["index"]
+                if include_names:
+                    columns_props.append("name")
+                    columns_counts.append("name")
+                columns_counts.append("count")
+                return (
+                    pd.DataFrame(columns=columns_props),
+                    pd.DataFrame(columns=columns_counts),
+                )
+
+            # Validate input shape
+            if centroids.ndim != 2 or centroids.shape[1] != 3:
+                raise ValueError(
+                    f"When passing an array, it must be Nx3, got shape {centroids.shape}"
+                )
+
+            n_points = centroids.shape[0]
+            extra_properties = {}
+            use_dict_output = False
+        else:
+            raise TypeError(
+                f"region_properties must be a dict or numpy array, "
+                f"got {type(region_properties)}"
+            )
+
+        # Get atlas data and affine
+        dseg_data = self.dseg.data
+        if hasattr(dseg_data, "compute"):
+            dseg_data = dseg_data.compute()
+
+        affine_matrix = self.dseg.affine.matrix
+
+        # Convert physical coordinates to voxel coordinates
+        # centroids are in (x, y, z) order
+        # Create homogeneous coordinates
+        centroids_homogeneous = np.column_stack(
+            [centroids, np.ones((n_points, 1), dtype=np.float64)]
+        )
+
+        # Apply inverse affine transform
+        affine_inv = np.linalg.inv(affine_matrix)
+        voxel_coords_homogeneous = centroids_homogeneous @ affine_inv.T
+        voxel_coords = voxel_coords_homogeneous[:, :3]
+
+        # Create grid for interpn
+        # Grid should be in the order of the data array dimensions
+        # For ZarrNii, this is typically (z, y, x) or (c, z, y, x)
+        # Remove channel dimension if present
+        if dseg_data.ndim == 4:
+            dseg_data = dseg_data[0]  # Remove channel dimension
+
+        # Create coordinate grids for each dimension
+        # interpn expects a tuple of 1D arrays representing the grid coordinates
+        shape = dseg_data.shape
+        grid = tuple(np.arange(s) for s in shape)
+
+        # The inverse affine transform already converted physical (x, y, z) coordinates
+        # to voxel coordinates in the order matching the data array axes_order.
+        # So voxel_coords is already in the correct order for interpn!
+
+        # Use interpn to get labels at the centroid locations
+        label_at_points = interpn(
+            grid,
+            dseg_data,
+            voxel_coords,
+            method="nearest",
+            bounds_error=False,
+            fill_value=0,
+        )
+
+        # Convert to integer labels
+        label_at_points = label_at_points.astype(int)
+
+        # Create DataFrame with appropriate columns
+        if use_dict_output:
+            # Include all properties from the input dict
+            df_data = {
+                coord_column_names[0]: region_properties[coord_column_names[0]],
+                coord_column_names[1]: region_properties[coord_column_names[1]],
+                coord_column_names[2]: region_properties[coord_column_names[2]],
+            }
+            # Add extra properties (like area, eccentricity, etc.)
+            df_data.update(extra_properties)
+        else:
+            # Use x, y, z for backward compatibility with centroid arrays
+            df_data = {
+                "x": centroids[:, 0],
+                "y": centroids[:, 1],
+                "z": centroids[:, 2],
+            }
+
+        # Add atlas index
+        df_data["index"] = label_at_points
+
+        # Add region names if requested
+        if include_names and self.labels_df is not None:
+            # Create a lookup from index to name
+            label_to_name = dict(
+                zip(
+                    self.labels_df[self.label_column],
+                    self.labels_df[self.name_column],
+                )
+            )
+            # Map labels to names, use 'Unknown' for labels not in lookup table
+            df_data["name"] = [
+                label_to_name.get(label, f"Unknown_Label_{label}")
+                for label in label_at_points
+            ]
+
+        df_props = pd.DataFrame(df_data)
+
+        # Create counts DataFrame - group by index and optionally name
+        if include_names and self.labels_df is not None:
+            df_counts = (
+                df_props.groupby(["index", "name"]).size().reset_index(name="count")
+            )
+        else:
+            df_counts = df_props.groupby(["index"]).size().reset_index(name="count")
+
+        return (df_props, df_counts)
+
     def label_centroids(
         self,
         centroids: np.ndarray,
         include_names: bool = True,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Map centroids to atlas labels using nearest neighbor interpolation.
+
+        .. deprecated::
+            Use :meth:`label_region_properties` instead. This method is provided
+            for backward compatibility and will be removed in a future version.
 
         This method takes a set of centroids (typically from compute_centroids)
         and determines which atlas region each centroid falls into. It uses
@@ -1265,106 +1532,9 @@ class ZarrNiiAtlas(ZarrNii):
             ...     df_centroids['name'] == 'Hippocampus'
             ... ]
         """
-        # Handle empty centroids array
-        if centroids.shape[0] == 0:
-            columns_centroids = ["x", "y", "z", "index"]
-            columns_counts = ["index"]
-            if include_names:
-                columns_centroids.append("name")
-                columns_counts.append("name")
-            columns_counts.append("count")
-            return (
-                pd.DataFrame(columns=columns_centroids),
-                pd.DataFrame(columns=columns_counts),
-            )
-
-        # Validate input shape
-        if centroids.ndim != 2 or centroids.shape[1] != 3:
-            raise ValueError(
-                f"centroids must be Nx3 array, got shape {centroids.shape}"
-            )
-
-        # Get atlas data and affine
-        dseg_data = self.dseg.data
-        if hasattr(dseg_data, "compute"):
-            dseg_data = dseg_data.compute()
-
-        affine_matrix = self.dseg.affine.matrix
-
-        # Convert physical coordinates to voxel coordinates
-        # centroids are in (x, y, z) order
-        # Create homogeneous coordinates
-        n_points = centroids.shape[0]
-        centroids_homogeneous = np.column_stack(
-            [centroids, np.ones((n_points, 1), dtype=np.float64)]
+        warnings.warn(
+            "label_centroids is deprecated, use label_region_properties instead",
+            DeprecationWarning,
+            stacklevel=2,
         )
-
-        # Apply inverse affine transform
-        affine_inv = np.linalg.inv(affine_matrix)
-        voxel_coords_homogeneous = centroids_homogeneous @ affine_inv.T
-        voxel_coords = voxel_coords_homogeneous[:, :3]
-
-        # Create grid for interpn
-        # Grid should be in the order of the data array dimensions
-        # For ZarrNii, this is typically (z, y, x) or (c, z, y, x)
-        # Remove channel dimension if present
-        if dseg_data.ndim == 4:
-            dseg_data = dseg_data[0]  # Remove channel dimension
-
-        # Create coordinate grids for each dimension
-        # interpn expects a tuple of 1D arrays representing the grid coordinates
-        shape = dseg_data.shape
-        grid = tuple(np.arange(s) for s in shape)
-
-        # The inverse affine transform already converted physical (x, y, z) coordinates
-        # to voxel coordinates in the order matching the data array axes_order.
-        # So voxel_coords is already in the correct order for interpn!
-
-        # Use interpn to get labels at the centroid locations
-        label_at_points = interpn(
-            grid,
-            dseg_data,
-            voxel_coords,
-            method="nearest",
-            bounds_error=False,
-            fill_value=0,
-        )
-
-        # Convert to integer labels
-        label_at_points = label_at_points.astype(int)
-
-        # Create DataFrame with x, y, z columns
-        # centroids are in (x, y, z) order, so we use that order for output
-        df_data = {
-            "x": centroids[:, 0],  # x from centroids
-            "y": centroids[:, 1],  # y from centroids
-            "z": centroids[:, 2],  # z from centroids
-            "index": label_at_points,
-        }
-
-        # Add region names if requested
-        if include_names and self.labels_df is not None:
-            # Create a lookup from index to name
-            label_to_name = dict(
-                zip(
-                    self.labels_df[self.label_column],
-                    self.labels_df[self.name_column],
-                )
-            )
-            # Map labels to names, use 'Unknown' for labels not in lookup table
-            df_data["name"] = [
-                label_to_name.get(label, f"Unknown_Label_{label}")
-                for label in label_at_points
-            ]
-
-        df_centroids = pd.DataFrame(df_data)
-
-        # Create counts DataFrame - group by index and optionally name
-        if include_names and self.labels_df is not None:
-            df_counts = (
-                df_centroids.groupby(["index", "name"]).size().reset_index(name="count")
-            )
-        else:
-            df_counts = df_centroids.groupby(["index"]).size().reset_index(name="count")
-
-        return (df_centroids, df_counts)
+        return self.label_region_properties(centroids, include_names=include_names)
