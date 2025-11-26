@@ -5140,8 +5140,9 @@ class ZarrNii:
         Returns:
             Optional[Dict[str, numpy.ndarray]]: If output_path is None, returns a
                 dictionary mapping property names to numpy arrays. For coordinate
-                properties like 'centroid', the keys are 'x', 'y', 'z' containing
-                physical coordinates. Scalar properties have their name as the key.
+                properties like 'centroid', the keys are prefixed (e.g., 'centroid_x',
+                'centroid_y', 'centroid_z') containing physical coordinates.
+                Scalar properties have their name as the key.
                 If output_path is provided, writes to Parquet file and returns None.
 
         Notes:
@@ -5149,7 +5150,8 @@ class ZarrNii:
             - Objects with centroids in overlap regions are filtered to avoid duplicates.
             - Uses 26-connectivity (connectivity=3) for 3D connected component labeling.
             - Coordinate properties ('centroid', 'centroid_weighted') are transformed
-              to physical coordinates and split into 'x', 'y', 'z' columns.
+              to physical coordinates and split into prefixed columns (e.g.,
+              'centroid_x', 'centroid_y', 'centroid_z').
             - Scalar properties are included directly without transformation.
             - Available regionprops properties include: 'area', 'area_bbox', 'centroid',
               'eccentricity', 'equivalent_diameter_area', 'euler_number', 'extent',
@@ -5162,7 +5164,7 @@ class ZarrNii:
             ...     output_properties=['centroid', 'area'],
             ...     depth=5
             ... )
-            >>> print(f"Found {len(props['x'])} objects")
+            >>> print(f"Found {len(props['centroid_x'])} objects")
             >>> print(f"Areas: {props['area']}")
             >>>
             >>> # Extract multiple properties with filtering

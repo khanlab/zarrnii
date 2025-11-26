@@ -991,8 +991,9 @@ def compute_region_properties(
     Returns:
         Optional[Dict[str, numpy.ndarray]]: If output_path is None, returns a
             dictionary mapping property names to numpy arrays. For coordinate
-            properties like 'centroid', the keys are 'x', 'y', 'z' containing
-            physical coordinates. Scalar properties have their name as the key.
+            properties like 'centroid', the keys are prefixed (e.g., 'centroid_x',
+            'centroid_y', 'centroid_z') containing physical coordinates.
+            Scalar properties have their name as the key.
             If output_path is provided, writes to Parquet file and returns None.
 
     Notes:
@@ -1001,7 +1002,8 @@ def compute_region_properties(
         - The function uses scikit-image's label() with connectivity=3 (26-connectivity
           in 3D) to identify connected components.
         - Coordinate properties ('centroid', 'centroid_weighted') are transformed
-          to physical coordinates and split into 'x', 'y', 'z' columns.
+          to physical coordinates and split into prefixed columns (e.g.,
+          'centroid_x', 'centroid_y', 'centroid_z').
         - Scalar properties are included directly without transformation.
         - Empty chunks (no objects detected) contribute empty arrays to the result.
         - This function computes the result immediately (not lazy).
@@ -1025,7 +1027,7 @@ def compute_region_properties(
         >>>
         >>> # Extract centroid and area (default properties)
         >>> props = compute_region_properties(binary_seg, affine, depth=5)
-        >>> print(f"Found {len(props['x'])} objects")
+        >>> print(f"Found {len(props['centroid_x'])} objects")
         >>>
         >>> # Extract multiple properties for downstream analysis
         >>> props = compute_region_properties(
