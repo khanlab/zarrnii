@@ -1031,6 +1031,67 @@ class TestZarrNiiAtlas:
         assert "index" in df_props.columns
         assert "area" in df_props.columns
 
+    def test_label_region_properties_custom_coord_column_names(self, sample_atlas):
+        """Test label_region_properties with custom coord_column_names."""
+        atlas = sample_atlas
+
+        # Create region properties dict with custom column names
+        region_props = {
+            "pos_x": np.array([2.5, 7.5, 7.5]),
+            "pos_y": np.array([5.0, 2.5, 7.5]),
+            "pos_z": np.array([5.0, 2.5, 7.5]),
+            "area": np.array([100, 200, 150]),
+        }
+
+        # Label the region properties with custom coord_column_names
+        df_props, df_counts = atlas.label_region_properties(
+            region_props,
+            include_names=True,
+            coord_column_names=["pos_x", "pos_y", "pos_z"],
+        )
+
+        # Check DataFrame structure - should include custom column names
+        assert isinstance(df_props, pd.DataFrame)
+        assert isinstance(df_counts, pd.DataFrame)
+        assert len(df_props) == 3
+        assert "pos_x" in df_props.columns
+        assert "pos_y" in df_props.columns
+        assert "pos_z" in df_props.columns
+        assert "area" in df_props.columns
+        assert "index" in df_props.columns
+        assert "name" in df_props.columns
+
+        # Should NOT have default column names
+        assert "centroid_x" not in df_props.columns
+        assert "centroid_y" not in df_props.columns
+        assert "centroid_z" not in df_props.columns
+
+        # Verify coordinate values are preserved
+        np.testing.assert_array_equal(df_props["pos_x"].values, region_props["pos_x"])
+        np.testing.assert_array_equal(df_props["pos_y"].values, region_props["pos_y"])
+        np.testing.assert_array_equal(df_props["pos_z"].values, region_props["pos_z"])
+
+        # Check label assignments (same locations as test_label_centroids_basic)
+        assert df_props.iloc[0]["index"] == 1  # Left Region
+        assert df_props.iloc[1]["index"] == 2  # Right Top
+        assert df_props.iloc[2]["index"] == 3  # Right Bottom
+
+    def test_label_region_properties_missing_custom_coord_column(self, sample_atlas):
+        """Test error handling when custom coord_column_names are missing from dict."""
+        atlas = sample_atlas
+
+        # Dict missing 'pos_z'
+        region_props = {
+            "pos_x": np.array([2.5]),
+            "pos_y": np.array([5.0]),
+            "area": np.array([100]),
+        }
+
+        with pytest.raises(ValueError, match="pos_z"):
+            atlas.label_region_properties(
+                region_props, coord_column_names=["pos_x", "pos_y", "pos_z"]
+            )
+
 
 class TestZarrNiiAtlasFileIO:
     """Test suite for ZarrNiiAtlas file I/O operations."""

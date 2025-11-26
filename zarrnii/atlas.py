@@ -1220,6 +1220,7 @@ class ZarrNiiAtlas(ZarrNii):
         self,
         region_properties: Union[Dict[str, np.ndarray], np.ndarray],
         include_names: bool = True,
+        coord_column_names: Optional[List[str]] = None,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Map region properties to atlas labels using nearest neighbor interpolation.
 
@@ -1235,12 +1236,15 @@ class ZarrNiiAtlas(ZarrNii):
             region_properties: Either:
                 - Dict[str, np.ndarray]: Output from compute_region_properties()
                   with keys like 'centroid_x', 'centroid_y', 'centroid_z', 'area', etc.
-                  Must contain 'centroid_x', 'centroid_y', 'centroid_z' for labeling.
+                  Must contain coordinate columns specified by coord_column_names for labeling.
                 - np.ndarray: Nx3 array of centroid coordinates in physical space
                   (for backward compatibility with compute_centroids output).
                   Each row is [x, y, z] in physical/world coordinates (mm).
             include_names: If True, includes region names from the labels dataframe
                 in the output (default: True).
+            coord_column_names: List of column names for x, y, z coordinates respectively.
+                Defaults to ['centroid_x', 'centroid_y', 'centroid_z'].
+                Can be customized, e.g., ['pos_x', 'pos_y', 'pos_z'].
 
         Returns:
             tuple of two pandas DataFrames:
@@ -1272,25 +1276,33 @@ class ZarrNiiAtlas(ZarrNii):
             >>> centroids = binary_seg.compute_centroids()
             >>> df_props, df_counts = atlas.label_region_properties(centroids)
             >>>
+            >>> # Using custom coordinate column names
+            >>> df_props, df_counts = atlas.label_region_properties(
+            ...     props, coord_column_names=['pos_x', 'pos_y', 'pos_z']
+            ... )
+            >>>
             >>> # Filter to specific regions
             >>> hippocampus_objects = df_props[df_props['name'] == 'Hippocampus']
         """
+        # Set default coordinate column names
+        if coord_column_names is None:
+            coord_column_names = ["centroid_x", "centroid_y", "centroid_z"]
+
         # Determine input type and extract coordinates
         if isinstance(region_properties, dict):
             # Input is from compute_region_properties
             # Check for required centroid keys
-            required_keys = ["centroid_x", "centroid_y", "centroid_z"]
+            required_keys = coord_column_names
             missing_keys = [k for k in required_keys if k not in region_properties]
             if missing_keys:
                 raise ValueError(
                     f"region_properties dict must contain {required_keys}. "
                     f"Missing: {missing_keys}. "
-                    "Ensure 'centroid' is in output_properties when calling "
-                    "compute_region_properties()."
+                    "Ensure coordinate columns are present in the input dictionary."
                 )
 
             # Get number of points
-            n_points = len(region_properties["centroid_x"])
+            n_points = len(region_properties[coord_column_names[0]])
 
             # Handle empty input
             if n_points == 0:
@@ -1308,9 +1320,9 @@ class ZarrNiiAtlas(ZarrNii):
             # Extract centroid coordinates for labeling
             centroids = np.column_stack(
                 [
-                    region_properties["centroid_x"],
-                    region_properties["centroid_y"],
-                    region_properties["centroid_z"],
+                    region_properties[coord_column_names[0]],
+                    region_properties[coord_column_names[1]],
+                    region_properties[coord_column_names[2]],
                 ]
             )
 
@@ -1403,9 +1415,9 @@ class ZarrNiiAtlas(ZarrNii):
         if use_dict_output:
             # Include all properties from the input dict
             df_data = {
-                "centroid_x": region_properties["centroid_x"],
-                "centroid_y": region_properties["centroid_y"],
-                "centroid_z": region_properties["centroid_z"],
+                coord_column_names[0]: region_properties[coord_column_names[0]],
+                coord_column_names[1]: region_properties[coord_column_names[1]],
+                coord_column_names[2]: region_properties[coord_column_names[2]],
             }
             # Add extra properties (like area, eccentricity, etc.)
             df_data.update(extra_properties)
