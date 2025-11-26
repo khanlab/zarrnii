@@ -4979,6 +4979,7 @@ class ZarrNii:
         depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,
         boundary: str = "none",
         rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
+        min_pixels: Optional[int] = None,
     ) -> np.ndarray:
         """
         Compute centroids of binary segmentation objects in physical coordinates.
@@ -5012,6 +5013,9 @@ class ZarrNii:
                 - int: target chunk size for all dimensions
                 - tuple: target chunk size per dimension
                 - None: use existing chunks (default)
+            min_pixels: Minimum number of pixels required for a region to be included.
+                Regions with fewer pixels than this threshold are filtered out.
+                If None (default), no minimum pixel filter is applied.
 
         Returns:
             numpy.ndarray: Nx3 array of physical coordinates for N detected objects,
@@ -5037,6 +5041,10 @@ class ZarrNii:
             ...     rechunk=(64, 64, 64)
             ... )
             >>>
+            >>> # Filter out small objects
+            >>> centroids = binary.compute_centroids(depth=5, min_pixels=30)
+            >>> print(f"Found {len(centroids)} objects with at least 30 pixels")
+            >>>
             >>> # Save centroids to file
             >>> np.savetxt('centroids.txt', centroids, fmt='%.6f')
         """
@@ -5048,6 +5056,7 @@ class ZarrNii:
             depth=depth,
             boundary=boundary,
             rechunk=rechunk,
+            min_pixels=min_pixels,
         )
 
     def apply_scaled_processing(

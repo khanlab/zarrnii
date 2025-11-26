@@ -409,3 +409,105 @@ class TestComputeCentroidsCZYX:
         # Should raise ValueError for unsupported dimensionality
         with pytest.raises(ValueError, match="Image must be 1D, 2D, 3D, or 4D"):
             compute_centroids(dask_img, affine, depth=5)
+
+
+class TestComputeCentroidsMinPixels:
+    """Test min_pixels parameter for filtering small regions."""
+
+    def test_min_pixels_filters_small_objects(self):
+        """Test that min_pixels parameter filters out small objects."""
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+
+        # Small object: 2x2x2 = 8 pixels
+        img[10:12, 10:12, 10:12] = 1
+
+        # Large object: 5x5x5 = 125 pixels
+        img[30:35, 30:35, 30:35] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        # Without min_pixels, should find both objects
+        centroids_all = compute_centroids(dask_img, affine, depth=5)
+        assert centroids_all.shape == (2, 3)
+
+        # With min_pixels=10, should filter out the small object (8 pixels)
+        centroids_filtered = compute_centroids(dask_img, affine, depth=5, min_pixels=10)
+        assert centroids_filtered.shape == (1, 3)
+
+        # The remaining centroid should be from the large object (centered at ~32)
+        assert_array_almost_equal(centroids_filtered[0], [32.0, 32.0, 32.0], decimal=0)
+
+    def test_min_pixels_none_no_filtering(self):
+        """Test that min_pixels=None does not filter any objects."""
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+
+        # Add single-voxel objects
+        img[10, 10, 10] = 1
+        img[20, 20, 20] = 1
+        img[30, 30, 30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        # min_pixels=None (default) should not filter anything
+        centroids = compute_centroids(dask_img, affine, depth=3, min_pixels=None)
+        assert centroids.shape == (3, 3)
+
+    def test_min_pixels_filters_all_small(self):
+        """Test that min_pixels can filter out all objects if all are too small."""
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+
+        # Three small 2x2x2 objects (8 pixels each)
+        img[10:12, 10:12, 10:12] = 1
+        img[20:22, 20:22, 20:22] = 1
+        img[30:32, 30:32, 30:32] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        # With min_pixels=100, all objects should be filtered out
+        centroids = compute_centroids(dask_img, affine, depth=5, min_pixels=100)
+        assert centroids.shape == (0, 3)
+
+    def test_min_pixels_via_zarrnii_method(self):
+        """Test min_pixels parameter through ZarrNii method."""
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+
+        # Small object: 2x2x2 = 8 pixels
+        img[10:12, 10:12, 10:12] = 1
+
+        # Large object: 5x5x5 = 125 pixels
+        img[30:35, 30:35, 30:35] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+
+        znii = ZarrNii.from_darr(
+            dask_img, spacing=(1.0, 1.0, 1.0), origin=(0.0, 0.0, 0.0), axes_order="ZYX"
+        )
+
+        # Without min_pixels, should find both objects
+        centroids_all = znii.compute_centroids(depth=5)
+        assert centroids_all.shape == (2, 3)
+
+        # With min_pixels=10, should filter out the small object
+        centroids_filtered = znii.compute_centroids(depth=5, min_pixels=10)
+        assert centroids_filtered.shape == (1, 3)
+
+    def test_min_pixels_boundary_value(self):
+        """Test min_pixels at exact boundary (object area == min_pixels)."""
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+
+        # Object with exactly 27 pixels (3x3x3)
+        img[20:23, 20:23, 20:23] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        # min_pixels=27 should NOT filter out the object (area >= min_pixels)
+        centroids_equal = compute_centroids(dask_img, affine, depth=5, min_pixels=27)
+        assert centroids_equal.shape == (1, 3)
+
+        # min_pixels=28 should filter out the object (area < min_pixels)
+        centroids_above = compute_centroids(dask_img, affine, depth=5, min_pixels=28)
+        assert centroids_above.shape == (0, 3)
