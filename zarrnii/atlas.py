@@ -863,7 +863,8 @@ class ZarrNiiAtlas(ZarrNii):
             - Non-numeric columns (except label_column) are excluded from aggregation
             - The label_column values are preserved as-is (used for grouping)
             - If a column specified in aggregations dict doesn't exist in the table,
-              it is silently ignored
+              it is silently ignored. This allows reusing the same aggregations dict
+              across different tables that may have different subsets of columns.
         """
         # Supported aggregation functions (same as aggregate_image_by_regions)
         supported_funcs = {"mean", "sum", "std", "median", "min", "max"}
