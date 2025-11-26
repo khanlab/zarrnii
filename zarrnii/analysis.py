@@ -874,9 +874,9 @@ COORDINATE_PROPERTIES = frozenset(
     [
         "centroid",
         "centroid_weighted",
-        "bbox",            # bounding box coordinates (min_row, min_col, min_plane, max_row, ...)
+        "bbox",  # bounding box coordinates (min_row, min_col, min_plane, max_row, ...)
         "centroid_local",  # centroid in local (bbox-relative) coordinates
-        "coords",          # all voxel coordinates for the region
+        "coords",  # all voxel coordinates for the region
     ]
 )
 
