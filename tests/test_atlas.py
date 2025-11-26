@@ -1092,6 +1092,34 @@ class TestZarrNiiAtlas:
                 region_props, coord_column_names=["pos_x", "pos_y", "pos_z"]
             )
 
+    def test_label_region_properties_invalid_coord_column_names_length(
+        self, sample_atlas
+    ):
+        """Test error handling when coord_column_names has wrong length."""
+        atlas = sample_atlas
+
+        region_props = {
+            "pos_x": np.array([2.5]),
+            "pos_y": np.array([5.0]),
+            "area": np.array([100]),
+        }
+
+        # Test with too few elements
+        with pytest.raises(ValueError, match="exactly 3 column names"):
+            atlas.label_region_properties(
+                region_props, coord_column_names=["pos_x", "pos_y"]
+            )
+
+        # Test with too many elements
+        with pytest.raises(ValueError, match="exactly 3 column names"):
+            atlas.label_region_properties(
+                region_props, coord_column_names=["pos_x", "pos_y", "pos_z", "pos_w"]
+            )
+
+        # Test with empty list
+        with pytest.raises(ValueError, match="exactly 3 column names"):
+            atlas.label_region_properties(region_props, coord_column_names=[])
+
 
 class TestZarrNiiAtlasFileIO:
     """Test suite for ZarrNiiAtlas file I/O operations."""

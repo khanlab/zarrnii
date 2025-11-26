@@ -1288,6 +1288,13 @@ class ZarrNiiAtlas(ZarrNii):
         if coord_column_names is None:
             coord_column_names = ["centroid_x", "centroid_y", "centroid_z"]
 
+        # Validate coord_column_names length
+        if len(coord_column_names) != 3:
+            raise ValueError(
+                f"coord_column_names must contain exactly 3 column names for x, y, z. "
+                f"Got {len(coord_column_names)} names: {coord_column_names}"
+            )
+
         # Determine input type and extract coordinates
         if isinstance(region_properties, dict):
             # Input is from compute_region_properties
