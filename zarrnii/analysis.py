@@ -929,7 +929,7 @@ def _extract_region_property(region: Any, prop_name: str) -> Any:
 def compute_region_properties(
     image: da.Array,
     affine: np.ndarray,
-    output_properties: Optional[List[str]] = None,
+    output_properties: Optional[Union[List[str], Dict[str, str]]] = None,
     depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,
     boundary: str = "none",
     rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
@@ -956,13 +956,19 @@ def compute_region_properties(
             images (c>1) are not supported - process each channel separately.
         affine: 4x4 affine transformation matrix to convert voxel coordinates
             to physical coordinates. Can be a numpy array or AffineTransform object.
-        output_properties: List of regionprops property names to extract and include
-            in the output. Coordinate properties ('centroid', 'centroid_weighted')
-            are automatically transformed to physical coordinates and split into
-            separate x, y, z columns. Scalar properties (e.g., 'area',
-            'equivalent_diameter_area', 'eccentricity') are included as-is.
+        output_properties: Properties to extract. Can be either:
+            - List of regionprops property names to extract. Property names are
+              used as output keys.
+            - Dict mapping regionprops property names to custom output names.
+              Example: {'area': 'nvoxels', 'equivalent_diameter_area': 'equivdiam'}
+            Coordinate properties ('centroid', 'centroid_weighted') are automatically
+            transformed to physical coordinates and split into separate x, y, z
+            columns. When using a dict, coordinate property output names are suffixed
+            with '_x', '_y', '_z' (e.g., {'centroid': 'loc'} gives 'loc_x', 'loc_y',
+            'loc_z').
             Default is ['centroid'] for backward compatibility.
-            Example: ['centroid', 'area', 'equivalent_diameter_area', 'eccentricity']
+            Example list: ['centroid', 'area', 'equivalent_diameter_area']
+            Example dict: {'area': 'nvoxels', 'centroid': 'position'}
         depth: Number of elements of overlap between chunks. Can be:
             - int: same depth for all dimensions
             - tuple: different depth per dimension
@@ -990,10 +996,11 @@ def compute_region_properties(
 
     Returns:
         Optional[Dict[str, numpy.ndarray]]: If output_path is None, returns a
-            dictionary mapping property names to numpy arrays. For coordinate
-            properties like 'centroid', the keys are prefixed (e.g., 'centroid_x',
-            'centroid_y', 'centroid_z') containing physical coordinates.
-            Scalar properties have their name as the key.
+            dictionary mapping property names (or custom names if dict was used)
+            to numpy arrays. For coordinate properties like 'centroid', the keys
+            are suffixed with _x, _y, _z (e.g., 'centroid_x' or 'custom_name_x')
+            containing physical coordinates.
+            Scalar properties have their name (or custom name) as the key.
             If output_path is provided, writes to Parquet file and returns None.
 
     Notes:
@@ -1002,8 +1009,9 @@ def compute_region_properties(
         - The function uses scikit-image's label() with connectivity=3 (26-connectivity
           in 3D) to identify connected components.
         - Coordinate properties ('centroid', 'centroid_weighted') are transformed
-          to physical coordinates and split into prefixed columns (e.g.,
-          'centroid_x', 'centroid_y', 'centroid_z').
+          to physical coordinates and split into suffixed columns (e.g.,
+          'centroid_x', 'centroid_y', 'centroid_z' or when renamed via dict,
+          'custom_name_x', 'custom_name_y', 'custom_name_z').
         - Scalar properties are included directly without transformation.
         - Empty chunks (no objects detected) contribute empty arrays to the result.
         - This function computes the result immediately (not lazy).
@@ -1043,6 +1051,13 @@ def compute_region_properties(
         ...     region_filters={'area': ('>=', 30)}
         ... )
         >>>
+        >>> # Use dict to rename output columns
+        >>> props = compute_region_properties(
+        ...     binary_seg, affine, depth=5,
+        ...     output_properties={'area': 'nvoxels', 'equivalent_diameter_area': 'equivdiam'}
+        ... )
+        >>> print(f"Number of voxels: {props['nvoxels']}")
+        >>>
         >>> # Write to Parquet for large datasets
         >>> compute_region_properties(
         ...     binary_seg, affine, depth=5,
@@ -1057,10 +1072,29 @@ def compute_region_properties(
     if output_properties is None:
         output_properties = list(DEFAULT_OUTPUT_PROPERTIES)
 
-    # Validate output_properties
-    if not isinstance(output_properties, list) or len(output_properties) == 0:
+    # Handle both list and dict input for output_properties
+    # Extract property names (keys) and optional rename mapping (values)
+    if isinstance(output_properties, dict):
+        if len(output_properties) == 0:
+            raise ValueError(
+                "output_properties must be a non-empty list or dict. "
+                f"Got: {output_properties}"
+            )
+        # Dict: keys are regionprops names, values are output names
+        property_names = list(output_properties.keys())
+        rename_mapping = output_properties
+    elif isinstance(output_properties, list):
+        if len(output_properties) == 0:
+            raise ValueError(
+                "output_properties must be a non-empty list or dict. "
+                f"Got: {output_properties}"
+            )
+        property_names = output_properties
+        # No renaming when list is used - use property names directly
+        rename_mapping = {name: name for name in property_names}
+    else:
         raise ValueError(
-            "output_properties must be a non-empty list of property names. "
+            "output_properties must be a non-empty list or dict. "
             f"Got: {output_properties}"
         )
 
@@ -1178,7 +1212,7 @@ def compute_region_properties(
                 # Extract all requested properties for this region
                 region_data = {}
 
-                for prop_name in output_properties:
+                for prop_name in property_names:
                     prop_value = _extract_region_property(region, prop_name)
 
                     if prop_name in COORDINATE_PROPERTIES:
@@ -1239,7 +1273,8 @@ def compute_region_properties(
             # Transform coordinate properties to physical coordinates
             processed_data = {}
 
-            for prop_name in output_properties:
+            for prop_name in property_names:
+                output_name = rename_mapping[prop_name]
                 if prop_name in COORDINATE_PROPERTIES:
                     # Collect voxel coordinates
                     voxel_coords = np.array(
@@ -1250,14 +1285,14 @@ def compute_region_properties(
                     physical_coords = _transform_coordinate_to_physical(
                         voxel_coords, affine_matrix
                     )
-                    # Split into prefixed x, y, z columns
-                    processed_data[f"{prop_name}_x"] = physical_coords[:, 0]
-                    processed_data[f"{prop_name}_y"] = physical_coords[:, 1]
-                    processed_data[f"{prop_name}_z"] = physical_coords[:, 2]
+                    # Split into suffixed x, y, z columns with renamed output
+                    processed_data[f"{output_name}_x"] = physical_coords[:, 0]
+                    processed_data[f"{output_name}_y"] = physical_coords[:, 1]
+                    processed_data[f"{output_name}_z"] = physical_coords[:, 2]
                 else:
                     # Non-coordinate properties
                     values = [region_data[prop_name] for region_data in block_data]
-                    processed_data[prop_name] = np.array(values, dtype=np.float64)
+                    processed_data[output_name] = np.array(values, dtype=np.float64)
 
             return processed_data
 
@@ -1271,15 +1306,16 @@ def compute_region_properties(
         # Compute all blocks in parallel
         computed_results = da.compute(*delayed_results)
 
-        # Build schema dynamically based on output_properties
+        # Build schema dynamically based on property_names and rename_mapping
         schema_fields = []
-        for prop_name in output_properties:
+        for prop_name in property_names:
+            output_name = rename_mapping[prop_name]
             if prop_name in COORDINATE_PROPERTIES:
-                schema_fields.append(pa.field(f"{prop_name}_x", pa.float64()))
-                schema_fields.append(pa.field(f"{prop_name}_y", pa.float64()))
-                schema_fields.append(pa.field(f"{prop_name}_z", pa.float64()))
+                schema_fields.append(pa.field(f"{output_name}_x", pa.float64()))
+                schema_fields.append(pa.field(f"{output_name}_y", pa.float64()))
+                schema_fields.append(pa.field(f"{output_name}_z", pa.float64()))
             else:
-                schema_fields.append(pa.field(prop_name, pa.float64()))
+                schema_fields.append(pa.field(output_name, pa.float64()))
 
         schema = pa.schema(schema_fields)
 
@@ -1335,19 +1371,21 @@ def compute_region_properties(
         if len(all_region_data) == 0:
             # Return empty dict with correct structure
             result = {}
-            for prop_name in output_properties:
+            for prop_name in property_names:
+                output_name = rename_mapping[prop_name]
                 if prop_name in COORDINATE_PROPERTIES:
-                    result[f"{prop_name}_x"] = np.empty((0,), dtype=np.float64)
-                    result[f"{prop_name}_y"] = np.empty((0,), dtype=np.float64)
-                    result[f"{prop_name}_z"] = np.empty((0,), dtype=np.float64)
+                    result[f"{output_name}_x"] = np.empty((0,), dtype=np.float64)
+                    result[f"{output_name}_y"] = np.empty((0,), dtype=np.float64)
+                    result[f"{output_name}_z"] = np.empty((0,), dtype=np.float64)
                 else:
-                    result[prop_name] = np.empty((0,), dtype=np.float64)
+                    result[output_name] = np.empty((0,), dtype=np.float64)
             return result
 
         # Transform coordinate properties and build result dict
         result = {}
 
-        for prop_name in output_properties:
+        for prop_name in property_names:
+            output_name = rename_mapping[prop_name]
             if prop_name in COORDINATE_PROPERTIES:
                 # Collect voxel coordinates
                 voxel_coords = np.array(
@@ -1358,14 +1396,14 @@ def compute_region_properties(
                 physical_coords = _transform_coordinate_to_physical(
                     voxel_coords, affine_matrix
                 )
-                # Split into prefixed x, y, z columns
-                result[f"{prop_name}_x"] = physical_coords[:, 0]
-                result[f"{prop_name}_y"] = physical_coords[:, 1]
-                result[f"{prop_name}_z"] = physical_coords[:, 2]
+                # Split into suffixed x, y, z columns with renamed output
+                result[f"{output_name}_x"] = physical_coords[:, 0]
+                result[f"{output_name}_y"] = physical_coords[:, 1]
+                result[f"{output_name}_z"] = physical_coords[:, 2]
             else:
                 # Non-coordinate properties
                 values = [region_data[prop_name] for region_data in all_region_data]
-                result[prop_name] = np.array(values, dtype=np.float64)
+                result[output_name] = np.array(values, dtype=np.float64)
 
         return result
 

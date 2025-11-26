@@ -1042,6 +1042,204 @@ class TestComputeRegionProperties:
         with pytest.raises(ValueError, match="output_properties must be a non-empty"):
             compute_region_properties(dask_img, affine, depth=5, output_properties=[])
 
+    def test_compute_region_properties_dict_rename_scalar(self):
+        """Test using dict to rename scalar properties."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1  # 10x10x10 cube = 1000 voxels
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        props = compute_region_properties(
+            dask_img,
+            affine,
+            depth=5,
+            output_properties={
+                "area": "nvoxels",
+                "equivalent_diameter_area": "equivdiam",
+            },
+        )
+
+        # Should have renamed keys
+        assert "nvoxels" in props
+        assert "equivdiam" in props
+        # Should NOT have original names
+        assert "area" not in props
+        assert "equivalent_diameter_area" not in props
+
+        # Verify values
+        assert len(props["nvoxels"]) == 1
+        assert props["nvoxels"][0] == 1000
+        assert props["equivdiam"][0] > 0
+
+    def test_compute_region_properties_dict_rename_coordinate(self):
+        """Test using dict to rename coordinate properties."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        props = compute_region_properties(
+            dask_img,
+            affine,
+            depth=5,
+            output_properties={"centroid": "position"},
+        )
+
+        # Should have renamed coordinate keys with suffixes
+        assert "position_x" in props
+        assert "position_y" in props
+        assert "position_z" in props
+        # Should NOT have original names
+        assert "centroid_x" not in props
+        assert "centroid_y" not in props
+        assert "centroid_z" not in props
+
+        # Verify values - centroid should be at approximately (24.5, 24.5, 24.5)
+        assert len(props["position_x"]) == 1
+        assert_array_almost_equal(
+            [props["position_x"][0], props["position_y"][0], props["position_z"][0]],
+            [24.5, 24.5, 24.5],
+            decimal=1,
+        )
+
+    def test_compute_region_properties_dict_mixed(self):
+        """Test using dict with both scalar and coordinate properties."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        props = compute_region_properties(
+            dask_img,
+            affine,
+            depth=5,
+            output_properties={
+                "centroid": "loc",
+                "area": "nvoxels",
+                "equivalent_diameter_area": "equivdiam",
+            },
+        )
+
+        # Check renamed keys exist
+        assert "loc_x" in props
+        assert "loc_y" in props
+        assert "loc_z" in props
+        assert "nvoxels" in props
+        assert "equivdiam" in props
+
+        # Check original names don't exist
+        assert "centroid_x" not in props
+        assert "area" not in props
+
+        # Verify values
+        assert props["nvoxels"][0] == 1000
+
+    def test_compute_region_properties_dict_empty_raises_error(self):
+        """Test that empty dict raises error."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        with pytest.raises(ValueError, match="output_properties must be a non-empty"):
+            compute_region_properties(dask_img, affine, depth=5, output_properties={})
+
+    def test_compute_region_properties_dict_with_filtering(self):
+        """Test dict output_properties with filtering."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+
+        # Small object (8 voxels)
+        img[10:12, 10:12, 10:12] = 1
+
+        # Large object (1000 voxels)
+        img[40:50, 40:50, 40:50] = 1
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+        affine = np.eye(4)
+
+        # Filter to only include large objects with renamed output
+        props = compute_region_properties(
+            dask_img,
+            affine,
+            depth=5,
+            output_properties={"centroid": "loc", "area": "nvoxels"},
+            region_filters={"area": (">=", 100)},
+        )
+
+        # Should only find the large object
+        assert len(props["loc_x"]) == 1
+        assert props["nvoxels"][0] == 1000
+
+    def test_compute_region_properties_dict_parquet_output(self, tmp_path):
+        """Test dict output_properties with Parquet output."""
+        import pandas as pd
+
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        output_file = tmp_path / "props_renamed.parquet"
+        result = compute_region_properties(
+            dask_img,
+            affine,
+            depth=5,
+            output_properties={"centroid": "loc", "area": "nvoxels"},
+            output_path=str(output_file),
+        )
+
+        # Should return None when writing to file
+        assert result is None
+        assert output_file.exists()
+
+        # Read back and verify renamed columns
+        df = pd.read_parquet(output_file)
+        assert len(df) == 1
+        assert "loc_x" in df.columns
+        assert "loc_y" in df.columns
+        assert "loc_z" in df.columns
+        assert "nvoxels" in df.columns
+        # Original names should not be present
+        assert "centroid_x" not in df.columns
+        assert "area" not in df.columns
+        assert df["nvoxels"].iloc[0] == 1000
+
+    def test_compute_region_properties_dict_empty_image(self):
+        """Test dict with empty image returns empty arrays with correct keys."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        props = compute_region_properties(
+            dask_img,
+            affine,
+            depth=5,
+            output_properties={"centroid": "loc", "area": "nvoxels"},
+        )
+
+        # Should return empty arrays with correct renamed keys
+        assert len(props["loc_x"]) == 0
+        assert len(props["loc_y"]) == 0
+        assert len(props["loc_z"]) == 0
+        assert len(props["nvoxels"]) == 0
+
 
 class TestZarrNiiComputeRegionProperties:
     """Test the ZarrNii.compute_region_properties method."""
@@ -1090,3 +1288,31 @@ class TestZarrNiiComputeRegionProperties:
         assert len(props["centroid_x"]) == 1
         assert props["area"][0] == 1000
         assert props["equivalent_diameter_area"][0] > 0
+
+    def test_compute_region_properties_method_with_dict(self):
+        """Test dict output_properties through ZarrNii method."""
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+
+        znii = ZarrNii.from_darr(
+            dask_img, spacing=(1.0, 1.0, 1.0), origin=(0.0, 0.0, 0.0), axes_order="ZYX"
+        )
+
+        props = znii.compute_region_properties(
+            output_properties={"centroid": "loc", "area": "nvoxels"},
+            depth=5,
+        )
+
+        # Check renamed keys
+        assert "loc_x" in props
+        assert "loc_y" in props
+        assert "loc_z" in props
+        assert "nvoxels" in props
+        # Check original names don't exist
+        assert "centroid_x" not in props
+        assert "area" not in props
+        # Check values
+        assert len(props["loc_x"]) == 1
+        assert props["nvoxels"][0] == 1000

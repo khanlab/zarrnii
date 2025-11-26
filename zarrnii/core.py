@@ -5066,7 +5066,7 @@ class ZarrNii:
 
     def compute_region_properties(
         self,
-        output_properties: Optional[List[str]] = None,
+        output_properties: Optional[Union[List[str], Dict[str, str]]] = None,
         depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,
         boundary: str = "none",
         rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
@@ -5089,13 +5089,19 @@ class ZarrNii:
         to a Parquet file on disk instead of returning them in memory.
 
         Args:
-            output_properties: List of regionprops property names to extract and include
-                in the output. Coordinate properties ('centroid', 'centroid_weighted')
-                are automatically transformed to physical coordinates and split into
-                separate x, y, z columns. Scalar properties (e.g., 'area',
-                'equivalent_diameter_area', 'eccentricity') are included as-is.
+            output_properties: Properties to extract. Can be either:
+                - List of regionprops property names to extract. Property names are
+                  used as output keys.
+                - Dict mapping regionprops property names to custom output names.
+                  Example: {'area': 'nvoxels', 'equivalent_diameter_area': 'equivdiam'}
+                Coordinate properties ('centroid', 'centroid_weighted') are automatically
+                transformed to physical coordinates and split into separate x, y, z
+                columns. When using a dict, coordinate property output names are suffixed
+                with '_x', '_y', '_z' (e.g., {'centroid': 'loc'} gives 'loc_x', 'loc_y',
+                'loc_z').
                 Default is ['centroid'].
-                Example: ['centroid', 'area', 'equivalent_diameter_area', 'eccentricity']
+                Example list: ['centroid', 'area', 'equivalent_diameter_area']
+                Example dict: {'area': 'nvoxels', 'centroid': 'position'}
             depth: Number of elements of overlap between chunks. Can be:
                 - int: same depth for all dimensions (default: 10)
                 - tuple: different depth per dimension
@@ -5122,10 +5128,11 @@ class ZarrNii:
 
         Returns:
             Optional[Dict[str, numpy.ndarray]]: If output_path is None, returns a
-                dictionary mapping property names to numpy arrays. For coordinate
-                properties like 'centroid', the keys are prefixed (e.g., 'centroid_x',
-                'centroid_y', 'centroid_z') containing physical coordinates.
-                Scalar properties have their name as the key.
+                dictionary mapping property names (or custom names if dict was used)
+                to numpy arrays. For coordinate properties like 'centroid', the keys
+                are suffixed with _x, _y, _z (e.g., 'centroid_x' or 'custom_name_x')
+                containing physical coordinates.
+                Scalar properties have their name (or custom name) as the key.
                 If output_path is provided, writes to Parquet file and returns None.
 
         Notes:
@@ -5133,8 +5140,9 @@ class ZarrNii:
             - Objects with centroids in overlap regions are filtered to avoid duplicates.
             - Uses 26-connectivity (connectivity=3) for 3D connected component labeling.
             - Coordinate properties ('centroid', 'centroid_weighted') are transformed
-              to physical coordinates and split into prefixed columns (e.g.,
-              'centroid_x', 'centroid_y', 'centroid_z').
+              to physical coordinates and split into suffixed columns (e.g.,
+              'centroid_x', 'centroid_y', 'centroid_z' or when renamed via dict,
+              'custom_name_x', 'custom_name_y', 'custom_name_z').
             - Scalar properties are included directly without transformation.
             - Available regionprops properties include: 'area', 'area_bbox', 'centroid',
               'eccentricity', 'equivalent_diameter_area', 'euler_number', 'extent',
@@ -5156,6 +5164,14 @@ class ZarrNii:
             ...     depth=5,
             ...     region_filters={'area': ('>=', 30)}
             ... )
+            >>>
+            >>> # Use dict to rename output columns
+            >>> props = binary.compute_region_properties(
+            ...     output_properties={'area': 'nvoxels', 'centroid': 'position'},
+            ...     depth=5
+            ... )
+            >>> print(f"Number of voxels: {props['nvoxels']}")
+            >>> print(f"Position X: {props['position_x']}")
             >>>
             >>> # Write to Parquet for large datasets
             >>> binary.compute_region_properties(
