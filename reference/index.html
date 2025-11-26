@@ -13043,7 +13043,7 @@ Tuple of (mip_list, slab_info_list) where:
 
 
 <h3 id="zarrnii.ZarrNii.compute_centroids" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">compute_centroids</span><span class="p">(</span><span class="n">depth</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="s1">&#39;none&#39;</span><span class="p">,</span> <span class="n">rechunk</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">compute_centroids</span><span class="p">(</span><span class="n">depth</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="s1">&#39;none&#39;</span><span class="p">,</span> <span class="n">rechunk</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">region_filters</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h3>
 
@@ -13126,6 +13126,23 @@ physical coordinates. If None (default), centroids are returned as numpy
 array.</p>
           </div>
         </li>
+        <li class="doc-section-item field-body">
+            <b><code>region_filters</code></b>
+              (<code><span title="typing.Optional">Optional</span>[<span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Tuple">Tuple</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]]]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Optional dictionary specifying filters to apply to detected
+regions based on scikit-image regionprops properties. Each key is a
+property name (e.g., 'area', 'perimeter', 'eccentricity'), and the value
+is a tuple of (operator, threshold) where operator is one of:
+'&gt;', '&gt;=', '&lt;', '&lt;=', '==', '!='.
+Regions that don't satisfy ALL filters are excluded.
+Example: {'area': ('&gt;=', 30), 'eccentricity': ('&lt;', 0.9)}
+If None (default), no filtering is applied.</p>
+          </div>
+        </li>
     </ul>
 
 
@@ -13154,6 +13171,11 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 <li>The result is computed immediately (not lazy).</li>
 <li>When using output_path, centroids are written in batches to avoid
   memory overflow, making it suitable for datasets with millions of objects.</li>
+<li>Available regionprops properties include: 'area', 'bbox_area', 'centroid',
+  'eccentricity', 'equivalent_diameter', 'euler_number', 'extent',
+  'feret_diameter_max', 'filled_area', 'major_axis_length',
+  'minor_axis_length', 'moments', 'perimeter', 'solidity', and more.
+  See scikit-image regionprops documentation for full list.</li>
 </ul>
 </details>
 
@@ -13167,6 +13189,18 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">centroids</span> <span class="o">=</span> <span class="n">binary</span><span class="o">.</span><span class="n">compute_centroids</span><span class="p">(</span>
 <span class="gp">... </span>    <span class="n">depth</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
 <span class="gp">... </span>    <span class="n">rechunk</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Filter by minimum area (voxels)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">centroids</span> <span class="o">=</span> <span class="n">binary</span><span class="o">.</span><span class="n">compute_centroids</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">depth</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">region_filters</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;area&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;&gt;=&#39;</span><span class="p">,</span> <span class="mi">30</span><span class="p">)}</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Multiple filters: minimum area AND maximum eccentricity</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">centroids</span> <span class="o">=</span> <span class="n">binary</span><span class="o">.</span><span class="n">compute_centroids</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">depth</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">region_filters</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;area&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;&gt;=&#39;</span><span class="p">,</span> <span class="mi">30</span><span class="p">),</span> <span class="s1">&#39;eccentricity&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;&lt;&#39;</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">)}</span>
 <span class="gp">... </span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt;</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># For large datasets, write to Parquet file</span>
@@ -13273,12 +13307,40 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 <span class="normal">5174</span>
 <span class="normal">5175</span>
 <span class="normal">5176</span>
-<span class="normal">5177</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_centroids</span><span class="p">(</span>
+<span class="normal">5177</span>
+<span class="normal">5178</span>
+<span class="normal">5179</span>
+<span class="normal">5180</span>
+<span class="normal">5181</span>
+<span class="normal">5182</span>
+<span class="normal">5183</span>
+<span class="normal">5184</span>
+<span class="normal">5185</span>
+<span class="normal">5186</span>
+<span class="normal">5187</span>
+<span class="normal">5188</span>
+<span class="normal">5189</span>
+<span class="normal">5190</span>
+<span class="normal">5191</span>
+<span class="normal">5192</span>
+<span class="normal">5193</span>
+<span class="normal">5194</span>
+<span class="normal">5195</span>
+<span class="normal">5196</span>
+<span class="normal">5197</span>
+<span class="normal">5198</span>
+<span class="normal">5199</span>
+<span class="normal">5200</span>
+<span class="normal">5201</span>
+<span class="normal">5202</span>
+<span class="normal">5203</span>
+<span class="normal">5204</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_centroids</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">depth</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
     <span class="n">boundary</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;none&quot;</span><span class="p">,</span>
     <span class="n">rechunk</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">output_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">region_filters</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Compute centroids of binary segmentation objects in physical coordinates.</span>
@@ -13322,6 +13384,14 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 <span class="sd">            memory issues. The Parquet file will contain columns &#39;x&#39;, &#39;y&#39;, &#39;z&#39; with</span>
 <span class="sd">            physical coordinates. If None (default), centroids are returned as numpy</span>
 <span class="sd">            array.</span>
+<span class="sd">        region_filters: Optional dictionary specifying filters to apply to detected</span>
+<span class="sd">            regions based on scikit-image regionprops properties. Each key is a</span>
+<span class="sd">            property name (e.g., &#39;area&#39;, &#39;perimeter&#39;, &#39;eccentricity&#39;), and the value</span>
+<span class="sd">            is a tuple of (operator, threshold) where operator is one of:</span>
+<span class="sd">            &#39;&gt;&#39;, &#39;&gt;=&#39;, &#39;&lt;&#39;, &#39;&lt;=&#39;, &#39;==&#39;, &#39;!=&#39;.</span>
+<span class="sd">            Regions that don&#39;t satisfy ALL filters are excluded.</span>
+<span class="sd">            Example: {&#39;area&#39;: (&#39;&gt;=&#39;, 30), &#39;eccentricity&#39;: (&#39;&lt;&#39;, 0.9)}</span>
+<span class="sd">            If None (default), no filtering is applied.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Optional[numpy.ndarray]: If output_path is None, returns Nx3 array of</span>
@@ -13337,6 +13407,11 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 <span class="sd">        - The result is computed immediately (not lazy).</span>
 <span class="sd">        - When using output_path, centroids are written in batches to avoid</span>
 <span class="sd">          memory overflow, making it suitable for datasets with millions of objects.</span>
+<span class="sd">        - Available regionprops properties include: &#39;area&#39;, &#39;bbox_area&#39;, &#39;centroid&#39;,</span>
+<span class="sd">          &#39;eccentricity&#39;, &#39;equivalent_diameter&#39;, &#39;euler_number&#39;, &#39;extent&#39;,</span>
+<span class="sd">          &#39;feret_diameter_max&#39;, &#39;filled_area&#39;, &#39;major_axis_length&#39;,</span>
+<span class="sd">          &#39;minor_axis_length&#39;, &#39;moments&#39;, &#39;perimeter&#39;, &#39;solidity&#39;, and more.</span>
+<span class="sd">          See scikit-image regionprops documentation for full list.</span>
 
 <span class="sd">    Examples:</span>
 <span class="sd">        &gt;&gt;&gt; # Apply threshold segmentation and compute centroids</span>
@@ -13348,6 +13423,18 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 <span class="sd">        &gt;&gt;&gt; centroids = binary.compute_centroids(</span>
 <span class="sd">        ...     depth=15,</span>
 <span class="sd">        ...     rechunk=(64, 64, 64)</span>
+<span class="sd">        ... )</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; # Filter by minimum area (voxels)</span>
+<span class="sd">        &gt;&gt;&gt; centroids = binary.compute_centroids(</span>
+<span class="sd">        ...     depth=5,</span>
+<span class="sd">        ...     region_filters={&#39;area&#39;: (&#39;&gt;=&#39;, 30)}</span>
+<span class="sd">        ... )</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; # Multiple filters: minimum area AND maximum eccentricity</span>
+<span class="sd">        &gt;&gt;&gt; centroids = binary.compute_centroids(</span>
+<span class="sd">        ...     depth=5,</span>
+<span class="sd">        ...     region_filters={&#39;area&#39;: (&#39;&gt;=&#39;, 30), &#39;eccentricity&#39;: (&#39;&lt;&#39;, 0.9)}</span>
 <span class="sd">        ... )</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; # For large datasets, write to Parquet file</span>
@@ -13366,6 +13453,7 @@ If output_path is provided, writes to Parquet file and returns None.</p>
         <span class="n">boundary</span><span class="o">=</span><span class="n">boundary</span><span class="p">,</span>
         <span class="n">rechunk</span><span class="o">=</span><span class="n">rechunk</span><span class="p">,</span>
         <span class="n">output_path</span><span class="o">=</span><span class="n">output_path</span><span class="p">,</span>
+        <span class="n">region_filters</span><span class="o">=</span><span class="n">region_filters</span><span class="p">,</span>
     <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -13455,34 +13543,7 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5179</span>
-<span class="normal">5180</span>
-<span class="normal">5181</span>
-<span class="normal">5182</span>
-<span class="normal">5183</span>
-<span class="normal">5184</span>
-<span class="normal">5185</span>
-<span class="normal">5186</span>
-<span class="normal">5187</span>
-<span class="normal">5188</span>
-<span class="normal">5189</span>
-<span class="normal">5190</span>
-<span class="normal">5191</span>
-<span class="normal">5192</span>
-<span class="normal">5193</span>
-<span class="normal">5194</span>
-<span class="normal">5195</span>
-<span class="normal">5196</span>
-<span class="normal">5197</span>
-<span class="normal">5198</span>
-<span class="normal">5199</span>
-<span class="normal">5200</span>
-<span class="normal">5201</span>
-<span class="normal">5202</span>
-<span class="normal">5203</span>
-<span class="normal">5204</span>
-<span class="normal">5205</span>
-<span class="normal">5206</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5206</span>
 <span class="normal">5207</span>
 <span class="normal">5208</span>
 <span class="normal">5209</span>
@@ -13526,7 +13587,34 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 <span class="normal">5247</span>
 <span class="normal">5248</span>
 <span class="normal">5249</span>
-<span class="normal">5250</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
+<span class="normal">5250</span>
+<span class="normal">5251</span>
+<span class="normal">5252</span>
+<span class="normal">5253</span>
+<span class="normal">5254</span>
+<span class="normal">5255</span>
+<span class="normal">5256</span>
+<span class="normal">5257</span>
+<span class="normal">5258</span>
+<span class="normal">5259</span>
+<span class="normal">5260</span>
+<span class="normal">5261</span>
+<span class="normal">5262</span>
+<span class="normal">5263</span>
+<span class="normal">5264</span>
+<span class="normal">5265</span>
+<span class="normal">5266</span>
+<span class="normal">5267</span>
+<span class="normal">5268</span>
+<span class="normal">5269</span>
+<span class="normal">5270</span>
+<span class="normal">5271</span>
+<span class="normal">5272</span>
+<span class="normal">5273</span>
+<span class="normal">5274</span>
+<span class="normal">5275</span>
+<span class="normal">5276</span>
+<span class="normal">5277</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">plugin</span><span class="p">,</span>
     <span class="n">downsample_factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
