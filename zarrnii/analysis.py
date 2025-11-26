@@ -867,11 +867,16 @@ def _apply_region_filter(region: Any, filters: Dict[str, Tuple[str, Any]]) -> bo
     return True
 
 
-# Properties that represent coordinates and need full affine transformation
+# Properties that represent coordinates and need full affine transformation.
+# This includes all regionprops properties whose values are voxel coordinates
+# and should be mapped to physical space using the affine matrix.
 COORDINATE_PROPERTIES = frozenset(
     [
         "centroid",
         "centroid_weighted",
+        "bbox",            # bounding box coordinates (min_row, min_col, min_plane, max_row, ...)
+        "centroid_local",  # centroid in local (bbox-relative) coordinates
+        "coords",          # all voxel coordinates for the region
     ]
 )
 
