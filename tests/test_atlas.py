@@ -1120,6 +1120,296 @@ class TestZarrNiiAtlas:
         with pytest.raises(ValueError, match="exactly 3 column names"):
             atlas.label_region_properties(region_props, coord_column_names=[])
 
+    def test_aggregate_table_per_region_basic(self, sample_atlas):
+        """Test basic aggregation with default mean."""
+        atlas = sample_atlas
+
+        # Create table with multiple rows per region
+        table = pd.DataFrame(
+            {
+                "index": [1, 1, 1, 2, 2, 3],
+                "area": [10.0, 20.0, 30.0, 100.0, 200.0, 500.0],
+                "intensity": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            }
+        )
+
+        result = atlas.aggregate_table_per_region(table)
+
+        # Check structure
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 3  # 3 unique regions
+        assert "index" in result.columns
+        assert "area" in result.columns
+        assert "intensity" in result.columns
+
+        # Check default mean aggregation
+        region1 = result[result["index"] == 1].iloc[0]
+        assert region1["area"] == 20.0  # mean of 10, 20, 30
+        assert region1["intensity"] == 2.0  # mean of 1, 2, 3
+
+        region2 = result[result["index"] == 2].iloc[0]
+        assert region2["area"] == 150.0  # mean of 100, 200
+        assert region2["intensity"] == 4.5  # mean of 4, 5
+
+        region3 = result[result["index"] == 3].iloc[0]
+        assert region3["area"] == 500.0  # single value
+        assert region3["intensity"] == 6.0  # single value
+
+    def test_aggregate_table_per_region_with_aggregations_dict(self, sample_atlas):
+        """Test aggregation with custom aggregation functions per column."""
+        atlas = sample_atlas
+
+        table = pd.DataFrame(
+            {
+                "index": [1, 1, 1, 2, 2],
+                "area": [10.0, 20.0, 30.0, 100.0, 200.0],
+                "count": [1.0, 2.0, 3.0, 4.0, 5.0],
+            }
+        )
+
+        result = atlas.aggregate_table_per_region(
+            table, aggregations={"area": "sum", "count": "sum"}
+        )
+
+        # Check sum aggregation
+        region1 = result[result["index"] == 1].iloc[0]
+        assert region1["area"] == 60.0  # sum of 10, 20, 30
+        assert region1["count"] == 6.0  # sum of 1, 2, 3
+
+        region2 = result[result["index"] == 2].iloc[0]
+        assert region2["area"] == 300.0  # sum of 100, 200
+        assert region2["count"] == 9.0  # sum of 4, 5
+
+    def test_aggregate_table_per_region_mixed_aggregations(self, sample_atlas):
+        """Test aggregation with different functions for different columns."""
+        atlas = sample_atlas
+
+        table = pd.DataFrame(
+            {
+                "index": [1, 1, 1],
+                "area": [10.0, 20.0, 30.0],
+                "intensity": [5.0, 10.0, 15.0],
+                "count": [1.0, 2.0, 3.0],
+            }
+        )
+
+        result = atlas.aggregate_table_per_region(
+            table,
+            aggregations={"area": "sum", "intensity": "mean"},
+            default_aggregation="max",
+        )
+
+        region1 = result[result["index"] == 1].iloc[0]
+        assert region1["area"] == 60.0  # sum
+        assert region1["intensity"] == 10.0  # mean
+        assert region1["count"] == 3.0  # max (default)
+
+    def test_aggregate_table_per_region_all_agg_functions(self, sample_atlas):
+        """Test all supported aggregation functions."""
+        atlas = sample_atlas
+
+        table = pd.DataFrame(
+            {
+                "index": [1, 1, 1, 1, 1],
+                "value": [1.0, 2.0, 3.0, 4.0, 5.0],
+            }
+        )
+
+        # Test mean
+        result = atlas.aggregate_table_per_region(table, aggregations={"value": "mean"})
+        assert result.iloc[0]["value"] == 3.0
+
+        # Test sum
+        result = atlas.aggregate_table_per_region(table, aggregations={"value": "sum"})
+        assert result.iloc[0]["value"] == 15.0
+
+        # Test std
+        result = atlas.aggregate_table_per_region(table, aggregations={"value": "std"})
+        assert abs(result.iloc[0]["value"] - np.std([1, 2, 3, 4, 5], ddof=1)) < 0.001
+
+        # Test median
+        result = atlas.aggregate_table_per_region(
+            table, aggregations={"value": "median"}
+        )
+        assert result.iloc[0]["value"] == 3.0
+
+        # Test min
+        result = atlas.aggregate_table_per_region(table, aggregations={"value": "min"})
+        assert result.iloc[0]["value"] == 1.0
+
+        # Test max
+        result = atlas.aggregate_table_per_region(table, aggregations={"value": "max"})
+        assert result.iloc[0]["value"] == 5.0
+
+    def test_aggregate_table_per_region_custom_label_column(self, sample_atlas):
+        """Test aggregation with custom label column name."""
+        atlas = sample_atlas
+
+        table = pd.DataFrame(
+            {
+                "region_id": [1, 1, 2],
+                "area": [10.0, 20.0, 100.0],
+            }
+        )
+
+        result = atlas.aggregate_table_per_region(table, label_column="region_id")
+
+        assert "region_id" in result.columns
+        assert len(result) == 2
+        assert result[result["region_id"] == 1].iloc[0]["area"] == 15.0
+
+    def test_aggregate_table_per_region_empty_table(self, sample_atlas):
+        """Test aggregation with empty table."""
+        atlas = sample_atlas
+
+        table = pd.DataFrame({"index": [], "area": []})
+
+        result = atlas.aggregate_table_per_region(table)
+
+        assert len(result) == 0
+        assert "index" in result.columns
+        assert "area" in result.columns
+
+    def test_aggregate_table_per_region_single_row(self, sample_atlas):
+        """Test aggregation with single row (no actual aggregation needed)."""
+        atlas = sample_atlas
+
+        table = pd.DataFrame({"index": [1], "area": [100.0]})
+
+        result = atlas.aggregate_table_per_region(table)
+
+        assert len(result) == 1
+        assert result.iloc[0]["index"] == 1
+        assert result.iloc[0]["area"] == 100.0
+
+    def test_aggregate_table_per_region_missing_label_column(self, sample_atlas):
+        """Test error when label column is missing."""
+        atlas = sample_atlas
+
+        table = pd.DataFrame({"area": [10.0, 20.0]})
+
+        with pytest.raises(ValueError, match="label_column 'index' not found"):
+            atlas.aggregate_table_per_region(table)
+
+    def test_aggregate_table_per_region_unknown_agg_function(self, sample_atlas):
+        """Test error when unknown aggregation function is specified."""
+        atlas = sample_atlas
+
+        table = pd.DataFrame({"index": [1, 1], "area": [10.0, 20.0]})
+
+        with pytest.raises(ValueError, match="Unknown aggregation function"):
+            atlas.aggregate_table_per_region(
+                table, aggregations={"area": "invalid_func"}
+            )
+
+    def test_aggregate_table_per_region_unknown_default_agg(self, sample_atlas):
+        """Test error when unknown default aggregation is specified."""
+        atlas = sample_atlas
+
+        table = pd.DataFrame({"index": [1, 1], "area": [10.0, 20.0]})
+
+        with pytest.raises(ValueError, match="Unknown default aggregation"):
+            atlas.aggregate_table_per_region(table, default_aggregation="invalid")
+
+    def test_aggregate_table_per_region_non_numeric_columns(self, sample_atlas):
+        """Test that non-numeric columns are excluded from aggregation."""
+        atlas = sample_atlas
+
+        table = pd.DataFrame(
+            {
+                "index": [1, 1, 2],
+                "area": [10.0, 20.0, 100.0],
+                "name": ["a", "b", "c"],  # Non-numeric column
+            }
+        )
+
+        result = atlas.aggregate_table_per_region(table)
+
+        # Should have index and area columns
+        assert "index" in result.columns
+        assert "area" in result.columns
+        # name column should NOT be in result (non-numeric)
+        assert "name" not in result.columns
+
+    def test_aggregate_table_per_region_only_non_numeric(self, sample_atlas):
+        """Test aggregation when only non-numeric columns exist (besides label)."""
+        atlas = sample_atlas
+
+        table = pd.DataFrame(
+            {
+                "index": [1, 1, 2],
+                "name": ["a", "b", "c"],  # Only non-numeric
+            }
+        )
+
+        result = atlas.aggregate_table_per_region(table)
+
+        # Should return unique labels only
+        assert len(result) == 2
+        assert "index" in result.columns
+        assert "name" not in result.columns
+
+    def test_aggregate_table_per_region_integration_with_create_feature_map(
+        self, sample_atlas
+    ):
+        """Test full workflow: aggregate table then create feature map."""
+        atlas = sample_atlas
+
+        # Simulate output from label_region_properties with multiple objects per region
+        table = pd.DataFrame(
+            {
+                "index": [1, 1, 1, 2, 2, 3, 3],
+                "area": [10.0, 20.0, 30.0, 50.0, 100.0, 200.0, 300.0],
+            }
+        )
+
+        # Aggregate by region
+        aggregated = atlas.aggregate_table_per_region(
+            table, aggregations={"area": "sum"}
+        )
+
+        # Verify aggregation
+        assert len(aggregated) == 3
+        assert aggregated[aggregated["index"] == 1].iloc[0]["area"] == 60.0
+        assert aggregated[aggregated["index"] == 2].iloc[0]["area"] == 150.0
+        assert aggregated[aggregated["index"] == 3].iloc[0]["area"] == 500.0
+
+        # Create feature map from aggregated data
+        feature_map = atlas.create_feature_map(aggregated, "area")
+
+        # Verify feature map
+        assert feature_map.shape == atlas.dseg.shape
+
+        map_data = feature_map.data.compute()
+        dseg_data = atlas.dseg.data.compute()
+
+        assert np.all(map_data[dseg_data == 1] == 60.0)
+        assert np.all(map_data[dseg_data == 2] == 150.0)
+        assert np.all(map_data[dseg_data == 3] == 500.0)
+
+    def test_aggregate_table_per_region_missing_column_in_aggregations(
+        self, sample_atlas
+    ):
+        """Test that columns in aggregations dict but not in table are ignored."""
+        atlas = sample_atlas
+
+        table = pd.DataFrame(
+            {
+                "index": [1, 1],
+                "area": [10.0, 20.0],
+            }
+        )
+
+        # Specify aggregation for column that doesn't exist
+        result = atlas.aggregate_table_per_region(
+            table, aggregations={"area": "sum", "nonexistent": "mean"}
+        )
+
+        # Should succeed and only aggregate existing columns
+        assert len(result) == 1
+        assert result.iloc[0]["area"] == 30.0
+        assert "nonexistent" not in result.columns
+
 
 class TestZarrNiiAtlasFileIO:
     """Test suite for ZarrNiiAtlas file I/O operations."""

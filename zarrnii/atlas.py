@@ -806,6 +806,117 @@ class ZarrNiiAtlas(ZarrNii):
 
         return pd.DataFrame(results)
 
+    def aggregate_table_per_region(
+        self,
+        table: pd.DataFrame,
+        label_column: str = "index",
+        aggregations: Optional[Dict[str, str]] = None,
+        default_aggregation: str = "mean",
+    ) -> pd.DataFrame:
+        """Aggregate table rows by atlas region labels.
+
+        This method aggregates rows in a table that have the same atlas label,
+        applying specified aggregation functions to each column. This is useful
+        when you have multiple measurements per region (e.g., from regionprops
+        output) and need one aggregated value per region before creating a
+        feature map.
+
+        Args:
+            table: DataFrame with multiple rows that may share the same atlas label.
+                Must contain the label_column.
+            label_column: Column name containing region labels (default: "index").
+            aggregations: Dict mapping column names to aggregation functions.
+                Supported functions: 'mean', 'sum', 'std', 'median', 'min', 'max'.
+                Columns not in this dict will use default_aggregation.
+                If None, all numeric columns use default_aggregation.
+            default_aggregation: Aggregation function to use for columns not
+                specified in aggregations dict (default: "mean").
+                Must be one of: 'mean', 'sum', 'std', 'median', 'min', 'max'.
+
+        Returns:
+            DataFrame with one row per unique label, containing the label_column
+            and aggregated values for each specified column.
+
+        Raises:
+            ValueError: If label_column is missing from table, if an unknown
+                aggregation function is specified, or if table is empty.
+
+        Examples:
+            >>> # Basic usage with default mean aggregation
+            >>> props_df, counts_df = atlas.label_region_properties(props)
+            >>> aggregated = atlas.aggregate_table_per_region(props_df)
+            >>>
+            >>> # Specify different aggregations per column
+            >>> aggregated = atlas.aggregate_table_per_region(
+            ...     props_df,
+            ...     aggregations={'area': 'sum', 'intensity': 'mean', 'count': 'sum'}
+            ... )
+            >>>
+            >>> # Use with create_feature_map
+            >>> aggregated = atlas.aggregate_table_per_region(
+            ...     props_df,
+            ...     aggregations={'area': 'sum'}
+            ... )
+            >>> feature_map = atlas.create_feature_map(aggregated, 'area')
+
+        Notes:
+            - Non-numeric columns (except label_column) are excluded from aggregation
+            - The label_column values are preserved as-is (used for grouping)
+            - If a column specified in aggregations dict doesn't exist in the table,
+              it is silently ignored
+        """
+        # Supported aggregation functions (same as aggregate_image_by_regions)
+        supported_funcs = {"mean", "sum", "std", "median", "min", "max"}
+
+        # Validate default_aggregation
+        if default_aggregation not in supported_funcs:
+            raise ValueError(
+                f"Unknown default aggregation function: '{default_aggregation}'. "
+                f"Supported: {', '.join(sorted(supported_funcs))}"
+            )
+
+        # Validate label_column exists
+        if label_column not in table.columns:
+            raise ValueError(
+                f"label_column '{label_column}' not found in table. "
+                f"Available columns: {list(table.columns)}"
+            )
+
+        # Handle empty table
+        if len(table) == 0:
+            return table.copy()
+
+        # Validate aggregations dict
+        if aggregations is not None:
+            for col, func in aggregations.items():
+                if func not in supported_funcs:
+                    raise ValueError(
+                        f"Unknown aggregation function '{func}' for column '{col}'. "
+                        f"Supported: {', '.join(sorted(supported_funcs))}"
+                    )
+
+        # Get numeric columns (excluding label_column)
+        numeric_cols = table.select_dtypes(include=[np.number]).columns.tolist()
+        if label_column in numeric_cols:
+            numeric_cols.remove(label_column)
+
+        # Build aggregation dict for pandas groupby
+        agg_dict = {}
+        for col in numeric_cols:
+            if aggregations is not None and col in aggregations:
+                agg_dict[col] = aggregations[col]
+            else:
+                agg_dict[col] = default_aggregation
+
+        # If no columns to aggregate, just return unique labels
+        if not agg_dict:
+            return table[[label_column]].drop_duplicates().reset_index(drop=True)
+
+        # Perform groupby aggregation
+        result = table.groupby(label_column).agg(agg_dict).reset_index()
+
+        return result
+
     def create_feature_map(
         self,
         feature_data: pd.DataFrame,
