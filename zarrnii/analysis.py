@@ -1014,7 +1014,7 @@ def compute_centroids(
         # Process regions and filter to core
         centroids = []
         for region in regionprops(labeled):
-            # Skip regions smaller than min_pixels if specified
+            # Filter out regions with fewer than min_pixels pixels
             if min_pixels is not None and region.area < min_pixels:
                 continue
 
