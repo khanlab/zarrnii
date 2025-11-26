@@ -826,6 +826,7 @@ def compute_centroids(
     depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,
     boundary: str = "none",
     rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
+    min_pixels: Optional[int] = None,
 ) -> np.ndarray:
     """
     Compute centroids of binary segmentation objects in physical coordinates.
@@ -854,6 +855,9 @@ def compute_centroids(
             - tuple: target chunk size per dimension
             - None: use existing chunks
             Default is None (use existing chunks).
+        min_pixels: Minimum number of pixels required for a region to be included.
+            Regions with fewer pixels than this threshold are filtered out.
+            If None (default), no minimum pixel filter is applied.
 
     Returns:
         numpy.ndarray: Nx3 array of physical coordinates for N detected objects,
@@ -887,6 +891,10 @@ def compute_centroids(
         >>> # Compute centroids
         >>> centroids = compute_centroids(binary_seg, affine, depth=5)
         >>> print(f"Found {len(centroids)} objects with shape {centroids.shape}")
+        >>>
+        >>> # Compute centroids with minimum pixel filter
+        >>> centroids = compute_centroids(binary_seg, affine, depth=5, min_pixels=30)
+        >>> print(f"Found {len(centroids)} objects with at least 30 pixels")
     """
     # Import AffineTransform to handle both numpy arrays and AffineTransform objects
     from .transform import AffineTransform
@@ -1003,18 +1011,12 @@ def compute_centroids(
 
             core_slices.append((core_start, core_end))
 
-        min_pixels=30
-
-
         # Process regions and filter to core
         centroids = []
         for region in regionprops(labeled):
-
-            
-            # --- NEW: skip small regions ---
-            if region.area < min_pixels:
+            # Skip regions smaller than min_pixels if specified
+            if min_pixels is not None and region.area < min_pixels:
                 continue
-            # --------------------------------
 
             centroid = np.array(region.centroid)
 
