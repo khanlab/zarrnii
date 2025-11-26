@@ -3183,13 +3183,8 @@ class ZarrNii:
         # Append the inverse of the current image's affine
         tfms_to_apply.append(self.affine.invert())
 
-        # Create new NgffImage from ref image
-        interp_ngff_image = nz.NgffImage(
-            data=ref_znimg.data,
-            dims=ref_znimg.ngff_image.dims.copy(),
-            scale=ref_znimg.ngff_image.scale.copy(),
-            translation=ref_znimg.ngff_image.translation.copy(),
-            name=f"{self.name}_transformed_to_{ref_znimg.name}",
+        interp_znimg = ref_znimg.copy(
+            name=f"{self.name}_transformed_to_{ref_znimg.name}"
         )
 
         # Try to get zarr store information for direct access (avoids nested compute)
@@ -3198,7 +3193,7 @@ class ZarrNii:
         # Lazily apply the transformations using dask
         if store_info is not None:
             # Use direct zarr access to avoid nested compute() calls
-            interp_ngff_image.data = da.map_blocks(
+            interp_znimg.data = da.map_blocks(
                 interp_by_block,  # Function to interpolate each block
                 ref_znimg.data,  # Reference image data
                 dtype=np.float32,  # Output data type
@@ -3210,7 +3205,7 @@ class ZarrNii:
             )
         else:
             # Fall back to passing ZarrNii instance (legacy behavior with nested compute)
-            interp_ngff_image.data = da.map_blocks(
+            interp_znimg.data = da.map_blocks(
                 interp_by_block,  # Function to interpolate each block
                 ref_znimg.data,  # Reference image data
                 dtype=np.float32,  # Output data type
@@ -3218,12 +3213,7 @@ class ZarrNii:
                 flo_znimg=self,  # Floating image to align (legacy)
             )
 
-        return ZarrNii.from_ngff_image(
-            interp_ngff_image,
-            axes_order=ref_znimg.axes_order,
-            xyz_orientation=ref_znimg.xyz_orientation,
-            omero=self.omero,
-        )
+        return interp_znimg
 
     # I/O operations
     def to_ome_zarr(
@@ -4364,7 +4354,7 @@ class ZarrNii:
 
         return zyx_image
 
-    def copy(self) -> "ZarrNii":
+    def copy(self, name=None) -> "ZarrNii":
         """
         Create a copy of this ZarrNii.
 
@@ -4382,7 +4372,7 @@ class ZarrNii:
             dims=copied_dims,
             scale=self.ngff_image.scale.copy(),
             translation=self.ngff_image.translation.copy(),
-            name=self.ngff_image.name,
+            name=self.ngff_image.name if name is None else name,
         )
         return ZarrNii(
             ngff_image=copied_image,
@@ -4786,21 +4776,14 @@ class ZarrNii:
             meta=np.array([], dtype=np.uint8),  # Provide meta information
         )
 
-        # Create new NgffImage with segmented data
-        new_ngff_image = nz.NgffImage(
-            data=segmented_data,
-            dims=self.dims.copy(),
-            scale=self.scale.copy(),
-            translation=self.translation.copy(),
-            name=f"{self.name}_segmented_{plugin.name.lower().replace(' ', '_')}",
+        # Create copy with segmented data
+        segmented_znimg = self.copy(
+            name=f"{self.name}_segmented_{plugin.name.lower().replace(' ', '_')}"
         )
+        segmented_znimg.data = segmented_data
 
         # Return new ZarrNii instance
-        return ZarrNii(
-            ngff_image=new_ngff_image,
-            axes_order=self.axes_order,
-            xyz_orientation=self.xyz_orientation,
-        )
+        return segmented_znimg
 
     def segment_otsu(
         self, nbins: int = 256, chunk_size: Optional[Tuple[int, ...]] = None
