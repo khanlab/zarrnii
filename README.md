@@ -160,7 +160,6 @@ For development, this project uses:
 - **[uv](https://docs.astral.sh/uv/)** for fast dependency management
 - **[pytest](https://pytest.org/)** for testing
 - **[black](https://black.readthedocs.io/)** for code formatting  
-- **[flake8](https://flake8.pycqa.org/)** for linting
 - **[mkdocs](https://www.mkdocs.org/)** for documentation
 
 ### Available commands (using `uv run`):
@@ -170,9 +169,6 @@ uv run pytest
 
 # Format code
 uv run black .
-
-# Check linting  
-uv run flake8 .
 
 # Build documentation
 uv run mkdocs build
