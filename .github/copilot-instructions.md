@@ -25,7 +25,7 @@
 ### Development Environment
 - **Python version**: 3.11+ (requires Python >=3.11)
 - **Virtual environment**: uv automatically creates and manages .venv
-- **Available tools**: pytest, flake8, black, isort, mkdocs, jupyterlab, pre-commit
+- **Available tools**: pytest, black, isort, mkdocs, jupyterlab, pre-commit
 
 ### Running the Application
 - **Import library**: `uv run python -c "from zarrnii import ZarrNii; print('Import successful')"`
@@ -38,8 +38,7 @@
 ALWAYS run these before committing changes:
 - `uv run black .` - Format code with black (line-length: 88)
 - `uv run isort .` - Sort imports with isort (profile: black, line-length: 88)  
-- `uv run flake8 .` - Check code style (max-line-length: 88, extend-ignore: E203,W503)
-- `uv run pytest -v` - Run test suite (expect 37 pass, 1 skip, 1 xfail)
+- `uv run pytest -v` - Run test suite
 - **OR use quality check script**: `./scripts/quality-check.sh` (matches CI exactly)
 
 ### Manual Validation Scenarios
@@ -90,7 +89,6 @@ Available via `uv run <command>`:
 - `uv run pytest -v` - Run test suite
 - `uv run black .` - Format code with black
 - `uv run isort .` - Sort imports with isort
-- `uv run flake8 .` - Run flake8 linting  
 - `uv run mkdocs serve` - Serve documentation locally
 - `uv run mkdocs build` - Build documentation static files
 - `uv run mkdocs gh-deploy` - Deploy docs to GitHub Pages
