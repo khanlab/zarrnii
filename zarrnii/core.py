@@ -5141,7 +5141,8 @@ class ZarrNii:
             - Uses 26-connectivity (connectivity=3) for 3D connected component labeling.
             - Coordinate properties ('centroid', 'centroid_weighted') are transformed
               to physical coordinates and split into suffixed columns (e.g.,
-              'centroid_x', 'centroid_y', 'centroid_z' or 'custom_x', etc.).
+              'centroid_x', 'centroid_y', 'centroid_z' or when renamed via dict,
+              'custom_name_x', 'custom_name_y', 'custom_name_z').
             - Scalar properties are included directly without transformation.
             - Available regionprops properties include: 'area', 'area_bbox', 'centroid',
               'eccentricity', 'equivalent_diameter_area', 'euler_number', 'extent',

@@ -1009,8 +1009,9 @@ def compute_region_properties(
         - The function uses scikit-image's label() with connectivity=3 (26-connectivity
           in 3D) to identify connected components.
         - Coordinate properties ('centroid', 'centroid_weighted') are transformed
-          to physical coordinates and split into prefixed columns (e.g.,
-          'centroid_x', 'centroid_y', 'centroid_z').
+          to physical coordinates and split into suffixed columns (e.g.,
+          'centroid_x', 'centroid_y', 'centroid_z' or when renamed via dict,
+          'custom_name_x', 'custom_name_y', 'custom_name_z').
         - Scalar properties are included directly without transformation.
         - Empty chunks (no objects detected) contribute empty arrays to the result.
         - This function computes the result immediately (not lazy).
