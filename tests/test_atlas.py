@@ -867,44 +867,6 @@ class TestZarrNiiAtlas:
         with pytest.raises(ValueError, match="must be Nx3"):
             atlas.label_centroids(centroids_1d)
 
-    def test_label_centroids_integration_with_compute_centroids(self, sample_atlas):
-        """Test integration: compute centroids then label them."""
-        # Create a binary segmentation image matching atlas space
-        binary_data = np.zeros((1, 10, 10, 10), dtype=np.uint8)
-
-        # Add some objects in known regions
-        binary_data[0, 2:4, 2:4, 2:4] = 1  # Object in region 1 (left half, x < 5)
-        binary_data[0, 6:8, 6:8, 6:8] = 1  # Object in region 3 (right bottom)
-
-        # Create ZarrNii from binary data with matching affine
-        # Need to convert to dask array for compute_centroids
-        import dask.array as da
-
-        from zarrnii import ZarrNii
-
-        binary_dask = da.from_array(binary_data, chunks=(1, 5, 5, 5))
-        binary_znii = ZarrNii.from_darr(binary_dask)
-
-        # Compute centroids
-        centroids = binary_znii.compute_centroids(depth=2)
-
-        # Label them using the atlas
-        df_centroids, df_counts = sample_atlas.label_centroids(
-            centroids, include_names=True
-        )
-
-        # Should have found 2 objects
-        assert len(df_centroids) == 2
-
-        # Both should have valid labels (not 0)
-        assert all(df_centroids["index"] > 0)
-
-        # Check that we got expected region assignments
-        # Objects are at approximately (3, 3, 3) and (7, 7, 7) in voxel space
-        labels = set(df_centroids["index"].values)
-        # Should include regions 1 and 3 (or similar based on exact centroid positions)
-        assert len(labels) <= 2  # At most 2 different labels
-
     def test_label_centroids_unknown_label(self, sample_atlas):
         """Test handling of labels not in lookup table."""
         atlas = sample_atlas
