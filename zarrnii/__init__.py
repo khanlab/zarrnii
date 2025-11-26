@@ -1,5 +1,4 @@
 from .analysis import (
-    compute_centroids,
     compute_histogram,
     compute_otsu_thresholds,
     compute_region_properties,
