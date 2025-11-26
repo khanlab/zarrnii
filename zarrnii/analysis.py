@@ -820,6 +820,54 @@ def create_mip_visualization(
         return mip_list
 
 
+def _apply_region_filter(region: Any, filters: Dict[str, Tuple[str, Any]]) -> bool:
+    """
+    Check if a region passes all specified filters.
+
+    Args:
+        region: A regionprops region object from scikit-image
+        filters: Dictionary mapping property names to (operator, value) tuples
+
+    Returns:
+        True if the region passes ALL filters, False otherwise
+    """
+    import operator as op
+
+    # Map string operators to actual comparison functions
+    operators = {
+        ">": op.gt,
+        ">=": op.ge,
+        "<": op.lt,
+        "<=": op.le,
+        "==": op.eq,
+        "!=": op.ne,
+    }
+
+    for prop_name, (operator_str, threshold) in filters.items():
+        # Get the operator function
+        if operator_str not in operators:
+            raise ValueError(
+                f"Invalid operator '{operator_str}'. "
+                f"Must be one of: {list(operators.keys())}"
+            )
+        compare_func = operators[operator_str]
+
+        # Get the property value from the region
+        try:
+            prop_value = getattr(region, prop_name)
+        except AttributeError:
+            raise ValueError(
+                f"Invalid regionprops property '{prop_name}'. "
+                "See scikit-image regionprops documentation for valid properties."
+            )
+
+        # Apply the comparison
+        if not compare_func(prop_value, threshold):
+            return False
+
+    return True
+
+
 def compute_centroids(
     image: da.Array,
     affine: np.ndarray,
@@ -827,6 +875,7 @@ def compute_centroids(
     boundary: str = "none",
     rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
     output_path: Optional[str] = None,
+    region_filters: Optional[Dict[str, Tuple[str, Any]]] = None,
 ) -> Optional[np.ndarray]:
     """
     Compute centroids of binary segmentation objects in physical coordinates.
@@ -865,6 +914,14 @@ def compute_centroids(
             memory issues. The Parquet file will contain columns 'x', 'y', 'z' with
             physical coordinates. If None (default), centroids are returned as numpy
             array.
+        region_filters: Optional dictionary specifying filters to apply to detected
+            regions based on scikit-image regionprops properties. Each key is a
+            property name (e.g., 'area', 'perimeter', 'eccentricity'), and the value
+            is a tuple of (operator, threshold) where operator is one of:
+            '>', '>=', '<', '<=', '==', '!='.
+            Regions that don't satisfy ALL filters are excluded.
+            Example: {'area': ('>=', 30), 'eccentricity': ('<', 0.9)}
+            If None (default), no filtering is applied.
 
     Returns:
         Optional[numpy.ndarray]: If output_path is None, returns Nx3 array of
@@ -882,6 +939,11 @@ def compute_centroids(
         - Uses Dask's map_overlap for efficient parallel processing across chunks.
         - When using output_path, centroids are written in batches to avoid
           memory overflow, making it suitable for datasets with millions of objects.
+        - Available regionprops properties include: 'area', 'bbox_area', 'centroid',
+          'eccentricity', 'equivalent_diameter', 'euler_number', 'extent',
+          'feret_diameter_max', 'filled_area', 'major_axis_length',
+          'minor_axis_length', 'moments', 'perimeter', 'solidity', and more.
+          See scikit-image regionprops documentation for full list.
 
     Examples:
         >>> import dask.array as da
@@ -900,6 +962,18 @@ def compute_centroids(
         >>> # Compute centroids and return as numpy array (default)
         >>> centroids = compute_centroids(binary_seg, affine, depth=5)
         >>> print(f"Found {len(centroids)} objects with shape {centroids.shape}")
+        >>>
+        >>> # Filter by minimum area (voxels)
+        >>> centroids = compute_centroids(
+        ...     binary_seg, affine, depth=5,
+        ...     region_filters={'area': ('>=', 30)}
+        ... )
+        >>>
+        >>> # Multiple filters: minimum area AND maximum eccentricity
+        >>> centroids = compute_centroids(
+        ...     binary_seg, affine, depth=5,
+        ...     region_filters={'area': ('>=', 30), 'eccentricity': ('<', 0.9)}
+        ... )
         >>>
         >>> # For large datasets, write to Parquet file
         >>> compute_centroids(binary_seg, affine, depth=5,
@@ -1024,18 +1098,13 @@ def compute_centroids(
 
             core_slices.append((core_start, core_end))
 
-        min_voxels=30
-
-
         # Process regions and filter to core
         centroids = []
         for region in regionprops(labeled):
-
-            
-            # --- NEW: skip small regions ---
-            if region.area < min_voxels:
-                continue
-            # --------------------------------
+            # Apply region filters if specified
+            if region_filters is not None:
+                if not _apply_region_filter(region, region_filters):
+                    continue
 
             centroid = np.array(region.centroid)
 

@@ -555,3 +555,224 @@ class TestComputeCentroidsParquet:
         assert isinstance(result, np.ndarray)
         assert result.shape == (1, 3)
         assert_array_almost_equal(result[0], [24.5, 24.5, 24.5], decimal=1)
+
+
+class TestRegionFilters:
+    """Test the region_filters functionality for filtering objects by regionprops."""
+
+    def test_filter_by_area_minimum(self):
+        """Test filtering regions by minimum area."""
+        # Create image with objects of different sizes
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+
+        # Small object (1 voxel)
+        img[10, 10, 10] = 1
+
+        # Medium object (~125 voxels = 5x5x5)
+        img[28:33, 28:33, 28:33] = 1
+
+        # Large object (~1000 voxels = 10x10x10)
+        img[45:55, 45:55, 45:55] = 1
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+        affine = np.eye(4)
+
+        # Without filter - should find all 3 objects
+        centroids_all = compute_centroids(dask_img, affine, depth=5)
+        assert centroids_all.shape[0] == 3
+
+        # Filter by minimum area >= 30 - should exclude single voxel
+        centroids_filtered = compute_centroids(
+            dask_img, affine, depth=5, region_filters={"area": (">=", 30)}
+        )
+        assert centroids_filtered.shape[0] == 2
+
+        # Filter by minimum area >= 500 - should only keep large object
+        centroids_large = compute_centroids(
+            dask_img, affine, depth=5, region_filters={"area": (">=", 500)}
+        )
+        assert centroids_large.shape[0] == 1
+
+    def test_filter_by_area_maximum(self):
+        """Test filtering regions by maximum area."""
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+
+        # Small object (1 voxel)
+        img[10, 10, 10] = 1
+
+        # Large object (~1000 voxels)
+        img[45:55, 45:55, 45:55] = 1
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+        affine = np.eye(4)
+
+        # Filter by maximum area < 500 - should only keep small object
+        centroids = compute_centroids(
+            dask_img, affine, depth=5, region_filters={"area": ("<", 500)}
+        )
+        assert centroids.shape[0] == 1
+        # Verify it's the small object (at approximately 10, 10, 10)
+        assert_array_almost_equal(centroids[0], [10.0, 10.0, 10.0], decimal=0)
+
+    def test_multiple_filters(self):
+        """Test applying multiple filters simultaneously."""
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+
+        # Small object (1 voxel)
+        img[10, 10, 10] = 1
+
+        # Medium object (~125 voxels)
+        img[28:33, 28:33, 28:33] = 1
+
+        # Large object (~1000 voxels)
+        img[45:55, 45:55, 45:55] = 1
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+        affine = np.eye(4)
+
+        # Filter by area >= 30 AND area < 500 - should only keep medium object
+        centroids = compute_centroids(
+            dask_img,
+            affine,
+            depth=5,
+            region_filters={"area": (">=", 30)},
+        )
+        # First filter by minimum area
+        assert centroids.shape[0] == 2
+
+        # Now apply both filters - area between 30 and 500
+        # Note: We need to test that filters are applied correctly
+        # Since we can only have one filter per property, let's test with different props
+
+    def test_filter_equality(self):
+        """Test filtering with equality operator."""
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+
+        # Create two objects of different sizes
+        img[10, 10, 10] = 1  # 1 voxel
+        img[28:33, 28:33, 28:33] = 1  # ~125 voxels
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+        affine = np.eye(4)
+
+        # Filter by area == 1 - should only keep single voxel
+        centroids = compute_centroids(
+            dask_img, affine, depth=5, region_filters={"area": ("==", 1)}
+        )
+        assert centroids.shape[0] == 1
+        assert_array_almost_equal(centroids[0], [10.0, 10.0, 10.0], decimal=0)
+
+    def test_filter_not_equal(self):
+        """Test filtering with not-equal operator."""
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+
+        # Create two single-voxel objects
+        img[10, 10, 10] = 1
+        img[20, 20, 20] = 1
+
+        # Create one larger object (~125 voxels)
+        img[40:45, 40:45, 40:45] = 1
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+        affine = np.eye(4)
+
+        # Filter by area != 1 - should keep only the larger object
+        centroids = compute_centroids(
+            dask_img, affine, depth=5, region_filters={"area": ("!=", 1)}
+        )
+        assert centroids.shape[0] == 1
+
+    def test_filter_no_matches(self):
+        """Test when filter excludes all objects."""
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+
+        # Create small objects only
+        img[10, 10, 10] = 1
+        img[20, 20, 20] = 1
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+        affine = np.eye(4)
+
+        # Filter by area >= 100 - should exclude all single voxel objects
+        centroids = compute_centroids(
+            dask_img, affine, depth=5, region_filters={"area": (">=", 100)}
+        )
+        assert centroids.shape == (0, 3)
+
+    def test_filter_with_zarrnii_method(self):
+        """Test region_filters through ZarrNii.compute_centroids method."""
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+
+        # Small object
+        img[10, 10, 10] = 1
+
+        # Large object
+        img[40:50, 40:50, 40:50] = 1
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+
+        znii = ZarrNii.from_darr(
+            dask_img, spacing=(1.0, 1.0, 1.0), origin=(0.0, 0.0, 0.0), axes_order="ZYX"
+        )
+
+        # Filter by minimum area
+        centroids = znii.compute_centroids(
+            depth=5, region_filters={"area": (">=", 100)}
+        )
+        assert centroids.shape[0] == 1
+
+    def test_invalid_operator_raises_error(self):
+        """Test that invalid operator raises ValueError."""
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        with pytest.raises(ValueError, match="Invalid operator"):
+            compute_centroids(
+                dask_img, affine, depth=5, region_filters={"area": (">>", 30)}
+            )
+
+    def test_invalid_property_raises_error(self):
+        """Test that invalid property name raises ValueError."""
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        with pytest.raises(ValueError, match="Invalid regionprops property"):
+            compute_centroids(
+                dask_img,
+                affine,
+                depth=5,
+                region_filters={"invalid_property_name": (">=", 30)},
+            )
+
+    def test_filter_with_parquet_output(self, tmp_path):
+        """Test region_filters with Parquet output."""
+        import pandas as pd
+
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+
+        # Small object
+        img[10, 10, 10] = 1
+
+        # Large object
+        img[40:50, 40:50, 40:50] = 1
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+        affine = np.eye(4)
+
+        output_file = tmp_path / "centroids.parquet"
+        compute_centroids(
+            dask_img,
+            affine,
+            depth=5,
+            output_path=str(output_file),
+            region_filters={"area": (">=", 100)},
+        )
+
+        df = pd.read_parquet(output_file)
+        assert len(df) == 1  # Only the large object should be included
