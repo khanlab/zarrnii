@@ -5081,6 +5081,117 @@ class ZarrNii:
             scale_units=scale_units,
         )
 
+    def compute_region_properties(
+        self,
+        output_properties: Optional[List[str]] = None,
+        depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,
+        boundary: str = "none",
+        rechunk: Optional[Union[int, Tuple[int, ...]]] = None,
+        output_path: Optional[str] = None,
+        region_filters: Optional[Dict[str, Tuple[str, Any]]] = None,
+    ) -> Optional[Dict[str, np.ndarray]]:
+        """
+        Compute properties of binary segmentation objects with coordinate transformation.
+
+        This method processes the binary image (typically output from a segmentation
+        plugin) to identify connected components and compute their properties using
+        scikit-image's regionprops. Coordinate-based properties (like centroid) are
+        automatically transformed to physical coordinates. The method processes the
+        image chunk-by-chunk with overlap to handle objects that span chunk boundaries.
+
+        This is a generalized method that allows extraction of any combination of
+        regionprops properties, enabling downstream quantification and filtering.
+
+        For large datasets, use the output_path parameter to write properties directly
+        to a Parquet file on disk instead of returning them in memory.
+
+        Args:
+            output_properties: List of regionprops property names to extract and include
+                in the output. Coordinate properties ('centroid', 'centroid_weighted')
+                are automatically transformed to physical coordinates and split into
+                separate x, y, z columns. Scalar properties (e.g., 'area',
+                'equivalent_diameter_area', 'eccentricity') are included as-is.
+                Default is ['centroid'].
+                Example: ['centroid', 'area', 'equivalent_diameter_area', 'eccentricity']
+            depth: Number of elements of overlap between chunks. Can be:
+                - int: same depth for all dimensions (default: 10)
+                - tuple: different depth per dimension
+                - dict: mapping dimension index to depth
+            boundary: How to handle boundaries when adding overlap. Options include
+                'none', 'reflect', 'periodic', 'nearest', or constant values.
+                Default is 'none' (no padding at array boundaries).
+            rechunk: Optional rechunking specification before processing. Can be:
+                - int: target chunk size for all dimensions
+                - tuple: target chunk size per dimension
+                - None: use existing chunks (default)
+            output_path: Optional path to write properties to Parquet file instead of
+                returning them in memory. If provided, properties are written to this
+                file path and None is returned. Use this for large datasets.
+                If None (default), properties are returned as a dict.
+            region_filters: Optional dictionary specifying filters to apply to detected
+                regions based on scikit-image regionprops properties. Each key is a
+                property name (e.g., 'area', 'perimeter', 'eccentricity'), and the value
+                is a tuple of (operator, threshold) where operator is one of:
+                '>', '>=', '<', '<=', '==', '!='.
+                Regions that don't satisfy ALL filters are excluded.
+                Example: {'area': ('>=', 30), 'eccentricity': ('<', 0.9)}
+                If None (default), no filtering is applied.
+
+        Returns:
+            Optional[Dict[str, numpy.ndarray]]: If output_path is None, returns a
+                dictionary mapping property names to numpy arrays. For coordinate
+                properties like 'centroid', the keys are 'x', 'y', 'z' containing
+                physical coordinates. Scalar properties have their name as the key.
+                If output_path is provided, writes to Parquet file and returns None.
+
+        Notes:
+            - This method expects a binary image (e.g., from segment_threshold).
+            - Objects with centroids in overlap regions are filtered to avoid duplicates.
+            - Uses 26-connectivity (connectivity=3) for 3D connected component labeling.
+            - Coordinate properties ('centroid', 'centroid_weighted') are transformed
+              to physical coordinates and split into 'x', 'y', 'z' columns.
+            - Scalar properties are included directly without transformation.
+            - Available regionprops properties include: 'area', 'area_bbox', 'centroid',
+              'eccentricity', 'equivalent_diameter_area', 'euler_number', 'extent',
+              'feret_diameter_max', 'axis_major_length', 'axis_minor_length',
+              'moments', 'perimeter', 'solidity', and more.
+
+        Examples:
+            >>> # Extract centroid and area
+            >>> props = binary.compute_region_properties(
+            ...     output_properties=['centroid', 'area'],
+            ...     depth=5
+            ... )
+            >>> print(f"Found {len(props['x'])} objects")
+            >>> print(f"Areas: {props['area']}")
+            >>>
+            >>> # Extract multiple properties with filtering
+            >>> props = binary.compute_region_properties(
+            ...     output_properties=['centroid', 'area', 'equivalent_diameter_area'],
+            ...     depth=5,
+            ...     region_filters={'area': ('>=', 30)}
+            ... )
+            >>>
+            >>> # Write to Parquet for large datasets
+            >>> binary.compute_region_properties(
+            ...     output_properties=['centroid', 'area', 'eccentricity'],
+            ...     depth=5,
+            ...     output_path='region_props.parquet'
+            ... )
+        """
+        from .analysis import compute_region_properties
+
+        return compute_region_properties(
+            self.darr,
+            affine=self.affine.matrix,
+            output_properties=output_properties,
+            depth=depth,
+            boundary=boundary,
+            rechunk=rechunk,
+            output_path=output_path,
+            region_filters=region_filters,
+        )
+
     def compute_centroids(
         self,
         depth: Union[int, Tuple[int, ...], Dict[int, int]] = 10,

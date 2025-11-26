@@ -396,7 +396,8 @@ class TestComputeCentroidsCZYX:
         affine = np.eye(4)
 
         # Should raise ValueError with informative message
-        with pytest.raises(ValueError, match="compute_centroids only supports 3D"):
+        # Note: compute_centroids now uses compute_region_properties internally
+        with pytest.raises(ValueError, match="only supports 3D"):
             compute_centroids(dask_img, affine, depth=5)
 
     def test_five_dimensional_raises_error(self):
@@ -776,3 +777,314 @@ class TestRegionFilters:
 
         df = pd.read_parquet(output_file)
         assert len(df) == 1  # Only the large object should be included
+
+
+class TestComputeRegionProperties:
+    """Test the compute_region_properties function for extracting multiple properties."""
+
+    def test_compute_region_properties_default_output(self):
+        """Test that default output is centroid (backward compat)."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        props = compute_region_properties(dask_img, affine, depth=5)
+
+        # Should have x, y, z keys for centroid
+        assert "x" in props
+        assert "y" in props
+        assert "z" in props
+        assert len(props["x"]) == 1
+        assert_array_almost_equal(
+            [props["x"][0], props["y"][0], props["z"][0]], [24.5, 24.5, 24.5], decimal=1
+        )
+
+    def test_compute_region_properties_multiple_properties(self):
+        """Test extracting multiple properties at once."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1  # 10x10x10 cube = 1000 voxels
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        props = compute_region_properties(
+            dask_img,
+            affine,
+            depth=5,
+            output_properties=["centroid", "area", "equivalent_diameter_area"],
+        )
+
+        # Should have centroid coordinates and scalar properties
+        assert "x" in props
+        assert "y" in props
+        assert "z" in props
+        assert "area" in props
+        assert "equivalent_diameter_area" in props
+
+        # Verify values
+        assert len(props["x"]) == 1
+        assert props["area"][0] == 1000  # 10x10x10 cube
+        assert props["equivalent_diameter_area"][0] > 0
+
+    def test_compute_region_properties_area_only(self):
+        """Test extracting area without centroid."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:25, 20:25, 20:25] = 1  # 5x5x5 cube = 125 voxels
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        props = compute_region_properties(
+            dask_img, affine, depth=5, output_properties=["area"]
+        )
+
+        # Should only have area, no centroid
+        assert "area" in props
+        assert "x" not in props
+        assert "y" not in props
+        assert "z" not in props
+        assert len(props["area"]) == 1
+        assert props["area"][0] == 125
+
+    def test_compute_region_properties_multiple_objects(self):
+        """Test with multiple objects extracting various properties."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+
+        # Small object
+        img[10:12, 10:12, 10:12] = 1  # 8 voxels
+
+        # Large object
+        img[40:50, 40:50, 40:50] = 1  # 1000 voxels
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+        affine = np.eye(4)
+
+        props = compute_region_properties(
+            dask_img, affine, depth=5, output_properties=["centroid", "area"]
+        )
+
+        # Should find both objects
+        assert len(props["x"]) == 2
+        assert len(props["area"]) == 2
+
+        # Check areas (sorted by area)
+        areas_sorted = sorted(props["area"])
+        assert areas_sorted[0] == 8
+        assert areas_sorted[1] == 1000
+
+    def test_compute_region_properties_with_filtering(self):
+        """Test filtering with multiple properties output."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+
+        # Small object (8 voxels)
+        img[10:12, 10:12, 10:12] = 1
+
+        # Large object (1000 voxels)
+        img[40:50, 40:50, 40:50] = 1
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+        affine = np.eye(4)
+
+        # Filter to only include large objects
+        props = compute_region_properties(
+            dask_img,
+            affine,
+            depth=5,
+            output_properties=["centroid", "area"],
+            region_filters={"area": (">=", 100)},
+        )
+
+        # Should only find the large object
+        assert len(props["x"]) == 1
+        assert props["area"][0] == 1000
+
+    def test_compute_region_properties_with_affine(self):
+        """Test coordinate transformation with affine."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((40, 40, 40), dtype=np.uint8)
+        img[18:23, 18:23, 18:23] = 1  # Centered at (20, 20, 20)
+
+        dask_img = da.from_array(img, chunks=(20, 20, 20))
+
+        # Affine with 2mm spacing and 10mm offset
+        affine = np.array(
+            [[2.0, 0, 0, 10], [0, 2.0, 0, 10], [0, 0, 2.0, 10], [0, 0, 0, 1]]
+        )
+
+        props = compute_region_properties(
+            dask_img, affine, depth=3, output_properties=["centroid", "area"]
+        )
+
+        # Physical coord = 2.0 * 20 + 10 = 50
+        assert_array_almost_equal([props["x"][0]], [50.0], decimal=1)
+        assert_array_almost_equal([props["y"][0]], [50.0], decimal=1)
+        assert_array_almost_equal([props["z"][0]], [50.0], decimal=1)
+
+    def test_compute_region_properties_empty_image(self):
+        """Test with empty image returns empty arrays."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        props = compute_region_properties(
+            dask_img, affine, depth=5, output_properties=["centroid", "area"]
+        )
+
+        # Should return empty arrays with correct structure
+        assert len(props["x"]) == 0
+        assert len(props["y"]) == 0
+        assert len(props["z"]) == 0
+        assert len(props["area"]) == 0
+
+    def test_compute_region_properties_parquet_output(self, tmp_path):
+        """Test Parquet output with multiple properties."""
+        import pandas as pd
+
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        output_file = tmp_path / "props.parquet"
+        result = compute_region_properties(
+            dask_img,
+            affine,
+            depth=5,
+            output_properties=["centroid", "area", "equivalent_diameter_area"],
+            output_path=str(output_file),
+        )
+
+        # Should return None when writing to file
+        assert result is None
+        assert output_file.exists()
+
+        # Read back and verify
+        df = pd.read_parquet(output_file)
+        assert len(df) == 1
+        assert "x" in df.columns
+        assert "y" in df.columns
+        assert "z" in df.columns
+        assert "area" in df.columns
+        assert "equivalent_diameter_area" in df.columns
+        assert df["area"].iloc[0] == 1000
+
+    def test_compute_region_properties_parquet_empty(self, tmp_path):
+        """Test Parquet output with empty image."""
+        import pandas as pd
+
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        output_file = tmp_path / "props.parquet"
+        compute_region_properties(
+            dask_img,
+            affine,
+            depth=5,
+            output_properties=["centroid", "area"],
+            output_path=str(output_file),
+        )
+
+        assert output_file.exists()
+        df = pd.read_parquet(output_file)
+        assert len(df) == 0
+        assert "x" in df.columns
+        assert "area" in df.columns
+
+    def test_compute_region_properties_invalid_properties(self):
+        """Test that invalid property names raise error."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        with pytest.raises(ValueError, match="Invalid regionprops property"):
+            compute_region_properties(
+                dask_img,
+                affine,
+                depth=5,
+                output_properties=["invalid_property_name"],
+            )
+
+    def test_compute_region_properties_empty_list_raises_error(self):
+        """Test that empty output_properties raises error."""
+        from zarrnii import compute_region_properties
+
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+        affine = np.eye(4)
+
+        with pytest.raises(ValueError, match="output_properties must be a non-empty"):
+            compute_region_properties(dask_img, affine, depth=5, output_properties=[])
+
+
+class TestZarrNiiComputeRegionProperties:
+    """Test the ZarrNii.compute_region_properties method."""
+
+    def test_compute_region_properties_method_basic(self):
+        """Test basic usage through ZarrNii method."""
+        img = np.zeros((50, 50, 50), dtype=np.uint8)
+        img[20:30, 20:30, 20:30] = 1
+
+        dask_img = da.from_array(img, chunks=(25, 25, 25))
+
+        znii = ZarrNii.from_darr(
+            dask_img, spacing=(1.0, 1.0, 1.0), origin=(0.0, 0.0, 0.0), axes_order="ZYX"
+        )
+
+        props = znii.compute_region_properties(
+            output_properties=["centroid", "area"], depth=5
+        )
+
+        assert "x" in props
+        assert "area" in props
+        assert len(props["x"]) == 1
+        assert props["area"][0] == 1000
+
+    def test_compute_region_properties_method_with_filtering(self):
+        """Test filtering through ZarrNii method."""
+        img = np.zeros((60, 60, 60), dtype=np.uint8)
+
+        # Small and large objects
+        img[10:12, 10:12, 10:12] = 1
+        img[40:50, 40:50, 40:50] = 1
+
+        dask_img = da.from_array(img, chunks=(30, 30, 30))
+
+        znii = ZarrNii.from_darr(
+            dask_img, spacing=(1.0, 1.0, 1.0), origin=(0.0, 0.0, 0.0), axes_order="ZYX"
+        )
+
+        props = znii.compute_region_properties(
+            output_properties=["centroid", "area", "equivalent_diameter_area"],
+            depth=5,
+            region_filters={"area": (">=", 100)},
+        )
+
+        # Should only include large object
+        assert len(props["x"]) == 1
+        assert props["area"][0] == 1000
+        assert props["equivalent_diameter_area"][0] > 0
