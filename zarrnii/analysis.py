@@ -7,6 +7,7 @@ histogram computation, threshold calculation, and MIP visualization.
 
 from __future__ import annotations
 
+import operator as op
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dask.array as da
@@ -831,8 +832,6 @@ def _apply_region_filter(region: Any, filters: Dict[str, Tuple[str, Any]]) -> bo
     Returns:
         True if the region passes ALL filters, False otherwise
     """
-    import operator as op
-
     # Map string operators to actual comparison functions
     operators = {
         ">": op.gt,
