@@ -13,7 +13,12 @@ import dask.array as da
 import numpy as np
 import pluggy
 
+from zarrnii.logging import get_logger
+
 hookimpl = pluggy.HookimplMarker("zarrnii")
+
+# Module-level logger for scaled processing plugins
+logger = get_logger(__name__)
 
 
 class ScaledProcessingPlugin:
