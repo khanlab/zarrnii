@@ -932,6 +932,11 @@ def _apply_near_isotropic_downsampling(znimg: "ZarrNii", axes_order: str) -> "Za
     This function calculates downsampling factors for dimensions where the pixel sizes
     are smaller than others by at least an integer factor, making the image more isotropic.
 
+    Only applies this if exactly a single dimension requires correcting, e.g. so that
+    it won't downsample the x and y to match a lower-res z, but it will
+    downsample a z to match a x and y (this occurs if the multi-res pyramid only
+    downsamples in x and y).
+
     Args:
         znimg: Input ZarrNii instance
         axes_order: Spatial axes order ("ZYX" or "XYZ")
@@ -977,8 +982,8 @@ def _apply_near_isotropic_downsampling(znimg: "ZarrNii", axes_order: str) -> "Za
         else:
             downsample_factors.append(1)
 
-    # Only apply downsampling if at least one factor is > 1
-    if any(factor > 1 for factor in downsample_factors):
+    # Only apply downsampling exactly one factor is > 1
+    if sum(f > 1 for f in downsample_factors) == 1:
         znimg = znimg.downsample(
             factors=downsample_factors, spatial_dims=available_dims
         )
