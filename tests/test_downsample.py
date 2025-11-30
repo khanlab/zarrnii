@@ -312,22 +312,26 @@ def test_near_isotropic_downsampling_skipped_when_multiple_dims(nifti_nib):
     x=0.1, y=0.1, z=0.4), the logic should skip downsampling entirely to avoid
     incorrectly downsampling x and y to match z.
     """
+    # Define test scale values for clarity
+    fine_scale = 0.1  # High resolution (x and y)
+    coarse_scale = 0.4  # Low resolution (z)
+
     nifti_nib.to_filename("test.nii")
     znimg = ZarrNii.from_nifti("test.nii")
 
     # Create an OME-Zarr with anisotropic voxels where TWO dimensions need correction
     znimg.to_ome_zarr("test_multi_anisotropic.ome.zarr", max_layer=0)
 
-    # Use ngff-zarr to modify the scale
+    # Modify the scale using ngff-zarr
     multiscales = nz.from_ngff_zarr("test_multi_anisotropic.ome.zarr")
     original_image = multiscales.images[0]
 
-    # Create a new NgffImage where x and y are fine (0.1) and z is coarse (0.4)
+    # Create a new NgffImage where x and y are fine and z is coarse
     # This means both x and y would need downsampling to match z
     modified_image = nz.NgffImage(
         data=original_image.data,
         dims=list(original_image.dims),
-        scale={"c": 1.0, "z": 0.4, "y": 0.1, "x": 0.1},
+        scale={"c": 1.0, "z": coarse_scale, "y": fine_scale, "x": fine_scale},
         translation=original_image.translation,
         name=original_image.name,
         axes_units=original_image.axes_units,
