@@ -1448,7 +1448,7 @@ def density_from_points(
         weights: Optional array of shape (N,) containing weights for each point.
             If provided, the density map will contain weighted sums instead of
             counts. For example, use this to weight points by their volume in
-            voxels or mm^3. Must have the same length as the number of points.
+            voxels or mm³. Must have the same length as the number of points.
             Defaults to None (unweighted counts).
 
     Returns:
@@ -1487,10 +1487,11 @@ def density_from_points(
         ...     voxel_coords, ref_img, in_physical_space=False
         ... )
         >>>
-        >>> # Weight points by volume (e.g., nvoxels or mm^3)
+        >>> # Weight points by volume (e.g., nvoxels or mm³)
         >>> points = np.array([[5.0, 5.0, 5.0], [6.0, 6.0, 6.0]])
         >>> volumes = np.array([100.0, 250.0])  # Volume of each object
         >>> weighted_density = density_from_points(points, ref_img, weights=volumes)
+        >>> # Result: voxels at each point contain weighted values (100.0 and 250.0)
 
     Notes:
         - The output density map has a single channel dimension (c=1)
