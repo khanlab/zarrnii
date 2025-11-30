@@ -1417,6 +1417,7 @@ def density_from_points(
     points: Union[np.ndarray, str],
     reference_zarrnii: "ZarrNii",
     in_physical_space: bool = True,
+    weights: Union[np.ndarray, None] = None,
 ) -> "ZarrNii":
     """
     Create a density map from a set of points in the space of a reference ZarrNii image.
@@ -1444,15 +1445,21 @@ def density_from_points(
             (default: True). If True, points are transformed to voxel indices
             using the inverse affine. If False, points are assumed to already
             be in voxel coordinates.
+        weights: Optional array of shape (N,) containing weights for each point.
+            If provided, the density map will contain weighted sums instead of
+            counts. For example, use this to weight points by their volume in
+            voxels or mm³. Must have the same length as the number of points.
+            Defaults to None (unweighted counts).
 
     Returns:
         ZarrNii: New ZarrNii instance containing the density map with the same
             spatial properties (shape, spacing, origin) as the reference image.
             The data type is float32, suitable for visualization and analysis.
-            Values represent the number of points falling in each voxel.
+            Values represent the count (or weighted sum) of points in each voxel.
 
     Raises:
         ValueError: If points array doesn't have shape (N, 3)
+        ValueError: If weights array doesn't have shape (N,) matching points
         ValueError: If reference_zarrnii is not 3D (after removing channel/time dims)
         FileNotFoundError: If points path doesn't exist
         ImportError: If pandas/pyarrow not installed for parquet support
@@ -1479,6 +1486,12 @@ def density_from_points(
         >>> density = density_from_points(
         ...     voxel_coords, ref_img, in_physical_space=False
         ... )
+        >>>
+        >>> # Weight points by volume (e.g., nvoxels or mm³)
+        >>> points = np.array([[5.0, 5.0, 5.0], [6.0, 6.0, 6.0]])
+        >>> volumes = np.array([100.0, 250.0])  # Volume of each object
+        >>> weighted_density = density_from_points(points, ref_img, weights=volumes)
+        >>> # Result: voxels at each point contain weighted values (100.0 and 250.0)
 
     Notes:
         - The output density map has a single channel dimension (c=1)
@@ -1521,6 +1534,15 @@ def density_from_points(
     points = np.asarray(points, dtype=np.float64)
     if points.ndim != 2 or points.shape[1] != 3:
         raise ValueError(f"Points must have shape (N, 3), got shape {points.shape}")
+
+    # Validate weights if provided
+    if weights is not None:
+        weights = np.asarray(weights, dtype=np.float64)
+        if weights.ndim != 1 or weights.shape[0] != points.shape[0]:
+            raise ValueError(
+                f"Weights must have shape (N,) matching points, "
+                f"got shape {weights.shape} for {points.shape[0]} points"
+            )
 
     # Get reference image properties
     ref_data = reference_zarrnii.data
@@ -1582,6 +1604,11 @@ def density_from_points(
     # Convert to dask array for histogram computation
     pts_dask = da.from_array(voxel_coords, chunks=(10000, 3))
 
+    # Convert weights to dask array if provided, with compatible chunking
+    weights_dask = None
+    if weights is not None:
+        weights_dask = da.from_array(weights, chunks=(10000,))
+
     # Define voxel edges for histogram
     # histogramdd bins by [edge[i], edge[i+1]) so we need N+1 edges for N bins
     # The edges span from 0 to N for each dimension
@@ -1596,7 +1623,7 @@ def density_from_points(
 
     # Compute density histogram
     # Returns tuple: (histogram, edges) where histogram has shape (Nx, Ny, Nz)
-    density, _ = da.histogramdd(pts_dask, bins=edges)
+    density, _ = da.histogramdd(pts_dask, bins=edges, weights=weights_dask)
 
     # Convert to float32 for better compatibility and smaller size
     density = density.astype(np.float32)
