@@ -305,6 +305,63 @@ def test_near_isotropic_downsampling_parameter_validation(nifti_nib):
 
 
 @pytest.mark.usefixtures("cleandir")
+def test_near_isotropic_downsampling_skipped_when_multiple_dims(nifti_nib):
+    """Test that downsampling is skipped when multiple dimensions need correction.
+
+    When two or more dimensions require downsampling to become isotropic (e.g.,
+    x=0.1, y=0.1, z=0.4), the logic should skip downsampling entirely to avoid
+    incorrectly downsampling x and y to match z.
+    """
+    # Define test scale values for clarity
+    fine_scale = 0.1  # High resolution (x and y)
+    coarse_scale = 0.4  # Low resolution (z)
+
+    nifti_nib.to_filename("test.nii")
+    znimg = ZarrNii.from_nifti("test.nii")
+
+    # Create an OME-Zarr with anisotropic voxels where TWO dimensions need correction
+    znimg.to_ome_zarr("test_multi_anisotropic.ome.zarr", max_layer=0)
+
+    # Modify the scale using ngff-zarr
+    multiscales = nz.from_ngff_zarr("test_multi_anisotropic.ome.zarr")
+    original_image = multiscales.images[0]
+
+    # Create a new NgffImage where x and y are fine and z is coarse
+    # This means both x and y would need downsampling to match z
+    modified_image = nz.NgffImage(
+        data=original_image.data,
+        dims=list(original_image.dims),
+        scale={"c": 1.0, "z": coarse_scale, "y": fine_scale, "x": fine_scale},
+        translation=original_image.translation,
+        name=original_image.name,
+        axes_units=original_image.axes_units,
+    )
+
+    # Save the modified image back
+    new_multiscales = nz.to_multiscales(modified_image)
+    nz.to_ngff_zarr("test_multi_anisotropic.ome.zarr", new_multiscales, overwrite=True)
+
+    # Load without downsampling
+    znimg_normal = ZarrNii.from_ome_zarr(
+        "test_multi_anisotropic.ome.zarr", downsample_near_isotropic=False
+    )
+
+    # Load with near-isotropic downsampling
+    # Since two dimensions (x and y) would need correction, downsampling should be skipped
+    znimg_isotropic = ZarrNii.from_ome_zarr(
+        "test_multi_anisotropic.ome.zarr", downsample_near_isotropic=True
+    )
+
+    # Shapes should be identical since downsampling is skipped when multiple dims need correction
+    assert znimg_normal.shape == znimg_isotropic.shape
+
+    # Scales should be identical (no downsampling applied)
+    for dim in ["x", "y", "z"]:
+        if dim in znimg_normal.scale and dim in znimg_isotropic.scale:
+            assert abs(znimg_normal.scale[dim] - znimg_isotropic.scale[dim]) < 1e-6
+
+
+@pytest.mark.usefixtures("cleandir")
 def test_get_upsampled_chunks_function(nifti_nib):
     """Test the __get_upsampled_chunks function ensures exact target shapes."""
     nifti_nib.to_filename("test.nii")
