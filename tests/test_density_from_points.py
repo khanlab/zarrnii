@@ -478,3 +478,203 @@ class TestDensityFromPointsMetadata:
 
         # Check that orientation is preserved
         assert density.xyz_orientation == "LPI"
+
+
+class TestDensityFromPointsWeights:
+    """Test density_from_points with weights parameter."""
+
+    def test_density_with_uniform_weights(self):
+        """Test density map with uniform weights (should equal count * weight)."""
+        # Create reference image
+        ref_data = da.zeros((1, 10, 10, 10), chunks=(1, 5, 5, 5))
+        ref_img = ZarrNii.from_darr(
+            darr=ref_data,
+            axes_order="ZYX",
+            orientation="RAS",
+            spacing=(1.0, 1.0, 1.0),
+            origin=(0.0, 0.0, 0.0),
+        )
+
+        # Create points at a single location
+        points = np.array([[5.0, 5.0, 5.0]])
+        weights = np.array([3.0])  # Weight of 3
+
+        # Create density map with weights
+        density = density_from_points(
+            points, ref_img, in_physical_space=True, weights=weights
+        )
+
+        # Compute the density
+        density_computed = density.data.compute()
+
+        # Weighted density should be 3.0 at (5, 5, 5)
+        assert density_computed[0, 5, 5, 5] == 3.0
+        assert density_computed.sum() == 3.0
+
+    def test_density_with_varying_weights(self):
+        """Test density map with varying weights for different points."""
+        # Create reference image
+        ref_data = da.zeros((1, 10, 10, 10), chunks=(1, 5, 5, 5))
+        ref_img = ZarrNii.from_darr(
+            darr=ref_data,
+            axes_order="ZYX",
+            orientation="RAS",
+            spacing=(1.0, 1.0, 1.0),
+            origin=(0.0, 0.0, 0.0),
+        )
+
+        # Create points at different locations with different weights
+        points = np.array([[2.0, 2.0, 2.0], [5.0, 5.0, 5.0], [7.0, 7.0, 7.0]])
+        weights = np.array([1.0, 5.0, 10.0])  # Different weights
+
+        # Create density map with weights
+        density = density_from_points(
+            points, ref_img, in_physical_space=True, weights=weights
+        )
+
+        # Compute the density
+        density_computed = density.data.compute()
+
+        # Check weighted values at each location
+        assert density_computed[0, 2, 2, 2] == 1.0
+        assert density_computed[0, 5, 5, 5] == 5.0
+        assert density_computed[0, 7, 7, 7] == 10.0
+        assert density_computed.sum() == 16.0  # 1 + 5 + 10
+
+    def test_density_with_weights_same_voxel(self):
+        """Test that weights accumulate for points in the same voxel."""
+        # Create reference image
+        ref_data = da.zeros((1, 10, 10, 10), chunks=(1, 5, 5, 5))
+        ref_img = ZarrNii.from_darr(
+            darr=ref_data,
+            axes_order="ZYX",
+            orientation="RAS",
+            spacing=(1.0, 1.0, 1.0),
+            origin=(0.0, 0.0, 0.0),
+        )
+
+        # Create three points that fall in the same voxel with different weights
+        points = np.array(
+            [
+                [5.1, 5.1, 5.1],  # All fall in voxel (5, 5, 5)
+                [5.5, 5.5, 5.5],
+                [5.9, 5.9, 5.9],
+            ]
+        )
+        weights = np.array([10.0, 20.0, 30.0])  # Total should be 60
+
+        # Create density map with weights
+        density = density_from_points(
+            points, ref_img, in_physical_space=True, weights=weights
+        )
+
+        # Compute the density
+        density_computed = density.data.compute()
+
+        # All weights should accumulate in voxel (5, 5, 5)
+        assert density_computed[0, 5, 5, 5] == 60.0
+        assert density_computed.sum() == 60.0
+
+    def test_density_with_weights_voxel_space(self):
+        """Test weighted density with points in voxel space."""
+        # Create reference image
+        ref_data = da.zeros((1, 10, 10, 10), chunks=(1, 5, 5, 5))
+        ref_img = ZarrNii.from_darr(
+            darr=ref_data,
+            axes_order="ZYX",
+            orientation="RAS",
+            spacing=(2.0, 2.0, 2.0),  # Non-unit spacing
+            origin=(10.0, 10.0, 10.0),  # Non-zero origin
+        )
+
+        # Points directly in voxel coordinates
+        voxel_points = np.array([[3.0, 3.0, 3.0], [6.0, 6.0, 6.0]])
+        weights = np.array([100.0, 250.0])
+
+        # Create density map with in_physical_space=False
+        density = density_from_points(
+            voxel_points, ref_img, in_physical_space=False, weights=weights
+        )
+
+        # Compute the density
+        density_computed = density.data.compute()
+
+        # Check weighted values
+        assert density_computed[0, 3, 3, 3] == 100.0
+        assert density_computed[0, 6, 6, 6] == 250.0
+        assert density_computed.sum() == 350.0
+
+    def test_density_invalid_weights_shape(self):
+        """Test that invalid weights shape raises error."""
+        # Create reference image
+        ref_data = da.zeros((1, 10, 10, 10), chunks=(1, 5, 5, 5))
+        ref_img = ZarrNii.from_darr(
+            darr=ref_data,
+            axes_order="ZYX",
+            orientation="RAS",
+            spacing=(1.0, 1.0, 1.0),
+            origin=(0.0, 0.0, 0.0),
+        )
+
+        # Three points
+        points = np.array([[2.0, 2.0, 2.0], [5.0, 5.0, 5.0], [7.0, 7.0, 7.0]])
+
+        # Wrong number of weights (2 instead of 3)
+        invalid_weights = np.array([1.0, 2.0])
+
+        # Should raise ValueError
+        with pytest.raises(ValueError, match="Weights must have shape"):
+            density_from_points(
+                points, ref_img, in_physical_space=True, weights=invalid_weights
+            )
+
+    def test_density_invalid_weights_ndim(self):
+        """Test that 2D weights array raises error."""
+        # Create reference image
+        ref_data = da.zeros((1, 10, 10, 10), chunks=(1, 5, 5, 5))
+        ref_img = ZarrNii.from_darr(
+            darr=ref_data,
+            axes_order="ZYX",
+            orientation="RAS",
+            spacing=(1.0, 1.0, 1.0),
+            origin=(0.0, 0.0, 0.0),
+        )
+
+        # Three points
+        points = np.array([[2.0, 2.0, 2.0], [5.0, 5.0, 5.0], [7.0, 7.0, 7.0]])
+
+        # 2D weights (invalid)
+        invalid_weights = np.array([[1.0, 2.0, 3.0]])
+
+        # Should raise ValueError
+        with pytest.raises(ValueError, match="Weights must have shape"):
+            density_from_points(
+                points, ref_img, in_physical_space=True, weights=invalid_weights
+            )
+
+    def test_density_with_empty_points_and_weights(self):
+        """Test density map with empty points and weights."""
+        # Create reference image
+        ref_data = da.zeros((1, 10, 10, 10), chunks=(1, 5, 5, 5))
+        ref_img = ZarrNii.from_darr(
+            darr=ref_data,
+            axes_order="ZYX",
+            orientation="RAS",
+            spacing=(1.0, 1.0, 1.0),
+            origin=(0.0, 0.0, 0.0),
+        )
+
+        # Empty points and weights
+        points = np.empty((0, 3))
+        weights = np.empty((0,))
+
+        # Create density map
+        density = density_from_points(
+            points, ref_img, in_physical_space=True, weights=weights
+        )
+
+        # Compute the density
+        density_computed = density.data.compute()
+
+        # All voxels should be zero
+        assert density_computed.sum() == 0.0
