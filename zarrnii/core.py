@@ -982,7 +982,7 @@ def _apply_near_isotropic_downsampling(znimg: "ZarrNii", axes_order: str) -> "Za
         else:
             downsample_factors.append(1)
 
-    # Only apply downsampling exactly one factor is > 1
+    # Only apply downsampling if exactly one factor is > 1
     if sum(f > 1 for f in downsample_factors) == 1:
         znimg = znimg.downsample(
             factors=downsample_factors, spatial_dims=available_dims
