@@ -3922,23 +3922,12 @@ wheels = [
 [[package]]
 name = "stardist"
 version = "0.9.1"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/akhanf/stardist.git#8001f513a1142b729c2fbd7fb6cca9d8817ee6cb" }
 dependencies = [
     { name = "csbdeep" },
     { name = "imageio" },
     { name = "numba" },
     { name = "scikit-image" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/1f/99/f1d73061a663bfa66d92fcf6d4d696cc1a64a5d23be8f8667aecbe2490fe/stardist-0.9.1.tar.gz", hash = "sha256:fc96e8da35b49ac1e8990e2c15fecf129e5161fae9dfe17cb7b85a026163fbd5", size = 888249, upload-time = "2024-04-25T21:59:56.967Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/89/69/e486bf5b662c88e027936a96538d3657cff41353e7718b4bb4db404aeb36/stardist-0.9.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:da0f5a4be2140ff974b1dc9d51e57431cfe258800dca28cdcf28bb78c1163e59", size = 1167235, upload-time = "2024-04-25T21:59:19.586Z" },
-    { url = "https://files.pythonhosted.org/packages/9e/3f/40719f6cda755785954ff7ab99b4235284f2cd4ebb648c0236175cfac39b/stardist-0.9.1-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:dbff43119ef3e73f665bac08a37bd75715642cf3b8addc24bc8a0efeccc0b85a", size = 1086233, upload-time = "2024-04-25T21:59:21.452Z" },
-    { url = "https://files.pythonhosted.org/packages/9c/7b/19cdd1829523426dd45f4624d6e836834c0c8b91510df2c10520814ac918/stardist-0.9.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1f2caf3a071c1ead1b0cbbf9614ff2c82967be1bd22764f097871fb9bbd2718f", size = 3051625, upload-time = "2024-04-25T21:59:23.386Z" },
-    { url = "https://files.pythonhosted.org/packages/92/6c/83f4a3ae69fc7eb6f145e86c02500f47cc429f9cc845ce570e33a2dbc4cb/stardist-0.9.1-cp311-cp311-win_amd64.whl", hash = "sha256:6cdd0e9902489724b3b00082ff4c05775cb4b82feb971814b9ca141eee162d8a", size = 786064, upload-time = "2024-04-25T21:59:25.435Z" },
-    { url = "https://files.pythonhosted.org/packages/8d/94/daf45462e9bb10e92794a38bd61648b4e972bc28c3816fabb75884188ee4/stardist-0.9.1-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:1ac81239ac04cc8e06dcac47e2c93f103d318d2d2c788483336211bacbbd0634", size = 1167458, upload-time = "2024-04-25T21:59:27.311Z" },
-    { url = "https://files.pythonhosted.org/packages/85/5b/02b076f75cbff4910be28a3f73f315a4548c385b9107b5f88f82ae3cd633/stardist-0.9.1-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:0aebe9cedb0ba19cb13e23900393b5e890476031a7784a5abc4b34cc87393195", size = 1086422, upload-time = "2024-04-25T21:59:28.813Z" },
-    { url = "https://files.pythonhosted.org/packages/30/cf/7d964a93ca6ef9a3182924a7a85aba08209fb316a411cb058d76043e9b5f/stardist-0.9.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:cb64b8eb63813ad20a3cb61a605bdbf6072932571818ed20f71ac630c13d3cd8", size = 3051989, upload-time = "2024-04-25T21:59:31.287Z" },
-    { url = "https://files.pythonhosted.org/packages/20/35/b27f306745edb2e53614fb4a4dbfe9062598f5d4063d4979c8ad1c2b8606/stardist-0.9.1-cp312-cp312-win_amd64.whl", hash = "sha256:07b0c174eea6edacff7113a3eb4a5e7144fe7e3d838b56a46168e9d38f6cb19d", size = 786158, upload-time = "2024-04-25T21:59:33.343Z" },
 ]
 
 [[package]]
@@ -4673,7 +4662,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "scikit-image", specifier = ">=0.22.0" },
     { name = "scipy", specifier = ">=1.12.0" },
-    { name = "stardist", marker = "extra == 'stardist'", specifier = ">=0.8.0" },
+    { name = "stardist", marker = "extra == 'stardist'", git = "https://github.com/akhanf/stardist.git" },
     { name = "tensorflow", marker = "extra == 'stardist'", specifier = ">=2.10.0" },
     { name = "zarr", specifier = ">=3.0.8" },
 ]

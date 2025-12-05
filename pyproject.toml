@@ -57,7 +57,7 @@ imaris = [
 ]
 
 stardist = [
-    "stardist>=0.8.0",
+    "stardist @ git+https://github.com/akhanf/stardist.git",
     "tensorflow>=2.10.0",
 ]
 
@@ -70,6 +70,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.version]
 source = "vcs"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.hooks.vcs]
 version-file = "zarrnii/_version.py"
