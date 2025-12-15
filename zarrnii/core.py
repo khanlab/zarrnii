@@ -4445,11 +4445,14 @@ class ZarrNii:
                         channel_data = data_array
 
                     # Compute MIP incrementally using 3D tiles
-                    # Initialize MIP accumulator (Y×X plane)
-                    mip = None
+                    # Initialize MIP accumulator (Y×X plane) once before loops
                     tile_z_size = min(16, z)
                     tile_y_size = min(256, y)
                     tile_x_size = min(256, x)
+                    
+                    # Get dtype without materializing data
+                    mip_dtype = channel_data.dtype
+                    mip = np.zeros((y, x), dtype=mip_dtype)
 
                     for z_start in range(0, z, tile_z_size):
                         z_end = min(z_start + tile_z_size, z)
@@ -4470,10 +4473,7 @@ class ZarrNii:
                                 # Update MIP (maximum across Z within this tile)
                                 tile_mip = np.max(tile_data, axis=0)
                                 
-                                # Initialize or update the corresponding region in the global MIP
-                                if mip is None:
-                                    mip = np.zeros((y, x), dtype=tile_data.dtype)
-                                
+                                # Update the corresponding region in the global MIP
                                 mip[y_start:y_end, x_start:x_end] = np.maximum(
                                     mip[y_start:y_end, x_start:x_end], tile_mip
                                 )
@@ -4504,10 +4504,14 @@ class ZarrNii:
                     channel_data = data_array
 
                 # Compute MIP incrementally using 3D tiles
-                mip = None
+                # Initialize MIP accumulator (Y×X plane) once before loops
                 tile_z_size = min(16, z)
                 tile_y_size = min(256, y)
                 tile_x_size = min(256, x)
+                
+                # Get dtype without materializing data
+                mip_dtype = channel_data.dtype
+                mip = np.zeros((y, x), dtype=mip_dtype)
 
                 for z_start in range(0, z, tile_z_size):
                     z_end = min(z_start + tile_z_size, z)
@@ -4528,10 +4532,7 @@ class ZarrNii:
                             # Update MIP (maximum across Z within this tile)
                             tile_mip = np.max(tile_data, axis=0)
                             
-                            # Initialize or update the corresponding region in the global MIP
-                            if mip is None:
-                                mip = np.zeros((y, x), dtype=tile_data.dtype)
-                            
+                            # Update the corresponding region in the global MIP
                             mip[y_start:y_end, x_start:x_end] = np.maximum(
                                 mip[y_start:y_end, x_start:x_end], tile_mip
                             )
