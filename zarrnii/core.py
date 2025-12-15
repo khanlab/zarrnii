@@ -3971,11 +3971,30 @@ class ZarrNii:
         self, path: str, compression: str = "gzip", compression_opts: int = 6
     ) -> str:
         """
-        Save to Imaris (.ims) file format using HDF5.
+        Save to Imaris (.ims) file format using HDF5 with memory-safe chunked processing.
 
         This method creates Imaris files compatible with Imaris software by
         following the exact HDF5 structure from correctly-formed reference files.
         All attributes use byte-array encoding as required by Imaris.
+
+        **Memory-Safe Implementation:**
+        This method is designed to handle arbitrarily large datasets without loading
+        the entire array into memory. It achieves this through:
+
+        1. **Chunked Data Writing**: Processes data in small chunks (16 Z-slices at a time)
+           instead of loading the full volume. HDF5 datasets are created empty and
+           populated incrementally.
+
+        2. **Streaming Statistics**: Min/max values and histograms are computed
+           incrementally by processing chunks sequentially, maintaining only the
+           running statistics in memory.
+
+        3. **Streaming Thumbnail Generation**: Maximum Intensity Projection (MIP)
+           thumbnails are computed by processing Z-slices in chunks and maintaining
+           only the current maximum projection (YX plane) in memory.
+
+        For a 100GB dataset, memory usage should remain under a few hundred MB,
+        determined primarily by the chunk size (default: 16 Z-slices × Y × X).
 
         Args:
             path: Output path for Imaris (.ims) file
@@ -3992,6 +4011,8 @@ class ZarrNii:
             - Imaris files are always saved in ZYX axis order
             - Automatic axis reordering from XYZ to ZYX if needed
             - Spatial transformations and metadata are preserved
+            - Works efficiently with Dask arrays, Zarr arrays, and NumPy arrays
+            - No full-array compute() is ever called
         """
         try:
             import h5py
@@ -4017,27 +4038,28 @@ class ZarrNii:
             """Convert string to byte array as required by Imaris."""
             return np.array([c.encode() for c in s])
 
-        # Get data and metadata
-        if hasattr(ngff_image_to_save.data, "compute"):
-            data = (
-                ngff_image_to_save.data.compute()
-            )  # Convert Dask array to numpy array
-        else:
-            data = np.asarray(ngff_image_to_save.data)  # Handle numpy arrays directly
+        # Get data reference (DO NOT compute full array)
+        # Keep as Dask/Zarr array for chunk-wise processing
+        data_array = ngff_image_to_save.data
 
         # Handle dimensions: expect ZYX or CZYX
-        if len(data.shape) == 4:
+        if len(data_array.shape) == 4:
             # CZYX format
-            n_channels = data.shape[0]
-            z, y, x = data.shape[1:]
-        elif len(data.shape) == 3:
+            n_channels = data_array.shape[0]
+            z, y, x = data_array.shape[1:]
+        elif len(data_array.shape) == 3:
             # ZYX format - single channel
             n_channels = 1
-            z, y, x = data.shape
-            data = data[np.newaxis, ...]  # Add channel dimension
+            z, y, x = data_array.shape
+            # Add channel dimension (but keep as lazy array)
+            if hasattr(data_array, "reshape"):
+                data_array = data_array[np.newaxis, ...]
+            else:
+                # For Zarr arrays, we'll handle this per-channel
+                pass
         else:
             raise ValueError(
-                f"Unsupported data shape: {data.shape}. Expected 3D (ZYX) or 4D (CZYX)"
+                f"Unsupported data shape: {data_array.shape}. Expected 3D (ZYX) or 4D (CZYX)"
             )
 
         # Create Imaris file structure exactly matching reference file
@@ -4058,7 +4080,13 @@ class ZarrNii:
             # Create channels with proper attributes
             for c in range(n_channels):
                 channel_group = time_group.create_group(f"Channel {c}")
-                channel_data = data[c]  # (Z, Y, X)
+
+                # Get channel data reference (lazy - no compute yet)
+                if len(data_array.shape) == 4:
+                    channel_data = data_array[c]  # (Z, Y, X)
+                else:
+                    # Single channel case where we added dimension
+                    channel_data = data_array
 
                 # Channel attributes - use byte array format exactly like reference
                 channel_group.attrs["ImageSizeX"] = _string_to_byte_array(str(x))
@@ -4070,10 +4098,41 @@ class ZarrNii:
                     str(min(z, 16))
                 )
 
-                # Histogram range attributes
-                data_min, data_max = float(channel_data.min()), float(
-                    channel_data.max()
-                )
+                # Determine target dtype for storage
+                source_dtype = channel_data.dtype
+                if source_dtype == np.float32 or source_dtype == np.float64:
+                    target_dtype = np.float32
+                elif source_dtype in [np.uint16, np.int16]:
+                    target_dtype = source_dtype
+                else:
+                    target_dtype = np.uint8
+
+                # STREAMING STATISTICS: Compute min/max/histogram incrementally
+                # Process data in chunks to compute statistics without loading full array
+                data_min = np.inf
+                data_max = -np.inf
+                hist_bins = np.zeros(256, dtype=np.uint64)
+
+                # Determine chunk size for streaming (process Z slices in batches)
+                chunk_z_size = min(16, z)  # Process 16 Z-slices at a time
+
+                # First pass: compute min/max for histogram range
+                for z_start in range(0, z, chunk_z_size):
+                    z_end = min(z_start + chunk_z_size, z)
+                    chunk = channel_data[z_start:z_end, :, :]
+
+                    # Compute chunk (small subset of full data)
+                    if hasattr(chunk, "compute"):
+                        chunk_data = chunk.compute()
+                    else:
+                        chunk_data = np.asarray(chunk)
+
+                    chunk_min = float(chunk_data.min())
+                    chunk_max = float(chunk_data.max())
+                    data_min = min(data_min, chunk_min)
+                    data_max = max(data_max, chunk_max)
+
+                # Set histogram range attributes
                 channel_group.attrs["HistogramMin"] = _string_to_byte_array(
                     f"{data_min:.3f}"
                 )
@@ -4081,33 +4140,42 @@ class ZarrNii:
                     f"{data_max:.3f}"
                 )
 
-                # Create data dataset with proper compression
-                # Preserve original data type but ensure it's compatible with Imaris
-                if channel_data.dtype == np.float32 or channel_data.dtype == np.float64:
-                    # Keep float data as is for round-trip compatibility
-                    data_for_storage = channel_data.astype(np.float32)
-                elif channel_data.dtype in [np.uint16, np.int16]:
-                    # Keep 16-bit data as is
-                    data_for_storage = channel_data
-                else:
-                    # Convert other types to uint8
-                    data_for_storage = channel_data.astype(np.uint8)
-
-                channel_group.create_dataset(
+                # Create HDF5 dataset (empty, to be filled chunk by chunk)
+                h5_dataset = channel_group.create_dataset(
                     "Data",
-                    data=data_for_storage,
+                    shape=(z, y, x),
+                    dtype=target_dtype,
                     compression=compression,
                     compression_opts=compression_opts,
-                    chunks=True,
+                    chunks=(min(z, 16), y, x),  # Use reasonable chunk size
                 )
 
-                # Create histogram
-                hist_data, _ = np.histogram(
-                    channel_data.flatten(), bins=256, range=(data_min, data_max)
-                )
-                channel_group.create_dataset(
-                    "Histogram", data=hist_data.astype(np.uint64)
-                )
+                # Second pass: write data and accumulate histogram chunk by chunk
+                for z_start in range(0, z, chunk_z_size):
+                    z_end = min(z_start + chunk_z_size, z)
+                    chunk = channel_data[z_start:z_end, :, :]
+
+                    # Compute chunk
+                    if hasattr(chunk, "compute"):
+                        chunk_data = chunk.compute()
+                    else:
+                        chunk_data = np.asarray(chunk)
+
+                    # Convert to target dtype
+                    if chunk_data.dtype != target_dtype:
+                        chunk_data = chunk_data.astype(target_dtype)
+
+                    # Write chunk to HDF5
+                    h5_dataset[z_start:z_end, :, :] = chunk_data
+
+                    # Accumulate histogram
+                    chunk_hist, _ = np.histogram(
+                        chunk_data.flatten(), bins=256, range=(data_min, data_max)
+                    )
+                    hist_bins += chunk_hist.astype(np.uint64)
+
+                # Create histogram dataset
+                channel_group.create_dataset("Histogram", data=hist_bins)
 
             # Get spacing directly from scale dictionary with proper XYZ order
             try:
@@ -4231,18 +4299,43 @@ class ZarrNii:
             # Create thumbnail group with proper multi-channel thumbnail
             thumbnail_group = f.create_group("Thumbnail")
 
-            # Create a combined thumbnail (256x1024 for multi-channel as in reference)
+            # STREAMING THUMBNAIL: Generate MIP and downsample incrementally
+            # Process each channel's thumbnail independently to save memory
             if n_channels > 1:
                 # Multi-channel thumbnail: concatenate channels horizontally
                 thumb_width = 256 * n_channels
                 thumbnail_data = np.zeros((256, thumb_width), dtype=np.uint8)
 
                 for c in range(n_channels):
-                    # Downsample each channel to 256x256
-                    channel_data = data[c]
-                    # Take MIP (Maximum Intensity Projection) along Z
-                    mip = np.max(channel_data, axis=0)
-                    # Resize to 256x256 (simple decimation)
+                    # Get channel data reference
+                    if len(data_array.shape) == 4:
+                        channel_data = data_array[c]
+                    else:
+                        channel_data = data_array
+
+                    # Compute MIP incrementally by processing Z-slices in chunks
+                    # Initialize MIP accumulator
+                    mip = None
+                    chunk_z_size = min(16, z)
+
+                    for z_start in range(0, z, chunk_z_size):
+                        z_end = min(z_start + chunk_z_size, z)
+                        chunk = channel_data[z_start:z_end, :, :]
+
+                        # Compute chunk
+                        if hasattr(chunk, "compute"):
+                            chunk_data = chunk.compute()
+                        else:
+                            chunk_data = np.asarray(chunk)
+
+                        # Update MIP (maximum across Z within this chunk)
+                        chunk_mip = np.max(chunk_data, axis=0)
+                        if mip is None:
+                            mip = chunk_mip
+                        else:
+                            mip = np.maximum(mip, chunk_mip)
+
+                    # Downsample MIP to 256x256 (simple decimation)
                     step_y = max(1, mip.shape[0] // 256)
                     step_x = max(1, mip.shape[1] // 256)
                     thumb_channel = mip[::step_y, ::step_x]
@@ -4256,12 +4349,39 @@ class ZarrNii:
                     else:
                         thumb_channel = thumb_channel[:256, :256]
 
-                    # Place in thumbnail
-                    thumbnail_data[:, c * 256 : (c + 1) * 256] = thumb_channel
+                    # Place in thumbnail (convert to uint8)
+                    thumbnail_data[:, c * 256 : (c + 1) * 256] = thumb_channel.astype(
+                        np.uint8
+                    )
             else:
                 # Single channel: 256x256 thumbnail
-                channel_data = data[0]
-                mip = np.max(channel_data, axis=0)
+                if len(data_array.shape) == 4:
+                    channel_data = data_array[0]
+                else:
+                    channel_data = data_array
+
+                # Compute MIP incrementally
+                mip = None
+                chunk_z_size = min(16, z)
+
+                for z_start in range(0, z, chunk_z_size):
+                    z_end = min(z_start + chunk_z_size, z)
+                    chunk = channel_data[z_start:z_end, :, :]
+
+                    # Compute chunk
+                    if hasattr(chunk, "compute"):
+                        chunk_data = chunk.compute()
+                    else:
+                        chunk_data = np.asarray(chunk)
+
+                    # Update MIP
+                    chunk_mip = np.max(chunk_data, axis=0)
+                    if mip is None:
+                        mip = chunk_mip
+                    else:
+                        mip = np.maximum(mip, chunk_mip)
+
+                # Downsample to 256x256
                 step_y = max(1, mip.shape[0] // 256)
                 step_x = max(1, mip.shape[1] // 256)
                 thumbnail_data = mip[::step_y, ::step_x]
@@ -4274,7 +4394,9 @@ class ZarrNii:
                 else:
                     thumbnail_data = thumbnail_data[:256, :256]
 
-            thumbnail_group.create_dataset("Data", data=thumbnail_data.astype(np.uint8))
+                thumbnail_data = thumbnail_data.astype(np.uint8)
+
+            thumbnail_group.create_dataset("Data", data=thumbnail_data)
 
         return path
 
