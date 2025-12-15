@@ -279,43 +279,55 @@ class TestImarisMemorySafe:
         shape_large = (64, 512, 384)  # Z, Y, X
         data_large = da.zeros(shape_large, dtype=np.float32, chunks=(16, 512, 384))
         data_large = data_large[np.newaxis, ...]
-        
+
         znimg_large = ZarrNii.from_darr(data_large, spacing=[1.0, 1.0, 1.0])
         znimg_large.to_imaris("test_large_chunks.ims")
-        
+
         with h5py.File("test_large_chunks.ims", "r") as f:
             dataset = f["DataSet"]["ResolutionLevel 0"]["TimePoint 0"]["Channel 0"][
                 "Data"
             ]
             # Verify chunking is 16x256x256 (ZYX)
-            assert dataset.chunks == (16, 256, 256), f"Expected (16, 256, 256), got {dataset.chunks}"
-        
+            assert dataset.chunks == (
+                16,
+                256,
+                256,
+            ), f"Expected (16, 256, 256), got {dataset.chunks}"
+
         # Test with small dimensions (smaller than 16x256x256)
         shape_small = (8, 128, 96)  # Z, Y, X
         data_small = da.zeros(shape_small, dtype=np.float32, chunks=(8, 128, 96))
         data_small = data_small[np.newaxis, ...]
-        
+
         znimg_small = ZarrNii.from_darr(data_small, spacing=[1.0, 1.0, 1.0])
         znimg_small.to_imaris("test_small_chunks.ims")
-        
+
         with h5py.File("test_small_chunks.ims", "r") as f:
             dataset = f["DataSet"]["ResolutionLevel 0"]["TimePoint 0"]["Channel 0"][
                 "Data"
             ]
             # Verify chunking is adjusted for small dimensions (8x128x96)
-            assert dataset.chunks == (8, 128, 96), f"Expected (8, 128, 96), got {dataset.chunks}"
-        
+            assert dataset.chunks == (
+                8,
+                128,
+                96,
+            ), f"Expected (8, 128, 96), got {dataset.chunks}"
+
         # Test with mixed dimensions (some smaller, some larger than default)
         shape_mixed = (32, 128, 512)  # Z, Y, X
         data_mixed = da.zeros(shape_mixed, dtype=np.float32, chunks=(16, 128, 512))
         data_mixed = data_mixed[np.newaxis, ...]
-        
+
         znimg_mixed = ZarrNii.from_darr(data_mixed, spacing=[1.0, 1.0, 1.0])
         znimg_mixed.to_imaris("test_mixed_chunks.ims")
-        
+
         with h5py.File("test_mixed_chunks.ims", "r") as f:
             dataset = f["DataSet"]["ResolutionLevel 0"]["TimePoint 0"]["Channel 0"][
                 "Data"
             ]
             # Verify chunking is (16, 128, 256) - mixed
-            assert dataset.chunks == (16, 128, 256), f"Expected (16, 128, 256), got {dataset.chunks}"
+            assert dataset.chunks == (
+                16,
+                128,
+                256,
+            ), f"Expected (16, 128, 256), got {dataset.chunks}"

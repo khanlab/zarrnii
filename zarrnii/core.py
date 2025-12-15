@@ -4087,14 +4087,14 @@ class ZarrNii:
                 else:
                     # Single channel case where we added dimension
                     channel_data = data_array
-                
+
                 # Rechunk data to match Imaris chunk size (16x256x256 in ZYX)
                 # This optimizes data layout for HDF5 writing
                 target_chunk_z = min(z, 16)
                 target_chunk_y = min(y, 256)
                 target_chunk_x = min(x, 256)
                 target_chunks = (target_chunk_z, target_chunk_y, target_chunk_x)
-                
+
                 # Only rechunk if the data is a Dask array
                 if hasattr(channel_data, "rechunk"):
                     channel_data = channel_data.rechunk(target_chunks)
@@ -4157,7 +4157,7 @@ class ZarrNii:
                 chunk_y = min(y, 256)
                 chunk_x = min(x, 256)
                 h5_chunks = (chunk_z, chunk_y, chunk_x)
-                
+
                 h5_dataset = channel_group.create_dataset(
                     "Data",
                     shape=(z, y, x),
