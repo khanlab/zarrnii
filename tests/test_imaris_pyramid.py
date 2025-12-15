@@ -22,13 +22,13 @@ class TestImarisPyramid:
         # Test with a moderately sized volume
         data_size = (128, 256, 192)  # Z, Y, X
         pyramid_levels = ZarrNii._compute_imaris_pyramid_levels(data_size)
-        
+
         # Should have at least 2 levels (original + at least one downsampled)
         assert len(pyramid_levels) >= 2
-        
+
         # First level should be original size
         assert pyramid_levels[0] == data_size
-        
+
         # Each subsequent level should be smaller or equal
         for i in range(1, len(pyramid_levels)):
             prev_z, prev_y, prev_x = pyramid_levels[i - 1]
@@ -45,13 +45,15 @@ class TestImarisPyramid:
         # Small volume should have fewer pyramid levels
         data_size = (16, 32, 32)  # Z, Y, X
         pyramid_levels = ZarrNii._compute_imaris_pyramid_levels(data_size)
-        
+
         # First level should be original size
         assert pyramid_levels[0] == data_size
-        
+
         # Should stop when volume is small enough
         last_level = pyramid_levels[-1]
-        volume_mb = (last_level[0] * last_level[1] * last_level[2] * 4.0) / (1024.0 * 1024.0)
+        volume_mb = (last_level[0] * last_level[1] * last_level[2] * 4.0) / (
+            1024.0 * 1024.0
+        )
         assert volume_mb <= 1.0 or last_level == (1, 1, 1)
 
     @pytest.mark.usefixtures("cleandir")
@@ -60,28 +62,32 @@ class TestImarisPyramid:
         # Create a test dataset large enough to generate multiple pyramid levels
         shape = (128, 256, 192)  # Z, Y, X (24 MB, should generate multiple levels)
         chunks = (16, 256, 192)
-        
+
         data = da.arange(np.prod(shape), dtype=np.float32).reshape(shape)
         data = da.rechunk(data, chunks=chunks)
         data = data[np.newaxis, ...]  # Add channel dimension
-        
+
         znimg = ZarrNii.from_darr(data, spacing=[1.0, 1.0, 1.0])
-        
+
         # Save to Imaris
         output_path = "test_pyramid.ims"
         result_path = znimg.to_imaris(output_path)
-        
+
         assert result_path == output_path
         assert os.path.exists(output_path)
-        
+
         # Verify the file has multiple resolution levels
         with h5py.File(output_path, "r") as f:
             dataset_group = f["DataSet"]
-            
+
             # Count resolution levels
-            res_levels = [key for key in dataset_group.keys() if key.startswith("ResolutionLevel")]
-            assert len(res_levels) >= 2, f"Expected at least 2 resolution levels, found {len(res_levels)}"
-            
+            res_levels = [
+                key for key in dataset_group.keys() if key.startswith("ResolutionLevel")
+            ]
+            assert (
+                len(res_levels) >= 2
+            ), f"Expected at least 2 resolution levels, found {len(res_levels)}"
+
             # Verify each level has correct structure
             for level_key in res_levels:
                 res_group = dataset_group[level_key]
@@ -91,7 +97,7 @@ class TestImarisPyramid:
                 channel_group = time_group["Channel 0"]
                 assert "Data" in channel_group
                 assert "Histogram" in channel_group
-                
+
                 # Check that data exists
                 data_dataset = channel_group["Data"]
                 assert data_dataset.shape[0] > 0
@@ -105,34 +111,40 @@ class TestImarisPyramid:
         shape = (128, 256, 192)  # Z, Y, X
         data = da.zeros(shape, dtype=np.float32, chunks=(16, 256, 192))
         data = data[np.newaxis, ...]
-        
+
         znimg = ZarrNii.from_darr(data, spacing=[1.0, 1.0, 1.0])
-        
+
         output_path = "test_pyramid_sizes.ims"
         znimg.to_imaris(output_path)
-        
+
         with h5py.File(output_path, "r") as f:
             dataset_group = f["DataSet"]
-            
+
             # Get all resolution levels in order
             res_levels = sorted(
-                [key for key in dataset_group.keys() if key.startswith("ResolutionLevel")],
-                key=lambda x: int(x.split()[-1])
+                [
+                    key
+                    for key in dataset_group.keys()
+                    if key.startswith("ResolutionLevel")
+                ],
+                key=lambda x: int(x.split()[-1]),
             )
-            
+
             prev_volume = None
             for level_key in res_levels:
                 channel_group = dataset_group[level_key]["TimePoint 0"]["Channel 0"]
                 data_dataset = channel_group["Data"]
-                
+
                 # Get dimensions
                 z, y, x = data_dataset.shape
                 volume = z * y * x
-                
+
                 # Each level should be smaller or equal to previous
                 if prev_volume is not None:
-                    assert volume <= prev_volume, f"Level {level_key} has volume {volume} > previous {prev_volume}"
-                
+                    assert (
+                        volume <= prev_volume
+                    ), f"Level {level_key} has volume {volume} > previous {prev_volume}"
+
                 prev_volume = volume
 
     @pytest.mark.usefixtures("cleandir")
@@ -141,34 +153,34 @@ class TestImarisPyramid:
         shape = (128, 256, 192)  # Z, Y, X
         data = da.zeros(shape, dtype=np.float32, chunks=(16, 256, 192))
         data = data[np.newaxis, ...]
-        
+
         znimg = ZarrNii.from_darr(data, spacing=[1.0, 1.0, 1.0])
-        
+
         output_path = "test_pyramid_chunks.ims"
         znimg.to_imaris(output_path)
-        
+
         with h5py.File(output_path, "r") as f:
             dataset_group = f["DataSet"]
-            
+
             for level_key in dataset_group.keys():
                 if not level_key.startswith("ResolutionLevel"):
                     continue
-                    
+
                 channel_group = dataset_group[level_key]["TimePoint 0"]["Channel 0"]
                 data_dataset = channel_group["Data"]
-                
+
                 # Check chunking
                 chunks = data_dataset.chunks
                 assert chunks is not None, f"Level {level_key} has no chunking"
-                
+
                 # Chunks should follow 16x256x256 pattern (adjusted for small dimensions)
                 z_chunk, y_chunk, x_chunk = chunks
                 z_dim, y_dim, x_dim = data_dataset.shape
-                
+
                 assert z_chunk <= 16, f"Z chunk {z_chunk} exceeds 16"
                 assert y_chunk <= 256, f"Y chunk {y_chunk} exceeds 256"
                 assert x_chunk <= 256, f"X chunk {x_chunk} exceeds 256"
-                
+
                 # Chunks should not exceed dimensions
                 assert z_chunk <= z_dim
                 assert y_chunk <= y_dim
@@ -180,19 +192,21 @@ class TestImarisPyramid:
         n_channels = 3
         shape = (n_channels, 128, 256, 192)  # C, Z, Y, X (large enough for pyramid)
         data = da.zeros(shape, dtype=np.float32, chunks=(1, 16, 256, 192))
-        
+
         znimg = ZarrNii.from_darr(data, spacing=[1.0, 1.0, 1.0])
-        
+
         output_path = "test_multichannel_pyramid.ims"
         znimg.to_imaris(output_path)
-        
+
         with h5py.File(output_path, "r") as f:
             dataset_group = f["DataSet"]
-            
+
             # Get resolution levels
-            res_levels = [key for key in dataset_group.keys() if key.startswith("ResolutionLevel")]
+            res_levels = [
+                key for key in dataset_group.keys() if key.startswith("ResolutionLevel")
+            ]
             assert len(res_levels) >= 2
-            
+
             # Check that all channels exist in all levels
             for level_key in res_levels:
                 time_group = dataset_group[level_key]["TimePoint 0"]

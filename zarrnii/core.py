@@ -3969,7 +3969,7 @@ class ZarrNii:
 
     @staticmethod
     def _compute_imaris_pyramid_levels(
-        data_size: Tuple[int, int, int]
+        data_size: Tuple[int, int, int],
     ) -> List[Tuple[int, int, int]]:
         """
         Compute the pyramid resolution levels for Imaris format.
@@ -4146,10 +4146,10 @@ class ZarrNii:
 
             # Compute pyramid levels based on Imaris algorithm
             pyramid_levels = self._compute_imaris_pyramid_levels((z, y, x))
-            
+
             # Create main DataSet group structure
             dataset_group = f.create_group("DataSet")
-            
+
             # Write each resolution level
             for level_idx, (level_z, level_y, level_x) in enumerate(pyramid_levels):
                 res_group = dataset_group.create_group(f"ResolutionLevel {level_idx}")
@@ -4172,9 +4172,11 @@ class ZarrNii:
                         downsample_z = z // level_z
                         downsample_y = y // level_y
                         downsample_x = x // level_x
-                        
+
                         # Downsample using slicing (every Nth element)
-                        channel_data = channel_data[::downsample_z, ::downsample_y, ::downsample_x]
+                        channel_data = channel_data[
+                            ::downsample_z, ::downsample_y, ::downsample_x
+                        ]
 
                     # Rechunk data to match Imaris chunk size (16x256x256 in ZYX)
                     # This optimizes data layout for HDF5 writing
@@ -4188,11 +4190,21 @@ class ZarrNii:
                         channel_data = channel_data.rechunk(target_chunks)
 
                     # Channel attributes - use byte array format exactly like reference
-                    channel_group.attrs["ImageSizeX"] = _string_to_byte_array(str(level_x))
-                    channel_group.attrs["ImageSizeY"] = _string_to_byte_array(str(level_y))
-                    channel_group.attrs["ImageSizeZ"] = _string_to_byte_array(str(level_z))
-                    channel_group.attrs["ImageBlockSizeX"] = _string_to_byte_array(str(level_x))
-                    channel_group.attrs["ImageBlockSizeY"] = _string_to_byte_array(str(level_y))
+                    channel_group.attrs["ImageSizeX"] = _string_to_byte_array(
+                        str(level_x)
+                    )
+                    channel_group.attrs["ImageSizeY"] = _string_to_byte_array(
+                        str(level_y)
+                    )
+                    channel_group.attrs["ImageSizeZ"] = _string_to_byte_array(
+                        str(level_z)
+                    )
+                    channel_group.attrs["ImageBlockSizeX"] = _string_to_byte_array(
+                        str(level_x)
+                    )
+                    channel_group.attrs["ImageBlockSizeY"] = _string_to_byte_array(
+                        str(level_y)
+                    )
                     channel_group.attrs["ImageBlockSizeZ"] = _string_to_byte_array(
                         str(min(level_z, 16))
                     )
