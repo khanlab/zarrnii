@@ -3983,7 +3983,8 @@ class ZarrNii:
 
         1. **Chunked Data Writing**: Processes data in small chunks (16 Z-slices at a time)
            instead of loading the full volume. HDF5 datasets are created empty and
-           populated incrementally.
+           populated incrementally. Data is rechunked to 16×256×256 (ZYX) for optimal
+           HDF5 performance.
 
         2. **Streaming Statistics**: Min/max values and histograms are computed
            incrementally by processing chunks sequentially, maintaining only the
@@ -3994,7 +3995,7 @@ class ZarrNii:
            only the current maximum projection (YX plane) in memory.
 
         For a 100GB dataset, memory usage should remain under a few hundred MB,
-        determined primarily by the chunk size (default: 16 Z-slices × Y × X).
+        determined primarily by the chunk size (default: 16×256×256 ZYX chunks).
 
         Args:
             path: Output path for Imaris (.ims) file
