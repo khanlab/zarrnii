@@ -46,8 +46,15 @@ def _get_default_chunks(
 ) -> Union[str, Tuple[int, ...]]:
     """Get default chunk sizes for the given shape and axes order.
 
+    This function computes appropriate chunk sizes based on the data shape and
+    axes order. For "auto" chunking, it uses DEFAULT_SPATIAL_CHUNKS (16x256x256
+    for ZYX or 256x256x16 for XYZ).
+
     Args:
-        shape: Shape of the data array (e.g., (c, z, y, x) or (c, x, y, z))
+        shape: Shape of the data array. Examples:
+            - 3D: (z, y, x) or (x, y, z)
+            - 4D: (c, z, y, x) or (c, x, y, z)
+            - 5D: (t, c, z, y, x) or (t, c, x, y, z)
         axes_order: Spatial axes order ("ZYX" or "XYZ")
         chunks: User-specified chunks. If "auto", use DEFAULT_SPATIAL_CHUNKS
 
@@ -2198,7 +2205,7 @@ class ZarrNii:
         Args:
             path: File path to NIfTI file (.nii, .nii.gz, .img/.hdr)
             chunks: Dask array chunking strategy. Can be:
-                - "auto": Use default chunking (16x256x256 for ZYX spatial dimensions)
+                - "auto": Use default chunking (16x256x256 for ZYX, 256x256x16 for XYZ)
                 - Tuple of ints: Manual chunk sizes for each dimension
                 - Dict mapping axis to chunk size
             axes_order: Spatial axis ordering convention. Either:
