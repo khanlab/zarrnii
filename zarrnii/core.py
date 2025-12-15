@@ -35,6 +35,67 @@ from scipy.ndimage import zoom
 
 from .transform import AffineTransform, Transform
 
+# Default chunk sizes for spatial dimensions (Z, Y, X)
+DEFAULT_SPATIAL_CHUNKS = (16, 256, 256)
+
+
+def _get_default_chunks(
+    shape: Tuple[int, ...],
+    axes_order: str = "ZYX",
+    chunks: Union[str, Tuple[int, ...], None] = "auto",
+) -> Union[str, Tuple[int, ...]]:
+    """Get default chunk sizes for the given shape and axes order.
+
+    Args:
+        shape: Shape of the data array (e.g., (c, z, y, x) or (c, x, y, z))
+        axes_order: Spatial axes order ("ZYX" or "XYZ")
+        chunks: User-specified chunks. If "auto", use DEFAULT_SPATIAL_CHUNKS
+
+    Returns:
+        Tuple of chunk sizes matching the shape, or "auto" if explicit chunks
+        don't match the shape or for unsupported dimensions
+    """
+    # If user specified explicit chunks, validate they match the shape
+    if chunks != "auto" and isinstance(chunks, tuple):
+        # If user-provided chunks don't match the shape, fall back to auto
+        # This handles cases where user might provide chunks with channel dimension
+        # but the data doesn't have it yet
+        if len(chunks) != len(shape):
+            # Fall back to auto and let dask handle it
+            return "auto"
+        return chunks
+
+    # Use default spatial chunks (16, 256, 256) for ZYX
+    # Need to handle different array shapes and axes orders
+    ndim = len(shape)
+
+    if ndim == 3:
+        # Shape is (z, y, x) or (x, y, z)
+        if axes_order == "ZYX":
+            return DEFAULT_SPATIAL_CHUNKS  # (16, 256, 256) for ZYX
+        else:
+            # XYZ order: need to reverse to (256, 256, 16)
+            return (256, 256, 16)  # for XYZ
+    elif ndim == 4:
+        # Shape is (c, z, y, x) or (c, x, y, z)
+        # Keep full channel dimension, chunk spatial dimensions
+        if axes_order == "ZYX":
+            return (shape[0],) + DEFAULT_SPATIAL_CHUNKS  # (c, 16, 256, 256)
+        else:
+            # XYZ order
+            return (shape[0], 256, 256, 16)  # (c, 256, 256, 16)
+    elif ndim == 5:
+        # Shape is (t, c, z, y, x) or (t, c, x, y, z)
+        # Keep full time and channel dimensions, chunk spatial dimensions
+        if axes_order == "ZYX":
+            return (shape[0], shape[1]) + DEFAULT_SPATIAL_CHUNKS  # (t, c, 16, 256, 256)
+        else:
+            # XYZ order
+            return (shape[0], shape[1], 256, 256, 16)  # (t, c, 256, 256, 16)
+    else:
+        # For other dimensions, fall back to auto
+        return "auto"
+
 
 def _to_primitive(obj: Any) -> Any:
     """
@@ -2110,7 +2171,9 @@ class ZarrNii:
             znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
 
         if rechunk:
-            znimg.data = znimg.data.rechunk(chunks)
+            # Use helper to get default chunks if "auto" was specified
+            rechunk_sizes = _get_default_chunks(znimg.data.shape, axes_order, chunks)
+            znimg.data = znimg.data.rechunk(rechunk_sizes)
 
         return znimg
 
@@ -2135,7 +2198,7 @@ class ZarrNii:
         Args:
             path: File path to NIfTI file (.nii, .nii.gz, .img/.hdr)
             chunks: Dask array chunking strategy. Can be:
-                - "auto": Automatic chunking based on file size
+                - "auto": Use default chunking (16x256x256 for ZYX spatial dimensions)
                 - Tuple of ints: Manual chunk sizes for each dimension
                 - Dict mapping axis to chunk size
             axes_order: Spatial axis ordering convention. Either:
@@ -2217,15 +2280,22 @@ class ZarrNii:
         if as_ref:
             # Create an empty dask array with the adjusted shape
             # Already add channel dimension here
-            darr = da.zeros((1, *new_shape), chunks=chunks, dtype="float32")
+            # For as_ref, we know the final shape will be (1, *new_shape)
+            # new_shape is in XYZ order from NIfTI, will be transposed later if needed
+            final_ref_shape = (1, *new_shape)
+            ref_chunks = _get_default_chunks(final_ref_shape, "XYZ", chunks)
+            darr = da.zeros(final_ref_shape, chunks=ref_chunks, dtype="float32")
 
             # Mark that we already added channel dimension
             has_channel_dim = True
 
         else:
             # Load the NIfTI data and convert to a dask array
+            # NIfTI data is in XYZ (or XYZC) order
             array = nifti_img.get_fdata()
-            darr = da.from_array(array, chunks=chunks)
+            # Compute chunks based on the array shape in XYZ order
+            nifti_chunks = _get_default_chunks(array.shape, "XYZ", chunks)
+            darr = da.from_array(array, chunks=nifti_chunks)
             has_channel_dim = False
 
         # NIfTI uses XYZ ordering, but we need to handle channels
@@ -3908,7 +3978,9 @@ class ZarrNii:
             data_numpy = data_dataset[:]
 
             # Create dask array from numpy array
-            data_array = da.from_array(data_numpy, chunks=chunks)
+            # Imaris data is typically in ZYX order
+            imaris_chunks = _get_default_chunks(data_numpy.shape, axes_order, chunks)
+            data_array = da.from_array(data_numpy, chunks=imaris_chunks)
 
             # Add channel dimension if not present
             if len(data_array.shape) == 3:

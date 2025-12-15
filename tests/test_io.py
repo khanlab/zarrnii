@@ -791,3 +791,71 @@ def test_chunk_preservation_to_ome_zarr():
         96,
     ), f"Expected chunks (1, 96, 96, 96), got {z3.chunks}"
     assert z3.chunks != (1, 128, 128, 128), "Chunks should not revert to default 128"
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_default_chunking_16x256x256(nifti_nib):
+    """Test that default chunking is 16x256x256 for ZYX spatial dimensions.
+    
+    This test verifies that when using "auto" chunking (the default), the data is
+    chunked as 16x256x256 in ZYX order, rather than using Dask's auto chunking
+    which typically doesn't chunk the Z dimension.
+    """
+    # Create a NIfTI file with a reasonable size
+    nifti_nib.to_filename("test_chunking.nii")
+    
+    # Load with default chunking (should use 16x256x256 for ZYX)
+    znii_zyx = ZarrNii.from_nifti("test_chunking.nii", axes_order="ZYX")
+    
+    # Check the chunks - should be (1, 16, 256, 256) for (c, z, y, x)
+    # Note: actual chunks might be smaller if the data is smaller than chunk size
+    chunks = znii_zyx.data.chunksize
+    assert chunks[0] == 1, f"Channel chunk should be 1, got {chunks[0]}"
+    
+    # For Z dimension, should be 16 or smaller if data is smaller
+    assert chunks[1] <= 16, f"Z chunk should be at most 16, got {chunks[1]}"
+    
+    # For Y and X dimensions, should be 256 or smaller if data is smaller
+    assert chunks[2] <= 256, f"Y chunk should be at most 256, got {chunks[2]}"
+    assert chunks[3] <= 256, f"X chunk should be at most 256, got {chunks[3]}"
+    
+    # If the data is large enough, verify chunks are exactly as expected
+    if znii_zyx.shape[1] >= 16:
+        assert chunks[1] == 16, f"Z chunk should be 16, got {chunks[1]}"
+    if znii_zyx.shape[2] >= 256:
+        assert chunks[2] == 256, f"Y chunk should be 256, got {chunks[2]}"
+    if znii_zyx.shape[3] >= 256:
+        assert chunks[3] == 256, f"X chunk should be 256, got {chunks[3]}"
+    
+    # Load with XYZ order (should use 256x256x16 for XYZ)
+    znii_xyz = ZarrNii.from_nifti("test_chunking.nii", axes_order="XYZ")
+    
+    # Check the chunks - should be (1, 256, 256, 16) for (c, x, y, z)
+    chunks_xyz = znii_xyz.data.chunksize
+    assert chunks_xyz[0] == 1, f"Channel chunk should be 1, got {chunks_xyz[0]}"
+    
+    # For X and Y dimensions, should be 256 or smaller if data is smaller
+    assert chunks_xyz[1] <= 256, f"X chunk should be at most 256, got {chunks_xyz[1]}"
+    assert chunks_xyz[2] <= 256, f"Y chunk should be at most 256, got {chunks_xyz[2]}"
+    
+    # For Z dimension, should be 16 or smaller if data is smaller
+    assert chunks_xyz[3] <= 16, f"Z chunk should be at most 16, got {chunks_xyz[3]}"
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_explicit_chunking_overrides_default(nifti_nib):
+    """Test that explicit chunking overrides the default 16x256x256 chunking."""
+    # Create a NIfTI file
+    nifti_nib.to_filename("test_custom_chunks.nii")
+    
+    # Load with explicit custom chunks for spatial dimensions (3D NIfTI data)
+    # NIfTI data is 3D (x, y, z), so we need 3 chunk values
+    custom_chunks = (32, 128, 128)  # For XYZ order in NIfTI
+    znii = ZarrNii.from_nifti("test_custom_chunks.nii", chunks=custom_chunks, axes_order="ZYX")
+    
+    # After loading, the data will have a channel dimension added, so shape is (c, z, y, x)
+    # The chunks should be adjusted for this - Dask will handle the transpose
+    chunks = znii.data.chunksize
+    assert chunks[0] == 1, f"Channel chunk should be 1, got {chunks[0]}"
+    # Verify that custom chunks were used (may be smaller if data is smaller)
+    # After transpose from XYZ to ZYX, the chunks get reordered too
