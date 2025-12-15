@@ -3983,7 +3983,8 @@ class ZarrNii:
 
         1. **Chunked Data Writing**: Processes data in small chunks (16 Z-slices at a time)
            instead of loading the full volume. HDF5 datasets are created empty and
-           populated incrementally.
+           populated incrementally. Data is rechunked to 16×256×256 (ZYX) for optimal
+           HDF5 performance.
 
         2. **Streaming Statistics**: Min/max values and histograms are computed
            incrementally by processing chunks sequentially, maintaining only the
@@ -3994,7 +3995,7 @@ class ZarrNii:
            only the current maximum projection (YX plane) in memory.
 
         For a 100GB dataset, memory usage should remain under a few hundred MB,
-        determined primarily by the chunk size (default: 16 Z-slices × Y × X).
+        determined primarily by the chunk size (default: 16×256×256 ZYX chunks).
 
         Args:
             path: Output path for Imaris (.ims) file
@@ -4088,6 +4089,17 @@ class ZarrNii:
                     # Single channel case where we added dimension
                     channel_data = data_array
 
+                # Rechunk data to match Imaris chunk size (16x256x256 in ZYX)
+                # This optimizes data layout for HDF5 writing
+                target_chunk_z = min(z, 16)
+                target_chunk_y = min(y, 256)
+                target_chunk_x = min(x, 256)
+                target_chunks = (target_chunk_z, target_chunk_y, target_chunk_x)
+
+                # Only rechunk if the data is a Dask array
+                if hasattr(channel_data, "rechunk"):
+                    channel_data = channel_data.rechunk(target_chunks)
+
                 # Channel attributes - use byte array format exactly like reference
                 channel_group.attrs["ImageSizeX"] = _string_to_byte_array(str(x))
                 channel_group.attrs["ImageSizeY"] = _string_to_byte_array(str(y))
@@ -4141,13 +4153,19 @@ class ZarrNii:
                 )
 
                 # Create HDF5 dataset (empty, to be filled chunk by chunk)
+                # Use 16x256x256 (ZYX) chunking for Imaris, adjusting for small dimensions
+                chunk_z = min(z, 16)
+                chunk_y = min(y, 256)
+                chunk_x = min(x, 256)
+                h5_chunks = (chunk_z, chunk_y, chunk_x)
+
                 h5_dataset = channel_group.create_dataset(
                     "Data",
                     shape=(z, y, x),
                     dtype=target_dtype,
                     compression=compression,
                     compression_opts=compression_opts,
-                    chunks=(min(z, 16), y, x),  # Use reasonable chunk size
+                    chunks=h5_chunks,  # Use 16x256x256 (ZYX) chunking for Imaris
                 )
 
                 # Second pass: write data and accumulate histogram chunk by chunk
