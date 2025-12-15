@@ -4049,23 +4049,23 @@ class ZarrNii:
 
         **Memory-Safe Implementation:**
         This method is designed to handle arbitrarily large datasets without loading
-        the entire array into memory. It achieves this through:
+        the entire array into memory. It achieves this through true 3D tiling:
 
-        1. **Chunked Data Writing**: Processes data in small chunks (16 Z-slices at a time)
-           instead of loading the full volume. HDF5 datasets are created empty and
-           populated incrementally. Data is rechunked to 16×256×256 (ZYX) for optimal
-           HDF5 performance.
+        1. **3D Tiled Data Writing**: Processes data using 3D tiles (16×256×256 voxels)
+           instead of loading full slabs. HDF5 datasets are created empty and populated
+           incrementally tile-by-tile. This prevents memory blowup even for ultra-high
+           resolution images with large Y×X dimensions.
 
-        2. **Streaming Statistics**: Min/max values and histograms are computed
-           incrementally by processing chunks sequentially, maintaining only the
-           running statistics in memory.
+        2. **3D Tiled Statistics**: Min/max values and histograms are computed
+           incrementally by processing 3D tiles, maintaining only the running
+           statistics in memory. No full Y×X slabs are ever materialized.
 
-        3. **Streaming Thumbnail Generation**: Maximum Intensity Projection (MIP)
-           thumbnails are computed by processing Z-slices in chunks and maintaining
-           only the current maximum projection (YX plane) in memory.
+        3. **3D Tiled Thumbnail Generation**: Maximum Intensity Projection (MIP)
+           thumbnails are computed by processing 3D tiles and maintaining only the
+           current maximum projection (YX plane) in memory, updated region-by-region.
 
-        For a 100GB dataset, memory usage should remain under a few hundred MB,
-        determined primarily by the chunk size (default: 16×256×256 ZYX chunks).
+        For a 100GB dataset with dimensions 1000×8192×8192, memory usage remains
+        under ~4MB per tile, regardless of Y×X dimensions (default: 16×256×256 tiles).
 
         Args:
             path: Output path for Imaris (.ims) file
