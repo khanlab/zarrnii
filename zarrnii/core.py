@@ -4219,29 +4219,37 @@ class ZarrNii:
                         target_dtype = np.uint8
 
                     # STREAMING STATISTICS: Compute min/max/histogram incrementally
-                    # Process data in chunks to compute statistics without loading full array
+                    # Process data in 3D tiles to compute statistics without loading full array
                     data_min = np.inf
                     data_max = -np.inf
                     hist_bins = np.zeros(256, dtype=np.uint64)
 
-                    # Determine chunk size for streaming (process Z slices in batches)
-                    chunk_z_size = min(16, level_z)  # Process 16 Z-slices at a time
+                    # Determine tile size for streaming (true 3D tiling: 16×256×256)
+                    tile_z_size = min(16, level_z)
+                    tile_y_size = min(256, level_y)
+                    tile_x_size = min(256, level_x)
 
-                    # First pass: compute min/max for histogram range
-                    for z_start in range(0, level_z, chunk_z_size):
-                        z_end = min(z_start + chunk_z_size, level_z)
-                        chunk = channel_data[z_start:z_end, :, :]
+                    # First pass: compute min/max for histogram range using 3D tiles
+                    for z_start in range(0, level_z, tile_z_size):
+                        z_end = min(z_start + tile_z_size, level_z)
+                        for y_start in range(0, level_y, tile_y_size):
+                            y_end = min(y_start + tile_y_size, level_y)
+                            for x_start in range(0, level_x, tile_x_size):
+                                x_end = min(x_start + tile_x_size, level_x)
+                                
+                                # Extract 3D tile (≤16×256×256)
+                                tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
 
-                        # Compute chunk (small subset of full data)
-                        if hasattr(chunk, "compute"):
-                            chunk_data = chunk.compute()
-                        else:
-                            chunk_data = np.asarray(chunk)
+                                # Compute tile (small subset of full data)
+                                if hasattr(tile, "compute"):
+                                    tile_data = tile.compute()
+                                else:
+                                    tile_data = np.asarray(tile)
 
-                        chunk_min = float(chunk_data.min())
-                        chunk_max = float(chunk_data.max())
-                        data_min = min(data_min, chunk_min)
-                        data_max = max(data_max, chunk_max)
+                                tile_min = float(tile_data.min())
+                                tile_max = float(tile_data.max())
+                                data_min = min(data_min, tile_min)
+                                data_max = max(data_max, tile_max)
 
                     # Set histogram range attributes
                     channel_group.attrs["HistogramMin"] = _string_to_byte_array(
@@ -4267,29 +4275,35 @@ class ZarrNii:
                         chunks=h5_chunks,  # Use 16x256x256 (ZYX) chunking for Imaris
                     )
 
-                    # Second pass: write data and accumulate histogram chunk by chunk
-                    for z_start in range(0, level_z, chunk_z_size):
-                        z_end = min(z_start + chunk_z_size, level_z)
-                        chunk = channel_data[z_start:z_end, :, :]
+                    # Second pass: write data and accumulate histogram using 3D tiles
+                    for z_start in range(0, level_z, tile_z_size):
+                        z_end = min(z_start + tile_z_size, level_z)
+                        for y_start in range(0, level_y, tile_y_size):
+                            y_end = min(y_start + tile_y_size, level_y)
+                            for x_start in range(0, level_x, tile_x_size):
+                                x_end = min(x_start + tile_x_size, level_x)
+                                
+                                # Extract 3D tile (≤16×256×256)
+                                tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
 
-                        # Compute chunk
-                        if hasattr(chunk, "compute"):
-                            chunk_data = chunk.compute()
-                        else:
-                            chunk_data = np.asarray(chunk)
+                                # Compute tile
+                                if hasattr(tile, "compute"):
+                                    tile_data = tile.compute()
+                                else:
+                                    tile_data = np.asarray(tile)
 
-                        # Convert to target dtype
-                        if chunk_data.dtype != target_dtype:
-                            chunk_data = chunk_data.astype(target_dtype)
+                                # Convert to target dtype
+                                if tile_data.dtype != target_dtype:
+                                    tile_data = tile_data.astype(target_dtype)
 
-                        # Write chunk to HDF5
-                        h5_dataset[z_start:z_end, :, :] = chunk_data
+                                # Write tile to HDF5
+                                h5_dataset[z_start:z_end, y_start:y_end, x_start:x_end] = tile_data
 
-                        # Accumulate histogram
-                        chunk_hist, _ = np.histogram(
-                            chunk_data.flatten(), bins=256, range=(data_min, data_max)
-                        )
-                        hist_bins += chunk_hist.astype(np.uint64)
+                                # Accumulate histogram
+                                tile_hist, _ = np.histogram(
+                                    tile_data.flatten(), bins=256, range=(data_min, data_max)
+                                )
+                                hist_bins += tile_hist.astype(np.uint64)
 
                     # Create histogram dataset
                     channel_group.create_dataset("Histogram", data=hist_bins)
@@ -4430,27 +4444,39 @@ class ZarrNii:
                     else:
                         channel_data = data_array
 
-                    # Compute MIP incrementally by processing Z-slices in chunks
-                    # Initialize MIP accumulator
+                    # Compute MIP incrementally using 3D tiles
+                    # Initialize MIP accumulator (Y×X plane)
                     mip = None
-                    chunk_z_size = min(16, z)
+                    tile_z_size = min(16, z)
+                    tile_y_size = min(256, y)
+                    tile_x_size = min(256, x)
 
-                    for z_start in range(0, z, chunk_z_size):
-                        z_end = min(z_start + chunk_z_size, z)
-                        chunk = channel_data[z_start:z_end, :, :]
+                    for z_start in range(0, z, tile_z_size):
+                        z_end = min(z_start + tile_z_size, z)
+                        for y_start in range(0, y, tile_y_size):
+                            y_end = min(y_start + tile_y_size, y)
+                            for x_start in range(0, x, tile_x_size):
+                                x_end = min(x_start + tile_x_size, x)
+                                
+                                # Extract 3D tile (≤16×256×256)
+                                tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
 
-                        # Compute chunk
-                        if hasattr(chunk, "compute"):
-                            chunk_data = chunk.compute()
-                        else:
-                            chunk_data = np.asarray(chunk)
+                                # Compute tile
+                                if hasattr(tile, "compute"):
+                                    tile_data = tile.compute()
+                                else:
+                                    tile_data = np.asarray(tile)
 
-                        # Update MIP (maximum across Z within this chunk)
-                        chunk_mip = np.max(chunk_data, axis=0)
-                        if mip is None:
-                            mip = chunk_mip
-                        else:
-                            mip = np.maximum(mip, chunk_mip)
+                                # Update MIP (maximum across Z within this tile)
+                                tile_mip = np.max(tile_data, axis=0)
+                                
+                                # Initialize or update the corresponding region in the global MIP
+                                if mip is None:
+                                    mip = np.zeros((y, x), dtype=tile_data.dtype)
+                                
+                                mip[y_start:y_end, x_start:x_end] = np.maximum(
+                                    mip[y_start:y_end, x_start:x_end], tile_mip
+                                )
 
                     # Downsample MIP to 256x256 (simple decimation)
                     step_y = max(1, mip.shape[0] // 256)
@@ -4477,26 +4503,38 @@ class ZarrNii:
                 else:
                     channel_data = data_array
 
-                # Compute MIP incrementally
+                # Compute MIP incrementally using 3D tiles
                 mip = None
-                chunk_z_size = min(16, z)
+                tile_z_size = min(16, z)
+                tile_y_size = min(256, y)
+                tile_x_size = min(256, x)
 
-                for z_start in range(0, z, chunk_z_size):
-                    z_end = min(z_start + chunk_z_size, z)
-                    chunk = channel_data[z_start:z_end, :, :]
+                for z_start in range(0, z, tile_z_size):
+                    z_end = min(z_start + tile_z_size, z)
+                    for y_start in range(0, y, tile_y_size):
+                        y_end = min(y_start + tile_y_size, y)
+                        for x_start in range(0, x, tile_x_size):
+                            x_end = min(x_start + tile_x_size, x)
+                            
+                            # Extract 3D tile (≤16×256×256)
+                            tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
 
-                    # Compute chunk
-                    if hasattr(chunk, "compute"):
-                        chunk_data = chunk.compute()
-                    else:
-                        chunk_data = np.asarray(chunk)
+                            # Compute tile
+                            if hasattr(tile, "compute"):
+                                tile_data = tile.compute()
+                            else:
+                                tile_data = np.asarray(tile)
 
-                    # Update MIP
-                    chunk_mip = np.max(chunk_data, axis=0)
-                    if mip is None:
-                        mip = chunk_mip
-                    else:
-                        mip = np.maximum(mip, chunk_mip)
+                            # Update MIP (maximum across Z within this tile)
+                            tile_mip = np.max(tile_data, axis=0)
+                            
+                            # Initialize or update the corresponding region in the global MIP
+                            if mip is None:
+                                mip = np.zeros((y, x), dtype=tile_data.dtype)
+                            
+                            mip[y_start:y_end, x_start:x_end] = np.maximum(
+                                mip[y_start:y_end, x_start:x_end], tile_mip
+                            )
 
                 # Downsample to 256x256
                 step_y = max(1, mip.shape[0] // 256)
