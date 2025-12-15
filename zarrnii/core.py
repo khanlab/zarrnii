@@ -3967,6 +3967,69 @@ class ZarrNii:
             _omero=None,
         )
 
+    @staticmethod
+    def _compute_imaris_pyramid_levels(
+        data_size: Tuple[int, int, int]
+    ) -> List[Tuple[int, int, int]]:
+        """
+        Compute the pyramid resolution levels for Imaris format.
+
+        This implements the Imaris multi-resolution pyramid algorithm as described
+        in the Imaris file format documentation. The algorithm continues creating
+        lower resolution levels until the volume size is less than 1 MB.
+
+        Args:
+            data_size: Original data size as (Z, Y, X) tuple
+
+        Returns:
+            List of resolution sizes as (Z, Y, X) tuples, starting with original size
+        """
+        min_volume_size_mb = 1.0
+        resolution_sizes = []
+
+        # Start with original resolution
+        new_resolution = list(data_size)
+
+        # Always add the original resolution first
+        resolution_sizes.append(tuple(new_resolution))
+
+        # Calculate initial volume
+        volume_mb = (
+            new_resolution[0] * new_resolution[1] * new_resolution[2] * 4.0
+        ) / (1024.0 * 1024.0)
+
+        # Continue while volume > 1 MB
+        while volume_mb > min_volume_size_mb:
+            last_resolution = new_resolution.copy()
+            last_volume = last_resolution[0] * last_resolution[1] * last_resolution[2]
+
+            # Compute next resolution level
+            # For each dimension, check if it should be downsampled by factor of 2
+            for d in range(3):
+                # Check condition: (10 * dimension)^2 > volume / dimension
+                dim_val = last_resolution[d]
+                if (10 * dim_val) * (10 * dim_val) > last_volume / dim_val:
+                    new_resolution[d] = last_resolution[d] // 2
+                else:
+                    new_resolution[d] = last_resolution[d]
+
+                # Ensure dimension is at least 1
+                new_resolution[d] = max(1, new_resolution[d])
+
+            # Calculate volume of the new resolution
+            volume_mb = (
+                new_resolution[0] * new_resolution[1] * new_resolution[2] * 4.0
+            ) / (1024.0 * 1024.0)
+
+            # Safety check: if resolution didn't change, stop
+            if tuple(new_resolution) == tuple(last_resolution):
+                break
+
+            # Add the new resolution to the list
+            resolution_sizes.append(tuple(new_resolution))
+
+        return resolution_sizes
+
     def to_imaris(
         self, path: str, compression: str = "gzip", compression_opts: int = 6
     ) -> str:
@@ -3976,6 +4039,13 @@ class ZarrNii:
         This method creates Imaris files compatible with Imaris software by
         following the exact HDF5 structure from correctly-formed reference files.
         All attributes use byte-array encoding as required by Imaris.
+
+        **Multi-Resolution Pyramid:**
+        The method automatically generates multiple resolution levels following the
+        Imaris pyramid algorithm. Resolution levels are created by downsampling
+        dimensions where (10 * dimension)² > volume / dimension until the total
+        volume is less than 1 MB. All pyramid levels use the same 16×256×256 (ZYX)
+        chunking strategy for optimal performance.
 
         **Memory-Safe Implementation:**
         This method is designed to handle arbitrarily large datasets without loading
@@ -4011,6 +4081,7 @@ class ZarrNii:
         Notes:
             - Imaris files are always saved in ZYX axis order
             - Automatic axis reordering from XYZ to ZYX if needed
+            - Multi-resolution pyramid automatically generated
             - Spatial transformations and metadata are preserved
             - Works efficiently with Dask arrays, Zarr arrays, and NumPy arrays
             - No full-array compute() is ever called
@@ -4073,127 +4144,143 @@ class ZarrNii:
             f.attrs["NumberOfDataSets"] = np.array([1], dtype=np.uint32)
             f.attrs["ThumbnailDirectoryName"] = _string_to_byte_array("Thumbnail")
 
+            # Compute pyramid levels based on Imaris algorithm
+            pyramid_levels = self._compute_imaris_pyramid_levels((z, y, x))
+            
             # Create main DataSet group structure
             dataset_group = f.create_group("DataSet")
-            res_group = dataset_group.create_group("ResolutionLevel 0")
-            time_group = res_group.create_group("TimePoint 0")
+            
+            # Write each resolution level
+            for level_idx, (level_z, level_y, level_x) in enumerate(pyramid_levels):
+                res_group = dataset_group.create_group(f"ResolutionLevel {level_idx}")
+                time_group = res_group.create_group("TimePoint 0")
 
-            # Create channels with proper attributes
-            for c in range(n_channels):
-                channel_group = time_group.create_group(f"Channel {c}")
+                # Create channels with proper attributes
+                for c in range(n_channels):
+                    channel_group = time_group.create_group(f"Channel {c}")
 
-                # Get channel data reference (lazy - no compute yet)
-                if len(data_array.shape) == 4:
-                    channel_data = data_array[c]  # (Z, Y, X)
-                else:
-                    # Single channel case where we added dimension
-                    channel_data = data_array
-
-                # Rechunk data to match Imaris chunk size (16x256x256 in ZYX)
-                # This optimizes data layout for HDF5 writing
-                target_chunk_z = min(z, 16)
-                target_chunk_y = min(y, 256)
-                target_chunk_x = min(x, 256)
-                target_chunks = (target_chunk_z, target_chunk_y, target_chunk_x)
-
-                # Only rechunk if the data is a Dask array
-                if hasattr(channel_data, "rechunk"):
-                    channel_data = channel_data.rechunk(target_chunks)
-
-                # Channel attributes - use byte array format exactly like reference
-                channel_group.attrs["ImageSizeX"] = _string_to_byte_array(str(x))
-                channel_group.attrs["ImageSizeY"] = _string_to_byte_array(str(y))
-                channel_group.attrs["ImageSizeZ"] = _string_to_byte_array(str(z))
-                channel_group.attrs["ImageBlockSizeX"] = _string_to_byte_array(str(x))
-                channel_group.attrs["ImageBlockSizeY"] = _string_to_byte_array(str(y))
-                channel_group.attrs["ImageBlockSizeZ"] = _string_to_byte_array(
-                    str(min(z, 16))
-                )
-
-                # Determine target dtype for storage
-                source_dtype = channel_data.dtype
-                if source_dtype == np.float32 or source_dtype == np.float64:
-                    target_dtype = np.float32
-                elif source_dtype in [np.uint16, np.int16]:
-                    target_dtype = source_dtype
-                else:
-                    target_dtype = np.uint8
-
-                # STREAMING STATISTICS: Compute min/max/histogram incrementally
-                # Process data in chunks to compute statistics without loading full array
-                data_min = np.inf
-                data_max = -np.inf
-                hist_bins = np.zeros(256, dtype=np.uint64)
-
-                # Determine chunk size for streaming (process Z slices in batches)
-                chunk_z_size = min(16, z)  # Process 16 Z-slices at a time
-
-                # First pass: compute min/max for histogram range
-                for z_start in range(0, z, chunk_z_size):
-                    z_end = min(z_start + chunk_z_size, z)
-                    chunk = channel_data[z_start:z_end, :, :]
-
-                    # Compute chunk (small subset of full data)
-                    if hasattr(chunk, "compute"):
-                        chunk_data = chunk.compute()
+                    # Get channel data reference (lazy - no compute yet)
+                    if len(data_array.shape) == 4:
+                        channel_data = data_array[c]  # (Z, Y, X)
                     else:
-                        chunk_data = np.asarray(chunk)
+                        # Single channel case where we added dimension
+                        channel_data = data_array
 
-                    chunk_min = float(chunk_data.min())
-                    chunk_max = float(chunk_data.max())
-                    data_min = min(data_min, chunk_min)
-                    data_max = max(data_max, chunk_max)
+                    # Downsample data for levels > 0 using slicing (memory-efficient)
+                    if level_idx > 0:
+                        # Calculate downsampling factors from original size
+                        downsample_z = z // level_z
+                        downsample_y = y // level_y
+                        downsample_x = x // level_x
+                        
+                        # Downsample using slicing (every Nth element)
+                        channel_data = channel_data[::downsample_z, ::downsample_y, ::downsample_x]
 
-                # Set histogram range attributes
-                channel_group.attrs["HistogramMin"] = _string_to_byte_array(
-                    f"{data_min:.3f}"
-                )
-                channel_group.attrs["HistogramMax"] = _string_to_byte_array(
-                    f"{data_max:.3f}"
-                )
+                    # Rechunk data to match Imaris chunk size (16x256x256 in ZYX)
+                    # This optimizes data layout for HDF5 writing
+                    target_chunk_z = min(level_z, 16)
+                    target_chunk_y = min(level_y, 256)
+                    target_chunk_x = min(level_x, 256)
+                    target_chunks = (target_chunk_z, target_chunk_y, target_chunk_x)
 
-                # Create HDF5 dataset (empty, to be filled chunk by chunk)
-                # Use 16x256x256 (ZYX) chunking for Imaris, adjusting for small dimensions
-                chunk_z = min(z, 16)
-                chunk_y = min(y, 256)
-                chunk_x = min(x, 256)
-                h5_chunks = (chunk_z, chunk_y, chunk_x)
+                    # Only rechunk if the data is a Dask array
+                    if hasattr(channel_data, "rechunk"):
+                        channel_data = channel_data.rechunk(target_chunks)
 
-                h5_dataset = channel_group.create_dataset(
-                    "Data",
-                    shape=(z, y, x),
-                    dtype=target_dtype,
-                    compression=compression,
-                    compression_opts=compression_opts,
-                    chunks=h5_chunks,  # Use 16x256x256 (ZYX) chunking for Imaris
-                )
-
-                # Second pass: write data and accumulate histogram chunk by chunk
-                for z_start in range(0, z, chunk_z_size):
-                    z_end = min(z_start + chunk_z_size, z)
-                    chunk = channel_data[z_start:z_end, :, :]
-
-                    # Compute chunk
-                    if hasattr(chunk, "compute"):
-                        chunk_data = chunk.compute()
-                    else:
-                        chunk_data = np.asarray(chunk)
-
-                    # Convert to target dtype
-                    if chunk_data.dtype != target_dtype:
-                        chunk_data = chunk_data.astype(target_dtype)
-
-                    # Write chunk to HDF5
-                    h5_dataset[z_start:z_end, :, :] = chunk_data
-
-                    # Accumulate histogram
-                    chunk_hist, _ = np.histogram(
-                        chunk_data.flatten(), bins=256, range=(data_min, data_max)
+                    # Channel attributes - use byte array format exactly like reference
+                    channel_group.attrs["ImageSizeX"] = _string_to_byte_array(str(level_x))
+                    channel_group.attrs["ImageSizeY"] = _string_to_byte_array(str(level_y))
+                    channel_group.attrs["ImageSizeZ"] = _string_to_byte_array(str(level_z))
+                    channel_group.attrs["ImageBlockSizeX"] = _string_to_byte_array(str(level_x))
+                    channel_group.attrs["ImageBlockSizeY"] = _string_to_byte_array(str(level_y))
+                    channel_group.attrs["ImageBlockSizeZ"] = _string_to_byte_array(
+                        str(min(level_z, 16))
                     )
-                    hist_bins += chunk_hist.astype(np.uint64)
 
-                # Create histogram dataset
-                channel_group.create_dataset("Histogram", data=hist_bins)
+                    # Determine target dtype for storage
+                    source_dtype = channel_data.dtype
+                    if source_dtype == np.float32 or source_dtype == np.float64:
+                        target_dtype = np.float32
+                    elif source_dtype in [np.uint16, np.int16]:
+                        target_dtype = source_dtype
+                    else:
+                        target_dtype = np.uint8
+
+                    # STREAMING STATISTICS: Compute min/max/histogram incrementally
+                    # Process data in chunks to compute statistics without loading full array
+                    data_min = np.inf
+                    data_max = -np.inf
+                    hist_bins = np.zeros(256, dtype=np.uint64)
+
+                    # Determine chunk size for streaming (process Z slices in batches)
+                    chunk_z_size = min(16, level_z)  # Process 16 Z-slices at a time
+
+                    # First pass: compute min/max for histogram range
+                    for z_start in range(0, level_z, chunk_z_size):
+                        z_end = min(z_start + chunk_z_size, level_z)
+                        chunk = channel_data[z_start:z_end, :, :]
+
+                        # Compute chunk (small subset of full data)
+                        if hasattr(chunk, "compute"):
+                            chunk_data = chunk.compute()
+                        else:
+                            chunk_data = np.asarray(chunk)
+
+                        chunk_min = float(chunk_data.min())
+                        chunk_max = float(chunk_data.max())
+                        data_min = min(data_min, chunk_min)
+                        data_max = max(data_max, chunk_max)
+
+                    # Set histogram range attributes
+                    channel_group.attrs["HistogramMin"] = _string_to_byte_array(
+                        f"{data_min:.3f}"
+                    )
+                    channel_group.attrs["HistogramMax"] = _string_to_byte_array(
+                        f"{data_max:.3f}"
+                    )
+
+                    # Create HDF5 dataset (empty, to be filled chunk by chunk)
+                    # Use 16x256x256 (ZYX) chunking for Imaris, adjusting for small dimensions
+                    chunk_z = min(level_z, 16)
+                    chunk_y = min(level_y, 256)
+                    chunk_x = min(level_x, 256)
+                    h5_chunks = (chunk_z, chunk_y, chunk_x)
+
+                    h5_dataset = channel_group.create_dataset(
+                        "Data",
+                        shape=(level_z, level_y, level_x),
+                        dtype=target_dtype,
+                        compression=compression,
+                        compression_opts=compression_opts,
+                        chunks=h5_chunks,  # Use 16x256x256 (ZYX) chunking for Imaris
+                    )
+
+                    # Second pass: write data and accumulate histogram chunk by chunk
+                    for z_start in range(0, level_z, chunk_z_size):
+                        z_end = min(z_start + chunk_z_size, level_z)
+                        chunk = channel_data[z_start:z_end, :, :]
+
+                        # Compute chunk
+                        if hasattr(chunk, "compute"):
+                            chunk_data = chunk.compute()
+                        else:
+                            chunk_data = np.asarray(chunk)
+
+                        # Convert to target dtype
+                        if chunk_data.dtype != target_dtype:
+                            chunk_data = chunk_data.astype(target_dtype)
+
+                        # Write chunk to HDF5
+                        h5_dataset[z_start:z_end, :, :] = chunk_data
+
+                        # Accumulate histogram
+                        chunk_hist, _ = np.histogram(
+                            chunk_data.flatten(), bins=256, range=(data_min, data_max)
+                        )
+                        hist_bins += chunk_hist.astype(np.uint64)
+
+                    # Create histogram dataset
+                    channel_group.create_dataset("Histogram", data=hist_bins)
 
             # Get spacing directly from scale dictionary with proper XYZ order
             try:
