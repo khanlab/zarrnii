@@ -4373,7 +4373,7 @@ class ZarrNii:
 
         # Create a new NgffImage with the same properties
         copied_image = nz.NgffImage(
-            data=self.ngff_image.data,  # Dask arrays are lazy so this is efficient
+            data=self.ngff_image.data.copy(),  # Dask arrays are lazy so this is efficient
             dims=copied_dims,
             scale=self.ngff_image.scale.copy(),
             translation=self.ngff_image.translation.copy(),
@@ -5281,6 +5281,34 @@ class ZarrNii:
             f"  dtype={self.data.dtype}, chunksize={self.data.chunksize}\n"
             f")"
         )
+
+    def destripe(
+        self,
+        channel=0,
+        **kwargs,
+    ) -> "ZarrNii":
+        """
+        Apply destriping.
+
+        Args:
+            **kwargs: Additional arguments passed to destripe()
+
+        Returns:
+            New ZarrNii instance with destriped data
+        """
+
+        from .destripe import destripe
+
+        # Step 1: Get ZYX array
+        # for now, just assume already ZYX, and single channel (later add chekcs for this, and reordering if XYZ)
+
+        destriped_znimg = self.copy()
+
+        img_3d = self.data[channel, :, :, :].squeeze()
+
+        destriped_znimg.data[channel, :, :, :] = destripe(img_3d, **kwargs)
+
+        return destriped_znimg
 
     def _is_metadata_valid(self, result: Any) -> bool:
         """Check if resulting array preserves metadata integrity.
