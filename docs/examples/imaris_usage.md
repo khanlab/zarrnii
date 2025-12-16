@@ -70,8 +70,14 @@ output_path = znimg.to_imaris("output_data.ims")
 print(f"Saved to: {output_path}")
 ```
 
-!!! note "Multi-Resolution Pyramid"
-    The `to_imaris()` method automatically generates multiple resolution levels (pyramid) for efficient visualization of large datasets. The number of levels is determined by the Imaris algorithm, which creates downsampled versions until the volume size drops below 1 MB. Each level uses memory-safe chunked processing with 16×256×256 (ZYX) chunks.
+!!! note "Multi-Resolution Pyramid & Memory Safety"
+    The `to_imaris()` method automatically generates multiple resolution levels (pyramid) for efficient visualization of large datasets. It uses an intermediate Zarr strategy:
+    
+    1. Writes a temporary Zarr file with proper multiscale pyramid (using Dask)
+    2. Computes statistics from the Zarr file
+    3. Copies data block-by-block from Zarr to HDF5
+    
+    This ensures memory-safe processing with 16×256×256 (ZYX) chunks throughout. The intermediate Zarr file is automatically cleaned up after successful conversion.
 
 ### Compression Options
 
@@ -81,6 +87,13 @@ znimg.to_imaris(
     "compressed_data.ims",
     compression="gzip",      # Compression method
     compression_opts=6       # Compression level (0-9)
+)
+
+# Specify custom temporary directory for intermediate Zarr
+# Useful if /tmp has limited space
+znimg.to_imaris(
+    "large_data.ims",
+    tmp_dir="/scratch/temp"  # Custom temp directory
 )
 ```
 

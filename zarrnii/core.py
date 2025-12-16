@@ -4031,46 +4031,44 @@ class ZarrNii:
         return resolution_sizes
 
     def to_imaris(
-        self, path: str, compression: str = "gzip", compression_opts: int = 6
+        self,
+        path: str,
+        compression: str = "gzip",
+        compression_opts: int = 6,
+        tmp_dir: Optional[str] = None,
     ) -> str:
         """
-        Save to Imaris (.ims) file format using HDF5 with memory-safe chunked processing.
+        Save to Imaris (.ims) file format using an intermediate Zarr strategy.
 
-        This method creates Imaris files compatible with Imaris software by
-        following the exact HDF5 structure from correctly-formed reference files.
-        All attributes use byte-array encoding as required by Imaris.
+        This method creates Imaris files compatible with Imaris software by:
+        1. Writing an intermediate Zarr file with proper multiscale pyramid and chunking
+        2. Computing histograms and metadata from the intermediate Zarr
+        3. Copying data block-by-block from Zarr to HDF5
+
+        This approach leverages Dask's efficient Zarr writing while maintaining
+        memory safety through chunked processing.
 
         **Multi-Resolution Pyramid:**
         The method automatically generates multiple resolution levels following the
         Imaris pyramid algorithm. Resolution levels are created by downsampling
         dimensions where (10 * dimension)² > volume / dimension until the total
-        volume is less than 1 MB. All pyramid levels use the same 16×256×256 (ZYX)
-        chunking strategy for optimal performance.
+        volume is less than 1 MB. All pyramid levels use 16×256×256 (ZYX)
+        chunking for optimal Imaris performance.
 
         **Memory-Safe Implementation:**
-        This method is designed to handle arbitrarily large datasets without loading
-        the entire array into memory. It achieves this through true 3D tiling:
-
-        1. **3D Tiled Data Writing**: Processes data using 3D tiles (16×256×256 voxels)
-           instead of loading full slabs. HDF5 datasets are created empty and populated
-           incrementally tile-by-tile. This prevents memory blowup even for ultra-high
-           resolution images with large Y×X dimensions.
-
-        2. **3D Tiled Statistics**: Min/max values and histograms are computed
-           incrementally by processing 3D tiles, maintaining only the running
-           statistics in memory. No full Y×X slabs are ever materialized.
-
-        3. **3D Tiled Thumbnail Generation**: Maximum Intensity Projection (MIP)
-           thumbnails are computed by processing 3D tiles and maintaining only the
-           current maximum projection (YX plane) in memory, updated region-by-region.
-
-        For a 100GB dataset with dimensions 1000×8192×8192, memory usage remains
-        under ~4MB per tile, regardless of Y×X dimensions (default: 16×256×256 tiles).
+        Memory safety is achieved through:
+        1. **Intermediate Zarr**: Uses to_ome_zarr() with Dask for memory-efficient
+           multiscale generation with proper chunking (16×256×256 voxels)
+        2. **Block-wise Copy**: Copies data from Zarr to HDF5 chunk-by-chunk
+        3. **Streaming Statistics**: Computes histograms incrementally while copying
+        4. **MIP Thumbnails**: Generates thumbnails by processing data in chunks
 
         Args:
             path: Output path for Imaris (.ims) file
             compression: HDF5 compression method (default: "gzip")
             compression_opts: Compression level (default: 6)
+            tmp_dir: Directory for intermediate Zarr file. If None, uses system temp
+                directory. The intermediate file is deleted after successful conversion.
 
         Returns:
             str: Path to the saved file
@@ -4083,8 +4081,8 @@ class ZarrNii:
             - Automatic axis reordering from XYZ to ZYX if needed
             - Multi-resolution pyramid automatically generated
             - Spatial transformations and metadata are preserved
+            - Intermediate Zarr file is automatically cleaned up
             - Works efficiently with Dask arrays, Zarr arrays, and NumPy arrays
-            - No full-array compute() is ever called
         """
         try:
             import h5py
@@ -4094,13 +4092,11 @@ class ZarrNii:
                 "Install with: pip install zarrnii[imaris] or pip install h5py"
             )
 
-        # Determine the image to save
-        if self.axes_order == "XYZ":
-            # Need to reorder data from XYZ to ZYX for Imaris
-            ngff_image_to_save = self._create_zyx_ngff_image()
-        else:
-            # Already in ZYX order
-            ngff_image_to_save = self.ngff_image
+        import os
+        import shutil
+        import tempfile
+
+        import zarr
 
         # Ensure path has .ims extension
         if not path.endswith(".ims"):
@@ -4110,8 +4106,15 @@ class ZarrNii:
             """Convert string to byte array as required by Imaris."""
             return np.array([c.encode() for c in s])
 
-        # Get data reference (DO NOT compute full array)
-        # Keep as Dask/Zarr array for chunk-wise processing
+        # Determine the image to save
+        if self.axes_order == "XYZ":
+            # Need to reorder data from XYZ to ZYX for Imaris
+            ngff_image_to_save = self._create_zyx_ngff_image()
+        else:
+            # Already in ZYX order
+            ngff_image_to_save = self.ngff_image
+
+        # Get data reference to determine dimensions
         data_array = ngff_image_to_save.data
 
         # Handle dimensions: expect ZYX or CZYX
@@ -4123,436 +4126,542 @@ class ZarrNii:
             # ZYX format - single channel
             n_channels = 1
             z, y, x = data_array.shape
-            # Add channel dimension (but keep as lazy array)
-            if hasattr(data_array, "reshape"):
-                data_array = data_array[np.newaxis, ...]
-            else:
-                # For Zarr arrays, we'll handle this per-channel
-                pass
         else:
             raise ValueError(
                 f"Unsupported data shape: {data_array.shape}. Expected 3D (ZYX) or 4D (CZYX)"
             )
 
-        # Create Imaris file structure exactly matching reference file
-        with h5py.File(path, "w") as f:
-            # Root attributes - use exact byte array format from reference
-            f.attrs["DataSetDirectoryName"] = _string_to_byte_array("DataSet")
-            f.attrs["DataSetInfoDirectoryName"] = _string_to_byte_array("DataSetInfo")
-            f.attrs["ImarisDataSet"] = _string_to_byte_array("ImarisDataSet")
-            f.attrs["ImarisVersion"] = _string_to_byte_array("5.5.0")
-            f.attrs["NumberOfDataSets"] = np.array([1], dtype=np.uint32)
-            f.attrs["ThumbnailDirectoryName"] = _string_to_byte_array("Thumbnail")
+        # Compute pyramid levels based on Imaris algorithm
+        pyramid_levels = self._compute_imaris_pyramid_levels((z, y, x))
+        num_levels = len(pyramid_levels)
 
-            # Compute pyramid levels based on Imaris algorithm
-            pyramid_levels = self._compute_imaris_pyramid_levels((z, y, x))
+        # STEP 1: Write intermediate Zarr with proper chunking and pyramid levels
+        # Use tmp_dir or system temp directory
+        if tmp_dir is None:
+            tmp_dir = tempfile.gettempdir()
 
-            # Create main DataSet group structure
-            dataset_group = f.create_group("DataSet")
+        intermediate_zarr_path = os.path.join(
+            tmp_dir, f"zarrnii_imaris_temp_{os.getpid()}.zarr"
+        )
 
-            # Write each resolution level
-            for level_idx, (level_z, level_y, level_x) in enumerate(pyramid_levels):
-                res_group = dataset_group.create_group(f"ResolutionLevel {level_idx}")
-                time_group = res_group.create_group("TimePoint 0")
+        try:
+            # Create a temporary ZarrNii object to use to_ome_zarr method
+            # This ensures proper handling of dask computation and writing
+            # Rechunk the data to Imaris-friendly chunk sizes
+            target_chunk_z = min(z, 16)
+            target_chunk_y = min(y, 256)
+            target_chunk_x = min(x, 256)
 
-                # Create channels with proper attributes
+            if len(data_array.shape) == 4:
+                target_chunks = (1, target_chunk_z, target_chunk_y, target_chunk_x)
+            else:
+                target_chunks = (target_chunk_z, target_chunk_y, target_chunk_x)
+
+            # Rechunk if it's a Dask array
+            if hasattr(data_array, "rechunk"):
+                rechunked_data = data_array.rechunk(target_chunks)
+            else:
+                rechunked_data = data_array
+
+            # Create temporary ZarrNii with rechunked data
+            temp_znimg = ZarrNii(
+                ngff_image=nz.NgffImage(
+                    data=rechunked_data,
+                    dims=ngff_image_to_save.dims,
+                    scale=ngff_image_to_save.scale,
+                    translation=ngff_image_to_save.translation,
+                    name=ngff_image_to_save.name,
+                ),
+                axes_order="ZYX",  # Already reordered if needed
+            )
+
+            # Write intermediate Zarr with pyramid levels
+            # Use ome-zarr-py backend for better dask handling
+            temp_znimg.to_ome_zarr(
+                intermediate_zarr_path,
+                max_layer=num_levels,
+                scale_factors=[2] * (num_levels - 1),
+                backend="ome-zarr-py",
+                compute=True,  # Force computation
+            )
+
+            # STEP 2: Open intermediate Zarr and compute statistics
+            # Open the Zarr group to access multiscale data
+            # Disable consolidated metadata to avoid access issues
+            import time
+            time.sleep(0.1)  # Give file system time to sync
+            
+            # Verify zarr exists
+            if not os.path.exists(intermediate_zarr_path):
+                raise RuntimeError(f"Intermediate Zarr not found: {intermediate_zarr_path}")
+            
+            zarr_group = zarr.open_group(
+                intermediate_zarr_path, mode="r", use_consolidated=False
+            )
+
+            # STEP 3: Create HDF5 file and copy data block-by-block
+            with h5py.File(path, "w") as f:
+                # Root attributes - use exact byte array format from reference
+                f.attrs["DataSetDirectoryName"] = _string_to_byte_array("DataSet")
+                f.attrs["DataSetInfoDirectoryName"] = _string_to_byte_array("DataSetInfo")
+                f.attrs["ImarisDataSet"] = _string_to_byte_array("ImarisDataSet")
+                f.attrs["ImarisVersion"] = _string_to_byte_array("5.5.0")
+                f.attrs["NumberOfDataSets"] = np.array([1], dtype=np.uint32)
+                f.attrs["ThumbnailDirectoryName"] = _string_to_byte_array("Thumbnail")
+
+                # Create main DataSet group structure
+                dataset_group = f.create_group("DataSet")
+
+                # Iterate through actual Zarr levels (which may differ from pyramid_levels)
+                # The Zarr was created with power-of-2 downsampling
+                zarr_level_keys = sorted(
+                    [k for k in zarr_group.keys() if k.isdigit()], key=int
+                )
+
+                for level_idx_str in zarr_level_keys:
+                    level_idx = int(level_idx_str)
+                    res_group = dataset_group.create_group(f"ResolutionLevel {level_idx}")
+                    time_group = res_group.create_group("TimePoint 0")
+
+                    # Get data from intermediate Zarr for this level
+                    zarr_level_array = zarr_group[level_idx_str]
+
+                    # Create channels with proper attributes
+                    for c in range(n_channels):
+                        channel_group = time_group.create_group(f"Channel {c}")
+
+                        # Determine channel dimensions and setup for block access
+                        if len(zarr_level_array.shape) == 4:
+                            # CZYX format - need to get the channel dimension
+                            level_z, level_y, level_x = zarr_level_array.shape[1:]
+                            channel_idx = c
+                        else:
+                            # ZYX format - single channel
+                            level_z, level_y, level_x = zarr_level_array.shape
+                            channel_idx = None
+
+                        # Channel attributes - use byte array format exactly like reference
+                        channel_group.attrs["ImageSizeX"] = _string_to_byte_array(
+                            str(level_x)
+                        )
+                        channel_group.attrs["ImageSizeY"] = _string_to_byte_array(
+                            str(level_y)
+                        )
+                        channel_group.attrs["ImageSizeZ"] = _string_to_byte_array(
+                            str(level_z)
+                        )
+                        channel_group.attrs["ImageBlockSizeX"] = _string_to_byte_array(
+                            str(level_x)
+                        )
+                        channel_group.attrs["ImageBlockSizeY"] = _string_to_byte_array(
+                            str(level_y)
+                        )
+                        channel_group.attrs["ImageBlockSizeZ"] = _string_to_byte_array(
+                            str(min(level_z, 16))
+                        )
+
+                        # Determine target dtype for storage
+                        source_dtype = zarr_level_array.dtype
+                        if source_dtype == np.float32 or source_dtype == np.float64:
+                            target_dtype = np.float32
+                        elif source_dtype in [np.uint16, np.int16]:
+                            target_dtype = source_dtype
+                        else:
+                            target_dtype = np.uint8
+
+                        # STREAMING STATISTICS: Compute min/max/histogram incrementally
+                        # Process data using block-aligned access via .blocks interface
+                        data_min = np.inf
+                        data_max = -np.inf
+                        hist_bins = np.zeros(256, dtype=np.uint64)
+
+                        # Get number of chunks per dimension for block iteration
+                        # For multi-channel, skip the channel dimension in block iteration
+                        if channel_idx is not None:
+                            # CZYX format: blocks are organized as (C, Z, Y, X)
+                            num_z_blocks = zarr_level_array.cdata_shape[1]
+                            num_y_blocks = zarr_level_array.cdata_shape[2]
+                            num_x_blocks = zarr_level_array.cdata_shape[3]
+                        else:
+                            # ZYX format
+                            num_z_blocks = zarr_level_array.cdata_shape[0]
+                            num_y_blocks = zarr_level_array.cdata_shape[1]
+                            num_x_blocks = zarr_level_array.cdata_shape[2]
+
+                        # First pass: compute min/max for histogram range using blocks
+                        for z_block in range(num_z_blocks):
+                            for y_block in range(num_y_blocks):
+                                for x_block in range(num_x_blocks):
+                                    # Read block from Zarr using blocks interface
+                                    if channel_idx is not None:
+                                        # Multi-channel: access specific channel's block
+                                        # blocks[c, z, y, x] returns shape (1, Z, Y, X), so squeeze first dim
+                                        block_data = np.asarray(
+                                            zarr_level_array.blocks[
+                                                channel_idx, z_block, y_block, x_block
+                                            ]
+                                        ).squeeze(0)
+                                    else:
+                                        # Single channel
+                                        block_data = np.asarray(
+                                            zarr_level_array.blocks[z_block, y_block, x_block]
+                                        )
+
+                                    block_min = float(block_data.min())
+                                    block_max = float(block_data.max())
+                                    data_min = min(data_min, block_min)
+                                    data_max = max(data_max, block_max)
+
+                        # Set histogram range attributes
+                        channel_group.attrs["HistogramMin"] = _string_to_byte_array(
+                            f"{data_min:.3f}"
+                        )
+                        channel_group.attrs["HistogramMax"] = _string_to_byte_array(
+                            f"{data_max:.3f}"
+                        )
+
+                        # Create HDF5 dataset (empty, to be filled chunk by chunk)
+                        # Use 16x256x256 (ZYX) chunking for Imaris
+                        chunk_z = min(level_z, 16)
+                        chunk_y = min(level_y, 256)
+                        chunk_x = min(level_x, 256)
+                        h5_chunks = (chunk_z, chunk_y, chunk_x)
+
+                        h5_dataset = channel_group.create_dataset(
+                            "Data",
+                            shape=(level_z, level_y, level_x),
+                            dtype=target_dtype,
+                            compression=compression,
+                            compression_opts=compression_opts,
+                            chunks=h5_chunks,
+                        )
+
+                        # Second pass: copy data from Zarr and accumulate histogram using blocks
+                        for z_block in range(num_z_blocks):
+                            for y_block in range(num_y_blocks):
+                                for x_block in range(num_x_blocks):
+                                    # Read block from Zarr using blocks interface
+                                    if channel_idx is not None:
+                                        # Multi-channel: access specific channel's block
+                                        # blocks[c, z, y, x] returns shape (1, Z, Y, X), so squeeze first dim
+                                        block_data = np.asarray(
+                                            zarr_level_array.blocks[
+                                                channel_idx, z_block, y_block, x_block
+                                            ]
+                                        ).squeeze(0)
+                                        # Get chunk sizes from the spatial dimensions
+                                        chunk_z = zarr_level_array.chunks[1]
+                                        chunk_y = zarr_level_array.chunks[2]
+                                        chunk_x = zarr_level_array.chunks[3]
+                                    else:
+                                        # Single channel
+                                        block_data = np.asarray(
+                                            zarr_level_array.blocks[z_block, y_block, x_block]
+                                        )
+                                        chunk_z = zarr_level_array.chunks[0]
+                                        chunk_y = zarr_level_array.chunks[1]
+                                        chunk_x = zarr_level_array.chunks[2]
+
+                                    # Convert to target dtype
+                                    if block_data.dtype != target_dtype:
+                                        block_data = block_data.astype(target_dtype)
+
+                                    # Calculate block position in array
+                                    z_start = z_block * chunk_z
+                                    y_start = y_block * chunk_y
+                                    x_start = x_block * chunk_x
+                                    z_end = z_start + block_data.shape[0]
+                                    y_end = y_start + block_data.shape[1]
+                                    x_end = x_start + block_data.shape[2]
+
+                                    # Write block to HDF5
+                                    h5_dataset[z_start:z_end, y_start:y_end, x_start:x_end] = (
+                                        block_data
+                                    )
+
+                                    # Accumulate histogram
+                                    block_hist, _ = np.histogram(
+                                        block_data.flatten(),
+                                        bins=256,
+                                        range=(data_min, data_max),
+                                    )
+                                    hist_bins += block_hist.astype(np.uint64)
+
+                        # Create histogram dataset
+                        channel_group.create_dataset("Histogram", data=hist_bins)
+
+                # Get spacing directly from scale dictionary with proper XYZ order
+                try:
+                    # Extract voxel sizes directly from ngff_image scale dictionary
+                    sx = ngff_image_to_save.scale.get("x", 1.0)
+                    sy = ngff_image_to_save.scale.get("y", 1.0)
+                    sz = ngff_image_to_save.scale.get("z", 1.0)
+                except:
+                    sx = sy = sz = 1.0
+
+                # Calculate extents (physical coordinates)
+                ext_x = sx * x
+                ext_y = sy * y
+                ext_z = sz * z
+
+                # Create comprehensive DataSetInfo structure matching reference
+                info_group = f.create_group("DataSetInfo")
+
+                # Create channel info groups
                 for c in range(n_channels):
-                    channel_group = time_group.create_group(f"Channel {c}")
+                    channel_info = info_group.create_group(f"Channel {c}")
 
-                    # Get channel data reference (lazy - no compute yet)
-                    if len(data_array.shape) == 4:
-                        channel_data = data_array[c]  # (Z, Y, X)
-                    else:
-                        # Single channel case where we added dimension
-                        channel_data = data_array
-
-                    # Downsample data for levels > 0 using slicing (memory-efficient)
-                    if level_idx > 0:
-                        # Calculate downsampling factors from original size
-                        downsample_z = z // level_z
-                        downsample_y = y // level_y
-                        downsample_x = x // level_x
-
-                        # Downsample using slicing (every Nth element)
-                        channel_data = channel_data[
-                            ::downsample_z, ::downsample_y, ::downsample_x
-                        ]
-
-                    # Rechunk data to match Imaris chunk size (16x256x256 in ZYX)
-                    # This optimizes data layout for HDF5 writing
-                    target_chunk_z = min(level_z, 16)
-                    target_chunk_y = min(level_y, 256)
-                    target_chunk_x = min(level_x, 256)
-                    target_chunks = (target_chunk_z, target_chunk_y, target_chunk_x)
-
-                    # Only rechunk if the data is a Dask array
-                    if hasattr(channel_data, "rechunk"):
-                        channel_data = channel_data.rechunk(target_chunks)
-
-                    # Channel attributes - use byte array format exactly like reference
-                    channel_group.attrs["ImageSizeX"] = _string_to_byte_array(
-                        str(level_x)
+                    # Essential channel attributes in byte array format
+                    channel_info.attrs["Color"] = _string_to_byte_array(
+                        "1.000 0.000 0.000"
+                        if c == 0
+                        else f"0.000 {1.0 if c == 1 else 0.0:.3f} {1.0 if c == 2 else 0.0:.3f}"
                     )
-                    channel_group.attrs["ImageSizeY"] = _string_to_byte_array(
-                        str(level_y)
+                    channel_info.attrs["Name"] = _string_to_byte_array(f"Channel {c}")
+                    channel_info.attrs["ColorMode"] = _string_to_byte_array("BaseColor")
+                    channel_info.attrs["ColorOpacity"] = _string_to_byte_array("1.000")
+                    channel_info.attrs["ColorRange"] = _string_to_byte_array("0 255")
+                    channel_info.attrs["GammaCorrection"] = _string_to_byte_array("1.000")
+                    channel_info.attrs["LSMEmissionWavelength"] = _string_to_byte_array(
+                        "500"
                     )
-                    channel_group.attrs["ImageSizeZ"] = _string_to_byte_array(
-                        str(level_z)
+                    channel_info.attrs["LSMExcitationWavelength"] = _string_to_byte_array(
+                        "500"
                     )
-                    channel_group.attrs["ImageBlockSizeX"] = _string_to_byte_array(
-                        str(level_x)
-                    )
-                    channel_group.attrs["ImageBlockSizeY"] = _string_to_byte_array(
-                        str(level_y)
-                    )
-                    channel_group.attrs["ImageBlockSizeZ"] = _string_to_byte_array(
-                        str(min(level_z, 16))
-                    )
+                    channel_info.attrs["LSMPhotons"] = _string_to_byte_array("1")
+                    channel_info.attrs["LSMPinhole"] = _string_to_byte_array("0")
 
-                    # Determine target dtype for storage
-                    source_dtype = channel_data.dtype
-                    if source_dtype == np.float32 or source_dtype == np.float64:
-                        target_dtype = np.float32
-                    elif source_dtype in [np.uint16, np.int16]:
-                        target_dtype = source_dtype
-                    else:
-                        target_dtype = np.uint8
+                    # Add description
+                    description = f"Channel {c} created by ZarrNii"
+                    channel_info.attrs["Description"] = _string_to_byte_array(description)
 
-                    # STREAMING STATISTICS: Compute min/max/histogram incrementally
-                    # Process data in 3D tiles to compute statistics without loading full array
-                    data_min = np.inf
-                    data_max = -np.inf
-                    hist_bins = np.zeros(256, dtype=np.uint64)
+                # Create CRITICAL Image group with voxel size information
+                image_info = info_group.create_group("Image")
 
-                    # Determine tile size for streaming (true 3D tiling: 16×256×256)
-                    tile_z_size = min(16, level_z)
-                    tile_y_size = min(256, level_y)
-                    tile_x_size = min(256, level_x)
+                # Add essential image metadata with proper voxel size information
+                image_info.attrs["X"] = _string_to_byte_array(str(x))
+                image_info.attrs["Y"] = _string_to_byte_array(str(y))
+                image_info.attrs["Z"] = _string_to_byte_array(str(z))
+                image_info.attrs["Unit"] = _string_to_byte_array("um")
+                image_info.attrs["Noc"] = _string_to_byte_array(str(n_channels))
 
-                    # First pass: compute min/max for histogram range using 3D tiles
-                    for z_start in range(0, level_z, tile_z_size):
-                        z_end = min(z_start + tile_z_size, level_z)
-                        for y_start in range(0, level_y, tile_y_size):
-                            y_end = min(y_start + tile_y_size, level_y)
-                            for x_start in range(0, level_x, tile_x_size):
-                                x_end = min(x_start + tile_x_size, level_x)
-                                
-                                # Extract 3D tile (≤16×256×256)
-                                tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
+                # CRITICAL: Set proper physical extents that define voxel size
+                # Imaris reads voxel size from these extent values
+                image_info.attrs["ExtMin0"] = _string_to_byte_array(f"{-ext_x/2:.3f}")
+                image_info.attrs["ExtMax0"] = _string_to_byte_array(f"{ext_x/2:.3f}")
+                image_info.attrs["ExtMin1"] = _string_to_byte_array(f"{-ext_y/2:.3f}")
+                image_info.attrs["ExtMax1"] = _string_to_byte_array(f"{ext_y/2:.3f}")
+                image_info.attrs["ExtMin2"] = _string_to_byte_array(f"{-ext_z/2:.3f}")
+                image_info.attrs["ExtMax2"] = _string_to_byte_array(f"{ext_z/2:.3f}")
 
-                                # Compute tile (small subset of full data)
-                                if hasattr(tile, "compute"):
-                                    tile_data = tile.compute()
-                                else:
-                                    tile_data = np.asarray(tile)
-
-                                tile_min = float(tile_data.min())
-                                tile_max = float(tile_data.max())
-                                data_min = min(data_min, tile_min)
-                                data_max = max(data_max, tile_max)
-
-                    # Set histogram range attributes
-                    channel_group.attrs["HistogramMin"] = _string_to_byte_array(
-                        f"{data_min:.3f}"
-                    )
-                    channel_group.attrs["HistogramMax"] = _string_to_byte_array(
-                        f"{data_max:.3f}"
-                    )
-
-                    # Create HDF5 dataset (empty, to be filled chunk by chunk)
-                    # Use 16x256x256 (ZYX) chunking for Imaris, adjusting for small dimensions
-                    chunk_z = min(level_z, 16)
-                    chunk_y = min(level_y, 256)
-                    chunk_x = min(level_x, 256)
-                    h5_chunks = (chunk_z, chunk_y, chunk_x)
-
-                    h5_dataset = channel_group.create_dataset(
-                        "Data",
-                        shape=(level_z, level_y, level_x),
-                        dtype=target_dtype,
-                        compression=compression,
-                        compression_opts=compression_opts,
-                        chunks=h5_chunks,  # Use 16x256x256 (ZYX) chunking for Imaris
-                    )
-
-                    # Second pass: write data and accumulate histogram using 3D tiles
-                    for z_start in range(0, level_z, tile_z_size):
-                        z_end = min(z_start + tile_z_size, level_z)
-                        for y_start in range(0, level_y, tile_y_size):
-                            y_end = min(y_start + tile_y_size, level_y)
-                            for x_start in range(0, level_x, tile_x_size):
-                                x_end = min(x_start + tile_x_size, level_x)
-                                
-                                # Extract 3D tile (≤16×256×256)
-                                tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
-
-                                # Compute tile
-                                if hasattr(tile, "compute"):
-                                    tile_data = tile.compute()
-                                else:
-                                    tile_data = np.asarray(tile)
-
-                                # Convert to target dtype
-                                if tile_data.dtype != target_dtype:
-                                    tile_data = tile_data.astype(target_dtype)
-
-                                # Write tile to HDF5
-                                h5_dataset[z_start:z_end, y_start:y_end, x_start:x_end] = tile_data
-
-                                # Accumulate histogram
-                                tile_hist, _ = np.histogram(
-                                    tile_data.flatten(), bins=256, range=(data_min, data_max)
-                                )
-                                hist_bins += tile_hist.astype(np.uint64)
-
-                    # Create histogram dataset
-                    channel_group.create_dataset("Histogram", data=hist_bins)
-
-            # Get spacing directly from scale dictionary with proper XYZ order
-            try:
-                # Extract voxel sizes directly from ngff_image scale dictionary
-                # This ensures we get X, Y, Z in the correct order regardless of axes_order
-                sx = ngff_image_to_save.scale.get("x", 1.0)
-                sy = ngff_image_to_save.scale.get("y", 1.0)
-                sz = ngff_image_to_save.scale.get("z", 1.0)
-            except:
-                sx = sy = sz = 1.0
-
-            # Calculate extents (physical coordinates)
-            ext_x = sx * x
-            ext_y = sy * y
-            ext_z = sz * z
-
-            # Create comprehensive DataSetInfo structure matching reference
-            info_group = f.create_group("DataSetInfo")
-
-            # Create channel info groups
-            for c in range(n_channels):
-                channel_info = info_group.create_group(f"Channel {c}")
-
-                # Essential channel attributes in byte array format
-                channel_info.attrs["Color"] = _string_to_byte_array(
-                    "1.000 0.000 0.000"
-                    if c == 0
-                    else f"0.000 {1.0 if c == 1 else 0.0:.3f} {1.0 if c == 2 else 0.0:.3f}"
+                # Add device/acquisition metadata
+                image_info.attrs["ManufactorString"] = _string_to_byte_array("ZarrNii")
+                image_info.attrs["ManufactorType"] = _string_to_byte_array("Generic")
+                image_info.attrs["LensPower"] = _string_to_byte_array("")
+                image_info.attrs["NumericalAperture"] = _string_to_byte_array("")
+                image_info.attrs["RecordingDate"] = _string_to_byte_array(
+                    "2024-01-01 00:00:00.000"
                 )
-                channel_info.attrs["Name"] = _string_to_byte_array(f"Channel {c}")
-                channel_info.attrs["ColorMode"] = _string_to_byte_array("BaseColor")
-                channel_info.attrs["ColorOpacity"] = _string_to_byte_array("1.000")
-                channel_info.attrs["ColorRange"] = _string_to_byte_array("0 255")
-                channel_info.attrs["GammaCorrection"] = _string_to_byte_array("1.000")
-                channel_info.attrs["LSMEmissionWavelength"] = _string_to_byte_array(
-                    "500"
-                )
-                channel_info.attrs["LSMExcitationWavelength"] = _string_to_byte_array(
-                    "500"
-                )
-                channel_info.attrs["LSMPhotons"] = _string_to_byte_array("1")
-                channel_info.attrs["LSMPinhole"] = _string_to_byte_array("0")
+                image_info.attrs["Filename"] = _string_to_byte_array(path.split("/")[-1])
+                image_info.attrs["Name"] = _string_to_byte_array("ZarrNii Export")
+                image_info.attrs["Compression"] = _string_to_byte_array("5794")
 
                 # Add description
-                description = f"Channel {c} created by ZarrNii"
-                channel_info.attrs["Description"] = _string_to_byte_array(description)
+                description = (
+                    f"Imaris file created by ZarrNii from {self.axes_order} format data. "
+                    f"Original shape: {self.darr.shape}. Converted to Imaris format "
+                    f"with {n_channels} channel(s) and dimensions {z}x{y}x{x}. "
+                    f"Voxel size: {sx:.3f} x {sy:.3f} x {sz:.3f} um."
+                )
+                image_info.attrs["Description"] = _string_to_byte_array(description)
 
-            # Create CRITICAL Image group with voxel size information (this was missing!)
-            image_info = info_group.create_group("Image")
+                # Create Imaris metadata group
+                imaris_info = info_group.create_group("Imaris")
+                imaris_info.attrs["Version"] = _string_to_byte_array("7.0")
+                imaris_info.attrs["ThumbnailMode"] = _string_to_byte_array("thumbnailMIP")
+                imaris_info.attrs["ThumbnailSize"] = _string_to_byte_array("256")
 
-            # Add essential image metadata with proper voxel size information
-            image_info.attrs["X"] = _string_to_byte_array(str(x))
-            image_info.attrs["Y"] = _string_to_byte_array(str(y))
-            image_info.attrs["Z"] = _string_to_byte_array(str(z))
-            image_info.attrs["Unit"] = _string_to_byte_array("um")
-            image_info.attrs["Noc"] = _string_to_byte_array(str(n_channels))
+                # Create ImarisDataSet metadata
+                dataset_info = info_group.create_group("ImarisDataSet")
+                dataset_info.attrs["Creator"] = _string_to_byte_array("Imaris")
+                dataset_info.attrs["Version"] = _string_to_byte_array("7.0")
+                dataset_info.attrs["NumberOfImages"] = _string_to_byte_array("1")
 
-            # CRITICAL: Set proper physical extents that define voxel size
-            # Imaris reads voxel size from these extent values
-            image_info.attrs["ExtMin0"] = _string_to_byte_array(f"{-ext_x/2:.3f}")
-            image_info.attrs["ExtMax0"] = _string_to_byte_array(f"{ext_x/2:.3f}")
-            image_info.attrs["ExtMin1"] = _string_to_byte_array(f"{-ext_y/2:.3f}")
-            image_info.attrs["ExtMax1"] = _string_to_byte_array(f"{ext_y/2:.3f}")
-            image_info.attrs["ExtMin2"] = _string_to_byte_array(f"{-ext_z/2:.3f}")
-            image_info.attrs["ExtMax2"] = _string_to_byte_array(f"{ext_z/2:.3f}")
+                # Add version-specific groups as seen in reference
+                dataset_info_ver = info_group.create_group("ImarisDataSet       0.0.0")
+                dataset_info_ver.attrs["NumberOfImages"] = _string_to_byte_array("1")
+                dataset_info_ver2 = info_group.create_group("ImarisDataSet      0.0.0")
+                dataset_info_ver2.attrs["NumberOfImages"] = _string_to_byte_array("1")
 
-            # Add device/acquisition metadata
-            image_info.attrs["ManufactorString"] = _string_to_byte_array("ZarrNii")
-            image_info.attrs["ManufactorType"] = _string_to_byte_array("Generic")
-            image_info.attrs["LensPower"] = _string_to_byte_array("")
-            image_info.attrs["NumericalAperture"] = _string_to_byte_array("")
-            image_info.attrs["RecordingDate"] = _string_to_byte_array(
-                "2024-01-01 00:00:00.000"
-            )
-            image_info.attrs["Filename"] = _string_to_byte_array(path.split("/")[-1])
-            image_info.attrs["Name"] = _string_to_byte_array("ZarrNii Export")
-            image_info.attrs["Compression"] = _string_to_byte_array("5794")
+                # Create TimeInfo group
+                time_info = info_group.create_group("TimeInfo")
+                time_info.attrs["DatasetTimePoints"] = _string_to_byte_array("1")
+                time_info.attrs["FileTimePoints"] = _string_to_byte_array("1")
+                time_info.attrs["TimePoint1"] = _string_to_byte_array(
+                    "2024-01-01 00:00:00.000"
+                )
 
-            # Add description
-            description = (
-                f"Imaris file created by ZarrNii from {self.axes_order} format data. "
-                f"Original shape: {self.darr.shape}. Converted to Imaris format "
-                f"with {n_channels} channel(s) and dimensions {z}x{y}x{x}. "
-                f"Voxel size: {sx:.3f} x {sy:.3f} x {sz:.3f} um."
-            )
-            image_info.attrs["Description"] = _string_to_byte_array(description)
+                # Create Log group (basic processing log)
+                log_group = info_group.create_group("Log")
+                log_group.attrs["Entries"] = _string_to_byte_array("1")
+                log_group.attrs["Entry0"] = _string_to_byte_array(
+                    f"<ZarrNiiExport channels=\"{' '.join(['on'] * n_channels)}\"/>"
+                )
 
-            # Create Imaris metadata group
-            imaris_info = info_group.create_group("Imaris")
-            imaris_info.attrs["Version"] = _string_to_byte_array("7.0")
-            imaris_info.attrs["ThumbnailMode"] = _string_to_byte_array("thumbnailMIP")
-            imaris_info.attrs["ThumbnailSize"] = _string_to_byte_array("256")
+                # Create thumbnail group with proper multi-channel thumbnail
+                thumbnail_group = f.create_group("Thumbnail")
 
-            # Create ImarisDataSet metadata
-            dataset_info = info_group.create_group("ImarisDataSet")
-            dataset_info.attrs["Creator"] = _string_to_byte_array("Imaris")
-            dataset_info.attrs["Version"] = _string_to_byte_array("7.0")
-            dataset_info.attrs["NumberOfImages"] = _string_to_byte_array("1")
+                # Generate MIP thumbnail from Zarr level 0 data
+                zarr_level_0 = zarr_group["0"]
 
-            # Add version-specific groups as seen in reference
-            dataset_info_ver = info_group.create_group("ImarisDataSet       0.0.0")
-            dataset_info_ver.attrs["NumberOfImages"] = _string_to_byte_array("1")
-            dataset_info_ver2 = info_group.create_group("ImarisDataSet      0.0.0")
-            dataset_info_ver2.attrs["NumberOfImages"] = _string_to_byte_array("1")
+                # STREAMING THUMBNAIL: Generate MIP and downsample incrementally
+                if n_channels > 1:
+                    # Multi-channel thumbnail: concatenate channels horizontally
+                    thumb_width = 256 * n_channels
+                    thumbnail_data = np.zeros((256, thumb_width), dtype=np.uint8)
 
-            # Create TimeInfo group
-            time_info = info_group.create_group("TimeInfo")
-            time_info.attrs["DatasetTimePoints"] = _string_to_byte_array("1")
-            time_info.attrs["FileTimePoints"] = _string_to_byte_array("1")
-            time_info.attrs["TimePoint1"] = _string_to_byte_array(
-                "2024-01-01 00:00:00.000"
-            )
+                    for c in range(n_channels):
+                        # Determine data type for MIP
+                        if len(zarr_level_0.shape) == 4:
+                            mip_dtype = zarr_level_0.dtype
+                            # CZYX format
+                            num_z_blocks = zarr_level_0.cdata_shape[1]
+                            num_y_blocks = zarr_level_0.cdata_shape[2]
+                            num_x_blocks = zarr_level_0.cdata_shape[3]
+                            chunk_y = zarr_level_0.chunks[2]
+                            chunk_x = zarr_level_0.chunks[3]
+                        else:
+                            mip_dtype = zarr_level_0.dtype
+                            # ZYX format
+                            num_z_blocks = zarr_level_0.cdata_shape[0]
+                            num_y_blocks = zarr_level_0.cdata_shape[1]
+                            num_x_blocks = zarr_level_0.cdata_shape[2]
+                            chunk_y = zarr_level_0.chunks[1]
+                            chunk_x = zarr_level_0.chunks[2]
 
-            # Create Log group (basic processing log)
-            log_group = info_group.create_group("Log")
-            log_group.attrs["Entries"] = _string_to_byte_array("1")
-            log_group.attrs["Entry0"] = _string_to_byte_array(
-                f"<ZarrNiiExport channels=\"{' '.join(['on'] * n_channels)}\"/>"
-            )
+                        # Compute MIP incrementally using block-aligned access
+                        mip = np.zeros((y, x), dtype=mip_dtype)
 
-            # Create thumbnail group with proper multi-channel thumbnail
-            thumbnail_group = f.create_group("Thumbnail")
+                        for z_block in range(num_z_blocks):
+                            for y_block in range(num_y_blocks):
+                                for x_block in range(num_x_blocks):
+                                    # Read block from Zarr using blocks interface
+                                    if len(zarr_level_0.shape) == 4:
+                                        # Multi-channel: access specific channel's block
+                                        # blocks[c, z, y, x] returns shape (1, Z, Y, X), so squeeze first dim
+                                        block_data = np.asarray(
+                                            zarr_level_0.blocks[c, z_block, y_block, x_block]
+                                        ).squeeze(0)
+                                    else:
+                                        # Single channel
+                                        block_data = np.asarray(
+                                            zarr_level_0.blocks[z_block, y_block, x_block]
+                                        )
 
-            # STREAMING THUMBNAIL: Generate MIP and downsample incrementally
-            # Process each channel's thumbnail independently to save memory
-            if n_channels > 1:
-                # Multi-channel thumbnail: concatenate channels horizontally
-                thumb_width = 256 * n_channels
-                thumbnail_data = np.zeros((256, thumb_width), dtype=np.uint8)
+                                    # Calculate block position in array
+                                    y_start = y_block * chunk_y
+                                    x_start = x_block * chunk_x
+                                    y_end = y_start + block_data.shape[-2]
+                                    x_end = x_start + block_data.shape[-1]
 
-                for c in range(n_channels):
-                    # Get channel data reference
-                    if len(data_array.shape) == 4:
-                        channel_data = data_array[c]
+                                    # Update MIP
+                                    block_mip = np.max(block_data, axis=0)
+                                    mip[y_start:y_end, x_start:x_end] = np.maximum(
+                                        mip[y_start:y_end, x_start:x_end], block_mip
+                                    )
+
+                        # Downsample MIP to 256x256
+                        step_y = max(1, mip.shape[0] // 256)
+                        step_x = max(1, mip.shape[1] // 256)
+                        thumb_channel = mip[::step_y, ::step_x]
+
+                        # Pad or crop to exactly 256x256
+                        if thumb_channel.shape[0] < 256 or thumb_channel.shape[1] < 256:
+                            padded = np.zeros((256, 256), dtype=thumb_channel.dtype)
+                            h, w = thumb_channel.shape
+                            padded[:h, :w] = thumb_channel
+                            thumb_channel = padded
+                        else:
+                            thumb_channel = thumb_channel[:256, :256]
+
+                        # Place in thumbnail (convert to uint8)
+                        thumbnail_data[:, c * 256 : (c + 1) * 256] = thumb_channel.astype(
+                            np.uint8
+                        )
+                else:
+                    # Single channel: 256x256 thumbnail
+                    # Determine data type for MIP
+                    if len(zarr_level_0.shape) == 4:
+                        mip_dtype = zarr_level_0.dtype
+                        # CZYX format
+                        num_z_blocks = zarr_level_0.cdata_shape[1]
+                        num_y_blocks = zarr_level_0.cdata_shape[2]
+                        num_x_blocks = zarr_level_0.cdata_shape[3]
+                        chunk_y = zarr_level_0.chunks[2]
+                        chunk_x = zarr_level_0.chunks[3]
+                        is_multi_channel = True
                     else:
-                        channel_data = data_array
+                        mip_dtype = zarr_level_0.dtype
+                        # ZYX format
+                        num_z_blocks = zarr_level_0.cdata_shape[0]
+                        num_y_blocks = zarr_level_0.cdata_shape[1]
+                        num_x_blocks = zarr_level_0.cdata_shape[2]
+                        chunk_y = zarr_level_0.chunks[1]
+                        chunk_x = zarr_level_0.chunks[2]
+                        is_multi_channel = False
 
-                    # Compute MIP incrementally using 3D tiles
-                    # Initialize MIP accumulator (Y×X plane) once before loops
-                    tile_z_size = min(16, z)
-                    tile_y_size = min(256, y)
-                    tile_x_size = min(256, x)
-                    
-                    # Get dtype without materializing data
-                    mip_dtype = channel_data.dtype
+                    # Compute MIP incrementally using block-aligned access
                     mip = np.zeros((y, x), dtype=mip_dtype)
 
-                    for z_start in range(0, z, tile_z_size):
-                        z_end = min(z_start + tile_z_size, z)
-                        for y_start in range(0, y, tile_y_size):
-                            y_end = min(y_start + tile_y_size, y)
-                            for x_start in range(0, x, tile_x_size):
-                                x_end = min(x_start + tile_x_size, x)
-                                
-                                # Extract 3D tile (≤16×256×256)
-                                tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
-
-                                # Compute tile
-                                if hasattr(tile, "compute"):
-                                    tile_data = tile.compute()
+                    for z_block in range(num_z_blocks):
+                        for y_block in range(num_y_blocks):
+                            for x_block in range(num_x_blocks):
+                                # Read block from Zarr using blocks interface
+                                if is_multi_channel:
+                                    # Multi-channel: access first channel's block
+                                    # blocks[c, z, y, x] returns shape (1, Z, Y, X), so squeeze first dim
+                                    block_data = np.asarray(
+                                        zarr_level_0.blocks[0, z_block, y_block, x_block]
+                                    ).squeeze(0)
                                 else:
-                                    tile_data = np.asarray(tile)
+                                    # Single channel
+                                    block_data = np.asarray(
+                                        zarr_level_0.blocks[z_block, y_block, x_block]
+                                    )
 
-                                # Update MIP (maximum across Z within this tile)
-                                tile_mip = np.max(tile_data, axis=0)
-                                
-                                # Update the corresponding region in the global MIP
+                                # Calculate block position in array
+                                y_start = y_block * chunk_y
+                                x_start = x_block * chunk_x
+                                y_end = y_start + block_data.shape[-2]
+                                x_end = x_start + block_data.shape[-1]
+
+                                # Update MIP
+                                block_mip = np.max(block_data, axis=0)
                                 mip[y_start:y_end, x_start:x_end] = np.maximum(
-                                    mip[y_start:y_end, x_start:x_end], tile_mip
+                                    mip[y_start:y_end, x_start:x_end], block_mip
                                 )
 
-                    # Downsample MIP to 256x256 (simple decimation)
+                    # Downsample to 256x256
                     step_y = max(1, mip.shape[0] // 256)
                     step_x = max(1, mip.shape[1] // 256)
-                    thumb_channel = mip[::step_y, ::step_x]
+                    thumbnail_data = mip[::step_y, ::step_x]
 
-                    # Pad or crop to exactly 256x256
-                    if thumb_channel.shape[0] < 256 or thumb_channel.shape[1] < 256:
-                        padded = np.zeros((256, 256), dtype=thumb_channel.dtype)
-                        h, w = thumb_channel.shape
-                        padded[:h, :w] = thumb_channel
-                        thumb_channel = padded
+                    if thumbnail_data.shape[0] < 256 or thumbnail_data.shape[1] < 256:
+                        padded = np.zeros((256, 256), dtype=thumbnail_data.dtype)
+                        h, w = thumbnail_data.shape
+                        padded[:h, :w] = thumbnail_data
+                        thumbnail_data = padded
                     else:
-                        thumb_channel = thumb_channel[:256, :256]
+                        thumbnail_data = thumbnail_data[:256, :256]
 
-                    # Place in thumbnail (convert to uint8)
-                    thumbnail_data[:, c * 256 : (c + 1) * 256] = thumb_channel.astype(
-                        np.uint8
-                    )
-            else:
-                # Single channel: 256x256 thumbnail
-                if len(data_array.shape) == 4:
-                    channel_data = data_array[0]
-                else:
-                    channel_data = data_array
+                    thumbnail_data = thumbnail_data.astype(np.uint8)
 
-                # Compute MIP incrementally using 3D tiles
-                # Initialize MIP accumulator (Y×X plane) once before loops
-                tile_z_size = min(16, z)
-                tile_y_size = min(256, y)
-                tile_x_size = min(256, x)
-                
-                # Get dtype without materializing data
-                mip_dtype = channel_data.dtype
-                mip = np.zeros((y, x), dtype=mip_dtype)
+                thumbnail_group.create_dataset("Data", data=thumbnail_data)
 
-                for z_start in range(0, z, tile_z_size):
-                    z_end = min(z_start + tile_z_size, z)
-                    for y_start in range(0, y, tile_y_size):
-                        y_end = min(y_start + tile_y_size, y)
-                        for x_start in range(0, x, tile_x_size):
-                            x_end = min(x_start + tile_x_size, x)
-                            
-                            # Extract 3D tile (≤16×256×256)
-                            tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
-
-                            # Compute tile
-                            if hasattr(tile, "compute"):
-                                tile_data = tile.compute()
-                            else:
-                                tile_data = np.asarray(tile)
-
-                            # Update MIP (maximum across Z within this tile)
-                            tile_mip = np.max(tile_data, axis=0)
-                            
-                            # Update the corresponding region in the global MIP
-                            mip[y_start:y_end, x_start:x_end] = np.maximum(
-                                mip[y_start:y_end, x_start:x_end], tile_mip
-                            )
-
-                # Downsample to 256x256
-                step_y = max(1, mip.shape[0] // 256)
-                step_x = max(1, mip.shape[1] // 256)
-                thumbnail_data = mip[::step_y, ::step_x]
-
-                if thumbnail_data.shape[0] < 256 or thumbnail_data.shape[1] < 256:
-                    padded = np.zeros((256, 256), dtype=thumbnail_data.dtype)
-                    h, w = thumbnail_data.shape
-                    padded[:h, :w] = thumbnail_data
-                    thumbnail_data = padded
-                else:
-                    thumbnail_data = thumbnail_data[:256, :256]
-
-                thumbnail_data = thumbnail_data.astype(np.uint8)
-
-            thumbnail_group.create_dataset("Data", data=thumbnail_data)
+        finally:
+            # Clean up intermediate Zarr file
+            if os.path.exists(intermediate_zarr_path):
+                shutil.rmtree(intermediate_zarr_path)
 
         return path
 

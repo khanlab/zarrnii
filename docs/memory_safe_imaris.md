@@ -17,27 +17,45 @@ For large datasets (>100 GB), these operations would cause out-of-memory errors.
 
 ## Memory-Safe Solution
 
-### Core Strategy: 3D Tiled Processing
+### Core Strategy: Intermediate Zarr with Block-by-Block Copying
 
-The refactored implementation processes data using true 3D tiling (default: 16×256×256 voxel tiles), ensuring memory usage remains bounded regardless of total dataset size. This eliminates the memory blowup problem caused by Z-only chunking that would materialize large Y×X slabs.
+The refactored implementation uses a three-step process that leverages Zarr's efficient handling of multiscale data and Dask's lazy evaluation:
+
+1. **Write Intermediate Zarr**: Uses `to_ome_zarr()` with Dask to write a temporary Zarr file with proper multiscale pyramid and Imaris-compatible chunking (16×256×256 voxels)
+2. **Compute Statistics**: Reads the intermediate Zarr in chunks to compute min/max and histograms without loading full arrays
+3. **Copy to HDF5**: Transfers data block-by-block from Zarr to HDF5, maintaining memory safety through chunked processing
+
+This approach ensures memory usage remains bounded regardless of total dataset size, leveraging both Dask's efficient computation and Zarr's optimized storage format.
 
 ### Key Components
 
-#### 1. Lazy Data References
+#### 1. Intermediate Zarr Creation
 
 ```python
-# OLD: Materialized full array
-data = ngff_image_to_save.data.compute()
+# Create temporary ZarrNii with Imaris-compatible chunking
+target_chunks = (1, 16, 256, 256)  # CZYX: channel, Z, Y, X
+rechunked_data = data_array.rechunk(target_chunks)
 
-# NEW: Keep as lazy reference
-data_array = ngff_image_to_save.data
+temp_znimg = ZarrNii(ngff_image=nz.NgffImage(...), axes_order="ZYX")
+
+# Write to intermediate Zarr using ome-zarr-py backend
+# This leverages Dask's efficient computation
+temp_znimg.to_ome_zarr(
+    intermediate_zarr_path,
+    max_layer=num_levels,
+    backend="ome-zarr-py",
+    compute=True,  # Force Dask computation
+)
 ```
 
-The new implementation never calls `compute()` on the full dataset. Instead, it maintains a reference to the lazy array (Dask/Zarr) and only materializes small chunks.
+The intermediate Zarr file contains all pyramid levels with proper chunking. Dask handles the computation efficiently, processing only what's needed and writing directly to Zarr.
 
-#### 2. 3D Tiled HDF5 Writing
+#### 2. Block-by-Block HDF5 Writing
 
 ```python
+# Open intermediate Zarr (without consolidated metadata to avoid issues)
+zarr_group = zarr.open_group(intermediate_zarr_path, mode="r", use_consolidated=False)
+
 # Create empty HDF5 dataset
 h5_dataset = channel_group.create_dataset(
     "Data",
@@ -48,78 +66,39 @@ h5_dataset = channel_group.create_dataset(
     chunks=(16, 256, 256),  # 3D tile size for HDF5
 )
 
-# Write data using 3D tiles
-tile_z_size = min(16, z)
-tile_y_size = min(256, y)
-tile_x_size = min(256, x)
-
-for z_start in range(0, z, tile_z_size):
-    z_end = min(z_start + tile_z_size, z)
-    for y_start in range(0, y, tile_y_size):
-        y_end = min(y_start + tile_y_size, y)
-        for x_start in range(0, x, tile_x_size):
-            x_end = min(x_start + tile_x_size, x)
-            
-            # Extract 3D tile (≤16×256×256)
-            tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
-            
-            # Only this tile is materialized
-            tile_data = tile.compute() if hasattr(tile, "compute") else np.asarray(tile)
-            
-            # Write tile to HDF5
+# Copy data block-by-block from Zarr to HDF5
+for z_start in range(0, level_z, 16):
+    for y_start in range(0, level_y, 256):
+        for x_start in range(0, level_x, 256):
+            # Read small tile from Zarr
+            tile_data = np.asarray(channel_data[z_start:z_end, y_start:y_end, x_start:x_end])
+            # Write to HDF5
             h5_dataset[z_start:z_end, y_start:y_end, x_start:x_end] = tile_data
 ```
 
-**Memory Impact**: Instead of requiring `Z × Y × X × bytes_per_voxel` memory, this only requires `≤16 × 256 × 256 × bytes_per_voxel` (≤4 MB per tile for float32). Peak memory does not scale with Y or X dimensions.
+**Memory Impact**: Reading from Zarr is efficient as data is already chunked optimally. Each tile read is ≤16 × 256 × 256 × bytes_per_voxel (≤4 MB per tile for float32). Peak memory does not scale with Y or X dimensions.
 
-#### 3. Streaming Statistics
+#### 3. Streaming Statistics from Zarr
 
-##### Min/Max Computation
+Statistics are computed incrementally while copying data, minimizing memory usage:
 
 ```python
 data_min = np.inf
 data_max = -np.inf
-
-tile_z_size = min(16, z)
-tile_y_size = min(256, y)
-tile_x_size = min(256, x)
-
-for z_start in range(0, z, tile_z_size):
-    z_end = min(z_start + tile_z_size, z)
-    for y_start in range(0, y, tile_y_size):
-        y_end = min(y_start + tile_y_size, y)
-        for x_start in range(0, x, tile_x_size):
-            x_end = min(x_start + tile_x_size, x)
-            
-            # Extract 3D tile (≤16×256×256)
-            tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
-            tile_data = tile.compute() if hasattr(tile, "compute") else np.asarray(tile)
-            
-            tile_min = float(tile_data.min())
-            tile_max = float(tile_data.max())
-            data_min = min(data_min, tile_min)
-            data_max = max(data_max, tile_max)
-```
-
-**Memory Impact**: Only two scalar values updated per tile, with tiles bounded to ≤16×256×256 voxels.
-
-##### Histogram Accumulation
-
-```python
 hist_bins = np.zeros(256, dtype=np.uint64)
 
-for z_start in range(0, z, tile_z_size):
-    z_end = min(z_start + tile_z_size, z)
-    for y_start in range(0, y, tile_y_size):
-        y_end = min(y_start + tile_y_size, y)
-        for x_start in range(0, x, tile_x_size):
-            x_end = min(x_start + tile_x_size, x)
+# Process in chunks
+for z_start in range(0, level_z, 16):
+    for y_start in range(0, level_y, 256):
+        for x_start in range(0, level_x, 256):
+            # Read tile from Zarr (already optimally chunked)
+            tile_data = np.asarray(channel_data[z_start:z_end, y_start:y_end, x_start:x_end])
             
-            # Extract 3D tile (≤16×256×256)
-            tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
-            tile_data = tile.compute() if hasattr(tile, "compute") else np.asarray(tile)
+            # Update statistics
+            data_min = min(data_min, float(tile_data.min()))
+            data_max = max(data_max, float(tile_data.max()))
             
-            # Compute histogram for this tile
+            # Accumulate histogram
             tile_hist, _ = np.histogram(
                 tile_data.flatten(), bins=256, range=(data_min, data_max)
             )
@@ -130,43 +109,30 @@ for z_start in range(0, z, tile_z_size):
 
 **Memory Impact**: Only 256 bins (2 KB with uint64) maintained in memory, plus one tile (≤4 MB for float32).
 
-#### 4. 3D Tiled Thumbnail Generation
+#### 4. Thumbnail Generation from Zarr
 
-Maximum Intensity Projection (MIP) is computed incrementally using 3D tiles:
+Maximum Intensity Projection (MIP) thumbnails are computed by reading from the intermediate Zarr in chunks:
 
 ```python
-mip = None  # Accumulator for MIP (Y×X plane)
-tile_z_size = min(16, z)
-tile_y_size = min(256, y)
-tile_x_size = min(256, x)
+# Initialize MIP accumulator
+mip = np.zeros((y, x), dtype=channel_data.dtype)
 
-for z_start in range(0, z, tile_z_size):
-    z_end = min(z_start + tile_z_size, z)
-    for y_start in range(0, y, tile_y_size):
-        y_end = min(y_start + tile_y_size, y)
-        for x_start in range(0, x, tile_x_size):
-            x_end = min(x_start + tile_x_size, x)
-            
-            # Extract 3D tile (≤16×256×256)
-            tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
-            tile_data = tile.compute() if hasattr(tile, "compute") else np.asarray(tile)
+# Process in 3D tiles
+for z_start in range(0, z, 16):
+    for y_start in range(0, y, 256):
+        for x_start in range(0, x, 256):
+            # Read tile from Zarr
+            tile_data = np.asarray(channel_data[z_start:z_end, y_start:y_end, x_start:x_end])
             
             # Compute MIP within this tile (maximum across Z)
             tile_mip = np.max(tile_data, axis=0)
             
-            # Initialize or update the corresponding region in the global MIP
-            if mip is None:
-                mip = np.zeros((y, x), dtype=tile_data.dtype)
-            
+            # Update the corresponding region in the global MIP
             mip[y_start:y_end, x_start:x_end] = np.maximum(
                 mip[y_start:y_end, x_start:x_end], tile_mip
             )
-```
 
-After all tiles are processed, the MIP is downsampled to 256×256:
-
-```python
-# Downsample MIP to thumbnail size
+# Downsample to 256×256 for thumbnail
 step_y = max(1, mip.shape[0] // 256)
 step_x = max(1, mip.shape[1] // 256)
 thumbnail = mip[::step_y, ::step_x]
@@ -174,68 +140,92 @@ thumbnail = mip[::step_y, ::step_x]
 
 **Memory Impact**: Maintains a single Y×X plane (the running MIP), typically <10 MB, plus one tile at a time (≤4 MB). Memory is independent of Z dimension.
 
-### Two-Pass Strategy
+#### 5. Cleanup
 
-The implementation uses a two-pass approach:
+The intermediate Zarr file is automatically removed after successful HDF5 creation:
 
-1. **First Pass**: Compute min/max for histogram range
-   - Iterates through all chunks
-   - Updates running min/max
+```python
+finally:
+    # Clean up intermediate Zarr file
+    if os.path.exists(intermediate_zarr_path):
+        shutil.rmtree(intermediate_zarr_path)
+```
+
+### Three-Step Process
+
+The implementation uses a three-step approach:
+
+1. **Step 1: Write Intermediate Zarr**
+   - Uses `to_ome_zarr()` with `compute=True` to force Dask evaluation
+   - Dask efficiently computes and writes multiscale pyramid
+   - Zarr format optimized with 16×256×256 chunking
+   - Memory: Managed by Dask's task scheduler
+
+2. **Step 2: Compute Statistics**
+   - First pass through Zarr data to find min/max
    - Memory: One chunk + two scalars
-
-2. **Second Pass**: Write data and accumulate histogram
-   - Iterates through all chunks again
-   - Writes chunk to HDF5
-   - Updates histogram bins
+   
+3. **Step 3: Copy to HDF5**
+   - Second pass through Zarr data
+   - Reads chunks from Zarr, writes to HDF5
+   - Accumulates histogram during copy
    - Memory: One chunk + 256 bins
 
-This two-pass approach is necessary because:
-- Histogram range must be known before binning
-- HDF5 datasets are created empty and filled incrementally
-- Total memory usage is still bounded by chunk size
+This approach is efficient because:
+- Dask handles the complex multiscale generation automatically
+- Zarr provides efficient intermediate storage
+- Block-by-block copying ensures memory safety
+- Intermediate file is cleaned up automatically
 
-### Tile Size Selection
+### Chunk Size Selection
 
-Default tile size: **16×256×256 voxels** (Z×Y×X)
+Default chunk size: **16×256×256 voxels** (Z×Y×X)
 
 For a typical volume with dimensions Z=1000, Y=2048, X=2048 and float32 data:
 - Full volume: 1000 × 2048 × 2048 × 4 bytes = ~16 GB
-- Single tile: 16 × 256 × 256 × 4 bytes = ~4 MB
+- Single chunk: 16 × 256 × 256 × 4 bytes = ~4 MB
 - **Memory reduction: 4000×** compared to full volume
 
-The tile size matches the Imaris HDF5 chunk size (16×256×256), providing optimal I/O performance. This true 3D tiling approach ensures that memory usage is bounded regardless of image dimensions.
+The chunk size matches the Imaris HDF5 chunk size (16×256×256), providing optimal I/O performance. Both the intermediate Zarr and final HDF5 use this chunking strategy.
 
 ## Performance Characteristics
 
 ### Memory Usage
 
-- **Z-only chunking (problematic)**: O(chunk_z_size × Y × X) - scales with Y and X
-- **3D tiling (current)**: O(tile_z_size × tile_y_size × tile_x_size) - constant, bounded
+The intermediate Zarr strategy provides excellent memory safety:
+
+- **Step 1 (Zarr write)**: Managed by Dask scheduler, typically uses a few chunks in flight
+- **Step 2-3 (Zarr read → HDF5 write)**: O(16 × 256 × 256) - constant, bounded
 
 For a 100 GB volume with dimensions 1000×8192×8192:
-- Z-only chunking: 16 × 8192 × 8192 × 4 bytes = ~4 GB per chunk (memory blowup!)
-- 3D tiling: 16 × 256 × 256 × 4 bytes = ~4 MB per tile (memory safe!)
+- Full array: 1000 × 8192 × 8192 × 4 bytes = ~268 GB (impossible!)
+- 3D chunking: 16 × 256 × 256 × 4 bytes = ~4 MB per chunk (memory safe!)
 
-The 3D tiling approach ensures peak memory usage is independent of all image dimensions.
+The chunked approach ensures peak memory usage is independent of all image dimensions.
 
 ### Time Complexity
 
-- **Old implementation**: Single pass through data (but requires full memory)
-- **New implementation**: Two passes through data (one for min/max, one for writing)
+The three-step approach involves:
+1. **Zarr write**: Dask computes and writes multiscale pyramid (1 pass through original data)
+2. **Statistics**: Read Zarr for min/max (1 pass through Zarr)
+3. **HDF5 copy**: Read Zarr and write HDF5 with histogram (1 pass through Zarr)
 
-Time overhead is typically 10-20% due to:
-- Two passes instead of one
-- Chunk boundary overhead
-- Incremental histogram accumulation
+Total: Effectively 3 passes, but with advantages:
+- Step 1 is optimized by Dask's task scheduler
+- Steps 2-3 read from fast intermediate storage (Zarr)
+- Memory usage remains bounded throughout
 
-This overhead is acceptable given the memory savings and ability to process datasets that would otherwise fail.
+Time overhead compared to direct HDF5 writing is offset by:
+- Dask's efficient multiscale generation
+- No memory constraints allowing larger datasets
+- Zarr's optimized chunk access patterns
 
 ### I/O Patterns
 
 The implementation is optimized for:
-- **Zarr arrays**: Natural chunked storage, efficient slice access
-- **Dask arrays**: Lazy evaluation, chunk-aligned processing
-- **HDF5 output**: Chunked writing with compression
+- **Dask arrays**: Leverages Dask's lazy evaluation and task scheduling
+- **Zarr intermediate**: Fast chunked storage with optimal access patterns  
+- **HDF5 output**: Chunked writing with compression matching Zarr chunks
 
 ## Compatibility
 
@@ -272,21 +262,30 @@ from zarrnii import ZarrNii
 import dask.array as da
 
 # Create a large Dask array (not materialized)
-data = da.random.random((1, 1000, 2048, 2048), chunks=(1, 16, 2048, 2048))
+data = da.random.random((1, 1000, 2048, 2048), chunks=(1, 16, 256, 256))
 znimg = ZarrNii.from_darr(data, spacing=[2.0, 1.5, 1.5])
 
-# Export to Imaris - memory usage stays bounded
+# Export to Imaris - uses intermediate Zarr strategy
+# Memory usage stays bounded throughout
 znimg.to_imaris("output.ims")
+```
+
+### Custom Temporary Directory
+
+```python
+# Specify custom temporary directory for intermediate Zarr
+# Useful if /tmp has limited space
+znimg.to_imaris("output.ims", tmp_dir="/scratch/imaris_temp")
 ```
 
 ### Multi-Channel Export
 
 ```python
 # Multi-channel data
-data = da.random.random((3, 500, 1024, 1024), chunks=(1, 16, 1024, 1024))
+data = da.random.random((3, 500, 1024, 1024), chunks=(1, 16, 256, 256))
 znimg = ZarrNii.from_darr(data, spacing=[1.0, 1.0, 1.0])
 
-# Each channel processed independently
+# Each channel processed independently in the intermediate Zarr
 znimg.to_imaris("multichannel.ims")
 ```
 
