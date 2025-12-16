@@ -4230,16 +4230,15 @@ class ZarrNii:
                     for c in range(n_channels):
                         channel_group = time_group.create_group(f"Channel {c}")
 
-                        # Get channel data from Zarr
+                        # Determine channel dimensions and setup for block access
                         if len(zarr_level_array.shape) == 4:
-                            # CZYX format
-                            channel_data = zarr_level_array[c]  # (Z, Y, X)
+                            # CZYX format - need to get the channel dimension
+                            level_z, level_y, level_x = zarr_level_array.shape[1:]
+                            channel_idx = c
                         else:
                             # ZYX format - single channel
-                            channel_data = zarr_level_array
-
-                        # Get actual dimensions from the Zarr level
-                        level_z, level_y, level_x = channel_data.shape
+                            level_z, level_y, level_x = zarr_level_array.shape
+                            channel_idx = None
 
                         # Channel attributes - use byte array format exactly like reference
                         channel_group.attrs["ImageSizeX"] = _string_to_byte_array(
@@ -4262,7 +4261,7 @@ class ZarrNii:
                         )
 
                         # Determine target dtype for storage
-                        source_dtype = channel_data.dtype
+                        source_dtype = zarr_level_array.dtype
                         if source_dtype == np.float32 or source_dtype == np.float64:
                             target_dtype = np.float32
                         elif source_dtype in [np.uint16, np.int16]:
@@ -4271,35 +4270,47 @@ class ZarrNii:
                             target_dtype = np.uint8
 
                         # STREAMING STATISTICS: Compute min/max/histogram incrementally
-                        # Process data in chunks to compute statistics
+                        # Process data using block-aligned access via .blocks interface
                         data_min = np.inf
                         data_max = -np.inf
                         hist_bins = np.zeros(256, dtype=np.uint64)
 
-                        # Determine tile size for streaming (16×256×256)
-                        tile_z_size = min(16, level_z)
-                        tile_y_size = min(256, level_y)
-                        tile_x_size = min(256, level_x)
+                        # Get number of chunks per dimension for block iteration
+                        # For multi-channel, skip the channel dimension in block iteration
+                        if channel_idx is not None:
+                            # CZYX format: blocks are organized as (C, Z, Y, X)
+                            num_z_blocks = zarr_level_array.cdata_shape[1]
+                            num_y_blocks = zarr_level_array.cdata_shape[2]
+                            num_x_blocks = zarr_level_array.cdata_shape[3]
+                        else:
+                            # ZYX format
+                            num_z_blocks = zarr_level_array.cdata_shape[0]
+                            num_y_blocks = zarr_level_array.cdata_shape[1]
+                            num_x_blocks = zarr_level_array.cdata_shape[2]
 
-                        # First pass: compute min/max for histogram range
-                        for z_start in range(0, level_z, tile_z_size):
-                            z_end = min(z_start + tile_z_size, level_z)
-                            for y_start in range(0, level_y, tile_y_size):
-                                y_end = min(y_start + tile_y_size, level_y)
-                                for x_start in range(0, level_x, tile_x_size):
-                                    x_end = min(x_start + tile_x_size, level_x)
+                        # First pass: compute min/max for histogram range using blocks
+                        for z_block in range(num_z_blocks):
+                            for y_block in range(num_y_blocks):
+                                for x_block in range(num_x_blocks):
+                                    # Read block from Zarr using blocks interface
+                                    if channel_idx is not None:
+                                        # Multi-channel: access specific channel's block
+                                        # blocks[c, z, y, x] returns shape (1, Z, Y, X), so squeeze first dim
+                                        block_data = np.asarray(
+                                            zarr_level_array.blocks[
+                                                channel_idx, z_block, y_block, x_block
+                                            ]
+                                        ).squeeze(0)
+                                    else:
+                                        # Single channel
+                                        block_data = np.asarray(
+                                            zarr_level_array.blocks[z_block, y_block, x_block]
+                                        )
 
-                                    # Read tile from Zarr
-                                    tile_data = np.asarray(
-                                        channel_data[
-                                            z_start:z_end, y_start:y_end, x_start:x_end
-                                        ]
-                                    )
-
-                                    tile_min = float(tile_data.min())
-                                    tile_max = float(tile_data.max())
-                                    data_min = min(data_min, tile_min)
-                                    data_max = max(data_max, tile_max)
+                                    block_min = float(block_data.min())
+                                    block_max = float(block_data.max())
+                                    data_min = min(data_min, block_min)
+                                    data_max = max(data_max, block_max)
 
                         # Set histogram range attributes
                         channel_group.attrs["HistogramMin"] = _string_to_byte_array(
@@ -4325,37 +4336,56 @@ class ZarrNii:
                             chunks=h5_chunks,
                         )
 
-                        # Second pass: copy data from Zarr and accumulate histogram
-                        for z_start in range(0, level_z, tile_z_size):
-                            z_end = min(z_start + tile_z_size, level_z)
-                            for y_start in range(0, level_y, tile_y_size):
-                                y_end = min(y_start + tile_y_size, level_y)
-                                for x_start in range(0, level_x, tile_x_size):
-                                    x_end = min(x_start + tile_x_size, level_x)
-
-                                    # Read tile from Zarr
-                                    tile_data = np.asarray(
-                                        channel_data[
-                                            z_start:z_end, y_start:y_end, x_start:x_end
-                                        ]
-                                    )
+                        # Second pass: copy data from Zarr and accumulate histogram using blocks
+                        for z_block in range(num_z_blocks):
+                            for y_block in range(num_y_blocks):
+                                for x_block in range(num_x_blocks):
+                                    # Read block from Zarr using blocks interface
+                                    if channel_idx is not None:
+                                        # Multi-channel: access specific channel's block
+                                        # blocks[c, z, y, x] returns shape (1, Z, Y, X), so squeeze first dim
+                                        block_data = np.asarray(
+                                            zarr_level_array.blocks[
+                                                channel_idx, z_block, y_block, x_block
+                                            ]
+                                        ).squeeze(0)
+                                        # Get chunk sizes from the spatial dimensions
+                                        chunk_z = zarr_level_array.chunks[1]
+                                        chunk_y = zarr_level_array.chunks[2]
+                                        chunk_x = zarr_level_array.chunks[3]
+                                    else:
+                                        # Single channel
+                                        block_data = np.asarray(
+                                            zarr_level_array.blocks[z_block, y_block, x_block]
+                                        )
+                                        chunk_z = zarr_level_array.chunks[0]
+                                        chunk_y = zarr_level_array.chunks[1]
+                                        chunk_x = zarr_level_array.chunks[2]
 
                                     # Convert to target dtype
-                                    if tile_data.dtype != target_dtype:
-                                        tile_data = tile_data.astype(target_dtype)
+                                    if block_data.dtype != target_dtype:
+                                        block_data = block_data.astype(target_dtype)
 
-                                    # Write tile to HDF5
-                                    h5_dataset[
-                                        z_start:z_end, y_start:y_end, x_start:x_end
-                                    ] = tile_data
+                                    # Calculate block position in array
+                                    z_start = z_block * chunk_z
+                                    y_start = y_block * chunk_y
+                                    x_start = x_block * chunk_x
+                                    z_end = z_start + block_data.shape[0]
+                                    y_end = y_start + block_data.shape[1]
+                                    x_end = x_start + block_data.shape[2]
+
+                                    # Write block to HDF5
+                                    h5_dataset[z_start:z_end, y_start:y_end, x_start:x_end] = (
+                                        block_data
+                                    )
 
                                     # Accumulate histogram
-                                    tile_hist, _ = np.histogram(
-                                        tile_data.flatten(),
+                                    block_hist, _ = np.histogram(
+                                        block_data.flatten(),
                                         bins=256,
                                         range=(data_min, data_max),
                                     )
-                                    hist_bins += tile_hist.astype(np.uint64)
+                                    hist_bins += block_hist.astype(np.uint64)
 
                         # Create histogram dataset
                         channel_group.create_dataset("Histogram", data=hist_bins)
@@ -4491,37 +4521,53 @@ class ZarrNii:
                     thumbnail_data = np.zeros((256, thumb_width), dtype=np.uint8)
 
                     for c in range(n_channels):
-                        # Get channel data from Zarr
+                        # Determine data type for MIP
                         if len(zarr_level_0.shape) == 4:
-                            channel_data = zarr_level_0[c]
+                            mip_dtype = zarr_level_0.dtype
+                            # CZYX format
+                            num_z_blocks = zarr_level_0.cdata_shape[1]
+                            num_y_blocks = zarr_level_0.cdata_shape[2]
+                            num_x_blocks = zarr_level_0.cdata_shape[3]
+                            chunk_y = zarr_level_0.chunks[2]
+                            chunk_x = zarr_level_0.chunks[3]
                         else:
-                            channel_data = zarr_level_0
+                            mip_dtype = zarr_level_0.dtype
+                            # ZYX format
+                            num_z_blocks = zarr_level_0.cdata_shape[0]
+                            num_y_blocks = zarr_level_0.cdata_shape[1]
+                            num_x_blocks = zarr_level_0.cdata_shape[2]
+                            chunk_y = zarr_level_0.chunks[1]
+                            chunk_x = zarr_level_0.chunks[2]
 
-                        # Compute MIP incrementally
-                        tile_z_size = min(16, z)
-                        tile_y_size = min(256, y)
-                        tile_x_size = min(256, x)
+                        # Compute MIP incrementally using block-aligned access
+                        mip = np.zeros((y, x), dtype=mip_dtype)
 
-                        mip = np.zeros((y, x), dtype=channel_data.dtype)
+                        for z_block in range(num_z_blocks):
+                            for y_block in range(num_y_blocks):
+                                for x_block in range(num_x_blocks):
+                                    # Read block from Zarr using blocks interface
+                                    if len(zarr_level_0.shape) == 4:
+                                        # Multi-channel: access specific channel's block
+                                        # blocks[c, z, y, x] returns shape (1, Z, Y, X), so squeeze first dim
+                                        block_data = np.asarray(
+                                            zarr_level_0.blocks[c, z_block, y_block, x_block]
+                                        ).squeeze(0)
+                                    else:
+                                        # Single channel
+                                        block_data = np.asarray(
+                                            zarr_level_0.blocks[z_block, y_block, x_block]
+                                        )
 
-                        for z_start in range(0, z, tile_z_size):
-                            z_end = min(z_start + tile_z_size, z)
-                            for y_start in range(0, y, tile_y_size):
-                                y_end = min(y_start + tile_y_size, y)
-                                for x_start in range(0, x, tile_x_size):
-                                    x_end = min(x_start + tile_x_size, x)
-
-                                    # Read tile from Zarr
-                                    tile_data = np.asarray(
-                                        channel_data[
-                                            z_start:z_end, y_start:y_end, x_start:x_end
-                                        ]
-                                    )
+                                    # Calculate block position in array
+                                    y_start = y_block * chunk_y
+                                    x_start = x_block * chunk_x
+                                    y_end = y_start + block_data.shape[-2]
+                                    x_end = x_start + block_data.shape[-1]
 
                                     # Update MIP
-                                    tile_mip = np.max(tile_data, axis=0)
+                                    block_mip = np.max(block_data, axis=0)
                                     mip[y_start:y_end, x_start:x_end] = np.maximum(
-                                        mip[y_start:y_end, x_start:x_end], tile_mip
+                                        mip[y_start:y_end, x_start:x_end], block_mip
                                     )
 
                         # Downsample MIP to 256x256
@@ -4544,36 +4590,55 @@ class ZarrNii:
                         )
                 else:
                     # Single channel: 256x256 thumbnail
+                    # Determine data type for MIP
                     if len(zarr_level_0.shape) == 4:
-                        channel_data = zarr_level_0[0]
+                        mip_dtype = zarr_level_0.dtype
+                        # CZYX format
+                        num_z_blocks = zarr_level_0.cdata_shape[1]
+                        num_y_blocks = zarr_level_0.cdata_shape[2]
+                        num_x_blocks = zarr_level_0.cdata_shape[3]
+                        chunk_y = zarr_level_0.chunks[2]
+                        chunk_x = zarr_level_0.chunks[3]
+                        is_multi_channel = True
                     else:
-                        channel_data = zarr_level_0
+                        mip_dtype = zarr_level_0.dtype
+                        # ZYX format
+                        num_z_blocks = zarr_level_0.cdata_shape[0]
+                        num_y_blocks = zarr_level_0.cdata_shape[1]
+                        num_x_blocks = zarr_level_0.cdata_shape[2]
+                        chunk_y = zarr_level_0.chunks[1]
+                        chunk_x = zarr_level_0.chunks[2]
+                        is_multi_channel = False
 
-                    # Compute MIP incrementally
-                    tile_z_size = min(16, z)
-                    tile_y_size = min(256, y)
-                    tile_x_size = min(256, x)
+                    # Compute MIP incrementally using block-aligned access
+                    mip = np.zeros((y, x), dtype=mip_dtype)
 
-                    mip = np.zeros((y, x), dtype=channel_data.dtype)
+                    for z_block in range(num_z_blocks):
+                        for y_block in range(num_y_blocks):
+                            for x_block in range(num_x_blocks):
+                                # Read block from Zarr using blocks interface
+                                if is_multi_channel:
+                                    # Multi-channel: access first channel's block
+                                    # blocks[c, z, y, x] returns shape (1, Z, Y, X), so squeeze first dim
+                                    block_data = np.asarray(
+                                        zarr_level_0.blocks[0, z_block, y_block, x_block]
+                                    ).squeeze(0)
+                                else:
+                                    # Single channel
+                                    block_data = np.asarray(
+                                        zarr_level_0.blocks[z_block, y_block, x_block]
+                                    )
 
-                    for z_start in range(0, z, tile_z_size):
-                        z_end = min(z_start + tile_z_size, z)
-                        for y_start in range(0, y, tile_y_size):
-                            y_end = min(y_start + tile_y_size, y)
-                            for x_start in range(0, x, tile_x_size):
-                                x_end = min(x_start + tile_x_size, x)
-
-                                # Read tile from Zarr
-                                tile_data = np.asarray(
-                                    channel_data[
-                                        z_start:z_end, y_start:y_end, x_start:x_end
-                                    ]
-                                )
+                                # Calculate block position in array
+                                y_start = y_block * chunk_y
+                                x_start = x_block * chunk_x
+                                y_end = y_start + block_data.shape[-2]
+                                x_end = x_start + block_data.shape[-1]
 
                                 # Update MIP
-                                tile_mip = np.max(tile_data, axis=0)
+                                block_mip = np.max(block_data, axis=0)
                                 mip[y_start:y_end, x_start:x_end] = np.maximum(
-                                    mip[y_start:y_end, x_start:x_end], tile_mip
+                                    mip[y_start:y_end, x_start:x_end], block_mip
                                 )
 
                     # Downsample to 256x256
