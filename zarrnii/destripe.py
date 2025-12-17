@@ -1,12 +1,11 @@
-import numpy as np
-import dask.array as da
-import zarr
 import dask
-
-from scipy.signal import medfilt2d
-from skimage.morphology import remove_small_objects, binary_dilation, disk
-from skimage.transform import resize
+import dask.array as da
+import numpy as np
+import zarr
 from scipy.ndimage import binary_fill_holes
+from scipy.signal import medfilt2d
+from skimage.morphology import binary_dilation, disk, remove_small_objects
+from skimage.transform import resize
 
 
 def _odd(n):
@@ -208,9 +207,8 @@ def phasecong(
 # CENTER_FRACTION = 1.0  # 10% per spatial dimension
 
 
-def destripe_lightsheet_slice(
-    plane: np.ndarray,
-    *,
+def destripe_block(
+    block: np.ndarray,
     bg_thresh: float = 0.004,  # threshold for background mask (like T)
     factor: int = 16,  # down/upsampling grid factor
     diff_thresh: float = 0.007,  # threshold on D to split D0 / D1
@@ -221,25 +219,29 @@ def destripe_lightsheet_slice(
     ori_tol_deg: float = 5.0,  # tolerance around target orientation
 ) -> np.ndarray:
     """
-    PUBLIC API: de-stripe a single 2D lightsheet slice.
+    De-stripe a single block, assumed to be a z-slice.
 
     Takes a plain numpy array (no Dask/Zarr), returns a numpy array
     with the same shape. Internally uses your downsample_grid /
     upsample_grid + phasecong.
 
-    This is what you'll pass to dask.map_blocks (via a small wrapper).
+    This is what you'll pass to dask.map_blocks
     """
+
+    I = np.squeeze(block)  # (Y,X)
+
     # ---------- normalize input to [0,1] ---------- #
-    I = np.asarray(plane)
     I = np.nan_to_num(I, nan=0.0, posinf=0.0, neginf=0.0)
+    norm_val = 1.0
 
     if np.issubdtype(I.dtype, np.integer):
-        maxv = float(np.iinfo(I.dtype).max)
-        I = I.astype(np.float32) / max(1.0, maxv)
+        norm_val = max(1.0, float(np.iinfo(I.dtype).max))
+        I = I.astype(np.float32) / norm_val
     else:
         I = I.astype(np.float32, copy=False)
         if I.max() > 1.0:
-            I = I / (I.max() + 1e-8)
+            norm_val = I.max() + 1e-8
+            I = I / norm_val
 
     II0 = I
 
@@ -337,7 +339,9 @@ def destripe_lightsheet_slice(
 
     # ---------- reconstruct full image from tiles ---------- #
     img_recon = upsample_grid(I_stack, factor)
-    return img_recon.astype(np.float32)
+
+    # use original shape and dtype and undo normalization
+    return (img_recon * norm_val).astype(block.dtype).reshape(block.shape)
 
 
 def downsample_grid(img, factor):
@@ -383,43 +387,32 @@ def upsample_grid(I_stack, factor):
     return img_recon
 
 
-def destripe_block(
-    block: np.ndarray,
-    bg_thresh: float = 0.004,
-    factor: int = 16,
-    diff_thresh: float = 0.007,
-    med_size_min: int = 9,
-    med_size_max: int = 19,
-    phase_size: int = 512,
-    ori_target_deg: float = 90.0,
-    ori_tol_deg: float = 5.0,
-) -> np.ndarray:
-    """
-    Wrapper for dask.map_blocks.
+def _has_allowed_chunking(arr: da.Array) -> bool:
+    if arr.ndim < 3 or arr.ndim > 5:
+        return False
 
-    Expected block shape: (1, Y, X) or (Y, X).
-    Returns a block with the same shape.
-    """
-    block = np.asarray(block)
-    squeezed = np.squeeze(block)  # (Y,X)
+    chunks = arr.chunks
+    shape = arr.shape
 
-    out2d = destripe_lightsheet_slice(
-        squeezed,
-        bg_thresh=bg_thresh,
-        factor=factor,
-        diff_thresh=diff_thresh,
-        med_size_min=med_size_min,
-        med_size_max=med_size_max,
-        phase_size=phase_size,
-        ori_target_deg=ori_target_deg,
-        ori_tol_deg=ori_tol_deg,
-    )
+    # Last 3 dims: (Nz, Ny, Nx)
+    z_chunks, y_chunks, x_chunks = chunks[-3:]
 
-    # Restore the leading Z dimension if it was there
-    if block.ndim == 3 and block.shape[0] == 1:
-        return out2d[np.newaxis, :, :]
-    else:
-        return out2d
+    # Z must be sliced into 1s
+    if not all(c == 1 for c in z_chunks):
+        return False
+
+    # Y, X must be exactly one chunk and full-sized
+    if not (len(y_chunks) == 1 and y_chunks[0] == shape[-2]):
+        return False
+    if not (len(x_chunks) == 1 and x_chunks[0] == shape[-1]):
+        return False
+
+    # Leading dims (Nt, Nc) if present must be chunked as all 1s
+    for dim_chunks in chunks[:-3]:
+        if not all(c == 1 for c in dim_chunks):
+            return False
+
+    return True
 
 
 def destripe(
@@ -434,18 +427,21 @@ def destripe(
     ori_tol_deg: float = 5.0,  # tolerance around target orientation
 ) -> da.Array:
 
-    # 5. Apply destriping per slice
-    destriped = img.map_blocks(
-        destripe_block,
-        dtype=np.float32,
-        bg_thresh=bg_thresh,
-        factor=factor,
-        diff_thresh=diff_thresh,
-        med_size_min=med_size_min,
-        med_size_max=med_size_max,
-        phase_size=phase_size,
-        ori_target_deg=ori_target_deg,
-        ori_tol_deg=ori_tol_deg,
-    )
+    if _has_allowed_chunking(img):
 
-    return destriped
+        return img.map_blocks(
+            destripe_block,
+            dtype=img.dtype,
+            bg_thresh=bg_thresh,
+            factor=factor,
+            diff_thresh=diff_thresh,
+            med_size_min=med_size_min,
+            med_size_max=med_size_max,
+            phase_size=phase_size,
+            ori_target_deg=ori_target_deg,
+            ori_tol_deg=ori_tol_deg,
+        )
+    else:
+        raise ValueError(
+            f"Incorrect shape or chunking in dask array for destripe, must be Z-slices, with XY chunks as image size"
+        )
