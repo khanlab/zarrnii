@@ -5299,9 +5299,6 @@ class ZarrNii:
 
         from .destripe import destripe
 
-        # Step 1: Get ZYX array
-        # for now, just assume already ZYX, and single channel (later add chekcs for this, and reordering if XYZ)
-
         destriped_znimg = self.copy()
 
         img_3d = self.data[channel, :, :, :].squeeze()
