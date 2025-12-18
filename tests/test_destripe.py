@@ -3,7 +3,7 @@
 import dask.array as da
 import numpy as np
 import pytest
-from numpy.testing import assert_array_almost_equal, assert_array_equal
+from numpy.testing import assert_array_equal
 
 from zarrnii.destripe import (
     _has_allowed_chunking,
@@ -204,7 +204,7 @@ class TestPhasecong:
         img = np.zeros((64, 64), dtype=np.float32)
         img[:, 10:20] = 1.0  # Vertical stripe
 
-        pc, ori = phasecong(img, nscale=2, norient=4, minWaveLength=3)
+        pc, ori = phasecong(img, nscale=2, norient=4, min_wave_length=3)
 
         # Check output shapes
         assert pc.shape == (64, 64)

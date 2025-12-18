@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import dask
 import dask.array as da
 import numpy as np
-import zarr
 from scipy.ndimage import binary_fill_holes
 from scipy.signal import medfilt2d
 from skimage.morphology import binary_dilation, disk, remove_small_objects
@@ -31,12 +29,12 @@ def phasecong(
     image: np.ndarray,
     nscale: int = 4,
     norient: int = 6,
-    minWaveLength: int = 3,
+    min_wave_length: int = 3,
     mult: int = 2,
-    sigmaOnf: float = 0.55,
-    dThetaOnSigma: float = 1.2,
+    sigma_on_f: float = 0.55,
+    d_theta_on_sigma: float = 1.2,
     k: float = 2.0,
-    cutOff: float = 0.4,
+    cut_off: float = 0.4,
     g: float = 10.0,
     epsilon: float = 1e-4,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -54,20 +52,20 @@ def phasecong(
         Number of wavelet scales to use in the analysis.
     norient : int
         Number of filter orientations to use (divides 180 degrees).
-    minWaveLength : int
+    min_wave_length : int
         Wavelength of smallest scale filter in pixels.
     mult : int
         Scaling factor between successive filter wavelengths.
-    sigmaOnf : float
+    sigma_on_f : float
         Ratio of standard deviation of Gaussian describing log Gabor
         filter's transfer function in frequency domain to filter center frequency.
-    dThetaOnSigma : float
+    d_theta_on_sigma : float
         Ratio of angular interval between filter orientations and
         standard deviation of angular Gaussian function used to construct filters.
     k : float
         Number of standard deviations of noise energy above mean at which
         we set threshold for phase congruency.
-    cutOff : float
+    cut_off : float
         Threshold used to determine significance of frequency spread weighting.
     g : float
         Controls sharpness of the frequency spread weighting sigmoid function.
@@ -88,20 +86,19 @@ def phasecong(
     ValueError
         If image is not square 2D.
     """
-    I = np.asarray(image, dtype=np.float32)
-    if I.ndim != 2 or I.shape[0] != I.shape[1]:
+    image_array = np.asarray(image, dtype=np.float32)
+    if image_array.ndim != 2 or image_array.shape[0] != image_array.shape[1]:
         raise ValueError("phasecong: image must be square 2D.")
 
-    rows = cols = I.shape[0]
-    thetaSigma = np.pi / norient / dThetaOnSigma
+    rows = cols = image_array.shape[0]
+    thetaSigma = np.pi / norient / d_theta_on_sigma
 
     # Fourier transform of image
-    imagefft = np.fft.fft2(I)
+    imagefft = np.fft.fft2(image_array)
 
-    zero = np.zeros_like(I, dtype=np.float32)
-    totalEnergy = np.zeros_like(I, dtype=np.float32)
-    totalSumAn = np.zeros_like(I, dtype=np.float32)
-    orientation_idx = np.zeros_like(I, dtype=np.float32)  # stores (o-1)
+    total_energy = np.zeros_like(image_array, dtype=np.float32)
+    total_sum_an = np.zeros_like(image_array, dtype=np.float32)
+    orientation_idx = np.zeros_like(image_array, dtype=np.float32)  # stores (o-1)
     estMeanE2n_list = []
 
     # ----- precompute polar coords (unshifted layout) -----
@@ -126,12 +123,12 @@ def phasecong(
         dtheta = np.abs(np.arctan2(ds, dc))
         spread = np.exp(-(dtheta**2) / (2 * thetaSigma**2)).astype(np.float32)
 
-        wavelength = float(minWaveLength)
+        wavelength = float(min_wave_length)
 
-        sumE_ThisOrient = np.zeros_like(I, dtype=np.float32)
-        sumO_ThisOrient = np.zeros_like(I, dtype=np.float32)
-        sumAn_ThisOrient = np.zeros_like(I, dtype=np.float32)
-        Energy_ThisOrient = np.zeros_like(I, dtype=np.float32)
+        sumE_ThisOrient = np.zeros_like(image_array, dtype=np.float32)
+        sumO_ThisOrient = np.zeros_like(image_array, dtype=np.float32)
+        sumAn_ThisOrient = np.zeros_like(image_array, dtype=np.float32)
+        Energy_ThisOrient = np.zeros_like(image_array, dtype=np.float32)
 
         EO_list = []  # complex responses (per scale)
         ifftFilt_list = []  # real(ifft2(filter))*sqrt(N)
@@ -146,9 +143,9 @@ def phasecong(
 
             # Log-Gabor radial component (in unshifted frequency coords)
             log_term = np.log(radius / (rfo + 1e-12))
-            logGabor = np.exp(-(log_term**2) / (2 * (np.log(sigmaOnf) ** 2))).astype(
-                np.float32
-            )
+            logGabor = np.exp(
+                -(log_term**2) / (2 * (np.log(sigma_on_f) ** 2))
+            ).astype(np.float32)
             logGabor[rows // 2, cols // 2] = 0.0  # undo radius fudge
 
             # Full filter = radial * angular spread
@@ -200,11 +197,11 @@ def phasecong(
         noisePower = meanE2n / (EM_n + 1e-12)
 
         # Estimate total noise energy^2 over all scales
-        EstSumAn2 = np.zeros_like(I, dtype=np.float32)
+        EstSumAn2 = np.zeros_like(image_array, dtype=np.float32)
         for s in range(nscale):
             EstSumAn2 += ifftFilt_list[s] ** 2
 
-        EstSumAiAj = np.zeros_like(I, dtype=np.float32)
+        EstSumAiAj = np.zeros_like(image_array, dtype=np.float32)
         for si in range(nscale - 1):
             for sj in range(si + 1, nscale):
                 EstSumAiAj += ifftFilt_list[si] * ifftFilt_list[sj]
@@ -226,12 +223,12 @@ def phasecong(
 
         # Sigmoidal weighting based on frequency width
         width = (sumAn_ThisOrient / (maxAn + epsilon)) / float(nscale)
-        weight = 1.0 / (1.0 + np.exp((cutOff - width) * g))
+        weight = 1.0 / (1.0 + np.exp((cut_off - width) * g))
         Energy_ThisOrient *= weight.astype(np.float32)
 
         # Accumulate
-        totalSumAn += sumAn_ThisOrient
-        totalEnergy += Energy_ThisOrient
+        total_sum_an += sumAn_ThisOrient
+        total_energy += Energy_ThisOrient
 
         # Track best orientation index
         if o == 1:
@@ -242,7 +239,7 @@ def phasecong(
             maxEnergy = np.maximum(maxEnergy, Energy_ThisOrient)
 
     # Phase Congruency
-    phaseCongruency = totalEnergy / (totalSumAn + epsilon)
+    phaseCongruency = total_energy / (total_sum_an + epsilon)
 
     # Orientation in degrees (0..180)
     orientation_deg = orientation_idx * (180.0 / norient)
@@ -255,7 +252,7 @@ def destripe_block(
     bg_thresh: float = 0.004,  # threshold for background mask (like T)
     factor: int = 16,  # down/upsampling grid factor
     diff_thresh: float = 0.007,  # threshold on D to split D0 / D1
-    med_size_min: int = 9,  # random median filter size range per tile
+    med_size_min: int = 9,  # deterministic median filter size range per tile
     med_size_max: int = 19,
     phase_size: int = 512,  # size for phasecong (square)
     ori_target_deg: float = 90.0,  # stripe orientation
@@ -296,15 +293,17 @@ def destripe_block(
         make it more inclusive.
     med_size_min:
         Minimum size (in pixels) of the median filter kernel applied per
-        tile during destriping. The actual kernel size is chosen
-        randomly between ``med_size_min`` and ``med_size_max`` (odd
-        sizes are enforced internally). Smaller values preserve more
+        tile during destriping. The actual kernel size used for a given
+        tile is deterministically selected between ``med_size_min`` and
+        ``med_size_max`` (for example, based on the channel index), and
+        odd sizes are enforced internally. Smaller values preserve more
         fine detail but may leave residual stripe noise.
     med_size_max:
         Maximum size (in pixels) of the median filter kernel applied per
-        tile during destriping. Larger values yield stronger smoothing
-        and more aggressive stripe removal, at the risk of blurring
-        small structures.
+        tile during destriping. Within the deterministically chosen range
+        between ``med_size_min`` and ``med_size_max``, larger kernel
+        sizes yield stronger smoothing and more aggressive stripe removal,
+        at the risk of blurring small structures.
     phase_size:
         Size (in pixels) of the square region used for phase congruency
         analysis. This controls the spatial extent over which oriented
@@ -335,22 +334,25 @@ def destripe_block(
     be mapped over a larger volume using ``dask.map_blocks``.
     """
 
-    I = np.squeeze(block)  # (Y,X)
+    image = np.squeeze(block)  # (Y,X)
 
     # ---------- normalize input to [0,1] ---------- #
-    I = np.nan_to_num(I, nan=0.0, posinf=0.0, neginf=0.0)
+    image = np.nan_to_num(image, nan=0.0, posinf=0.0, neginf=0.0)
     norm_val = 1.0
 
-    if np.issubdtype(I.dtype, np.integer):
-        norm_val = max(1.0, float(np.iinfo(I.dtype).max))
-        I = I.astype(np.float32) / norm_val
+    if np.issubdtype(image.dtype, np.integer):
+        norm_val = max(1.0, float(np.iinfo(image.dtype).max))
+        image = image.astype(np.float32) / norm_val
     else:
-        I = I.astype(np.float32, copy=False)
-        if I.max() > 1.0:
-            norm_val = I.max() + 1e-8
-            I = I / norm_val
+        image = image.astype(np.float32, copy=False)
+        img_min = image.min()
+        img_max = image.max()
+        # Handle constant images - no normalization needed if max == min
+        if img_max != img_min and img_max > 1.0:
+            norm_val = img_max + 1e-8
+            image = image / norm_val
 
-    II0 = I
+    II0 = image
 
     # ---------- background mask & stacking ---------- #
     mask_full = np.zeros_like(II0, dtype=np.float32)
@@ -591,7 +593,7 @@ def destripe(
     bg_thresh: float = 0.004,  # threshold for background mask (like T)
     factor: int = 16,  # down/upsampling grid factor
     diff_thresh: float = 0.007,  # threshold on D to split D0 / D1
-    med_size_min: int = 9,  # random median filter size range per tile
+    med_size_min: int = 9,  # deterministic median filter size range per tile
     med_size_max: int = 19,
     phase_size: int = 512,  # size for phasecong (square)
     ori_target_deg: float = 90.0,  # stripe orientation

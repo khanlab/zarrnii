@@ -4373,7 +4373,7 @@ class ZarrNii:
 
         # Create a new NgffImage with the same properties
         copied_image = nz.NgffImage(
-            data=self.ngff_image.data.copy(),  # Dask arrays are lazy so this is efficient
+            data=self.ngff_image.data,  # Reuse lazy Dask array; no extra copy needed
             dims=copied_dims,
             scale=self.ngff_image.scale.copy(),
             translation=self.ngff_image.translation.copy(),
@@ -5301,9 +5301,28 @@ class ZarrNii:
 
         destriped_znimg = self.copy()
 
+        # Extract the selected channel as a 3D array
         img_3d = self.data[channel, :, :, :].squeeze()
 
-        destriped_znimg.data[channel, :, :, :] = destripe(img_3d, **kwargs)
+        # Compute destriped channel data and ensure it is a Dask array
+        destriped_channel = da.asarray(destripe(img_3d, **kwargs))
+
+        # Ensure the destriped channel has the same shape as the original channel
+        original_channel = self.data[channel, :, :, :]
+        if destriped_channel.shape != original_channel.shape:
+            destriped_channel = destriped_channel.reshape(original_channel.shape)
+
+        # Rebuild the data array with the updated channel, avoiding in-place mutation
+        data = self.data
+        num_channels = data.shape[0]
+        channels = []
+        for c in range(num_channels):
+            if c == channel:
+                channels.append(destriped_channel)
+            else:
+                channels.append(data[c, :, :, :])
+
+        destriped_znimg.data = da.stack(channels, axis=0)
 
         return destriped_znimg
 
