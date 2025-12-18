@@ -347,11 +347,8 @@ def destripe_block(
         image = image.astype(np.float32, copy=False)
         img_min = image.min()
         img_max = image.max()
-        # Handle constant images
-        if img_max == img_min:
-            # Image is constant, no normalization needed
-            pass
-        elif img_max > 1.0:
+        # Handle constant images - no normalization needed if max == min
+        if img_max != img_min and img_max > 1.0:
             norm_val = img_max + 1e-8
             image = image / norm_val
 
