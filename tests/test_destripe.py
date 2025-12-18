@@ -264,7 +264,12 @@ class TestDestripeBlock:
         block = np.random.rand(128, 128).astype(np.float32)
 
         result = destripe_block(
-            block, bg_thresh=0.004, factor=8, phase_size=64, med_size_min=3, med_size_max=5
+            block,
+            bg_thresh=0.004,
+            factor=8,
+            phase_size=64,
+            med_size_min=3,
+            med_size_max=5,
         )
 
         # Check shape preservation
@@ -413,9 +418,9 @@ class TestDestripe:
 
     def test_destripe_invalid_too_many_dims(self):
         """Test that 6D arrays are rejected."""
-        arr = da.random.random((2, 2, 2, 10, 256, 256), chunks=(1, 1, 1, 1, 256, 256)).astype(
-            np.float32
-        )
+        arr = da.random.random(
+            (2, 2, 2, 10, 256, 256), chunks=(1, 1, 1, 1, 256, 256)
+        ).astype(np.float32)
 
         with pytest.raises(ValueError, match="Incorrect shape or chunking"):
             destripe(arr)
