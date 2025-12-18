@@ -327,9 +327,13 @@ class TestDestripeBlock:
         result = destripe_block(block, factor=8, phase_size=64)
 
         # Result should be in a reasonable range relative to input
-        # (allowing some variation due to processing)
-        assert result.min() >= original_min - 0.2
-        assert result.max() <= original_max + 0.2
+        # Tolerance of 0.2 accounts for:
+        # - Median filtering and phase congruency corrections
+        # - Background masking and morphological operations
+        # - Normalization and rescaling steps in the algorithm
+        tolerance = 0.2
+        assert result.min() >= original_min - tolerance
+        assert result.max() <= original_max + tolerance
 
     def test_destripe_block_nan_handling(self):
         """Test that NaN values are handled correctly."""
