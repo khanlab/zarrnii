@@ -1,3 +1,7 @@
+"""Destriping module for removing stripe artifacts from volumetric images."""
+
+from __future__ import annotations
+
 import dask
 import dask.array as da
 import numpy as np
@@ -8,36 +12,81 @@ from skimage.morphology import binary_dilation, disk, remove_small_objects
 from skimage.transform import resize
 
 
-def _odd(n):
+def _odd(n: int) -> int:
+    """Convert an integer to the nearest odd number.
+
+    If the input is even, returns n + 1. If the input is already odd, returns n unchanged.
+
+    Args:
+        n: Integer value to convert to odd number.
+
+    Returns:
+        The nearest odd integer (n if odd, n+1 if even).
+    """
     n = int(n)
     return n if n % 2 else n + 1
 
 
 def phasecong(
-    image,
-    nscale=4,
-    norient=6,
-    minWaveLength=3,
-    mult=2,
-    sigmaOnf=0.55,
-    dThetaOnSigma=1.2,
-    k=2.0,
-    cutOff=0.4,
-    g=10.0,
-    epsilon=1e-4,
-):
-    """
-    Python reimplementation of Kovesi's phase congruency (as in your MATLAB code).
+    image: np.ndarray,
+    nscale: int = 4,
+    norient: int = 6,
+    minWaveLength: int = 3,
+    mult: int = 2,
+    sigmaOnf: float = 0.55,
+    dThetaOnSigma: float = 1.2,
+    k: float = 2.0,
+    cutOff: float = 0.4,
+    g: float = 10.0,
+    epsilon: float = 1e-4,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute phase congruency for detecting image features.
+
+    Python reimplementation of Kovesi's phase congruency algorithm.
+    Phase congruency is a measure of feature significance based on local
+    frequency and phase information, independent of image contrast.
 
     Parameters
     ----------
-    image : (N,N) array_like
-        Square grayscale image. Float32/64 recommended.
+    image : np.ndarray
+        Square grayscale image (N, N). Float32/64 recommended.
+    nscale : int
+        Number of wavelet scales to use in the analysis.
+    norient : int
+        Number of filter orientations to use (divides 180 degrees).
+    minWaveLength : int
+        Wavelength of smallest scale filter in pixels.
+    mult : int
+        Scaling factor between successive filter wavelengths.
+    sigmaOnf : float
+        Ratio of standard deviation of Gaussian describing log Gabor
+        filter's transfer function in frequency domain to filter center frequency.
+    dThetaOnSigma : float
+        Ratio of angular interval between filter orientations and
+        standard deviation of angular Gaussian function used to construct filters.
+    k : float
+        Number of standard deviations of noise energy above mean at which
+        we set threshold for phase congruency.
+    cutOff : float
+        Threshold used to determine significance of frequency spread weighting.
+    g : float
+        Controls sharpness of the frequency spread weighting sigmoid function.
+    epsilon : float
+        Small constant to prevent division by zero.
+
     Returns
     -------
-    phaseCongruency : (N,N) float
-    orientation_deg : (N,N) float
-        Orientation in degrees (0..180), quantized by the winning orientation bin.
+    tuple[np.ndarray, np.ndarray]
+        phaseCongruency : np.ndarray
+            Phase congruency values (N, N) as float32, representing feature strength.
+        orientation_deg : np.ndarray
+            Orientation in degrees (N, N) as float32, range 0-180, quantized by
+            the winning orientation bin.
+
+    Raises
+    ------
+    ValueError
+        If image is not square 2D.
     """
     I = np.asarray(image, dtype=np.float32)
     if I.ndim != 2 or I.shape[0] != I.shape[1]:
@@ -199,7 +248,6 @@ def phasecong(
     orientation_deg = orientation_idx * (180.0 / norient)
 
     return phaseCongruency.astype(np.float32), orientation_deg.astype(np.float32)
-
 
 
 def destripe_block(
@@ -408,11 +456,30 @@ def destripe_block(
     return (img_recon * norm_val).astype(block.dtype).reshape(block.shape)
 
 
-def downsample_grid(img, factor):
-    """
-    img: 2D grayscale image
-    factor: downsampling factor
-    Returns I_stack with shape (h//factor, w//factor, factor^2)
+def downsample_grid(img: np.ndarray, factor: int) -> np.ndarray:
+    """Downsample a 2D image into an interleaved grid stack.
+
+    Divides the input image into a regular grid of non-overlapping tiles
+    based on the downsampling factor. Each tile is extracted by taking every
+    ``factor``-th pixel in both dimensions starting from different offsets.
+    The function crops the image to ensure dimensions are multiples of
+    ``factor``.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        2D grayscale image with shape (H, W).
+    factor : int
+        Downsampling grid factor. The image is divided into ``factor**2``
+        interleaved sub-grids.
+
+    Returns
+    -------
+    np.ndarray
+        3D stack with shape (h_small, w_small, factor**2) where
+        ``h_small = H // factor`` and ``w_small = W // factor``.
+        Each channel along the third axis corresponds to one interleaved
+        sub-grid defined by offsets ``(i, j)`` for ``i, j in range(factor)``.
     """
     h, w = img.shape
     h_small = h // factor
@@ -433,9 +500,8 @@ def downsample_grid(img, factor):
     return I_stack
 
 
-def upsample_grid(I_stack, factor):
-    """
-    Reconstruct a high-resolution 2D image from a downsampled grid stack.
+def upsample_grid(I_stack: np.ndarray, factor: int) -> np.ndarray:
+    """Reconstruct a high-resolution 2D image from a downsampled grid stack.
 
     This function reverses :func:`downsample_grid` by "unshuffling" the
     interleaved low-resolution tiles stored in ``I_stack`` back into their
@@ -445,7 +511,7 @@ def upsample_grid(I_stack, factor):
 
     Parameters
     ----------
-    I_stack : numpy.ndarray
+    I_stack : np.ndarray
         3D stack of downsampled images with shape
         ``(h_small, w_small, factor**2)``, where
         ``h_small = floor(h / factor)`` and ``w_small = floor(w / factor)``.
@@ -460,7 +526,7 @@ def upsample_grid(I_stack, factor):
 
     Returns
     -------
-    numpy.ndarray
+    np.ndarray
         Reconstructed 2D image of shape ``(h_small * factor, w_small * factor)``.
         For each channel index ``idx`` corresponding to offsets
         ``(i, j)`` in ``range(factor)``, the slice ``I_stack[:, :, idx]`` is
@@ -480,6 +546,19 @@ def upsample_grid(I_stack, factor):
 
 
 def _has_allowed_chunking(arr: da.Array) -> bool:
+    """Validate that a Dask array has the correct chunking for destriping.
+
+    Checks whether the input array satisfies the chunking requirements for
+    the destripe operation: 3-5 dimensions with trailing (Z, Y, X) axes,
+    where Z is chunked into single slices, Y and X are each in one full chunk,
+    and any leading dimensions are also singleton-chunked.
+
+    Args:
+        arr: Dask array to validate.
+
+    Returns:
+        True if the array has valid chunking for destriping, False otherwise.
+    """
     if arr.ndim < 3 or arr.ndim > 5:
         return False
 
