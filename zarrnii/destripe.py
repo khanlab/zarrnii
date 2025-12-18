@@ -201,11 +201,6 @@ def phasecong(
     return phaseCongruency.astype(np.float32), orientation_deg.astype(np.float32)
 
 
-# INPUT_PATH = "../sub-AS40F2_sample-brain_acq-imaris4x_SPIM.ome.zarr"
-#
-# CHANNEL_INDEX = 0  # 0-based: the 3rd channel
-# CENTER_FRACTION = 1.0  # 10% per spatial dimension
-
 
 def destripe_block(
     block: np.ndarray,
@@ -219,13 +214,77 @@ def destripe_block(
     ori_tol_deg: float = 5.0,  # tolerance around target orientation
 ) -> np.ndarray:
     """
-    De-stripe a single block, assumed to be a z-slice.
+    De-stripe a single 2D block (typically a z-slice).
 
-    Takes a plain numpy array (no Dask/Zarr), returns a numpy array
-    with the same shape. Internally uses your downsample_grid /
-    upsample_grid + phasecong.
+    The input block is normalized, background is masked, and stripe-like
+    artifacts are detected via phase congruency in a downsampled grid and
+    then corrected. The result is rescaled back to the original intensity
+    range and has the same shape as the input.
 
-    This is what you'll pass to dask.map_blocks
+    Parameters
+    ----------
+    block:
+        Input image block as a NumPy array. It is squeezed to 2D
+        (Y, X) before processing. Usually this is the array passed by
+        ``dask.map_blocks``.
+    bg_thresh:
+        Background intensity threshold in the normalized [0, 1] domain.
+        Pixels with intensity lower than this value are treated as
+        background when building the background mask. Increasing this
+        value makes the background mask more aggressive (more pixels
+        are considered background); decreasing it is more conservative.
+    factor:
+        Integer down/upsampling factor for the internal processing grid.
+        The image is divided into a coarse grid scaled by this factor
+        for estimating and correcting stripe patterns. Larger values
+        reduce computational cost and capture broader stripe structure
+        but may miss very fine-scale artifacts; smaller values provide
+        finer sampling at higher computational cost.
+    diff_thresh:
+        Threshold applied to an internal difference map ``D`` used to
+        separate two regimes (e.g., ``D0``/``D1``) when estimating stripe
+        contributions. Higher values make the split more selective
+        (fewer pixels classified as high-difference), while lower values
+        make it more inclusive.
+    med_size_min:
+        Minimum size (in pixels) of the median filter kernel applied per
+        tile during destriping. The actual kernel size is chosen
+        randomly between ``med_size_min`` and ``med_size_max`` (odd
+        sizes are enforced internally). Smaller values preserve more
+        fine detail but may leave residual stripe noise.
+    med_size_max:
+        Maximum size (in pixels) of the median filter kernel applied per
+        tile during destriping. Larger values yield stronger smoothing
+        and more aggressive stripe removal, at the risk of blurring
+        small structures.
+    phase_size:
+        Size (in pixels) of the square region used for phase congruency
+        analysis. This controls the spatial extent over which oriented
+        features (such as stripes) are detected. Must be large enough to
+        capture several stripe periods; increasing it may improve
+        robustness for broad patterns but increases computation.
+    ori_target_deg:
+        Target stripe orientation in degrees for phase congruency
+        detection (e.g., 90° for vertical stripes in image coordinates).
+        Only features near this orientation are treated as stripe
+        artifacts.
+    ori_tol_deg:
+        Angular tolerance (in degrees) around ``ori_target_deg`` within
+        which features are considered stripe-like. A larger tolerance
+        captures a wider range of orientations (more aggressive
+        destriping), while a smaller tolerance focuses on a narrower
+        band of orientations.
+
+    Returns
+    -------
+    np.ndarray
+        De-striped image block with the same shape as ``block``,
+        rescaled to the original intensity range.
+
+    Notes
+    -----
+    This function operates on in-memory NumPy arrays and is designed to
+    be mapped over a larger volume using ``dask.map_blocks``.
     """
 
     I = np.squeeze(block)  # (Y,X)
@@ -265,10 +324,15 @@ def destripe_block(
 
         I0 = I_tile.copy()
 
-        # random odd med size in [med_size_min, med_size_max]
+        # deterministic odd med size in [med_size_min, med_size_max]
         lo = max(1, med_size_min)
         hi = max(lo, med_size_max)
-        med_size = np.random.randint(lo, hi + 1)
+        if hi == lo:
+            med_size = lo
+        else:
+            span = hi - lo
+            # use channel index to choose a value in [lo, hi] deterministically
+            med_size = lo + (idx % (span + 1))
         med_size = _odd(med_size)
 
         # median filter along stripe direction (vertical kernel)
@@ -313,7 +377,7 @@ def destripe_block(
         mask_ori = binary_fill_holes(mask_ori)
         v = mask_ori.astype(np.float32)
 
-        # gate PC by mask, scale to 02 (like MATLAB)
+        # gate PC by mask, scale to [0, 2] (like MATLAB)
         pc_gated = pc_small * v
         m = float(pc_gated.max()) if pc_gated.size else 0.0
         if m > 0.0:
@@ -371,9 +435,37 @@ def downsample_grid(img, factor):
 
 def upsample_grid(I_stack, factor):
     """
-    I_stack: 3D stack of downsampled images (h/f x w/f x f^2)
-    factor: downsampling factor
-    Returns reconstructed 2D image of size (h, w)
+    Reconstruct a high-resolution 2D image from a downsampled grid stack.
+
+    This function reverses :func:`downsample_grid` by "unshuffling" the
+    interleaved low-resolution tiles stored in ``I_stack`` back into their
+    original pixel positions in a single 2D image. The input ``I_stack`` is
+    expected to have been produced by ``downsample_grid(img, factor)`` on a
+    2D grayscale image ``img``.
+
+    Parameters
+    ----------
+    I_stack : numpy.ndarray
+        3D stack of downsampled images with shape
+        ``(h_small, w_small, factor**2)``, where
+        ``h_small = floor(h / factor)`` and ``w_small = floor(w / factor)``.
+        The third axis indexes the ``factor**2`` interleaved sub-grids,
+        corresponding to all combinations of row/column offsets
+        ``(i, j)`` in ``range(factor)`` used during downsampling.
+    factor : int
+        Downsampling / upsampling grid factor. Must be the same positive
+        integer that was used in :func:`downsample_grid`. The reconstructed
+        image will have spatial dimensions ``h = h_small * factor`` and
+        ``w = w_small * factor``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Reconstructed 2D image of shape ``(h_small * factor, w_small * factor)``.
+        For each channel index ``idx`` corresponding to offsets
+        ``(i, j)`` in ``range(factor)``, the slice ``I_stack[:, :, idx]`` is
+        written into ``img_recon[i::factor, j::factor]``, reassembling the
+        original interleaved pixel grid.
     """
     h_small, w_small, num_channels = I_stack.shape
     img_recon = np.zeros((h_small * factor, w_small * factor), dtype=I_stack.dtype)
@@ -416,7 +508,7 @@ def _has_allowed_chunking(arr: da.Array) -> bool:
 
 
 def destripe(
-    img: da.Array,  # must by 3-D, axes order Z Y X, chunked as z slices
+    img: da.Array,  # must be 3–5D; last 3 axes Z Y X chunked as Z-slices, leading dims (if any) singleton-chunked
     bg_thresh: float = 0.004,  # threshold for background mask (like T)
     factor: int = 16,  # down/upsampling grid factor
     diff_thresh: float = 0.007,  # threshold on D to split D0 / D1
@@ -426,7 +518,101 @@ def destripe(
     ori_target_deg: float = 90.0,  # stripe orientation
     ori_tol_deg: float = 5.0,  # tolerance around target orientation
 ) -> da.Array:
+    """
+    Reduce stripe artifacts in a volumetric image using a block-wise destriping algorithm.
 
+    This function applies :func:`destripe_block` independently to each Z-slice
+    (or to each Z-slice per leading index such as time or channel) of a Dask
+    array. It is designed for large 3D imaging data (e.g. light-sheet
+    microscopy volumes) stored as a stack of 2D planes, where striping arises
+    from illumination or acquisition artifacts with a dominant orientation.
+
+    The input must be a Dask array with 3 to 5 dimensions. The last three
+    dimensions are interpreted as ``(Z, Y, X)``. Any leading dimensions (e.g.
+    time ``T`` and/or channels ``C``) are preserved and processed independently.
+
+    Chunking requirements
+    ----------------------
+    The destriping algorithm assumes that each block corresponds to a single
+    Z-slice with the full in-plane field of view. The following chunking
+    constraints are enforced (see :func:`_has_allowed_chunking`):
+
+    * The array must have between 3 and 5 dimensions.
+    * The last three axes must be ``(Z, Y, X)``.
+    * Z chunks must have size 1 along the Z axis (i.e. one slice per chunk).
+    * Y and X must each be a single chunk covering the full image extent
+      (``chunk[-2] == shape[-2]`` and ``chunk[-1] == shape[-1]``).
+    * Any leading axes (e.g. T, C) must also be chunked with size 1 along each
+      of those axes.
+
+    If these conditions are not met, a :class:`ValueError` is raised.
+
+    Parameters
+    ----------
+    img:
+        Dask array containing the input image data. The last three dimensions
+        must be ``(Z, Y, X)`` with chunking as described above. The data type
+        is preserved in the output.
+    bg_thresh:
+        Threshold used to define a background mask. Typical values are small
+        positive fractions of the image dynamic range; pixels below this value
+        are considered background and are down-weighted in the destriping
+        process.
+    factor:
+        Down/upsampling grid factor used by the internal tiling scheme. Larger
+        values correspond to finer tiling during destriping and may increase
+        computation time.
+    diff_thresh:
+        Threshold applied to an internal difference image (``D``) to separate
+        low- and high-intensity components before stripe estimation.
+    med_size_min:
+        Minimum size (in pixels) of the median filter kernel used per tile.
+        The effective kernel size per tile is chosen within
+        ``[med_size_min, med_size_max]``.
+    med_size_max:
+        Maximum size (in pixels) of the median filter kernel used per tile.
+    phase_size:
+        Size (in pixels) of the square region used for phase congruency
+        analysis. Must be large enough to capture several stripe periods.
+    ori_target_deg:
+        Target stripe orientation in degrees. The default of ``90.0`` assumes
+        vertical stripes in the image coordinate system.
+    ori_tol_deg:
+        Angular tolerance (in degrees) around ``ori_target_deg`` within which
+        structures are considered stripe-like.
+
+    Returns
+    -------
+    dask.array.Array
+        A Dask array of the same shape and data type as ``img``, with stripe
+        artifacts reduced. The chunking pattern is preserved.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` does not have between 3 and 5 dimensions or if its chunking
+        does not satisfy the constraints described above.
+
+    Examples
+    --------
+    Create a synthetic volume and apply destriping::
+
+        import dask.array as da
+        import numpy as np
+
+        # 3D volume with shape (Z, Y, X)
+        vol = np.random.rand(16, 512, 512).astype("float32")
+
+        # Chunk as one Z-slice per chunk, full XY
+        darr = da.from_array(vol, chunks=(1, 512, 512))
+
+        # Apply destriping lazily
+        darr_destriped = destripe(darr)
+
+        # Trigger computation
+        result = darr_destriped.compute()
+
+    """
     if _has_allowed_chunking(img):
 
         return img.map_blocks(
@@ -443,5 +629,16 @@ def destripe(
         )
     else:
         raise ValueError(
-            f"Incorrect shape or chunking in dask array for destripe, must be Z-slices, with XY chunks as image size"
+            "Incorrect shape or chunking in dask array for destripe.\n"
+            f"Detected shape: {img.shape}, chunks: {img.chunks}.\n"
+            "Required chunking:\n"
+            "  - 3D–5D array with trailing axes (..., Z, Y, X)\n"
+            "  - Z axis chunk size = 1 (one slice per chunk)\n"
+            "  - Y and X axes each in a single chunk equal to the full image size\n"
+            "  - Any leading axes (e.g. time, channel) chunked with size 1\n"
+            "You can rechunk with dask before calling destripe, for example:\n"
+            "  # for a 3D array (Z, Y, X)\n"
+            "  img = img.rechunk((1, img.shape[1], img.shape[2]))\n"
+            "  # for a 4D array (C, Z, Y, X)\n"
+            "  img = img.rechunk((1, 1, img.shape[2], img.shape[3]))\n"
         )
