@@ -936,6 +936,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#zarrnii.ZarrNii.destripe" class="md-nav__link">
+    <span class="md-ellipsis">
+      destripe
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2137,6 +2146,15 @@
   <a href="#zarrnii.ZarrNii.apply_scaled_processing" class="md-nav__link">
     <span class="md-ellipsis">
       apply_scaled_processing
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.ZarrNii.destripe" class="md-nav__link">
+    <span class="md-ellipsis">
+      destripe
     </span>
   </a>
   
@@ -10525,7 +10543,7 @@ All attributes use byte-array encoding as required by Imaris.</p>
 
     <span class="c1"># Create a new NgffImage with the same properties</span>
     <span class="n">copied_image</span> <span class="o">=</span> <span class="n">nz</span><span class="o">.</span><span class="n">NgffImage</span><span class="p">(</span>
-        <span class="n">data</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ngff_image</span><span class="o">.</span><span class="n">data</span><span class="p">,</span>  <span class="c1"># Dask arrays are lazy so this is efficient</span>
+        <span class="n">data</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ngff_image</span><span class="o">.</span><span class="n">data</span><span class="p">,</span>  <span class="c1"># Reuse lazy Dask array; no extra copy needed</span>
         <span class="n">dims</span><span class="o">=</span><span class="n">copied_dims</span><span class="p">,</span>
         <span class="n">scale</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ngff_image</span><span class="o">.</span><span class="n">scale</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
         <span class="n">translation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ngff_image</span><span class="o">.</span><span class="n">translation</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
@@ -13698,6 +13716,137 @@ If output_path is provided, writes to Parquet file and returns None.</p>
     <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">corrected_znimg</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="zarrnii.ZarrNii.destripe" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">destripe</span><span class="p">(</span><span class="n">channel</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Apply destriping.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>**kwargs</code></b>
+          –
+          <div class="doc-md-description">
+            <p>Additional arguments passed to destripe()</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code>&#39;ZarrNii&#39;</code>
+          –
+          <div class="doc-md-description">
+            <p>New ZarrNii instance with destriped data</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="quote">
+              <summary>Source code in <code>zarrnii/core.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5285</span>
+<span class="normal">5286</span>
+<span class="normal">5287</span>
+<span class="normal">5288</span>
+<span class="normal">5289</span>
+<span class="normal">5290</span>
+<span class="normal">5291</span>
+<span class="normal">5292</span>
+<span class="normal">5293</span>
+<span class="normal">5294</span>
+<span class="normal">5295</span>
+<span class="normal">5296</span>
+<span class="normal">5297</span>
+<span class="normal">5298</span>
+<span class="normal">5299</span>
+<span class="normal">5300</span>
+<span class="normal">5301</span>
+<span class="normal">5302</span>
+<span class="normal">5303</span>
+<span class="normal">5304</span>
+<span class="normal">5305</span>
+<span class="normal">5306</span>
+<span class="normal">5307</span>
+<span class="normal">5308</span>
+<span class="normal">5309</span>
+<span class="normal">5310</span>
+<span class="normal">5311</span>
+<span class="normal">5312</span>
+<span class="normal">5313</span>
+<span class="normal">5314</span>
+<span class="normal">5315</span>
+<span class="normal">5316</span>
+<span class="normal">5317</span>
+<span class="normal">5318</span>
+<span class="normal">5319</span>
+<span class="normal">5320</span>
+<span class="normal">5321</span>
+<span class="normal">5322</span>
+<span class="normal">5323</span>
+<span class="normal">5324</span>
+<span class="normal">5325</span>
+<span class="normal">5326</span>
+<span class="normal">5327</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">destripe</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">channel</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Apply destriping.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        **kwargs: Additional arguments passed to destripe()</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        New ZarrNii instance with destriped data</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.destripe</span><span class="w"> </span><span class="kn">import</span> <span class="n">destripe</span>
+
+    <span class="n">destriped_znimg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+    <span class="c1"># Extract the selected channel as a 3D array</span>
+    <span class="n">img_3d</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">channel</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="p">:]</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span>
+
+    <span class="c1"># Compute destriped channel data and ensure it is a Dask array</span>
+    <span class="n">destriped_channel</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">destripe</span><span class="p">(</span><span class="n">img_3d</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+
+    <span class="c1"># Ensure the destriped channel has the same shape as the original channel</span>
+    <span class="n">original_channel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">channel</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="p">:]</span>
+    <span class="k">if</span> <span class="n">destriped_channel</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">original_channel</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+        <span class="n">destriped_channel</span> <span class="o">=</span> <span class="n">destriped_channel</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">original_channel</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="c1"># Rebuild the data array with the updated channel, avoiding in-place mutation</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span>
+    <span class="n">num_channels</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">channels</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_channels</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">c</span> <span class="o">==</span> <span class="n">channel</span><span class="p">:</span>
+            <span class="n">channels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">destriped_channel</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">channels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">c</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="p">:])</span>
+
+    <span class="n">destriped_znimg</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">channels</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">destriped_znimg</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
