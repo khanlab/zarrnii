@@ -13,7 +13,12 @@ import dask.array as da
 import numpy as np
 from scipy import ndimage
 
+from zarrnii.logging import get_logger
+
 from .base import ScaledProcessingPlugin, hookimpl
+
+# Module-level logger for this plugin
+logger = get_logger(__name__)
 
 
 class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
@@ -41,6 +46,11 @@ class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
         super().__init__(sigma=sigma, mode=mode, **kwargs)
         self.sigma = sigma
         self.mode = mode
+        logger.debug(
+            "Initialized GaussianBiasFieldCorrection with sigma=%.2f, mode=%s",
+            sigma,
+            mode,
+        )
 
     @hookimpl
     def lowres_func(self, lowres_array: np.ndarray) -> np.ndarray:
@@ -57,6 +67,12 @@ class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
         Returns:
             Estimated bias field at low resolution
         """
+        logger.debug(
+            "GaussianBiasFieldCorrection.lowres_func - input shape: %s, dtype: %s",
+            lowres_array.shape,
+            lowres_array.dtype,
+        )
+
         if lowres_array.size == 0:
             raise ValueError("Input array is empty")
 
@@ -74,12 +90,19 @@ class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
             leading_shape = work_array.shape[:-3]
             spatial_shape = work_array.shape[-3:]
             work_array = work_array.reshape(-1, *spatial_shape)
+            logger.debug(
+                "Reshaped array for processing - new shape: %s", work_array.shape
+            )
 
         # Ensure we're working with float data
         if work_array.dtype.kind in ["i", "u"]:  # integer types
             work_array = work_array.astype(np.float32)
+            logger.debug("Converted to float32 for processing")
 
         # Simple bias field estimation: smooth the image to get low-frequency components
+        logger.debug(
+            "Applying Gaussian filter with sigma=%.2f, mode=%s", self.sigma, self.mode
+        )
         if work_array.ndim == 2:
             smoothed = ndimage.gaussian_filter(
                 work_array, sigma=self.sigma, mode=self.mode
@@ -92,6 +115,9 @@ class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
                     smoothed[i] = ndimage.gaussian_filter(
                         work_array[i], sigma=self.sigma, mode=self.mode
                     )
+                logger.debug(
+                    "Applied Gaussian filter to %d volumes", work_array.shape[0]
+                )
             else:  # single 3D volume
                 smoothed = ndimage.gaussian_filter(
                     work_array, sigma=self.sigma, mode=self.mode
@@ -100,9 +126,19 @@ class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
         # Reshape back to original shape if needed
         if original_shape != smoothed.shape:
             smoothed = smoothed.reshape(original_shape)
+            logger.debug("Reshaped output back to: %s", original_shape)
 
         # Avoid division by zero by adding small epsilon
         smoothed = np.maximum(smoothed, np.finfo(smoothed.dtype).eps)
+
+        logger.debug(
+            "GaussianBiasFieldCorrection.lowres_func - output shape: %s, "
+            "min: %.4f, max: %.4f, mean: %.4f",
+            smoothed.shape,
+            smoothed.min(),
+            smoothed.max(),
+            smoothed.mean(),
+        )
 
         return smoothed
 
@@ -123,10 +159,25 @@ class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
         Returns:
             Bias-corrected full-resolution array
         """
+        logger.debug(
+            "GaussianBiasFieldCorrection.highres_func - fullres shape: %s, "
+            "chunks: %s, upsampled shape: %s, chunks: %s",
+            fullres_array.shape,
+            fullres_array.chunksize,
+            upsampled_output.shape,
+            upsampled_output.chunksize,
+        )
+
         # Apply bias field correction by division using dask operations
         # Avoid division by zero by adding small epsilon
         epsilon = np.finfo(np.float32).eps
         corrected_array = fullres_array / da.maximum(upsampled_output, epsilon)
+
+        logger.debug(
+            "Bias field correction applied - output chunks: %s, npartitions: %d",
+            corrected_array.chunksize,
+            corrected_array.npartitions,
+        )
 
         return corrected_array
 
