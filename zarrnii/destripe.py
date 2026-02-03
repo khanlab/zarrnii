@@ -507,14 +507,16 @@ def destripe_block(
             preserve_range=True,
             anti_aliasing=False,
         ).astype(np.float32)
+        
+    return (img_recon * norm_val).astype(block.dtype).reshape(block.shape)
 
     # ---- restore original scale ----
-    out2d = (img_recon * norm_val).astype(np.float32)
+    #out2d = (img_recon * norm_val).astype(np.float32)
 
     # restore shape
-    if had_leading_one:
-        return out2d[np.newaxis, :, :]
-    return out2d
+    #if had_leading_one:
+    #    return out2d[np.newaxis, :, :]
+    #return out2d
 
 
 
