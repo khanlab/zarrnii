@@ -590,7 +590,7 @@ def _get_nifti_spatial_unit_code(unit: str) -> str:
         "um": "micron",
         "meter": "meter",
         "m": "meter",
-        "nanometer": "mm",  # Convert nm to mm numerically, but report as mm in header
+        "nanometer": "mm",  # Nanometers will be converted to mm numerically elsewhere, report as mm
         "nm": "mm",
     }
 
@@ -1699,27 +1699,27 @@ class ZarrNii:
             elif dim == "t":
                 axis = {"name": dim, "type": "time"}
                 # Add unit if available in axes_units
-                if (
-                    hasattr(self.ngff_image, "axes_units")
-                    and self.ngff_image.axes_units
-                    and dim in self.ngff_image.axes_units
-                ):
+                if self._has_axis_unit(dim):
                     axis["unit"] = self.ngff_image.axes_units[dim]
                 axes.append(axis)
             else:
                 # Spatial dimension
                 axis = {"name": dim, "type": "space"}
                 # Use actual unit from axes_units if available, otherwise default to micrometer
-                if (
-                    hasattr(self.ngff_image, "axes_units")
-                    and self.ngff_image.axes_units
-                    and dim in self.ngff_image.axes_units
-                ):
+                if self._has_axis_unit(dim):
                     axis["unit"] = self.ngff_image.axes_units[dim]
                 else:
                     axis["unit"] = "micrometer"
                 axes.append(axis)
         return axes
+
+    def _has_axis_unit(self, dim: str) -> bool:
+        """Check if the ngff_image has a unit defined for the given dimension."""
+        return (
+            hasattr(self.ngff_image, "axes_units")
+            and self.ngff_image.axes_units
+            and dim in self.ngff_image.axes_units
+        )
 
     @property
     def coordinate_transformations(self) -> Optional[List[Dict]]:
@@ -3619,40 +3619,33 @@ class ZarrNii:
             affine_matrix = self.get_affine_matrix(axes_order="XYZ")
 
         # Handle unit conversion if requested
+        # Get the spatial units from axes metadata (common for both branches)
+        axes = self.axes
+        spatial_axes = [ax for ax in axes if ax.get("type") == "space"]
+        source_unit = "micrometer"  # Default
+
+        if spatial_axes:
+            source_unit = spatial_axes[0].get("unit", "micrometer")
+            # Handle None case (default to micrometer)
+            if source_unit is None:
+                source_unit = "micrometer"
+
         output_spatial_unit = "mm"  # Default output unit for NIfTI
+
         if convert_units_to_mm:
-            # Get the spatial units from axes metadata
-            axes = self.axes
-            spatial_axes = [ax for ax in axes if ax.get("type") == "space"]
+            # Only convert if the source unit is not already millimeters
+            if source_unit.lower() not in ["millimeter", "mm"]:
+                # Convert spatial scale in affine matrix
+                conversion_factor = _convert_spatial_unit_to_mm(1.0, source_unit)
 
-            if spatial_axes:
-                # Assume all spatial axes have the same unit (standard for OME-Zarr)
-                source_unit = spatial_axes[0].get("unit", "micrometer")
-
-                # Handle None case (default to micrometer)
-                if source_unit is None:
-                    source_unit = "micrometer"
-
-                # Only convert if the source unit is not already millimeters
-                if source_unit.lower() not in ["millimeter", "mm"]:
-                    # Convert spatial scale in affine matrix
-                    conversion_factor = _convert_spatial_unit_to_mm(1.0, source_unit)
-
-                    # Scale the spatial components of the affine matrix
-                    # The first 3 columns of the first 3 rows contain the spatial scaling/rotation
-                    affine_matrix[:3, :3] *= conversion_factor
-                    # The translation component (last column, first 3 rows) also needs conversion
-                    affine_matrix[:3, 3] *= conversion_factor
+                # Scale the spatial components of the affine matrix
+                # The first 3 columns of the first 3 rows contain the spatial scaling/rotation
+                affine_matrix[:3, :3] *= conversion_factor
+                # The translation component (last column, first 3 rows) also needs conversion
+                affine_matrix[:3, 3] *= conversion_factor
         else:
             # Preserve original units
-            axes = self.axes
-            spatial_axes = [ax for ax in axes if ax.get("type") == "space"]
-            if spatial_axes:
-                source_unit = spatial_axes[0].get("unit", "micrometer")
-                # Handle None case
-                if source_unit is None:
-                    source_unit = "micrometer"
-                output_spatial_unit = _get_nifti_spatial_unit_code(source_unit)
+            output_spatial_unit = _get_nifti_spatial_unit_code(source_unit)
 
         # Create NIfTI image
         nifti_img = nib.Nifti1Image(data, affine_matrix)
