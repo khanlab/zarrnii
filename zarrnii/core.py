@@ -1698,9 +1698,11 @@ class ZarrNii:
                 axes.append({"name": "c", "type": "channel", "unit": None})
             elif dim == "t":
                 axis = {"name": dim, "type": "time"}
-                # Add unit if available in axes_units
+                # Add unit if available in axes_units, otherwise None
                 if self._has_axis_unit(dim):
                     axis["unit"] = self.ngff_image.axes_units[dim]
+                else:
+                    axis["unit"] = None
                 axes.append(axis)
             else:
                 # Spatial dimension

@@ -11,6 +11,18 @@ from synthetic_ome_zarr import generate_synthetic_dataset
 from zarrnii import AffineTransform, ZarrNii
 
 
+def _get_spatial_scale_from_affine(affine_matrix: np.ndarray) -> np.ndarray:
+    """Extract spatial scale (voxel dimensions) from a 4x4 affine matrix.
+
+    Args:
+        affine_matrix: 4x4 affine transformation matrix
+
+    Returns:
+        Array of spatial scales for each dimension
+    """
+    return np.sqrt((affine_matrix[:3, :3] ** 2).sum(axis=0))
+
+
 @pytest.mark.usefixtures("cleandir")
 def test_from_nifti_to_nifti(nifti_nib):
     """create a nifti with nibabel, read it with ZarrNii, then write it back as a nifti.
@@ -819,7 +831,7 @@ def test_to_nifti_unit_conversion_from_micrometers():
 
     # The affine should have scale values converted from 3.6 um to 0.0036 mm
     expected_scale = 0.0036
-    actual_scale = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
+    actual_scale = _get_spatial_scale_from_affine(nifti_img.affine)
 
     assert_array_almost_equal(
         actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6
@@ -853,7 +865,7 @@ def test_to_nifti_unit_conversion_from_meters():
 
     # 0.001 m = 1 mm
     expected_scale = 1.0
-    actual_scale = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
+    actual_scale = _get_spatial_scale_from_affine(nifti_img.affine)
 
     assert_array_almost_equal(
         actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6
@@ -886,7 +898,7 @@ def test_to_nifti_unit_conversion_from_nanometers():
 
     # 1000000 nm = 1 mm
     expected_scale = 1.0
-    actual_scale = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
+    actual_scale = _get_spatial_scale_from_affine(nifti_img.affine)
 
     assert_array_almost_equal(
         actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6
@@ -919,7 +931,7 @@ def test_to_nifti_unit_conversion_already_millimeters():
 
     # Should remain 2.5 mm
     expected_scale = 2.5
-    actual_scale = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
+    actual_scale = _get_spatial_scale_from_affine(nifti_img.affine)
 
     assert_array_almost_equal(
         actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6
@@ -953,7 +965,7 @@ def test_to_nifti_preserve_original_units():
 
     # The affine should still have the original 3.6 value (in micrometers)
     expected_scale = 3.6
-    actual_scale = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
+    actual_scale = _get_spatial_scale_from_affine(nifti_img.affine)
 
     assert_array_almost_equal(
         actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6
