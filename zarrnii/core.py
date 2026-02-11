@@ -1696,8 +1696,29 @@ class ZarrNii:
         for dim in self.ngff_image.dims:
             if dim == "c":
                 axes.append({"name": "c", "type": "channel", "unit": None})
+            elif dim == "t":
+                axis = {"name": dim, "type": "time"}
+                # Add unit if available in axes_units
+                if (
+                    hasattr(self.ngff_image, "axes_units")
+                    and self.ngff_image.axes_units
+                    and dim in self.ngff_image.axes_units
+                ):
+                    axis["unit"] = self.ngff_image.axes_units[dim]
+                axes.append(axis)
             else:
-                axes.append({"name": dim, "type": "space", "unit": "micrometer"})
+                # Spatial dimension
+                axis = {"name": dim, "type": "space"}
+                # Use actual unit from axes_units if available, otherwise default to micrometer
+                if (
+                    hasattr(self.ngff_image, "axes_units")
+                    and self.ngff_image.axes_units
+                    and dim in self.ngff_image.axes_units
+                ):
+                    axis["unit"] = self.ngff_image.axes_units[dim]
+                else:
+                    axis["unit"] = "micrometer"
+                axes.append(axis)
         return axes
 
     @property
@@ -2350,18 +2371,37 @@ class ZarrNii:
         # Extract translation from affine, scale from the zooms
         scale = {}
         translation = {}
+        axes_units = {}
         spatial_dims = ["z", "y", "x"] if axes_order == "ZYX" else ["x", "y", "z"]
+
+        # Get spatial units from NIfTI header
+        try:
+            spatial_unit_code, time_unit_code = nifti_img.header.get_xyzt_units()
+        except Exception:
+            spatial_unit_code = 'unknown'
+        
+        # Map NIfTI spatial unit codes to OME-Zarr unit names
+        # NIfTI codes: 'unknown', 'meter', 'mm', 'micron'
+        nifti_to_omezarr_units = {
+            'mm': 'millimeter',
+            'micron': 'micrometer',
+            'meter': 'meter',
+            'unknown': 'millimeter',  # Default to millimeter for unknown (NIfTI standard assumption)
+        }
+        omezarr_unit = nifti_to_omezarr_units.get(spatial_unit_code, 'millimeter')
 
         for i, dim in enumerate(spatial_dims):
             scale[dim] = float(in_zooms[i])
             translation[dim] = affine_matrix[i, 3]
+            axes_units[dim] = omezarr_unit
 
         # Create NgffImage
         if name is None:
             name = f"nifti_image_{path}"
 
         ngff_image = nz.NgffImage(
-            data=darr, dims=dims, scale=scale, translation=translation, name=name
+            data=darr, dims=dims, scale=scale, translation=translation, 
+            axes_units=axes_units, name=name
         )
 
         # Extract channel labels from NIfTI header extensions if present
@@ -3585,6 +3625,10 @@ class ZarrNii:
                 # Assume all spatial axes have the same unit (standard for OME-Zarr)
                 source_unit = spatial_axes[0].get('unit', 'micrometer')
                 
+                # Handle None case (default to micrometer)
+                if source_unit is None:
+                    source_unit = 'micrometer'
+                
                 # Only convert if the source unit is not already millimeters
                 if source_unit.lower() not in ['millimeter', 'mm']:
                     # Convert spatial scale in affine matrix
@@ -3601,6 +3645,9 @@ class ZarrNii:
             spatial_axes = [ax for ax in axes if ax.get('type') == 'space']
             if spatial_axes:
                 source_unit = spatial_axes[0].get('unit', 'micrometer')
+                # Handle None case
+                if source_unit is None:
+                    source_unit = 'micrometer'
                 output_spatial_unit = _get_nifti_spatial_unit_code(source_unit)
 
         # Create NIfTI image
@@ -4475,12 +4522,20 @@ class ZarrNii:
             new_translation["y"] = current_translation["y"]
             new_translation["x"] = current_translation["x"]
 
+        # Preserve axes_units if present
+        new_axes_units = None
+        if hasattr(self.ngff_image, "axes_units") and self.ngff_image.axes_units:
+            new_axes_units = {}
+            for key, value in self.ngff_image.axes_units.items():
+                new_axes_units[key] = value
+
         # Create new NgffImage with ZYX ordering
         zyx_image = nz.NgffImage(
             data=transposed_data,
             dims=new_dims,
             scale=new_scale,
             translation=new_translation,
+            axes_units=new_axes_units,
             name=self.ngff_image.name,
         )
 
