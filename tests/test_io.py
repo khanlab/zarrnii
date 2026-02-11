@@ -797,7 +797,7 @@ def test_chunk_preservation_to_ome_zarr():
 def test_to_nifti_unit_conversion_from_micrometers():
     """Test that to_nifti converts micrometers to millimeters by default."""
     import ngff_zarr as nz
-    
+
     # Create a test image with micrometer spacing (3.6 um)
     data = np.random.rand(10, 10, 10)
     ngff_image = nz.to_ngff_image(
@@ -806,33 +806,35 @@ def test_to_nifti_unit_conversion_from_micrometers():
         scale={"z": 3.6, "y": 3.6, "x": 3.6},
         translation={"z": 0.0, "y": 0.0, "x": 0.0},
     )
-    
+
     # Create a multiscales object and save to OME-Zarr
     multiscales = nz.to_multiscales(ngff_image)
     nz.to_ngff_zarr("test_um.ome.zarr", multiscales)
-    
+
     # Load with ZarrNii
     znimg = ZarrNii.from_ome_zarr("test_um.ome.zarr")
-    
+
     # Convert to NIfTI with default unit conversion (to mm)
     nifti_img = znimg.to_nifti()
-    
+
     # The affine should have scale values converted from 3.6 um to 0.0036 mm
     expected_scale = 0.0036
     actual_scale = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
-    
-    assert_array_almost_equal(actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6)
-    
+
+    assert_array_almost_equal(
+        actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6
+    )
+
     # Check that the NIfTI header units are set to 'mm'
     spatial_unit, time_unit = nifti_img.header.get_xyzt_units()
-    assert spatial_unit == 'mm', f"Expected spatial unit 'mm', got '{spatial_unit}'"
+    assert spatial_unit == "mm", f"Expected spatial unit 'mm', got '{spatial_unit}'"
 
 
 @pytest.mark.usefixtures("cleandir")
 def test_to_nifti_unit_conversion_from_meters():
     """Test that to_nifti converts meters to millimeters."""
     import ngff_zarr as nz
-    
+
     # Create a test image with meter spacing (0.001 m = 1 mm)
     data = np.random.rand(10, 10, 10)
     ngff_image = nz.to_ngff_image(
@@ -842,28 +844,30 @@ def test_to_nifti_unit_conversion_from_meters():
         translation={"z": 0.0, "y": 0.0, "x": 0.0},
         axes_units={"z": "meter", "y": "meter", "x": "meter"},
     )
-    
+
     multiscales = nz.to_multiscales(ngff_image)
     nz.to_ngff_zarr("test_m.ome.zarr", multiscales)
-    
+
     znimg = ZarrNii.from_ome_zarr("test_m.ome.zarr")
     nifti_img = znimg.to_nifti()
-    
+
     # 0.001 m = 1 mm
     expected_scale = 1.0
     actual_scale = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
-    
-    assert_array_almost_equal(actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6)
-    
+
+    assert_array_almost_equal(
+        actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6
+    )
+
     spatial_unit, _ = nifti_img.header.get_xyzt_units()
-    assert spatial_unit == 'mm'
+    assert spatial_unit == "mm"
 
 
 @pytest.mark.usefixtures("cleandir")
 def test_to_nifti_unit_conversion_from_nanometers():
     """Test that to_nifti converts nanometers to millimeters."""
     import ngff_zarr as nz
-    
+
     # Create a test image with nanometer spacing (1000000 nm = 1 mm)
     data = np.random.rand(10, 10, 10)
     ngff_image = nz.to_ngff_image(
@@ -873,28 +877,30 @@ def test_to_nifti_unit_conversion_from_nanometers():
         translation={"z": 0.0, "y": 0.0, "x": 0.0},
         axes_units={"z": "nanometer", "y": "nanometer", "x": "nanometer"},
     )
-    
+
     multiscales = nz.to_multiscales(ngff_image)
     nz.to_ngff_zarr("test_nm.ome.zarr", multiscales)
-    
+
     znimg = ZarrNii.from_ome_zarr("test_nm.ome.zarr")
     nifti_img = znimg.to_nifti()
-    
+
     # 1000000 nm = 1 mm
     expected_scale = 1.0
     actual_scale = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
-    
-    assert_array_almost_equal(actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6)
-    
+
+    assert_array_almost_equal(
+        actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6
+    )
+
     spatial_unit, _ = nifti_img.header.get_xyzt_units()
-    assert spatial_unit == 'mm'
+    assert spatial_unit == "mm"
 
 
 @pytest.mark.usefixtures("cleandir")
 def test_to_nifti_unit_conversion_already_millimeters():
     """Test that to_nifti handles data already in millimeters correctly."""
     import ngff_zarr as nz
-    
+
     # Create a test image already in millimeters
     data = np.random.rand(10, 10, 10)
     ngff_image = nz.to_ngff_image(
@@ -904,28 +910,30 @@ def test_to_nifti_unit_conversion_already_millimeters():
         translation={"z": 0.0, "y": 0.0, "x": 0.0},
         axes_units={"z": "millimeter", "y": "millimeter", "x": "millimeter"},
     )
-    
+
     multiscales = nz.to_multiscales(ngff_image)
     nz.to_ngff_zarr("test_mm.ome.zarr", multiscales)
-    
+
     znimg = ZarrNii.from_ome_zarr("test_mm.ome.zarr")
     nifti_img = znimg.to_nifti()
-    
+
     # Should remain 2.5 mm
     expected_scale = 2.5
     actual_scale = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
-    
-    assert_array_almost_equal(actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6)
-    
+
+    assert_array_almost_equal(
+        actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6
+    )
+
     spatial_unit, _ = nifti_img.header.get_xyzt_units()
-    assert spatial_unit == 'mm'
+    assert spatial_unit == "mm"
 
 
 @pytest.mark.usefixtures("cleandir")
 def test_to_nifti_preserve_original_units():
     """Test that convert_units_to_mm=False preserves original units."""
     import ngff_zarr as nz
-    
+
     # Create a test image with micrometer spacing
     data = np.random.rand(10, 10, 10)
     ngff_image = nz.to_ngff_image(
@@ -934,31 +942,35 @@ def test_to_nifti_preserve_original_units():
         scale={"z": 3.6, "y": 3.6, "x": 3.6},
         translation={"z": 0.0, "y": 0.0, "x": 0.0},
     )
-    
+
     multiscales = nz.to_multiscales(ngff_image)
     nz.to_ngff_zarr("test_preserve_um.ome.zarr", multiscales)
-    
+
     znimg = ZarrNii.from_ome_zarr("test_preserve_um.ome.zarr")
-    
+
     # Convert to NIfTI while preserving original units
     nifti_img = znimg.to_nifti(convert_units_to_mm=False)
-    
+
     # The affine should still have the original 3.6 value (in micrometers)
     expected_scale = 3.6
     actual_scale = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
-    
-    assert_array_almost_equal(actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6)
-    
+
+    assert_array_almost_equal(
+        actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6
+    )
+
     # Check that the NIfTI header units are set to 'micron'
     spatial_unit, time_unit = nifti_img.header.get_xyzt_units()
-    assert spatial_unit == 'micron', f"Expected spatial unit 'micron', got '{spatial_unit}'"
+    assert (
+        spatial_unit == "micron"
+    ), f"Expected spatial unit 'micron', got '{spatial_unit}'"
 
 
 @pytest.mark.usefixtures("cleandir")
 def test_to_nifti_translation_conversion():
     """Test that translation is also converted when units are converted."""
     import ngff_zarr as nz
-    
+
     # Create a test image with micrometer spacing and translation
     data = np.random.rand(10, 10, 10)
     ngff_image = nz.to_ngff_image(
@@ -967,18 +979,18 @@ def test_to_nifti_translation_conversion():
         scale={"z": 3.6, "y": 3.6, "x": 3.6},
         translation={"z": 100.0, "y": 200.0, "x": 300.0},  # in micrometers
     )
-    
+
     multiscales = nz.to_multiscales(ngff_image)
     nz.to_ngff_zarr("test_translation.ome.zarr", multiscales)
-    
+
     znimg = ZarrNii.from_ome_zarr("test_translation.ome.zarr")
     nifti_img = znimg.to_nifti()
-    
+
     # Translation should be converted from micrometers to millimeters
     # 100 um = 0.1 mm, 200 um = 0.2 mm, 300 um = 0.3 mm
     expected_translation = np.array([0.3, 0.2, 0.1])  # XYZ order for NIfTI
     actual_translation = nifti_img.affine[:3, 3]
-    
+
     assert_array_almost_equal(actual_translation, expected_translation, decimal=6)
 
 
@@ -986,7 +998,7 @@ def test_to_nifti_translation_conversion():
 def test_to_nifti_roundtrip_with_unit_conversion():
     """Test that a full roundtrip (zarr->nifti->zarr) works with unit conversion."""
     import ngff_zarr as nz
-    
+
     # Create original data in micrometers
     data = np.random.rand(10, 10, 10)
     ngff_image = nz.to_ngff_image(
@@ -995,28 +1007,28 @@ def test_to_nifti_roundtrip_with_unit_conversion():
         scale={"z": 3.6, "y": 3.6, "x": 3.6},
         translation={"z": 0.0, "y": 0.0, "x": 0.0},
     )
-    
+
     multiscales = nz.to_multiscales(ngff_image)
     nz.to_ngff_zarr("test_roundtrip.ome.zarr", multiscales)
-    
+
     # Load and convert to NIfTI (should convert to mm)
     znimg1 = ZarrNii.from_ome_zarr("test_roundtrip.ome.zarr")
     znimg1.to_nifti("test_roundtrip.nii.gz")
-    
+
     # Load the NIfTI back
     znimg2 = ZarrNii.from_nifti("test_roundtrip.nii.gz")
-    
+
     # The scale should now be in mm (0.0036)
     actual_scale = znimg2.get_zooms(axes_order="XYZ")
     expected_scale = np.array([0.0036, 0.0036, 0.0036])
-    
+
     assert_array_almost_equal(actual_scale, expected_scale, decimal=6)
-    
+
     # Data should be identical (accounting for channel dimension added by from_nifti)
     # znimg1 is ZYX with shape (10, 10, 10)
     # znimg2 is CXYZ with shape (1, 10, 10, 10)
     # Need to transpose znimg1 from ZYX to XYZ to compare
     znimg1_xyz = znimg1.data.compute().transpose(2, 1, 0)  # ZYX -> XYZ
     znimg2_xyz = znimg2.data.compute()[0, :, :, :]  # Remove channel dim
-    
+
     assert_array_almost_equal(znimg1_xyz, znimg2_xyz, decimal=6)
