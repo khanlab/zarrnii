@@ -519,6 +519,85 @@ def save_ngff_image_with_ome_zarr(
                 pass
 
 
+def _convert_spatial_unit_to_mm(value: float, from_unit: str) -> float:
+    """Convert a spatial measurement from one unit to millimeters.
+    
+    Args:
+        value: The numerical value to convert
+        from_unit: The source unit (e.g., 'micrometer', 'meter', 'millimeter', 'nanometer')
+    
+    Returns:
+        The value converted to millimeters
+        
+    Raises:
+        ValueError: If the unit is not recognized
+        
+    Examples:
+        >>> _convert_spatial_unit_to_mm(3.6, 'micrometer')
+        0.0036
+        >>> _convert_spatial_unit_to_mm(1.0, 'meter')
+        1000.0
+        >>> _convert_spatial_unit_to_mm(2.5, 'millimeter')
+        2.5
+    """
+    # Conversion factors to millimeters
+    conversion_factors = {
+        'meter': 1000.0,
+        'millimeter': 1.0,
+        'micrometer': 0.001,
+        'nanometer': 0.000001,
+        # Also support alternative names
+        'mm': 1.0,
+        'um': 0.001,
+        'micron': 0.001,
+        'nm': 0.000001,
+        'm': 1000.0,
+    }
+    
+    unit_lower = from_unit.lower() if from_unit else 'micrometer'
+    
+    if unit_lower not in conversion_factors:
+        raise ValueError(
+            f"Unsupported spatial unit: '{from_unit}'. "
+            f"Supported units are: {', '.join(sorted(set(conversion_factors.keys())))}"
+        )
+    
+    return value * conversion_factors[unit_lower]
+
+
+def _get_nifti_spatial_unit_code(unit: str) -> str:
+    """Get the NIfTI spatial unit code for a given unit string.
+    
+    Args:
+        unit: The unit string (e.g., 'micrometer', 'millimeter')
+        
+    Returns:
+        The NIfTI spatial unit code string ('mm', 'micron', 'meter', or 'unknown')
+        
+    Examples:
+        >>> _get_nifti_spatial_unit_code('millimeter')
+        'mm'
+        >>> _get_nifti_spatial_unit_code('micrometer')
+        'micron'
+    """
+    # Map from common unit names to NIfTI unit codes
+    # NIfTI supports: 'unknown', 'meter', 'mm', 'micron'
+    unit_mapping = {
+        'millimeter': 'mm',
+        'mm': 'mm',
+        'micrometer': 'micron',
+        'micron': 'micron',
+        'um': 'micron',
+        'meter': 'meter',
+        'm': 'meter',
+        'nanometer': 'mm',  # Convert nm to mm numerically, but report as mm in header
+        'nm': 'mm',
+    }
+    
+    unit_lower = unit.lower() if unit else 'unknown'
+    return unit_mapping.get(unit_lower, 'unknown')
+
+
 def _ngff_image_to_ome_zarr_axes(ngff_image: nz.NgffImage) -> list:
     """Convert NgffImage dims to ome-zarr axes format.
 
@@ -3353,7 +3432,9 @@ class ZarrNii:
         return self
 
     def to_nifti(
-        self, filename: Optional[Union[str, bytes]] = None
+        self, 
+        filename: Optional[Union[str, bytes]] = None,
+        convert_units_to_mm: bool = True
     ) -> Union[nib.Nifti1Image, str]:
         """Convert to NIfTI format with automatic dimension handling.
 
@@ -3369,6 +3450,10 @@ class ZarrNii:
                 - .nii: Uncompressed NIfTI
                 - .nii.gz: Compressed NIfTI (recommended)
                 If None, returns nibabel image object without saving
+            convert_units_to_mm: If True (default), converts spatial units to
+                millimeters. If False, preserves the original units from the
+                OME-Zarr metadata. Supported source units: meter, micrometer,
+                millimeter, nanometer.
 
         Returns:
             If filename is None: nibabel.Nifti1Image object
@@ -3385,14 +3470,19 @@ class ZarrNii:
             - Supports multi-channel data via 4th dimension (XYZC ordering)
             - Channel labels are saved in NIfTI header extensions as JSON
             - Spatial transformations are converted to NIfTI affine format
+            - By default, converts spatial units to millimeters (NIfTI standard)
+            - Sets NIfTI header xyzt_units appropriately
 
         Examples:
-            >>> # Save to compressed NIfTI file
+            >>> # Save to compressed NIfTI file with units in mm (default)
             >>> znii.to_nifti("output.nii.gz")
 
             >>> # Get nibabel object without saving
             >>> nifti_img = znii.to_nifti()
             >>> print(nifti_img.shape)
+
+            >>> # Preserve original units (e.g., micrometers)
+            >>> znii.to_nifti("output.nii.gz", convert_units_to_mm=False)
 
             >>> # Save multi-channel data with channel labels preserved
             >>> znii.to_nifti("multichannel.nii.gz")
@@ -3484,8 +3574,45 @@ class ZarrNii:
 
             affine_matrix = self.get_affine_matrix(axes_order="XYZ")
 
+        # Handle unit conversion if requested
+        output_spatial_unit = 'mm'  # Default output unit for NIfTI
+        if convert_units_to_mm:
+            # Get the spatial units from axes metadata
+            axes = self.axes
+            spatial_axes = [ax for ax in axes if ax.get('type') == 'space']
+            
+            if spatial_axes:
+                # Assume all spatial axes have the same unit (standard for OME-Zarr)
+                source_unit = spatial_axes[0].get('unit', 'micrometer')
+                
+                # Only convert if the source unit is not already millimeters
+                if source_unit.lower() not in ['millimeter', 'mm']:
+                    # Convert spatial scale in affine matrix
+                    conversion_factor = _convert_spatial_unit_to_mm(1.0, source_unit)
+                    
+                    # Scale the spatial components of the affine matrix
+                    # The first 3 columns of the first 3 rows contain the spatial scaling/rotation
+                    affine_matrix[:3, :3] *= conversion_factor
+                    # The translation component (last column, first 3 rows) also needs conversion
+                    affine_matrix[:3, 3] *= conversion_factor
+        else:
+            # Preserve original units
+            axes = self.axes
+            spatial_axes = [ax for ax in axes if ax.get('type') == 'space']
+            if spatial_axes:
+                source_unit = spatial_axes[0].get('unit', 'micrometer')
+                output_spatial_unit = _get_nifti_spatial_unit_code(source_unit)
+
         # Create NIfTI image
         nifti_img = nib.Nifti1Image(data, affine_matrix)
+        
+        # Set the spatial units in the NIfTI header
+        try:
+            # Set spatial units; time unit defaults to 'unknown'
+            nifti_img.header.set_xyzt_units(output_spatial_unit, 'unknown')
+        except Exception:
+            # If setting units fails, it's not critical
+            pass
 
         # Add channel labels to NIfTI header extensions if available
         channel_labels = self.list_channels()
