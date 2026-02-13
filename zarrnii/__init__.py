@@ -12,6 +12,7 @@ from .core import (
     save_ngff_image,
     save_ngff_image_with_ome_zarr,
 )
+from .logging import configure_logging, get_logger
 from .transform import AffineTransform, DisplacementTransform
 
 __all__ = [
@@ -28,4 +29,6 @@ __all__ = [
     "compute_histogram",
     "compute_otsu_thresholds",
     "density_from_points",
+    "configure_logging",
+    "get_logger",
 ]
