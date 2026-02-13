@@ -4140,15 +4140,105 @@ class ZarrNii:
             _omero=None,
         )
 
+    @staticmethod
+    def _compute_imaris_pyramid_levels(
+        data_size: Tuple[int, int, int],
+    ) -> List[Tuple[int, int, int]]:
+        """
+        Compute the pyramid resolution levels for Imaris format.
+
+        This implements the Imaris multi-resolution pyramid algorithm as described
+        in the Imaris file format documentation. The algorithm continues creating
+        lower resolution levels until the volume size is less than 1 MB.
+
+        Args:
+            data_size: Original data size as (Z, Y, X) tuple
+
+        Returns:
+            List of resolution sizes as (Z, Y, X) tuples, starting with original size
+        """
+        min_volume_size_mb = 1.0
+        resolution_sizes = []
+
+        # Start with original resolution
+        new_resolution = list(data_size)
+
+        # Always add the original resolution first
+        resolution_sizes.append(tuple(new_resolution))
+
+        # Calculate initial volume
+        volume_mb = (
+            new_resolution[0] * new_resolution[1] * new_resolution[2] * 4.0
+        ) / (1024.0 * 1024.0)
+
+        # Continue while volume > 1 MB
+        while volume_mb > min_volume_size_mb:
+            last_resolution = new_resolution.copy()
+            last_volume = last_resolution[0] * last_resolution[1] * last_resolution[2]
+
+            # Compute next resolution level
+            # For each dimension, check if it should be downsampled by factor of 2
+            for d in range(3):
+                # Check condition: (10 * dimension)^2 > volume / dimension
+                dim_val = last_resolution[d]
+                if (10 * dim_val) * (10 * dim_val) > last_volume / dim_val:
+                    new_resolution[d] = last_resolution[d] // 2
+                else:
+                    new_resolution[d] = last_resolution[d]
+
+                # Ensure dimension is at least 1
+                new_resolution[d] = max(1, new_resolution[d])
+
+            # Calculate volume of the new resolution
+            volume_mb = (
+                new_resolution[0] * new_resolution[1] * new_resolution[2] * 4.0
+            ) / (1024.0 * 1024.0)
+
+            # Safety check: if resolution didn't change, stop
+            if tuple(new_resolution) == tuple(last_resolution):
+                break
+
+            # Add the new resolution to the list
+            resolution_sizes.append(tuple(new_resolution))
+
+        return resolution_sizes
+
     def to_imaris(
         self, path: str, compression: str = "gzip", compression_opts: int = 6
     ) -> str:
         """
-        Save to Imaris (.ims) file format using HDF5.
+        Save to Imaris (.ims) file format using HDF5 with memory-safe chunked processing.
 
         This method creates Imaris files compatible with Imaris software by
         following the exact HDF5 structure from correctly-formed reference files.
         All attributes use byte-array encoding as required by Imaris.
+
+        **Multi-Resolution Pyramid:**
+        The method automatically generates multiple resolution levels following the
+        Imaris pyramid algorithm. Resolution levels are created by downsampling
+        dimensions where (10 * dimension)² > volume / dimension until the total
+        volume is less than 1 MB. All pyramid levels use the same 16×256×256 (ZYX)
+        chunking strategy for optimal performance.
+
+        **Memory-Safe Implementation:**
+        This method is designed to handle arbitrarily large datasets without loading
+        the entire array into memory. It achieves this through true 3D tiling:
+
+        1. **3D Tiled Data Writing**: Processes data using 3D tiles (16×256×256 voxels)
+           instead of loading full slabs. HDF5 datasets are created empty and populated
+           incrementally tile-by-tile. This prevents memory blowup even for ultra-high
+           resolution images with large Y×X dimensions.
+
+        2. **3D Tiled Statistics**: Min/max values and histograms are computed
+           incrementally by processing 3D tiles, maintaining only the running
+           statistics in memory. No full Y×X slabs are ever materialized.
+
+        3. **3D Tiled Thumbnail Generation**: Maximum Intensity Projection (MIP)
+           thumbnails are computed by processing 3D tiles and maintaining only the
+           current maximum projection (YX plane) in memory, updated region-by-region.
+
+        For a 100GB dataset with dimensions 1000×8192×8192, memory usage remains
+        under ~4MB per tile, regardless of Y×X dimensions (default: 16×256×256 tiles).
 
         Args:
             path: Output path for Imaris (.ims) file
@@ -4164,7 +4254,10 @@ class ZarrNii:
         Notes:
             - Imaris files are always saved in ZYX axis order
             - Automatic axis reordering from XYZ to ZYX if needed
+            - Multi-resolution pyramid automatically generated
             - Spatial transformations and metadata are preserved
+            - Works efficiently with Dask arrays, Zarr arrays, and NumPy arrays
+            - No full-array compute() is ever called
         """
         try:
             import h5py
@@ -4190,27 +4283,28 @@ class ZarrNii:
             """Convert string to byte array as required by Imaris."""
             return np.array([c.encode() for c in s])
 
-        # Get data and metadata
-        if hasattr(ngff_image_to_save.data, "compute"):
-            data = (
-                ngff_image_to_save.data.compute()
-            )  # Convert Dask array to numpy array
-        else:
-            data = np.asarray(ngff_image_to_save.data)  # Handle numpy arrays directly
+        # Get data reference (DO NOT compute full array)
+        # Keep as Dask/Zarr array for chunk-wise processing
+        data_array = ngff_image_to_save.data
 
         # Handle dimensions: expect ZYX or CZYX
-        if len(data.shape) == 4:
+        if len(data_array.shape) == 4:
             # CZYX format
-            n_channels = data.shape[0]
-            z, y, x = data.shape[1:]
-        elif len(data.shape) == 3:
+            n_channels = data_array.shape[0]
+            z, y, x = data_array.shape[1:]
+        elif len(data_array.shape) == 3:
             # ZYX format - single channel
             n_channels = 1
-            z, y, x = data.shape
-            data = data[np.newaxis, ...]  # Add channel dimension
+            z, y, x = data_array.shape
+            # Add channel dimension (but keep as lazy array)
+            if hasattr(data_array, "reshape"):
+                data_array = data_array[np.newaxis, ...]
+            else:
+                # For Zarr arrays, we'll handle this per-channel
+                pass
         else:
             raise ValueError(
-                f"Unsupported data shape: {data.shape}. Expected 3D (ZYX) or 4D (CZYX)"
+                f"Unsupported data shape: {data_array.shape}. Expected 3D (ZYX) or 4D (CZYX)"
             )
 
         # Create Imaris file structure exactly matching reference file
@@ -4223,64 +4317,169 @@ class ZarrNii:
             f.attrs["NumberOfDataSets"] = np.array([1], dtype=np.uint32)
             f.attrs["ThumbnailDirectoryName"] = _string_to_byte_array("Thumbnail")
 
+            # Compute pyramid levels based on Imaris algorithm
+            pyramid_levels = self._compute_imaris_pyramid_levels((z, y, x))
+
             # Create main DataSet group structure
             dataset_group = f.create_group("DataSet")
-            res_group = dataset_group.create_group("ResolutionLevel 0")
-            time_group = res_group.create_group("TimePoint 0")
 
-            # Create channels with proper attributes
-            for c in range(n_channels):
-                channel_group = time_group.create_group(f"Channel {c}")
-                channel_data = data[c]  # (Z, Y, X)
+            # Write each resolution level
+            for level_idx, (level_z, level_y, level_x) in enumerate(pyramid_levels):
+                res_group = dataset_group.create_group(f"ResolutionLevel {level_idx}")
+                time_group = res_group.create_group("TimePoint 0")
 
-                # Channel attributes - use byte array format exactly like reference
-                channel_group.attrs["ImageSizeX"] = _string_to_byte_array(str(x))
-                channel_group.attrs["ImageSizeY"] = _string_to_byte_array(str(y))
-                channel_group.attrs["ImageSizeZ"] = _string_to_byte_array(str(z))
-                channel_group.attrs["ImageBlockSizeX"] = _string_to_byte_array(str(x))
-                channel_group.attrs["ImageBlockSizeY"] = _string_to_byte_array(str(y))
-                channel_group.attrs["ImageBlockSizeZ"] = _string_to_byte_array(
-                    str(min(z, 16))
-                )
+                # Create channels with proper attributes
+                for c in range(n_channels):
+                    channel_group = time_group.create_group(f"Channel {c}")
 
-                # Histogram range attributes
-                data_min, data_max = float(channel_data.min()), float(
-                    channel_data.max()
-                )
-                channel_group.attrs["HistogramMin"] = _string_to_byte_array(
-                    f"{data_min:.3f}"
-                )
-                channel_group.attrs["HistogramMax"] = _string_to_byte_array(
-                    f"{data_max:.3f}"
-                )
+                    # Get channel data reference (lazy - no compute yet)
+                    if len(data_array.shape) == 4:
+                        channel_data = data_array[c]  # (Z, Y, X)
+                    else:
+                        # Single channel case where we added dimension
+                        channel_data = data_array
 
-                # Create data dataset with proper compression
-                # Preserve original data type but ensure it's compatible with Imaris
-                if channel_data.dtype == np.float32 or channel_data.dtype == np.float64:
-                    # Keep float data as is for round-trip compatibility
-                    data_for_storage = channel_data.astype(np.float32)
-                elif channel_data.dtype in [np.uint16, np.int16]:
-                    # Keep 16-bit data as is
-                    data_for_storage = channel_data
-                else:
-                    # Convert other types to uint8
-                    data_for_storage = channel_data.astype(np.uint8)
+                    # Downsample data for levels > 0 using slicing (memory-efficient)
+                    if level_idx > 0:
+                        # Calculate downsampling factors from original size
+                        downsample_z = z // level_z
+                        downsample_y = y // level_y
+                        downsample_x = x // level_x
 
-                channel_group.create_dataset(
-                    "Data",
-                    data=data_for_storage,
-                    compression=compression,
-                    compression_opts=compression_opts,
-                    chunks=True,
-                )
+                        # Downsample using slicing (every Nth element)
+                        channel_data = channel_data[
+                            ::downsample_z, ::downsample_y, ::downsample_x
+                        ]
 
-                # Create histogram
-                hist_data, _ = np.histogram(
-                    channel_data.flatten(), bins=256, range=(data_min, data_max)
-                )
-                channel_group.create_dataset(
-                    "Histogram", data=hist_data.astype(np.uint64)
-                )
+                    # Rechunk data to match Imaris chunk size (16x256x256 in ZYX)
+                    # This optimizes data layout for HDF5 writing
+                    target_chunk_z = min(level_z, 16)
+                    target_chunk_y = min(level_y, 256)
+                    target_chunk_x = min(level_x, 256)
+                    target_chunks = (target_chunk_z, target_chunk_y, target_chunk_x)
+
+                    # Only rechunk if the data is a Dask array
+                    if hasattr(channel_data, "rechunk"):
+                        channel_data = channel_data.rechunk(target_chunks)
+
+                    # Channel attributes - use byte array format exactly like reference
+                    channel_group.attrs["ImageSizeX"] = _string_to_byte_array(
+                        str(level_x)
+                    )
+                    channel_group.attrs["ImageSizeY"] = _string_to_byte_array(
+                        str(level_y)
+                    )
+                    channel_group.attrs["ImageSizeZ"] = _string_to_byte_array(
+                        str(level_z)
+                    )
+                    channel_group.attrs["ImageBlockSizeX"] = _string_to_byte_array(
+                        str(level_x)
+                    )
+                    channel_group.attrs["ImageBlockSizeY"] = _string_to_byte_array(
+                        str(level_y)
+                    )
+                    channel_group.attrs["ImageBlockSizeZ"] = _string_to_byte_array(
+                        str(min(level_z, 16))
+                    )
+
+                    # Determine target dtype for storage
+                    source_dtype = channel_data.dtype
+                    if source_dtype == np.float32 or source_dtype == np.float64:
+                        target_dtype = np.float32
+                    elif source_dtype in [np.uint16, np.int16]:
+                        target_dtype = source_dtype
+                    else:
+                        target_dtype = np.uint8
+
+                    # STREAMING STATISTICS: Compute min/max/histogram incrementally
+                    # Process data in 3D tiles to compute statistics without loading full array
+                    data_min = np.inf
+                    data_max = -np.inf
+                    hist_bins = np.zeros(256, dtype=np.uint64)
+
+                    # Determine tile size for streaming (true 3D tiling: 16×256×256)
+                    tile_z_size = min(16, level_z)
+                    tile_y_size = min(256, level_y)
+                    tile_x_size = min(256, level_x)
+
+                    # First pass: compute min/max for histogram range using 3D tiles
+                    for z_start in range(0, level_z, tile_z_size):
+                        z_end = min(z_start + tile_z_size, level_z)
+                        for y_start in range(0, level_y, tile_y_size):
+                            y_end = min(y_start + tile_y_size, level_y)
+                            for x_start in range(0, level_x, tile_x_size):
+                                x_end = min(x_start + tile_x_size, level_x)
+                                
+                                # Extract 3D tile (≤16×256×256)
+                                tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
+
+                                # Compute tile (small subset of full data)
+                                if hasattr(tile, "compute"):
+                                    tile_data = tile.compute()
+                                else:
+                                    tile_data = np.asarray(tile)
+
+                                tile_min = float(tile_data.min())
+                                tile_max = float(tile_data.max())
+                                data_min = min(data_min, tile_min)
+                                data_max = max(data_max, tile_max)
+
+                    # Set histogram range attributes
+                    channel_group.attrs["HistogramMin"] = _string_to_byte_array(
+                        f"{data_min:.3f}"
+                    )
+                    channel_group.attrs["HistogramMax"] = _string_to_byte_array(
+                        f"{data_max:.3f}"
+                    )
+
+                    # Create HDF5 dataset (empty, to be filled chunk by chunk)
+                    # Use 16x256x256 (ZYX) chunking for Imaris, adjusting for small dimensions
+                    chunk_z = min(level_z, 16)
+                    chunk_y = min(level_y, 256)
+                    chunk_x = min(level_x, 256)
+                    h5_chunks = (chunk_z, chunk_y, chunk_x)
+
+                    h5_dataset = channel_group.create_dataset(
+                        "Data",
+                        shape=(level_z, level_y, level_x),
+                        dtype=target_dtype,
+                        compression=compression,
+                        compression_opts=compression_opts,
+                        chunks=h5_chunks,  # Use 16x256x256 (ZYX) chunking for Imaris
+                    )
+
+                    # Second pass: write data and accumulate histogram using 3D tiles
+                    for z_start in range(0, level_z, tile_z_size):
+                        z_end = min(z_start + tile_z_size, level_z)
+                        for y_start in range(0, level_y, tile_y_size):
+                            y_end = min(y_start + tile_y_size, level_y)
+                            for x_start in range(0, level_x, tile_x_size):
+                                x_end = min(x_start + tile_x_size, level_x)
+                                
+                                # Extract 3D tile (≤16×256×256)
+                                tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
+
+                                # Compute tile
+                                if hasattr(tile, "compute"):
+                                    tile_data = tile.compute()
+                                else:
+                                    tile_data = np.asarray(tile)
+
+                                # Convert to target dtype
+                                if tile_data.dtype != target_dtype:
+                                    tile_data = tile_data.astype(target_dtype)
+
+                                # Write tile to HDF5
+                                h5_dataset[z_start:z_end, y_start:y_end, x_start:x_end] = tile_data
+
+                                # Accumulate histogram
+                                tile_hist, _ = np.histogram(
+                                    tile_data.flatten(), bins=256, range=(data_min, data_max)
+                                )
+                                hist_bins += tile_hist.astype(np.uint64)
+
+                    # Create histogram dataset
+                    channel_group.create_dataset("Histogram", data=hist_bins)
 
             # Get spacing directly from scale dictionary with proper XYZ order
             try:
@@ -4404,18 +4603,55 @@ class ZarrNii:
             # Create thumbnail group with proper multi-channel thumbnail
             thumbnail_group = f.create_group("Thumbnail")
 
-            # Create a combined thumbnail (256x1024 for multi-channel as in reference)
+            # STREAMING THUMBNAIL: Generate MIP and downsample incrementally
+            # Process each channel's thumbnail independently to save memory
             if n_channels > 1:
                 # Multi-channel thumbnail: concatenate channels horizontally
                 thumb_width = 256 * n_channels
                 thumbnail_data = np.zeros((256, thumb_width), dtype=np.uint8)
 
                 for c in range(n_channels):
-                    # Downsample each channel to 256x256
-                    channel_data = data[c]
-                    # Take MIP (Maximum Intensity Projection) along Z
-                    mip = np.max(channel_data, axis=0)
-                    # Resize to 256x256 (simple decimation)
+                    # Get channel data reference
+                    if len(data_array.shape) == 4:
+                        channel_data = data_array[c]
+                    else:
+                        channel_data = data_array
+
+                    # Compute MIP incrementally using 3D tiles
+                    # Initialize MIP accumulator (Y×X plane) once before loops
+                    tile_z_size = min(16, z)
+                    tile_y_size = min(256, y)
+                    tile_x_size = min(256, x)
+                    
+                    # Get dtype without materializing data
+                    mip_dtype = channel_data.dtype
+                    mip = np.zeros((y, x), dtype=mip_dtype)
+
+                    for z_start in range(0, z, tile_z_size):
+                        z_end = min(z_start + tile_z_size, z)
+                        for y_start in range(0, y, tile_y_size):
+                            y_end = min(y_start + tile_y_size, y)
+                            for x_start in range(0, x, tile_x_size):
+                                x_end = min(x_start + tile_x_size, x)
+                                
+                                # Extract 3D tile (≤16×256×256)
+                                tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
+
+                                # Compute tile
+                                if hasattr(tile, "compute"):
+                                    tile_data = tile.compute()
+                                else:
+                                    tile_data = np.asarray(tile)
+
+                                # Update MIP (maximum across Z within this tile)
+                                tile_mip = np.max(tile_data, axis=0)
+                                
+                                # Update the corresponding region in the global MIP
+                                mip[y_start:y_end, x_start:x_end] = np.maximum(
+                                    mip[y_start:y_end, x_start:x_end], tile_mip
+                                )
+
+                    # Downsample MIP to 256x256 (simple decimation)
                     step_y = max(1, mip.shape[0] // 256)
                     step_x = max(1, mip.shape[1] // 256)
                     thumb_channel = mip[::step_y, ::step_x]
@@ -4429,12 +4665,52 @@ class ZarrNii:
                     else:
                         thumb_channel = thumb_channel[:256, :256]
 
-                    # Place in thumbnail
-                    thumbnail_data[:, c * 256 : (c + 1) * 256] = thumb_channel
+                    # Place in thumbnail (convert to uint8)
+                    thumbnail_data[:, c * 256 : (c + 1) * 256] = thumb_channel.astype(
+                        np.uint8
+                    )
             else:
                 # Single channel: 256x256 thumbnail
-                channel_data = data[0]
-                mip = np.max(channel_data, axis=0)
+                if len(data_array.shape) == 4:
+                    channel_data = data_array[0]
+                else:
+                    channel_data = data_array
+
+                # Compute MIP incrementally using 3D tiles
+                # Initialize MIP accumulator (Y×X plane) once before loops
+                tile_z_size = min(16, z)
+                tile_y_size = min(256, y)
+                tile_x_size = min(256, x)
+                
+                # Get dtype without materializing data
+                mip_dtype = channel_data.dtype
+                mip = np.zeros((y, x), dtype=mip_dtype)
+
+                for z_start in range(0, z, tile_z_size):
+                    z_end = min(z_start + tile_z_size, z)
+                    for y_start in range(0, y, tile_y_size):
+                        y_end = min(y_start + tile_y_size, y)
+                        for x_start in range(0, x, tile_x_size):
+                            x_end = min(x_start + tile_x_size, x)
+                            
+                            # Extract 3D tile (≤16×256×256)
+                            tile = channel_data[z_start:z_end, y_start:y_end, x_start:x_end]
+
+                            # Compute tile
+                            if hasattr(tile, "compute"):
+                                tile_data = tile.compute()
+                            else:
+                                tile_data = np.asarray(tile)
+
+                            # Update MIP (maximum across Z within this tile)
+                            tile_mip = np.max(tile_data, axis=0)
+                            
+                            # Update the corresponding region in the global MIP
+                            mip[y_start:y_end, x_start:x_end] = np.maximum(
+                                mip[y_start:y_end, x_start:x_end], tile_mip
+                            )
+
+                # Downsample to 256x256
                 step_y = max(1, mip.shape[0] // 256)
                 step_x = max(1, mip.shape[1] // 256)
                 thumbnail_data = mip[::step_y, ::step_x]
@@ -4447,7 +4723,9 @@ class ZarrNii:
                 else:
                     thumbnail_data = thumbnail_data[:256, :256]
 
-            thumbnail_group.create_dataset("Data", data=thumbnail_data.astype(np.uint8))
+                thumbnail_data = thumbnail_data.astype(np.uint8)
+
+            thumbnail_group.create_dataset("Data", data=thumbnail_data)
 
         return path
 
