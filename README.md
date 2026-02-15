@@ -133,13 +133,11 @@ from zarrnii import ZarrNii
 # Load an OME-Zarr dataset
 znimg = ZarrNii.from_ome_zarr("path/to/zarr_dataset.ome.zarr")
 
-<<<<<<< HEAD
 # Or load from Imaris (requires zarrnii[imaris])
 # znimg = ZarrNii.from_imaris("path/to/microscopy_data.ims")
-=======
+
 # Load from compressed ZIP format
 znimg_zip = ZarrNii.from_ome_zarr("path/to/dataset.ome.zarr.zip")
->>>>>>> main
 
 # Perform a transformation (e.g., downsample)
 downsampled_znimg = znimg.downsample(level=2)
@@ -187,8 +185,7 @@ just help
 just test
 
 # Format and lint
-just format
-just lint
+just quality_fix
 ```
 
 ---
