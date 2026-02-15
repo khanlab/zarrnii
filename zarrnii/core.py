@@ -3087,10 +3087,10 @@ class ZarrNii:
 
         # Create new NgffImage with upsampled data
         dims = self.dims
-        
+
         # Build new_scale by updating only the spatial dimensions
         new_scale = self.scale.copy()
-        
+
         # Find spatial dimension indices and update their scales
         for i, dim in enumerate(dims):
             if dim.lower() in ['x', 'y', 'z']:
@@ -5422,15 +5422,27 @@ class ZarrNii:
         lowres_array = lowres_znimg.data.compute()
 
         # Step 2: Apply low-resolution function and prepare for upsampling
-        # Construct chunk size: spatial chunk_size with singleton dimensions for non-spatial dims
+        # Construct chunk size: map spatial dimensions to their positions
         spatial_chunk_size = chunk_size if chunk_size is not None else (10, 10, 10)
         
-        # Count non-spatial dimensions (dims that are not x, y, z)
-        num_non_spatial = sum(1 for dim in lowres_znimg.dims if dim.lower() not in ['x', 'y', 'z'])
+        # Build lowres_chunks by iterating through dims and assigning appropriate chunk sizes
+        lowres_chunks = []
+        spatial_idx = 0
+        for dim in lowres_znimg.dims:
+            if dim.lower() in ['x', 'y', 'z']:
+                # This is a spatial dimension, use the corresponding spatial chunk size
+                if spatial_idx < len(spatial_chunk_size):
+                    lowres_chunks.append(spatial_chunk_size[spatial_idx])
+                    spatial_idx += 1
+                else:
+                    # Fallback to 10 if not enough values provided
+                    lowres_chunks.append(10)
+            else:
+                # Non-spatial dimension (time, channel), use singleton chunk
+                lowres_chunks.append(1)
         
-        # Prepend singleton chunks for non-spatial dimensions
-        lowres_chunks = (1,) * num_non_spatial + spatial_chunk_size
-        
+        lowres_chunks = tuple(lowres_chunks)
+
         lowres_znimg.data = da.from_array(
             plugin.lowres_func(lowres_array), chunks=lowres_chunks
         )
