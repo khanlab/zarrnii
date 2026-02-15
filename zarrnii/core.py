@@ -3093,7 +3093,7 @@ class ZarrNii:
 
         # Find spatial dimension indices and update their scales
         for i, dim in enumerate(dims):
-            if dim.lower() in ['x', 'y', 'z']:
+            if dim.lower() in ["x", "y", "z"]:
                 if dim in self.scale:
                     new_scale[dim] = self.scale[dim] / scaling[i]
 
@@ -5424,16 +5424,18 @@ class ZarrNii:
         # Step 2: Apply low-resolution function and prepare for upsampling
         # Construct chunk size: map spatial dimensions to their positions
         spatial_chunk_size = chunk_size if chunk_size is not None else (10, 10, 10)
-        
+
         # Determine spatial dimension order based on axes_order
         if lowres_znimg.axes_order == "XYZ":
-            spatial_dim_order = ['x', 'y', 'z']
+            spatial_dim_order = ["x", "y", "z"]
         else:  # ZYX
-            spatial_dim_order = ['z', 'y', 'x']
-        
+            spatial_dim_order = ["z", "y", "x"]
+
         # Create a mapping from spatial dimension name to chunk size
-        spatial_chunk_map = {dim: size for dim, size in zip(spatial_dim_order, spatial_chunk_size)}
-        
+        spatial_chunk_map = {
+            dim: size for dim, size in zip(spatial_dim_order, spatial_chunk_size)
+        }
+
         # Build lowres_chunks by iterating through dims and assigning appropriate chunk sizes
         lowres_chunks = []
         for dim in lowres_znimg.dims:
@@ -5444,7 +5446,7 @@ class ZarrNii:
             else:
                 # Non-spatial dimension (time, channel), use singleton chunk
                 lowres_chunks.append(1)
-        
+
         lowres_chunks = tuple(lowres_chunks)
 
         lowres_znimg.data = da.from_array(

@@ -314,46 +314,41 @@ class TestZarrNiiScaledProcessingIntegration:
         # Create 5D test data with singleton time and channel dimensions
         data_5d = np.random.rand(1, 1, 20, 20, 20).astype(np.float32) * 100
         dask_data = da.from_array(data_5d, chunks=(1, 1, 10, 10, 10))
-        
+
         znimg_5d = ZarrNii.from_darr(
-            dask_data,
-            spacing=(1.0, 1.0, 1.0),
-            dims=["t", "c", "z", "y", "x"]
+            dask_data, spacing=(1.0, 1.0, 1.0), dims=["t", "c", "z", "y", "x"]
         )
-        
+
         plugin = GaussianBiasFieldCorrection(sigma=1.0)
-        
+
         # Test with default chunk size (should be spatial only)
         result = znimg_5d.apply_scaled_processing(plugin, downsample_factor=2)
-        
+
         assert isinstance(result, ZarrNii)
         assert result.shape == znimg_5d.shape
         assert len(result.dims) == 5
-        
+
     @pytest.mark.usefixtures("cleandir")
     def test_apply_scaled_processing_5d_data_custom_chunks(self):
         """Test apply_scaled_processing with 5D data and custom spatial chunks."""
         # Create 5D test data with singleton time and channel dimensions
         data_5d = np.random.rand(1, 1, 20, 20, 20).astype(np.float32) * 100
         dask_data = da.from_array(data_5d, chunks=(1, 1, 10, 10, 10))
-        
+
         znimg_5d = ZarrNii.from_darr(
-            dask_data,
-            spacing=(1.0, 1.0, 1.0),
-            dims=["t", "c", "z", "y", "x"]
+            dask_data, spacing=(1.0, 1.0, 1.0), dims=["t", "c", "z", "y", "x"]
         )
-        
+
         plugin = GaussianBiasFieldCorrection(sigma=1.0)
-        
+
         # Test with custom spatial chunk size (only Z, Y, X)
         result = znimg_5d.apply_scaled_processing(
             plugin, downsample_factor=2, chunk_size=(16, 16, 16)
         )
-        
+
         assert isinstance(result, ZarrNii)
         assert result.shape == znimg_5d.shape
         assert len(result.dims) == 5
-
 
 
 class TestScaledProcessingWorkflow:
