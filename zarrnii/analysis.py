@@ -1127,7 +1127,7 @@ def compute_region_properties(
             raise ValueError(
                 f"Image has 5D shape {image.shape} with {image.shape[0]} timepoints. "
                 "compute_region_properties only supports 3D images or 4D/5D images with "
-                "singleton time dimension (t=1). Please select a single timepoint before "
+                "a single timepoint (t=1). Please select a single timepoint before "
                 "calling this function."
             )
 
