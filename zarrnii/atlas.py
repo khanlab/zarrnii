@@ -1404,9 +1404,30 @@ class ZarrNiiAtlas(ZarrNii):
 
         # Create grid for interpn
         # Grid should be in the order of the data array dimensions
-        # For ZarrNii, this is typically (z, y, x) or (c, z, y, x)
-        # Remove channel dimension if present
-        if dseg_data.ndim == 4:
+        # For ZarrNii, this is typically (z, y, x), (c, z, y, x), or (t, c, z, y, x)
+        # Remove time and/or channel dimensions if present
+        if dseg_data.ndim == 5:
+            # Validate that time and channel dimensions are singleton
+            time_dim = dseg_data.shape[0]
+            channel_dim = dseg_data.shape[1]
+            if time_dim != 1 or channel_dim != 1:
+                raise ValueError(
+                    f"5D atlas data must have singleton time and channel dimensions, "
+                    f"but got shape {dseg_data.shape} (t={time_dim}, c={channel_dim}). "
+                    "Please select a single timepoint and channel before calling "
+                    "label_region_properties."
+                )
+            # Remove singleton time and channel dimensions (t, c, z, y, x) -> (z, y, x)
+            dseg_data = dseg_data[0, 0]
+        elif dseg_data.ndim == 4:
+            # Validate that channel dimension is singleton
+            channel_dim = dseg_data.shape[0]
+            if channel_dim != 1:
+                raise ValueError(
+                    f"4D atlas data must have singleton channel dimension, "
+                    f"but got shape {dseg_data.shape} (c={channel_dim}). "
+                    "Please select a single channel before calling label_region_properties."
+                )
             dseg_data = dseg_data[0]  # Remove channel dimension
 
         # Create coordinate grids for each dimension

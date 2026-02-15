@@ -957,8 +957,10 @@ def compute_region_properties(
     Args:
         image: Input binary dask array (typically 0/1 values) at highest resolution.
             Should be 3D with shape (z, y, x) or (x, y, z) depending on axes order,
-            or 4D with shape (c, z, y, x) where c=1 (single channel). Multi-channel
-            images (c>1) are not supported - process each channel separately.
+            4D with shape (c, z, y, x) where c=1 (single channel), or 5D with shape
+            (t, c, z, y, x) where t=1 and c=1 (singleton time and channel).
+            Multi-channel images (c>1) or multi-timepoint images (t>1) are not
+            supported - process each channel/timepoint separately.
         affine: 4x4 affine transformation matrix to convert voxel coordinates
             to physical coordinates. Can be a numpy array or AffineTransform object.
         output_properties: Properties to extract. Can be either:
@@ -1113,6 +1115,22 @@ def compute_region_properties(
     if affine_matrix.shape != (4, 4):
         raise ValueError(f"Affine matrix must be 4x4, got shape {affine_matrix.shape}")
 
+    # Handle 5D images with time and channel dimensions (TCZYX format)
+    if image.ndim == 5:
+        # Check if time dimension is singleton (common for zarr data)
+        if image.shape[0] == 1:
+            # Squeeze singleton time dimension
+            image = image[0]
+            # Now image is 4D (CZYX) - fall through to 4D handler below
+        elif image.shape[0] > 1:
+            # Multiple timepoints - not supported
+            raise ValueError(
+                f"Image has 5D shape {image.shape} with {image.shape[0]} timepoints. "
+                "compute_region_properties only supports 3D images or 4D/5D images with "
+                "a single timepoint (t=1). Please select a single timepoint before "
+                "calling this function."
+            )
+
     # Handle 4D images with channel dimension (CZYX format)
     if image.ndim == 4:
         # Check if first dimension is channel dimension (size 1 is common)
@@ -1131,8 +1149,8 @@ def compute_region_properties(
             )
     elif image.ndim not in [1, 2, 3]:
         raise ValueError(
-            f"Image must be 1D, 2D, 3D, or 4D (with single channel), "
-            f"got {image.ndim}D with shape {image.shape}"
+            f"Image must be 1D, 2D, 3D, 4D (with single channel), or 5D (with "
+            f"singleton time and channel), got {image.ndim}D with shape {image.shape}"
         )
 
     # Rechunk if requested

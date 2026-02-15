@@ -414,3 +414,149 @@ class TestIntegrationWithExistingCode:
             # First and last should be min and max
             assert thresh_list[0] == 0.0
             assert thresh_list[-1] == 1.0
+
+
+class TestComputeRegionProperties:
+    """Test the compute_region_properties function with various dimensions."""
+
+    def test_compute_region_properties_3d(self):
+        """Test compute_region_properties with 3D data."""
+        from zarrnii.analysis import compute_region_properties
+
+        # Create a simple 3D binary image with a single object
+        data = np.zeros((10, 10, 10), dtype=np.uint8)
+        data[3:7, 3:7, 3:7] = 1  # 4x4x4 cube
+        image = da.from_array(data, chunks=(5, 5, 5))
+
+        # Simple identity affine
+        affine = np.eye(4)
+
+        # Compute properties
+        props = compute_region_properties(image, affine, depth=2)
+
+        # Should detect one object
+        assert len(props["centroid_x"]) == 1
+        assert len(props["centroid_y"]) == 1
+        assert len(props["centroid_z"]) == 1
+
+        # Centroid should be at center of cube (5, 5, 5) in voxel coords
+        # With identity affine, physical coords = voxel coords
+        assert np.allclose(props["centroid_x"][0], 5.0, atol=0.5)
+        assert np.allclose(props["centroid_y"][0], 5.0, atol=0.5)
+        assert np.allclose(props["centroid_z"][0], 5.0, atol=0.5)
+
+    def test_compute_region_properties_4d_singleton_channel(self):
+        """Test compute_region_properties with 4D data (singleton channel)."""
+        from zarrnii.analysis import compute_region_properties
+
+        # Create a 4D binary image with singleton channel dimension (c, z, y, x)
+        data = np.zeros((1, 10, 10, 10), dtype=np.uint8)
+        data[0, 3:7, 3:7, 3:7] = 1  # 4x4x4 cube
+        image = da.from_array(data, chunks=(1, 5, 5, 5))
+
+        affine = np.eye(4)
+
+        # Compute properties - should automatically squeeze channel dimension
+        props = compute_region_properties(image, affine, depth=2)
+
+        # Should detect one object
+        assert len(props["centroid_x"]) == 1
+        assert np.allclose(props["centroid_x"][0], 5.0, atol=0.5)
+        assert np.allclose(props["centroid_y"][0], 5.0, atol=0.5)
+        assert np.allclose(props["centroid_z"][0], 5.0, atol=0.5)
+
+    def test_compute_region_properties_5d_singleton_time_and_channel(self):
+        """Test compute_region_properties with 5D data (singleton time and channel)."""
+        from zarrnii.analysis import compute_region_properties
+
+        # Create a 5D binary image with singleton time and channel (t, c, z, y, x)
+        data = np.zeros((1, 1, 10, 10, 10), dtype=np.uint8)
+        data[0, 0, 3:7, 3:7, 3:7] = 1  # 4x4x4 cube
+        image = da.from_array(data, chunks=(1, 1, 5, 5, 5))
+
+        affine = np.eye(4)
+
+        # Compute properties - should automatically squeeze time and channel dimensions
+        props = compute_region_properties(image, affine, depth=2)
+
+        # Should detect one object
+        assert len(props["centroid_x"]) == 1
+        assert np.allclose(props["centroid_x"][0], 5.0, atol=0.5)
+        assert np.allclose(props["centroid_y"][0], 5.0, atol=0.5)
+        assert np.allclose(props["centroid_z"][0], 5.0, atol=0.5)
+
+    def test_compute_region_properties_4d_multi_channel_error(self):
+        """Test that 4D data with multiple channels raises an error."""
+        from zarrnii.analysis import compute_region_properties
+
+        # Create a 4D binary image with multiple channels
+        data = np.zeros((2, 10, 10, 10), dtype=np.uint8)
+        image = da.from_array(data, chunks=(2, 5, 5, 5))
+
+        affine = np.eye(4)
+
+        # Should raise error for multi-channel images
+        with pytest.raises(ValueError, match="channels"):
+            compute_region_properties(image, affine, depth=2)
+
+    def test_compute_region_properties_5d_multi_channel_error(self):
+        """Test that 5D data with multiple channels raises an error."""
+        from zarrnii.analysis import compute_region_properties
+
+        # Create a 5D binary image with singleton time but multiple channels
+        data = np.zeros((1, 2, 10, 10, 10), dtype=np.uint8)
+        image = da.from_array(data, chunks=(1, 2, 5, 5, 5))
+
+        affine = np.eye(4)
+
+        # Should raise error for multi-channel images (after squeezing time, becomes 4D)
+        with pytest.raises(ValueError, match="channels"):
+            compute_region_properties(image, affine, depth=2)
+
+    def test_compute_region_properties_5d_multi_timepoint_error(self):
+        """Test that 5D data with multiple timepoints raises an error."""
+        from zarrnii.analysis import compute_region_properties
+
+        # Create a 5D binary image with multiple timepoints but singleton channel
+        data = np.zeros((2, 1, 10, 10, 10), dtype=np.uint8)
+        image = da.from_array(data, chunks=(2, 1, 5, 5, 5))
+
+        affine = np.eye(4)
+
+        # Should raise error for multi-timepoint images
+        with pytest.raises(ValueError, match="Please select a single timepoint"):
+            compute_region_properties(image, affine, depth=2)
+
+    def test_compute_region_properties_6d_error(self):
+        """Test that 6D data raises an appropriate error."""
+        from zarrnii.analysis import compute_region_properties
+
+        # Create a 6D array (not supported)
+        data = np.zeros((1, 1, 1, 10, 10, 10), dtype=np.uint8)
+        image = da.from_array(data, chunks=(1, 1, 1, 5, 5, 5))
+
+        affine = np.eye(4)
+
+        # Should raise error for unsupported dimensions
+        with pytest.raises(ValueError, match="Image must be"):
+            compute_region_properties(image, affine, depth=2)
+
+    def test_compute_region_properties_multiple_objects_5d(self):
+        """Test compute_region_properties with multiple objects in 5D data."""
+        from zarrnii.analysis import compute_region_properties
+
+        # Create a 5D binary image with two objects
+        data = np.zeros((1, 1, 20, 20, 20), dtype=np.uint8)
+        data[0, 0, 3:7, 3:7, 3:7] = 1  # First cube
+        data[0, 0, 13:17, 13:17, 13:17] = 1  # Second cube
+        image = da.from_array(data, chunks=(1, 1, 10, 10, 10))
+
+        affine = np.eye(4)
+
+        # Compute properties
+        props = compute_region_properties(image, affine, depth=2)
+
+        # Should detect two objects
+        assert len(props["centroid_x"]) == 2
+        assert len(props["centroid_y"]) == 2
+        assert len(props["centroid_z"]) == 2
