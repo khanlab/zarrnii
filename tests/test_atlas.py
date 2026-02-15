@@ -1129,6 +1129,66 @@ class TestZarrNiiAtlas:
         with pytest.raises(ValueError, match="exactly 3 column names"):
             atlas.label_region_properties(region_props, coord_column_names=[])
 
+    def test_label_region_properties_5d_atlas(self):
+        """Test label_region_properties with 5D atlas data (singleton time and channel)."""
+        # Create a simple 5D atlas with singleton time and channel dimensions
+        # (t, c, z, y, x)
+        shape = (1, 1, 10, 10, 10)
+        dseg_data = da.zeros(shape, dtype=np.int32)
+
+        # Region 1: left half
+        dseg_data[0, 0, :, :, :5] = 1
+        # Region 2: right half top
+        dseg_data[0, 0, :5, :, 5:] = 2
+        # Region 3: right half bottom
+        dseg_data[0, 0, 5:, :, 5:] = 3
+
+        # Create ZarrNii from the 5D data
+        dseg = ZarrNii.from_darr(dseg_data)
+        labels_df = pd.DataFrame(
+            {
+                "index": [0, 1, 2, 3],
+                "name": ["Background", "Left Region", "Right Top", "Right Bottom"],
+                "abbreviation": ["BG", "LR", "RT", "RB"],
+            }
+        )
+
+        atlas = ZarrNiiAtlas.create_from_dseg(dseg, labels_df)
+
+        # Create region properties dict
+        region_props = {
+            "centroid_x": np.array([2.5, 7.5, 7.5]),
+            "centroid_y": np.array([5.0, 2.5, 7.5]),
+            "centroid_z": np.array([5.0, 2.5, 7.5]),
+            "area": np.array([100, 200, 150]),
+        }
+
+        # Label the region properties - should work with 5D atlas
+        df_props, df_counts = atlas.label_region_properties(
+            region_props, include_names=True
+        )
+
+        # Check that it worked correctly
+        assert isinstance(df_props, pd.DataFrame)
+        assert isinstance(df_counts, pd.DataFrame)
+        assert len(df_props) == 3
+
+        # Check label assignments match expected regions
+        assert df_props.iloc[0]["index"] == 1  # Left Region
+        assert df_props.iloc[1]["index"] == 2  # Right Top
+        assert df_props.iloc[2]["index"] == 3  # Right Bottom
+
+        # Verify coordinate values are preserved
+        np.testing.assert_array_equal(
+            df_props["centroid_x"].values, region_props["centroid_x"]
+        )
+        np.testing.assert_array_equal(
+            df_props["centroid_y"].values, region_props["centroid_y"]
+        )
+        np.testing.assert_array_equal(
+            df_props["centroid_z"].values, region_props["centroid_z"]
+        )
+
 
 class TestZarrNiiAtlasFileIO:
     """Test suite for ZarrNiiAtlas file I/O operations."""

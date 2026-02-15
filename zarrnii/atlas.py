@@ -1404,9 +1404,12 @@ class ZarrNiiAtlas(ZarrNii):
 
         # Create grid for interpn
         # Grid should be in the order of the data array dimensions
-        # For ZarrNii, this is typically (z, y, x) or (c, z, y, x)
-        # Remove channel dimension if present
-        if dseg_data.ndim == 4:
+        # For ZarrNii, this is typically (z, y, x), (c, z, y, x), or (t, c, z, y, x)
+        # Remove time and/or channel dimensions if present
+        if dseg_data.ndim == 5:
+            # Remove singleton time and channel dimensions (t, c, z, y, x) -> (z, y, x)
+            dseg_data = dseg_data[0, 0]
+        elif dseg_data.ndim == 4:
             dseg_data = dseg_data[0]  # Remove channel dimension
 
         # Create coordinate grids for each dimension
