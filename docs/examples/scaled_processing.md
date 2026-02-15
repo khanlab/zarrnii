@@ -325,11 +325,12 @@ result = znimg.apply_scaled_processing(
 ### Custom Chunk Sizes
 
 ```python
-# Specify custom chunk sizes for low-resolution processing
-# The chunk_size parameter controls the chunking of low-resolution intermediate results
+# Specify custom spatial chunk sizes for low-resolution processing
+# The chunk_size parameter accepts only spatial dimensions (Z, Y, X)
+# Non-spatial dimensions (time, channel) are automatically prepended with singleton chunks (1)
 result = znimg.apply_scaled_processing(
     GaussianBiasFieldCorrection(),
-    chunk_size=(1, 32, 32, 32)  # Used for low-res processing chunks
+    chunk_size=(32, 32, 32)  # Spatial chunks only (Z, Y, X)
 )
 ```
 

@@ -3087,18 +3087,15 @@ class ZarrNii:
 
         # Create new NgffImage with upsampled data
         dims = self.dims
-        if self.axes_order == "XYZ":
-            new_scale = {
-                dims[1]: self.scale[dims[1]] / scaling[1],
-                dims[2]: self.scale[dims[2]] / scaling[2],
-                dims[3]: self.scale[dims[3]] / scaling[3],
-            }
-        else:
-            new_scale = {
-                dims[1]: self.scale[dims[1]] / scaling[1],
-                dims[2]: self.scale[dims[2]] / scaling[2],
-                dims[3]: self.scale[dims[3]] / scaling[3],
-            }
+
+        # Build new_scale by updating only the spatial dimensions
+        new_scale = self.scale.copy()
+
+        # Find spatial dimension indices and update their scales
+        for i, dim in enumerate(dims):
+            if dim.lower() in ['x', 'y', 'z']:
+                if dim in self.scale:
+                    new_scale[dim] = self.scale[dim] / scaling[i]
 
         upsampled_ngff = nz.to_ngff_image(
             darr_scaled,
@@ -5399,7 +5396,9 @@ class ZarrNii:
         Args:
             plugin: ScaledProcessingPlugin instance or class to apply
             downsample_factor: Factor for downsampling (default: 4)
-            chunk_size: Optional chunk size for low-res processing. If None, uses (1, 10, 10, 10).
+            chunk_size: Optional chunk size for spatial dimensions in order [Z, Y, X] (or [X, Y, Z] if axes_order is 'XYZ').
+                If None, defaults to (10, 10, 10). Non-spatial dimensions (time, channel) are automatically
+                assigned singleton chunks (1). The order of spatial dimensions follows the axes_order of the data.
             upsampled_ome_zarr_path: Path to save intermediate OME-Zarr, default saved in system temp directory.
             **kwargs: Additional arguments passed to the plugin
 
@@ -5423,8 +5422,31 @@ class ZarrNii:
         lowres_array = lowres_znimg.data.compute()
 
         # Step 2: Apply low-resolution function and prepare for upsampling
-        # Use chunk_size parameter for the low-res processing chunks
-        lowres_chunks = chunk_size if chunk_size is not None else (1, 10, 10, 10)
+        # Construct chunk size: map spatial dimensions to their positions
+        spatial_chunk_size = chunk_size if chunk_size is not None else (10, 10, 10)
+        
+        # Determine spatial dimension order based on axes_order
+        if lowres_znimg.axes_order == "XYZ":
+            spatial_dim_order = ['x', 'y', 'z']
+        else:  # ZYX
+            spatial_dim_order = ['z', 'y', 'x']
+        
+        # Create a mapping from spatial dimension name to chunk size
+        spatial_chunk_map = {dim: size for dim, size in zip(spatial_dim_order, spatial_chunk_size)}
+        
+        # Build lowres_chunks by iterating through dims and assigning appropriate chunk sizes
+        lowres_chunks = []
+        for dim in lowres_znimg.dims:
+            dim_lower = dim.lower()
+            if dim_lower in spatial_chunk_map:
+                # This is a spatial dimension, use the mapped chunk size
+                lowres_chunks.append(spatial_chunk_map[dim_lower])
+            else:
+                # Non-spatial dimension (time, channel), use singleton chunk
+                lowres_chunks.append(1)
+        
+        lowres_chunks = tuple(lowres_chunks)
+
         lowres_znimg.data = da.from_array(
             plugin.lowres_func(lowres_array), chunks=lowres_chunks
         )
