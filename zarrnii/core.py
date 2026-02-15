@@ -5396,9 +5396,9 @@ class ZarrNii:
         Args:
             plugin: ScaledProcessingPlugin instance or class to apply
             downsample_factor: Factor for downsampling (default: 4)
-            chunk_size: Optional chunk size for spatial dimensions only (e.g., (10, 10, 10) for Z, Y, X).
+            chunk_size: Optional chunk size for spatial dimensions in order [Z, Y, X] (or [X, Y, Z] if axes_order is 'XYZ').
                 If None, defaults to (10, 10, 10). Non-spatial dimensions (time, channel) are automatically
-                prepended with singleton chunks (1) based on the input data shape.
+                assigned singleton chunks (1). The order of spatial dimensions follows the axes_order of the data.
             upsampled_ome_zarr_path: Path to save intermediate OME-Zarr, default saved in system temp directory.
             **kwargs: Additional arguments passed to the plugin
 
@@ -5425,18 +5425,22 @@ class ZarrNii:
         # Construct chunk size: map spatial dimensions to their positions
         spatial_chunk_size = chunk_size if chunk_size is not None else (10, 10, 10)
         
+        # Determine spatial dimension order based on axes_order
+        if lowres_znimg.axes_order == "XYZ":
+            spatial_dim_order = ['x', 'y', 'z']
+        else:  # ZYX
+            spatial_dim_order = ['z', 'y', 'x']
+        
+        # Create a mapping from spatial dimension name to chunk size
+        spatial_chunk_map = {dim: size for dim, size in zip(spatial_dim_order, spatial_chunk_size)}
+        
         # Build lowres_chunks by iterating through dims and assigning appropriate chunk sizes
         lowres_chunks = []
-        spatial_idx = 0
         for dim in lowres_znimg.dims:
-            if dim.lower() in ['x', 'y', 'z']:
-                # This is a spatial dimension, use the corresponding spatial chunk size
-                if spatial_idx < len(spatial_chunk_size):
-                    lowres_chunks.append(spatial_chunk_size[spatial_idx])
-                    spatial_idx += 1
-                else:
-                    # Fallback to 10 if not enough values provided
-                    lowres_chunks.append(10)
+            dim_lower = dim.lower()
+            if dim_lower in spatial_chunk_map:
+                # This is a spatial dimension, use the mapped chunk size
+                lowres_chunks.append(spatial_chunk_map[dim_lower])
             else:
                 # Non-spatial dimension (time, channel), use singleton chunk
                 lowres_chunks.append(1)
