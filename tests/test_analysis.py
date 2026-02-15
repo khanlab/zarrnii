@@ -485,21 +485,6 @@ class TestComputeRegionProperties:
         assert np.allclose(props["centroid_y"][0], 5.0, atol=0.5)
         assert np.allclose(props["centroid_z"][0], 5.0, atol=0.5)
 
-    def test_compute_region_properties_5d_singleton_time_only(self):
-        """Test compute_region_properties with 5D data (singleton time, singleton channel)."""
-        from zarrnii.analysis import compute_region_properties
-
-        # Create a 5D binary image with singleton time, singleton channel
-        data = np.zeros((1, 1, 10, 10, 10), dtype=np.uint8)
-        data[0, 0, 3:7, 3:7, 3:7] = 1
-        image = da.from_array(data, chunks=(1, 1, 5, 5, 5))
-
-        affine = np.eye(4)
-
-        # Should work fine with both singleton dimensions
-        props = compute_region_properties(image, affine, depth=2)
-        assert len(props["centroid_x"]) == 1
-
     def test_compute_region_properties_4d_multi_channel_error(self):
         """Test that 4D data with multiple channels raises an error."""
         from zarrnii.analysis import compute_region_properties

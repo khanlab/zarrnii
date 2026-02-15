@@ -1117,43 +1117,22 @@ def compute_region_properties(
 
     # Handle 5D images with time and channel dimensions (TCZYX format)
     if image.ndim == 5:
-        # Check if both time and channel dimensions are singleton (common for zarr data)
-        if image.shape[0] == 1 and image.shape[1] == 1:
-            # Squeeze both singleton dimensions to get 3D image
-            image = image[0, 0]
-        elif image.shape[0] == 1:
-            # Only time is singleton, still have channels - squeeze time
+        # Check if time dimension is singleton (common for zarr data)
+        if image.shape[0] == 1:
+            # Squeeze singleton time dimension
             image = image[0]
-            # Now check channel dimension
-            if image.shape[0] == 1:
-                image = image[0]
-            else:
-                raise ValueError(
-                    f"Image has 5D shape with singleton time but "
-                    f"{image.shape[0]} channels. compute_region_properties only supports "
-                    "3D images or 4D/5D images with singleton time and channel dimensions. "
-                    "For multi-channel images, please process each channel "
-                    "separately or squeeze/select a single channel before calling "
-                    "this function."
-                )
-        elif image.shape[1] == 1:
-            # Only channel is singleton, have multiple timepoints
+            # Now image is 4D (CZYX) - fall through to 4D handler below
+        elif image.shape[0] > 1:
+            # Multiple timepoints - not supported
             raise ValueError(
-                f"Image has 5D shape with {image.shape[0]} timepoints and singleton channel. "
+                f"Image has 5D shape {image.shape} with {image.shape[0]} timepoints. "
                 "compute_region_properties only supports 3D images or 4D/5D images with "
-                "singleton time dimension. Please select a single timepoint before calling "
-                "this function."
+                "singleton time dimension (t=1). Please select a single timepoint before "
+                "calling this function."
             )
-        else:
-            # Neither time nor channel is singleton
-            raise ValueError(
-                f"Image has 5D shape {image.shape} with {image.shape[0]} timepoints and "
-                f"{image.shape[1]} channels. compute_region_properties only supports "
-                "3D images or 4D/5D images with singleton time and channel dimensions. "
-                "Please select a single timepoint and channel before calling this function."
-            )
+
     # Handle 4D images with channel dimension (CZYX format)
-    elif image.ndim == 4:
+    if image.ndim == 4:
         # Check if first dimension is channel dimension (size 1 is common)
         if image.shape[0] == 1:
             # Squeeze the channel dimension to get 3D image
