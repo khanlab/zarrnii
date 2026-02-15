@@ -524,7 +524,7 @@ class TestComputeRegionProperties:
         affine = np.eye(4)
 
         # Should raise error for multi-timepoint images
-        with pytest.raises(ValueError, match="timepoints.*singleton"):
+        with pytest.raises(ValueError, match="Please select a single timepoint"):
             compute_region_properties(image, affine, depth=2)
 
     def test_compute_region_properties_6d_error(self):
