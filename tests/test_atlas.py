@@ -1189,6 +1189,58 @@ class TestZarrNiiAtlas:
             df_props["centroid_z"].values, region_props["centroid_z"]
         )
 
+    def test_label_region_properties_5d_atlas_multi_channel_error(self):
+        """Test that 5D atlas with multiple channels raises an error."""
+        # Create a 5D atlas with singleton time but multiple channels
+        shape = (1, 2, 10, 10, 10)
+        dseg_data = da.ones(shape, dtype=np.int32)
+
+        dseg = ZarrNii.from_darr(dseg_data)
+        labels_df = pd.DataFrame(
+            {
+                "index": [0, 1],
+                "name": ["Background", "Region"],
+            }
+        )
+
+        atlas = ZarrNiiAtlas.create_from_dseg(dseg, labels_df)
+
+        region_props = {
+            "centroid_x": np.array([5.0]),
+            "centroid_y": np.array([5.0]),
+            "centroid_z": np.array([5.0]),
+        }
+
+        # Should raise error for non-singleton dimensions
+        with pytest.raises(ValueError, match="singleton time and channel"):
+            atlas.label_region_properties(region_props)
+
+    def test_label_region_properties_4d_atlas_multi_channel_error(self):
+        """Test that 4D atlas with multiple channels raises an error."""
+        # Create a 4D atlas with multiple channels
+        shape = (2, 10, 10, 10)
+        dseg_data = da.ones(shape, dtype=np.int32)
+
+        dseg = ZarrNii.from_darr(dseg_data)
+        labels_df = pd.DataFrame(
+            {
+                "index": [0, 1],
+                "name": ["Background", "Region"],
+            }
+        )
+
+        atlas = ZarrNiiAtlas.create_from_dseg(dseg, labels_df)
+
+        region_props = {
+            "centroid_x": np.array([5.0]),
+            "centroid_y": np.array([5.0]),
+            "centroid_z": np.array([5.0]),
+        }
+
+        # Should raise error for non-singleton channel dimension
+        with pytest.raises(ValueError, match="singleton channel"):
+            atlas.label_region_properties(region_props)
+
 
 class TestZarrNiiAtlasFileIO:
     """Test suite for ZarrNiiAtlas file I/O operations."""

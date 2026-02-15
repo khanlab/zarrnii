@@ -1407,9 +1407,23 @@ class ZarrNiiAtlas(ZarrNii):
         # For ZarrNii, this is typically (z, y, x), (c, z, y, x), or (t, c, z, y, x)
         # Remove time and/or channel dimensions if present
         if dseg_data.ndim == 5:
+            # Validate that time and channel dimensions are singleton
+            if dseg_data.shape[0] != 1 or dseg_data.shape[1] != 1:
+                raise ValueError(
+                    f"5D atlas data must have singleton time and channel dimensions, "
+                    f"but got shape {dseg_data.shape}. Please select a single timepoint "
+                    "and channel before calling label_region_properties."
+                )
             # Remove singleton time and channel dimensions (t, c, z, y, x) -> (z, y, x)
             dseg_data = dseg_data[0, 0]
         elif dseg_data.ndim == 4:
+            # Validate that channel dimension is singleton
+            if dseg_data.shape[0] != 1:
+                raise ValueError(
+                    f"4D atlas data must have singleton channel dimension, "
+                    f"but got shape {dseg_data.shape}. Please select a single channel "
+                    "before calling label_region_properties."
+                )
             dseg_data = dseg_data[0]  # Remove channel dimension
 
         # Create coordinate grids for each dimension

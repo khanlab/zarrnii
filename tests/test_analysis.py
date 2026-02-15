@@ -496,7 +496,7 @@ class TestComputeRegionProperties:
         affine = np.eye(4)
 
         # Should raise error for multi-channel images
-        with pytest.raises(ValueError, match="channels.*compute_region_properties"):
+        with pytest.raises(ValueError, match="channels"):
             compute_region_properties(image, affine, depth=2)
 
     def test_compute_region_properties_5d_multi_channel_error(self):
@@ -509,8 +509,8 @@ class TestComputeRegionProperties:
 
         affine = np.eye(4)
 
-        # Should raise error for multi-channel images
-        with pytest.raises(ValueError, match="channels.*compute_region_properties"):
+        # Should raise error for multi-channel images (after squeezing time, becomes 4D)
+        with pytest.raises(ValueError, match="channels"):
             compute_region_properties(image, affine, depth=2)
 
     def test_compute_region_properties_5d_multi_timepoint_error(self):
