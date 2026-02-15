@@ -3087,18 +3087,15 @@ class ZarrNii:
 
         # Create new NgffImage with upsampled data
         dims = self.dims
-        if self.axes_order == "XYZ":
-            new_scale = {
-                dims[1]: self.scale[dims[1]] / scaling[1],
-                dims[2]: self.scale[dims[2]] / scaling[2],
-                dims[3]: self.scale[dims[3]] / scaling[3],
-            }
-        else:
-            new_scale = {
-                dims[1]: self.scale[dims[1]] / scaling[1],
-                dims[2]: self.scale[dims[2]] / scaling[2],
-                dims[3]: self.scale[dims[3]] / scaling[3],
-            }
+        
+        # Build new_scale by updating only the spatial dimensions
+        new_scale = self.scale.copy()
+        
+        # Find spatial dimension indices and update their scales
+        for i, dim in enumerate(dims):
+            if dim.lower() in ['x', 'y', 'z']:
+                if dim in self.scale:
+                    new_scale[dim] = self.scale[dim] / scaling[i]
 
         upsampled_ngff = nz.to_ngff_image(
             darr_scaled,
@@ -5399,7 +5396,9 @@ class ZarrNii:
         Args:
             plugin: ScaledProcessingPlugin instance or class to apply
             downsample_factor: Factor for downsampling (default: 4)
-            chunk_size: Optional chunk size for low-res processing. If None, uses (1, 10, 10, 10).
+            chunk_size: Optional chunk size for spatial dimensions only (e.g., (10, 10, 10) for Z, Y, X).
+                If None, defaults to (10, 10, 10). Non-spatial dimensions (time, channel) are automatically
+                prepended with singleton chunks (1) based on the input data shape.
             upsampled_ome_zarr_path: Path to save intermediate OME-Zarr, default saved in system temp directory.
             **kwargs: Additional arguments passed to the plugin
 
@@ -5423,8 +5422,15 @@ class ZarrNii:
         lowres_array = lowres_znimg.data.compute()
 
         # Step 2: Apply low-resolution function and prepare for upsampling
-        # Use chunk_size parameter for the low-res processing chunks
-        lowres_chunks = chunk_size if chunk_size is not None else (1, 10, 10, 10)
+        # Construct chunk size: spatial chunk_size with singleton dimensions for non-spatial dims
+        spatial_chunk_size = chunk_size if chunk_size is not None else (10, 10, 10)
+        
+        # Count non-spatial dimensions (dims that are not x, y, z)
+        num_non_spatial = sum(1 for dim in lowres_znimg.dims if dim.lower() not in ['x', 'y', 'z'])
+        
+        # Prepend singleton chunks for non-spatial dimensions
+        lowres_chunks = (1,) * num_non_spatial + spatial_chunk_size
+        
         lowres_znimg.data = da.from_array(
             plugin.lowres_func(lowres_array), chunks=lowres_chunks
         )
