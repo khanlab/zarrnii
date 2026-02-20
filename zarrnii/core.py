@@ -809,6 +809,7 @@ def _select_dimensions_from_image(
         scale=image.scale,
         translation=image.translation,
         name=image.name,
+        axes_units=image.axes_units,
     )
 
     return new_image
@@ -889,6 +890,7 @@ def _select_channels_from_image(
         scale=image.scale,
         translation=image.translation,
         name=image.name,
+        axes_units=image.axes_units,
     )
 
     return new_image
@@ -943,6 +945,7 @@ def crop_ngff_image(
         scale=ngff_image.scale,
         translation=new_translation,
         name=ngff_image.name,
+        axes_units=ngff_image.axes_units,
     )
 
 
@@ -1001,6 +1004,7 @@ def downsample_ngff_image(
         scale=new_scale,
         translation=ngff_image.translation,
         name=ngff_image.name,
+        axes_units=ngff_image.axes_units,
     )
 
 
@@ -1176,6 +1180,7 @@ def _select_dimensions_from_image_with_omero(
         scale=ngff_image.scale,
         translation=ngff_image.translation,
         name=ngff_image.name,
+        axes_units=ngff_image.axes_units,
     )
 
     # Filter omero metadata to match selected channels (timepoints don't affect omero metadata)
@@ -2847,6 +2852,7 @@ class ZarrNii:
                 scale=self.ngff_image.scale.copy(),
                 translation=new_translation,
                 name=self.ngff_image.name,
+                axes_units=self.ngff_image.axes_units,
             )
 
             return ZarrNii(
@@ -2922,6 +2928,7 @@ class ZarrNii:
                 scale=cropped_image.scale,
                 translation=new_translation,
                 name=cropped_image.name,
+                axes_units=self.ngff_image.axes_units,
             )
 
         return ZarrNii(
@@ -3103,6 +3110,7 @@ class ZarrNii:
             scale=new_scale,
             translation=self.translation.copy(),
             name=self.name,
+            axes_units=self.ngff_image.axes_units,
         )
 
         # Return a new ZarrNii instance with the upsampled data
@@ -4556,6 +4564,7 @@ class ZarrNii:
             scale=self.ngff_image.scale.copy(),
             translation=self.ngff_image.translation.copy(),
             name=self.ngff_image.name if name is None else name,
+            axes_units=self.ngff_image.axes_units,
         )
         return ZarrNii(
             ngff_image=copied_image,
@@ -4583,6 +4592,7 @@ class ZarrNii:
             scale=self.ngff_image.scale,
             translation=self.ngff_image.translation,
             name=self.ngff_image.name,
+            axes_units=self.ngff_image.axes_units,
         )
         return computed_image
 
@@ -4816,9 +4826,8 @@ class ZarrNii:
             scale=self.scale,
             translation=self.translation,
             name=self.name,
+            axes_units=self.ngff_image.axes_units,
         )
-
-        # Filter omero metadata to match selected channels
         filtered_omero = None
         if self.omero is not None and hasattr(self.omero, "channels"):
 
@@ -4871,6 +4880,7 @@ class ZarrNii:
             scale=self.scale,
             translation=self.translation,
             name=self.name,
+            axes_units=self.ngff_image.axes_units,
         )
 
         return ZarrNii(
@@ -4899,6 +4909,7 @@ class ZarrNii:
             scale=self.scale,
             translation=self.translation,
             name=name,
+            axes_units=self.ngff_image.axes_units,
         )
 
     def segment(

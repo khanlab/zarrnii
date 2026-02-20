@@ -420,3 +420,93 @@ def test_upsample_to_shape_exact_match(nifti_nib):
         assert (
             upsampled.data.shape == target_shape
         ), f"Data shape {upsampled.data.shape} != target {target_shape}"
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_downsample_preserves_axes_units():
+    """Test that downsampling preserves axes_units metadata.
+
+    Regression test for: Units not retained when performing operations like downsample.
+    If axes_units are lost, to_nifti() defaults to micrometer and incorrectly converts
+    units (e.g. 0.05 mm becomes 0.00005 mm).
+    """
+    # Create a test image in millimeters (0.05 mm voxel size)
+    data = np.random.rand(1, 40, 40, 40).astype(np.float32)
+    voxel_size_mm = 0.05
+    ngff_image = nz.to_ngff_image(
+        data,
+        dims=["c", "z", "y", "x"],
+        scale={"c": 1, "z": voxel_size_mm, "y": voxel_size_mm, "x": voxel_size_mm},
+        translation={"c": 0, "z": 0.0, "y": 0.0, "x": 0.0},
+        axes_units={"z": "millimeter", "y": "millimeter", "x": "millimeter"},
+    )
+    multiscales = nz.to_multiscales(ngff_image)
+    nz.to_ngff_zarr("test_mm.ome.zarr", multiscales)
+
+    znimg = ZarrNii.from_ome_zarr("test_mm.ome.zarr")
+
+    # Verify units are present before downsampling
+    assert znimg.ngff_image.axes_units is not None
+    assert znimg.ngff_image.axes_units.get("z") == "millimeter"
+
+    # Downsample by factor of 2
+    ds_factor = 2
+    znimg_ds = znimg.downsample(along_x=ds_factor, along_y=ds_factor, along_z=ds_factor)
+
+    # Units must be preserved after downsampling
+    assert (
+        znimg_ds.ngff_image.axes_units is not None
+    ), "axes_units lost after downsample"
+    assert znimg_ds.ngff_image.axes_units.get("z") == "millimeter"
+    assert znimg_ds.ngff_image.axes_units.get("y") == "millimeter"
+    assert znimg_ds.ngff_image.axes_units.get("x") == "millimeter"
+
+    # Convert to NIfTI and verify voxel sizes are correct (not incorrectly converted)
+    nifti_img = znimg_ds.to_nifti()
+    expected_scale = voxel_size_mm * ds_factor  # 0.1 mm after downsampling
+    actual_scale = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
+    assert_array_almost_equal(
+        actual_scale,
+        [expected_scale, expected_scale, expected_scale],
+        decimal=5,
+        err_msg="Voxel size incorrect after downsample - units likely lost",
+    )
+
+
+@pytest.mark.usefixtures("cleandir")
+def test_upsample_preserves_axes_units():
+    """Test that upsampling preserves axes_units metadata."""
+    data = np.random.rand(1, 20, 20, 20).astype(np.float32)
+    voxel_size_mm = 0.1
+    ngff_image = nz.to_ngff_image(
+        data,
+        dims=["c", "z", "y", "x"],
+        scale={"c": 1, "z": voxel_size_mm, "y": voxel_size_mm, "x": voxel_size_mm},
+        translation={"c": 0, "z": 0.0, "y": 0.0, "x": 0.0},
+        axes_units={"z": "millimeter", "y": "millimeter", "x": "millimeter"},
+    )
+    multiscales = nz.to_multiscales(ngff_image)
+    nz.to_ngff_zarr("test_mm_us.ome.zarr", multiscales)
+
+    znimg = ZarrNii.from_ome_zarr("test_mm_us.ome.zarr")
+
+    # Upsample by factor of 2
+    us_factor = 2
+    znimg_us = znimg.upsample(along_x=us_factor, along_y=us_factor, along_z=us_factor)
+
+    # Units must be preserved after upsampling
+    assert znimg_us.ngff_image.axes_units is not None, "axes_units lost after upsample"
+    assert znimg_us.ngff_image.axes_units.get("z") == "millimeter"
+    assert znimg_us.ngff_image.axes_units.get("y") == "millimeter"
+    assert znimg_us.ngff_image.axes_units.get("x") == "millimeter"
+
+    # Convert to NIfTI and verify voxel sizes are correct
+    nifti_img = znimg_us.to_nifti()
+    expected_scale = voxel_size_mm / us_factor  # 0.05 mm after upsampling
+    actual_scale = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
+    assert_array_almost_equal(
+        actual_scale,
+        [expected_scale, expected_scale, expected_scale],
+        decimal=5,
+        err_msg="Voxel size incorrect after upsample - units likely lost",
+    )
