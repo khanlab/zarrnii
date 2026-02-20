@@ -454,7 +454,9 @@ def test_downsample_preserves_axes_units():
     znimg_ds = znimg.downsample(along_x=ds_factor, along_y=ds_factor, along_z=ds_factor)
 
     # Units must be preserved after downsampling
-    assert znimg_ds.ngff_image.axes_units is not None, "axes_units lost after downsample"
+    assert (
+        znimg_ds.ngff_image.axes_units is not None
+    ), "axes_units lost after downsample"
     assert znimg_ds.ngff_image.axes_units.get("z") == "millimeter"
     assert znimg_ds.ngff_image.axes_units.get("y") == "millimeter"
     assert znimg_ds.ngff_image.axes_units.get("x") == "millimeter"
