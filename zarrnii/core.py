@@ -381,6 +381,7 @@ def save_ngff_image_with_ome_zarr(
     xyz_orientation: Optional[str] = None,
     omero: nz.Omero = None,
     compute: bool = True,
+    zarr_format: int = 3,
     **kwargs: Any,
 ) -> None:
     """Save an NgffImage to an OME-Zarr store using ome-zarr-py library.
@@ -401,6 +402,9 @@ def save_ngff_image_with_ome_zarr(
             as metadata
         compute: Whether to compute the write operations immediately (True) or
             return delayed operations (False)
+        zarr_format: Zarr format version to use (2 or 3). Defaults to 3.
+            Use 2 for backwards compatibility with tools that do not yet
+            support Zarr v3 (e.g. older versions of napari).
         **kwargs: Additional arguments passed to ome_zarr.writer.write_image
 
     Raises:
@@ -463,7 +467,7 @@ def save_ngff_image_with_ome_zarr(
         with tempfile.TemporaryDirectory() as tmpdir:
             # Save to temporary directory first
             temp_zarr_path = os.path.join(tmpdir, "temp.zarr")
-            store = zarr.open_group(temp_zarr_path, mode="w", zarr_format=3)
+            store = zarr.open_group(temp_zarr_path, mode="w", zarr_format=zarr_format)
 
             # Write the data to OME-Zarr
             write_image(
@@ -490,7 +494,7 @@ def save_ngff_image_with_ome_zarr(
     else:
         # Write to zarr store directly
         if isinstance(store_or_path, str):
-            store = zarr.open_group(store_or_path, mode="w", zarr_format=3)
+            store = zarr.open_group(store_or_path, mode="w", zarr_format=zarr_format)
         else:
             store = store_or_path
 
@@ -3357,6 +3361,7 @@ class ZarrNii:
         max_layer: int = 4,
         scale_factors: Optional[List[int]] = None,
         backend: str = "ome-zarr-py",
+        zarr_format: int = 3,
         **kwargs: Any,
     ) -> "ZarrNii":
         """Save to OME-Zarr store with multiscale pyramid.
@@ -3378,6 +3383,10 @@ class ZarrNii:
             backend: Backend library to use for writing. Options:
                 - 'ngff-zarr': Use ngff-zarr library (default)
                 - 'ome-zarr-py': Use ome-zarr-py library for better dask integration
+            zarr_format: Zarr format version to use (2 or 3). Defaults to 3.
+                Use 2 for backwards compatibility with tools that do not yet
+                support Zarr v3 (e.g. older versions of napari).
+                Only applies to the 'ome-zarr-py' backend.
             **kwargs: Additional arguments passed to the save function.
                 For 'ngff-zarr': passed to to_ngff_zarr function
                 For 'ome-zarr-py': passed to write_image (e.g., scaling_method, compute)
@@ -3457,6 +3466,7 @@ class ZarrNii:
                 xyz_orientation=(
                     self.xyz_orientation if hasattr(self, "xyz_orientation") else None
                 ),
+                zarr_format=zarr_format,
                 **kwargs,
             )
 

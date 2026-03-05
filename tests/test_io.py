@@ -326,6 +326,38 @@ def test_to_ome_zarr_backend_parameter(znimg_from_multiscales):
             assert "ome-zarr-py" in str(e)
 
 
+def test_to_ome_zarr_zarr_format_parameter(znimg_from_multiscales):
+    """Test that to_ome_zarr respects the zarr_format parameter."""
+    import os
+    import tempfile
+
+    import zarr
+
+    # Test with zarr_format=2 (ome-zarr-py backend)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = os.path.join(tmpdir, "test_zarr_v2.ome.zarr")
+        znimg_from_multiscales.to_ome_zarr(
+            output_path, backend="ome-zarr-py", zarr_format=2
+        )
+        assert os.path.exists(output_path)
+        # Verify the store was written as zarr v2
+        store = zarr.open_group(output_path, mode="r")
+        assert store.metadata.zarr_format == 2
+        # Verify data is still readable via ZarrNii
+        reloaded = ZarrNii.from_ome_zarr(output_path)
+        assert reloaded.darr.shape == znimg_from_multiscales.darr.shape
+
+    # Test with default zarr_format=3 (ome-zarr-py backend)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = os.path.join(tmpdir, "test_zarr_v3.ome.zarr")
+        znimg_from_multiscales.to_ome_zarr(
+            output_path, backend="ome-zarr-py", zarr_format=3
+        )
+        assert os.path.exists(output_path)
+        store = zarr.open_group(output_path, mode="r")
+        assert store.metadata.zarr_format == 3
+
+
 def test_orientation_functionality(tmp_path):
     """Test orientation reading/writing functionality."""
     # Create a simple test image
