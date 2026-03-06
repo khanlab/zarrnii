@@ -5,8 +5,9 @@ This example demonstrates how to use the segmentation plugin system in ZarrNii. 
 ## Plugin Architecture Overview
 
 ZarrNii's segmentation plugins use pluggy hook specifications and implementations:
-- **Hook specifications** define the interface that all plugins must implement
+- **Hook specifications** are defined in `zarrnii_plugin_api` (a lightweight package with only a `pluggy` dependency)
 - **Hook implementations** (using `@hookimpl` decorator) provide the actual functionality
+- Plugins are plain Python classes — no inheritance from any base class is required
 - Plugins can be used directly or registered with the plugin manager for discovery
 
 ## Basic Otsu Segmentation
@@ -14,7 +15,8 @@ ZarrNii's segmentation plugins use pluggy hook specifications and implementation
 ```python
 import numpy as np
 import dask.array as da
-from zarrnii import ZarrNii, OtsuSegmentation
+from zarrnii import ZarrNii
+from zarrnii.plugins import LocalOtsuSegmentation
 
 # Load or create your image data
 # For this example, we'll create synthetic bimodal data
@@ -30,11 +32,11 @@ znimg = ZarrNii.from_darr(darr, axes_order="ZYX", orientation="RAS")
 segmented = znimg.segment_otsu(nbins=256)
 
 # Method 2: Using the plugin directly
-plugin = OtsuSegmentation(nbins=256)
+plugin = LocalOtsuSegmentation(nbins=256)
 segmented = znimg.segment(plugin)
 
 # Method 3: Using plugin class with parameters
-segmented = znimg.segment(OtsuSegmentation, nbins=128)
+segmented = znimg.segment(LocalOtsuSegmentation, nbins=128)
 
 # The result is a new ZarrNii instance with binary segmentation
 print(f"Original shape: {znimg.shape}")
@@ -61,44 +63,42 @@ result_data = segmented.data.compute()
 
 ## Creating Custom Segmentation Plugins
 
-You can create your own segmentation plugins by inheriting from `SegmentationPlugin` and implementing the required hook methods with the `@hookimpl` decorator:
+You can create your own segmentation plugins as plain Python classes using the `@hookimpl` decorator from `zarrnii_plugin_api`. **No inheritance is required.**
 
 ```python
-from zarrnii.plugins import SegmentationPlugin
-from zarrnii.plugins.segmentation.base import hookimpl
+from zarrnii_plugin_api import hookimpl
 import numpy as np
 
-class ThresholdSegmentation(SegmentationPlugin):
+class ThresholdSegmentation:
     """Simple threshold-based segmentation plugin."""
-    
-    def __init__(self, threshold: float = 0.5, **kwargs):
+
+    def __init__(self, threshold: float = 0.5):
         """Initialize the plugin.
-        
+
         Args:
             threshold: Threshold value for segmentation
         """
-        super().__init__(threshold=threshold, **kwargs)
         self.threshold = threshold
-    
+
     @hookimpl
     def segment(self, image: np.ndarray, metadata=None) -> np.ndarray:
         """Apply threshold segmentation.
-        
+
         Args:
             image: Input image as numpy array
             metadata: Optional metadata dictionary
-            
+
         Returns:
             Binary segmentation mask
         """
         binary_mask = image > self.threshold
         return binary_mask.astype(np.uint8)
-    
+
     @hookimpl
     def segmentation_plugin_name(self) -> str:
         """Return the name of the plugin."""
         return "Threshold Segmentation"
-    
+
     @hookimpl
     def segmentation_plugin_description(self) -> str:
         """Return a description of the plugin."""
@@ -123,7 +123,7 @@ print(f"Registered {len(registered_plugins)} plugins")
 
 ## External Segmentation Plugin Development
 
-External plugins allow you to package and distribute your custom segmentation algorithms as separate Python packages. Here's a complete example:
+External plugins allow you to package and distribute your custom segmentation algorithms as separate Python packages. They only need `zarrnii_plugin_api` as a dependency — no dependency on `zarrnii` core is required.
 
 ### Step 1: Create Your Plugin Package Structure
 
@@ -141,49 +141,42 @@ In `adaptive_threshold.py`:
 
 ```python
 """Adaptive threshold segmentation plugin."""
-from zarrnii.plugins import SegmentationPlugin
-from zarrnii.plugins.segmentation.base import hookimpl
+from zarrnii_plugin_api import hookimpl
 import numpy as np
 from skimage.filters import threshold_local
 
-class AdaptiveThresholdSegmentation(SegmentationPlugin):
+class AdaptiveThresholdSegmentation:
     """Adaptive thresholding segmentation for images with varying illumination."""
-    
-    def __init__(self, block_size=35, offset=10, method='gaussian', **kwargs):
+
+    def __init__(self, block_size=35, offset=10, method='gaussian'):
         """Initialize adaptive threshold segmentation.
-        
+
         Args:
             block_size: Size of pixel neighborhood for threshold calculation
             offset: Constant subtracted from weighted mean
             method: Method for computing threshold ('gaussian' or 'mean')
         """
-        super().__init__(
-            block_size=block_size,
-            offset=offset,
-            method=method,
-            **kwargs
-        )
         self.block_size = block_size
         self.offset = offset
         self.method = method
-    
+
     @hookimpl
     def segment(self, image: np.ndarray, metadata=None) -> np.ndarray:
         """Segment image using adaptive thresholding.
-        
+
         Args:
             image: Input image as numpy array
             metadata: Optional metadata (unused)
-            
+
         Returns:
             Binary segmentation mask
         """
         if image.size == 0:
             raise ValueError("Input image is empty")
-        
+
         if image.ndim < 2:
             raise ValueError("Input image must be at least 2D")
-        
+
         # Work with 2D slice for threshold computation
         work_image = image
         if work_image.ndim > 2:
@@ -192,7 +185,7 @@ class AdaptiveThresholdSegmentation(SegmentationPlugin):
                 work_image = work_image[0]
             elif work_image.ndim > 3:
                 work_image = work_image.reshape(-1, *work_image.shape[-2:])[0]
-        
+
         # Compute adaptive threshold
         threshold = threshold_local(
             work_image,
@@ -200,17 +193,17 @@ class AdaptiveThresholdSegmentation(SegmentationPlugin):
             offset=self.offset,
             method=self.method
         )
-        
+
         # Apply threshold to original image
         binary_mask = image > threshold
-        
+
         return binary_mask.astype(np.uint8)
-    
+
     @hookimpl
     def segmentation_plugin_name(self) -> str:
         """Return the name of the plugin."""
         return "Adaptive Threshold Segmentation"
-    
+
     @hookimpl
     def segmentation_plugin_description(self) -> str:
         """Return a description of the plugin."""
@@ -239,11 +232,12 @@ name = "my-segmentation-plugin"
 version = "0.1.0"
 description = "Adaptive threshold segmentation plugin for ZarrNii"
 dependencies = [
-    "zarrnii>=0.1.0",
+    # Only zarrnii_plugin_api is needed — no zarrnii dependency!
+    "zarrnii_plugin_api>=0.1.0",
     "scikit-image>=0.21.0",
 ]
 
-[project.entry-points."zarrnii.plugins"]
+[project.entry-points."zarrnii"]
 adaptive_threshold = "my_segmentation_plugin:AdaptiveThresholdSegmentation"
 ```
 

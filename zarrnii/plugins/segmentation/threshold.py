@@ -11,10 +11,10 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 
-from .base import SegmentationPlugin, hookimpl
+from zarrnii_plugin_api import hookimpl
 
 
-class ThresholdSegmentation(SegmentationPlugin):
+class ThresholdSegmentation:
     """
     Threshold-based segmentation plugin.
 
@@ -33,7 +33,7 @@ class ThresholdSegmentation(SegmentationPlugin):
     """
 
     def __init__(
-        self, thresholds: Union[float, List[float]], inclusive: bool = True, **kwargs
+        self, thresholds: Union[float, List[float]], inclusive: bool = True
     ):
         """
         Initialize threshold segmentation plugin.
@@ -41,10 +41,7 @@ class ThresholdSegmentation(SegmentationPlugin):
         Args:
             thresholds: Single threshold or list of thresholds
             inclusive: Whether thresholds are inclusive (>= vs >)
-            **kwargs: Additional parameters passed to parent class
         """
-        super().__init__(thresholds=thresholds, inclusive=inclusive, **kwargs)
-
         # Normalize thresholds to always be a list
         if isinstance(thresholds, (int, float)):
             self.thresholds = [float(thresholds)]
@@ -116,15 +113,9 @@ class ThresholdSegmentation(SegmentationPlugin):
                 f"which thresholds each pixel exceeds (using {op} comparison)."
             )
 
-    @property
-    def name(self) -> str:
-        """Return the name of the segmentation algorithm."""
-        return self.segmentation_plugin_name()
-
-    @property
-    def description(self) -> str:
-        """Return a description of the segmentation algorithm."""
-        return self.segmentation_plugin_description()
+    def __repr__(self) -> str:
+        """Return string representation of the plugin."""
+        return f"ThresholdSegmentation(thresholds={self.thresholds}, inclusive={self.inclusive})"
 
     def get_thresholds(self) -> List[float]:
         """

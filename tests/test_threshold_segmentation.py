@@ -125,18 +125,18 @@ class TestThresholdSegmentation:
         assert_array_equal(result, expected)
 
     def test_plugin_properties(self):
-        """Test plugin name and description properties."""
+        """Test plugin name and description methods."""
         # Binary threshold
         plugin_binary = ThresholdSegmentation(thresholds=0.5)
-        assert plugin_binary.name == "Binary Threshold"
-        assert "Binary threshold segmentation" in plugin_binary.description
-        assert "0.5" in plugin_binary.description
+        assert plugin_binary.segmentation_plugin_name() == "Binary Threshold"
+        assert "Binary threshold segmentation" in plugin_binary.segmentation_plugin_description()
+        assert "0.5" in plugin_binary.segmentation_plugin_description()
 
         # Multi-level threshold
         plugin_multi = ThresholdSegmentation(thresholds=[0.3, 0.7])
-        assert plugin_multi.name == "Multi-level Threshold"
-        assert "Multi-level threshold segmentation" in plugin_multi.description
-        assert "[0.3, 0.7]" in plugin_multi.description
+        assert plugin_multi.segmentation_plugin_name() == "Multi-level Threshold"
+        assert "Multi-level threshold segmentation" in plugin_multi.segmentation_plugin_description()
+        assert "[0.3, 0.7]" in plugin_multi.segmentation_plugin_description()
 
     def test_get_thresholds_method(self):
         """Test get_thresholds method."""
@@ -156,10 +156,6 @@ class TestThresholdSegmentation:
 
         assert plugin.thresholds == [0.3, 0.7]
         assert plugin.inclusive is False
-
-        # Check that parameters are stored in parent class
-        assert plugin.params["thresholds"] == [0.3, 0.7]
-        assert plugin.params["inclusive"] is False
 
 
 class TestLocalOtsuSegmentation:
@@ -181,12 +177,12 @@ class TestLocalOtsuSegmentation:
         assert set(np.unique(result)).issubset({0, 1})
 
     def test_plugin_properties(self):
-        """Test plugin name and description."""
+        """Test plugin name and description methods."""
         plugin = LocalOtsuSegmentation()
 
-        assert plugin.name == "Local Otsu Thresholding"
-        assert "Local Otsu" in plugin.description
-        assert "locally" in plugin.description
+        assert plugin.segmentation_plugin_name() == "Local Otsu Thresholding"
+        assert "Local Otsu" in plugin.segmentation_plugin_description()
+        assert "locally" in plugin.segmentation_plugin_description()
 
     def test_get_threshold_method(self):
         """Test get_threshold method."""
@@ -234,4 +230,3 @@ class TestLocalOtsuSegmentation:
         plugin = LocalOtsuSegmentation(nbins=128)
 
         assert plugin.nbins == 128
-        assert plugin.params["nbins"] == 128

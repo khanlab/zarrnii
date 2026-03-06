@@ -12,10 +12,10 @@ from typing import Any, Dict, Optional
 import numpy as np
 from skimage.filters import threshold_otsu
 
-from .base import SegmentationPlugin, hookimpl
+from zarrnii_plugin_api import hookimpl
 
 
-class LocalOtsuSegmentation(SegmentationPlugin):
+class LocalOtsuSegmentation:
     """
     Local Otsu thresholding segmentation plugin.
 
@@ -29,15 +29,13 @@ class LocalOtsuSegmentation(SegmentationPlugin):
         nbins: Number of bins for histogram computation (default: 256)
     """
 
-    def __init__(self, nbins: int = 256, **kwargs):
+    def __init__(self, nbins: int = 256):
         """
         Initialize local Otsu segmentation plugin.
 
         Args:
             nbins: Number of bins for histogram computation
-            **kwargs: Additional parameters passed to parent class
         """
-        super().__init__(nbins=nbins, **kwargs)
         self.nbins = nbins
 
     @hookimpl
@@ -123,15 +121,9 @@ class LocalOtsuSegmentation(SegmentationPlugin):
             "processing block, suitable for images with varying illumination."
         )
 
-    @property
-    def name(self) -> str:
-        """Return the name of the segmentation algorithm."""
-        return self.segmentation_plugin_name()
-
-    @property
-    def description(self) -> str:
-        """Return a description of the segmentation algorithm."""
-        return self.segmentation_plugin_description()
+    def __repr__(self) -> str:
+        """Return string representation of the plugin."""
+        return f"LocalOtsuSegmentation(nbins={self.nbins})"
 
     def get_threshold(self, image: np.ndarray) -> float:
         """

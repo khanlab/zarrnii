@@ -13,10 +13,10 @@ import dask.array as da
 import numpy as np
 from scipy import ndimage
 
-from .base import ScaledProcessingPlugin, hookimpl
+from zarrnii_plugin_api import hookimpl
 
 
-class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
+class GaussianBiasFieldCorrection:
     """
     Bias field correction plugin using multi-resolution processing.
 
@@ -29,16 +29,14 @@ class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
         mode: Boundary condition for smoothing (default: 'reflect')
     """
 
-    def __init__(self, sigma: float = 5.0, mode: str = "reflect", **kwargs):
+    def __init__(self, sigma: float = 5.0, mode: str = "reflect"):
         """
         Initialize bias field correction plugin.
 
         Args:
             sigma: Standard deviation for Gaussian smoothing
             mode: Boundary condition for smoothing
-            **kwargs: Additional parameters passed to parent class
         """
-        super().__init__(sigma=sigma, mode=mode, **kwargs)
         self.sigma = sigma
         self.mode = mode
 
@@ -144,12 +142,6 @@ class GaussianBiasFieldCorrection(ScaledProcessingPlugin):
             "to full resolution data by division."
         )
 
-    @property
-    def name(self) -> str:
-        """Return the name of the algorithm."""
-        return self.scaled_processing_plugin_name()
-
-    @property
-    def description(self) -> str:
-        """Return a description of the algorithm."""
-        return self.scaled_processing_plugin_description()
+    def __repr__(self) -> str:
+        """Return string representation of the plugin."""
+        return f"GaussianBiasFieldCorrection(sigma={self.sigma}, mode={self.mode})"

@@ -11,7 +11,8 @@ import pytest
 from numpy.testing import assert_array_almost_equal
 
 from zarrnii import ZarrNii
-from zarrnii.plugins import GaussianBiasFieldCorrection, ScaledProcessingPlugin
+from zarrnii.plugins import GaussianBiasFieldCorrection
+from zarrnii_plugin_api import hookimpl
 
 # Import HAS_ANTSPYX for conditional tests
 try:
@@ -21,55 +22,36 @@ except ImportError:
 
 
 class TestScaledProcessingPlugin:
-    """Test the base ScaledProcessingPlugin interface."""
-
-    def test_abstract_plugin_cannot_be_instantiated(self):
-        """Test that ScaledProcessingPlugin base class raises NotImplementedError when methods are called."""
-        # With pluggy, we can instantiate the base class but methods should raise NotImplementedError
-        plugin = ScaledProcessingPlugin()
-
-        test_lowres = np.random.rand(10, 10).astype(np.float32)
-        test_fullres = da.from_array(
-            np.random.rand(20, 20).astype(np.float32), chunks=(10, 10)
-        )
-
-        with pytest.raises(NotImplementedError):
-            plugin.lowres_func(test_lowres)
-
-        with pytest.raises(NotImplementedError):
-            plugin.highres_func(test_fullres, test_fullres)
-
-        with pytest.raises(NotImplementedError):
-            plugin.scaled_processing_plugin_name()
-
-        with pytest.raises(NotImplementedError):
-            plugin.scaled_processing_plugin_description()
+    """Test the pluggy-based scaled processing plugin interface."""
 
     def test_plugin_interface(self):
-        """Test that plugins implement the required interface."""
+        """Test that plain pluggy-style plugins implement the required interface."""
 
-        # Create a minimal implementation for testing
-        class TestPlugin(ScaledProcessingPlugin):
+        # Create a minimal implementation using @hookimpl only (no inheritance)
+        class TestPlugin:
+            @hookimpl
             def lowres_func(self, lowres_array):
                 # Simple identity operation
                 return lowres_array
 
-            def highres_func(self, fullres_array, lowres_output):
+            @hookimpl
+            def highres_func(self, fullres_array, upsampled_output):
                 # Simple multiplication by 2
                 return fullres_array * 2
 
+            @hookimpl
             def scaled_processing_plugin_name(self):
                 return "Test Plugin"
 
+            @hookimpl
             def scaled_processing_plugin_description(self):
                 return "A test plugin"
 
-        plugin = TestPlugin(param1=10, param2="test")
+        plugin = TestPlugin()
 
-        # Test basic properties
-        assert plugin.name == "Test Plugin"
-        assert plugin.description == "A test plugin"
-        assert plugin.params == {"param1": 10, "param2": "test"}
+        # Test methods directly (no properties required)
+        assert plugin.scaled_processing_plugin_name() == "Test Plugin"
+        assert plugin.scaled_processing_plugin_description() == "A test plugin"
 
         # Test lowres function
         test_lowres = np.random.rand(10, 10).astype(np.float32)
@@ -98,11 +80,10 @@ class TestGaussianBiasFieldCorrection:
         """Test GaussianBiasFieldCorrection plugin initialization."""
         plugin = GaussianBiasFieldCorrection(sigma=3.0, mode="constant")
 
-        assert plugin.name == "Gaussian Bias Field Correction"
-        assert "Multi-resolution bias field correction" in plugin.description
+        assert plugin.scaled_processing_plugin_name() == "Gaussian Bias Field Correction"
+        assert "Multi-resolution bias field correction" in plugin.scaled_processing_plugin_description()
         assert plugin.sigma == 3.0
         assert plugin.mode == "constant"
-        assert plugin.params == {"sigma": 3.0, "mode": "constant"}
 
     def test_lowres_func_basic(self):
         """Test the lowres_func with basic input."""
@@ -260,7 +241,7 @@ class TestZarrNiiScaledProcessingIntegration:
 
         with pytest.raises(
             TypeError,
-            match="Plugin must be an instance or subclass of ScaledProcessingPlugin",
+            match="Plugin must have callable 'lowres_func' and 'highres_func' methods",
         ):
             znimg.apply_scaled_processing("not_a_plugin")
 
@@ -400,7 +381,7 @@ class TestN4BiasFieldCorrection:
             )
 
             plugin = N4BiasFieldCorrection()
-            assert plugin.name == "N4 Bias Field Correction"
+            assert plugin.scaled_processing_plugin_name() == "N4 Bias Field Correction"
 
     @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
     def test_n4_plugin_initialization(self):
@@ -412,8 +393,8 @@ class TestN4BiasFieldCorrection:
             shrink_factor=2,
         )
 
-        assert plugin.name == "N4 Bias Field Correction"
-        assert "Multi-resolution N4 bias field correction" in plugin.description
+        assert plugin.scaled_processing_plugin_name() == "N4 Bias Field Correction"
+        assert "Multi-resolution N4 bias field correction" in plugin.scaled_processing_plugin_description()
         assert plugin.convergence == {"iters": [25], "tol": 0.002}
         assert plugin.shrink_factor == 2
 
@@ -542,16 +523,11 @@ class TestSegmentationCleaner:
             mask_threshold=60, max_extent=0.2, exclusion_threshold=40
         )
 
-        assert plugin.name == "Segmentation Cleaner"
-        assert "Multi-resolution segmentation cleaning" in plugin.description
+        assert plugin.scaled_processing_plugin_name() == "Segmentation Cleaner"
+        assert "Multi-resolution segmentation cleaning" in plugin.scaled_processing_plugin_description()
         assert plugin.mask_threshold == 60
         assert plugin.max_extent == 0.2
         assert plugin.exclusion_threshold == 40
-        assert plugin.params == {
-            "mask_threshold": 60,
-            "max_extent": 0.2,
-            "exclusion_threshold": 40,
-        }
 
     def test_lowres_func_basic(self):
         """Test the lowres_func with basic segmentation input."""
