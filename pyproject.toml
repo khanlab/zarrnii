@@ -108,6 +108,7 @@ exclude = ["tests/*", ".venv", "build", "dist"]
 [tool.black]
 line-length = 88
 target-version = ['py39']  # Set to your target Python version
+force-exclude = '_version.py'
 
 [tool.isort]
 profile = "black"  # Ensure compatibility with Black
