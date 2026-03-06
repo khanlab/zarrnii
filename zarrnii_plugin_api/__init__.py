@@ -25,9 +25,8 @@ Usage::
 
 import pluggy
 
-from .hookspecs import ZarrNiiSpec
+from .hookspecs import ZarrNiiSpec, hookspec
 
-hookspec = pluggy.HookspecMarker("zarrnii")
 hookimpl = pluggy.HookimplMarker("zarrnii")
 
 __all__ = ["hookspec", "hookimpl", "ZarrNiiSpec"]

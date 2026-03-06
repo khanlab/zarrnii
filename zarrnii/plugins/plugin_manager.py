@@ -21,6 +21,8 @@ def get_plugin_manager() -> pluggy.PluginManager:
     """
     pm = pluggy.PluginManager("zarrnii")
     pm.add_hookspecs(ZarrNiiSpec)
+    # Discover and register external plugins declared via setuptools entry points
+    # under the "zarrnii" group (matching the pluggy project name).
     pm.load_setuptools_entrypoints("zarrnii")
     return pm
 

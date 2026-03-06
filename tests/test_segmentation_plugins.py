@@ -29,7 +29,7 @@ class TestPluginApiImport:
 
         assert hookspec is not None
 
-    def test_zarrniiispec_importable(self):
+    def test_zarrnispec_importable(self):
         """Test that ZarrNiiSpec can be imported from zarrnii_plugin_api."""
         from zarrnii_plugin_api import ZarrNiiSpec
 
