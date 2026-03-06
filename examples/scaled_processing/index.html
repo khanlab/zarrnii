@@ -1331,7 +1331,7 @@
 </ul>
 <p>ZarrNii uses the <a href="https://pluggy.readthedocs.io/">pluggy</a> framework for its plugin system, providing a flexible and extensible architecture for creating custom processing plugins.</p>
 <h2 id="plugin-interface">Plugin Interface</h2>
-<p>All scaled processing plugins must inherit from <code>ScaledProcessingPlugin</code> and implement the required hook methods decorated with <code>@hookimpl</code>:</p>
+<p>All scaled processing plugins are plain Python classes that implement the required hook methods using the <code>@hookimpl</code> decorator from <code>zarrnii_plugin_api</code>. <strong>No inheritance from any base class is required.</strong></p>
 <h3 id="lowres_funclowres_array-npndarray-npndarray"><code>lowres_func(lowres_array: np.ndarray) -&gt; np.ndarray</code></h3>
 <p>This function processes the downsampled data and returns a result that will be upsampled and applied to the full-resolution data.</p>
 <h3 id="highres_funcfullres_array-daskarray-upsampled_output-daskarray-daskarray"><code>highres_func(fullres_array: dask.array, upsampled_output: dask.array) -&gt; dask.array</code></h3>
@@ -1398,18 +1398,16 @@ corrected = znimg.apply_scaled_processing(
 - <code>convergence</code>: Dictionary with 'iters' (list) and 'tol' (float) for convergence criteria (default: {'iters': [50], 'tol': 0.001})
 - <code>shrink_factor</code>: Shrink factor for processing (default: 1)</p>
 <h2 id="creating-custom-plugins">Creating Custom Plugins</h2>
-<p>You can create custom plugins by inheriting from <code>ScaledProcessingPlugin</code> and implementing the required hook methods:</p>
-<pre><code class="language-python">from zarrnii.plugins import ScaledProcessingPlugin
-from zarrnii.plugins.scaled_processing.base import hookimpl
+<p>You can create custom plugins as plain Python classes by implementing the required hook methods with <code>@hookimpl</code>. <strong>No base class inheritance is required.</strong></p>
+<pre><code class="language-python">from zarrnii_plugin_api import hookimpl
 import numpy as np
 import dask.array as da
 from scipy import ndimage
 
-class CustomPlugin(ScaledProcessingPlugin):
+class CustomPlugin:
     &quot;&quot;&quot;Custom scaled processing plugin example.&quot;&quot;&quot;
 
-    def __init__(self, param1=1.0, **kwargs):
-        super().__init__(param1=param1, **kwargs)
+    def __init__(self, param1=1.0):
         self.param1 = param1
 
     @hookimpl
@@ -1453,7 +1451,7 @@ pm.register(plugin)
 # and can be discovered by other tools
 </code></pre>
 <h2 id="external-plugin-development">External Plugin Development</h2>
-<p>External plugins allow you to package and distribute your custom plugins as separate Python packages that can be discovered and used by ZarrNii. Here's a complete example of how to create an external plugin:</p>
+<p>External plugins allow you to package and distribute your custom plugins as separate Python packages that can be discovered and used by ZarrNii. They only need <code>zarrnii_plugin_api</code> as a dependency — no dependency on <code>zarrnii</code> core is required.</p>
 <h3 id="step-1-create-your-plugin-package">Step 1: Create Your Plugin Package</h3>
 <p>Create a new Python package with the following structure:</p>
 <pre><code>my_zarrnii_plugin/
@@ -1465,27 +1463,21 @@ pm.register(plugin)
 <h3 id="step-2-implement-your-plugin">Step 2: Implement Your Plugin</h3>
 <p>In <code>my_plugin.py</code>:</p>
 <pre><code class="language-python">&quot;&quot;&quot;Custom external plugin for ZarrNii.&quot;&quot;&quot;
-from zarrnii.plugins import ScaledProcessingPlugin
-from zarrnii.plugins.scaled_processing.base import hookimpl
+from zarrnii_plugin_api import hookimpl
 import numpy as np
 import dask.array as da
 from scipy import ndimage
 
-class MyExternalPlugin(ScaledProcessingPlugin):
+class MyExternalPlugin:
     &quot;&quot;&quot;An example external plugin for demonstration.&quot;&quot;&quot;
 
-    def __init__(self, smoothing_sigma=2.0, scale_factor=1.5, **kwargs):
+    def __init__(self, smoothing_sigma=2.0, scale_factor=1.5):
         &quot;&quot;&quot;Initialize the plugin with custom parameters.
 
         Args:
             smoothing_sigma: Sigma for Gaussian smoothing
             scale_factor: Scaling factor for the correction
         &quot;&quot;&quot;
-        super().__init__(
-            smoothing_sigma=smoothing_sigma,
-            scale_factor=scale_factor,
-            **kwargs
-        )
         self.smoothing_sigma = smoothing_sigma
         self.scale_factor = scale_factor
 
@@ -1541,11 +1533,12 @@ name = &quot;my-zarrnii-plugin&quot;
 version = &quot;0.1.0&quot;
 description = &quot;My custom ZarrNii processing plugin&quot;
 dependencies = [
-    &quot;zarrnii&gt;=0.1.0&quot;,
+    # Only zarrnii_plugin_api is needed — no zarrnii dependency!
+    &quot;zarrnii_plugin_api&gt;=0.1.0&quot;,
     &quot;scipy&gt;=1.11.0&quot;,
 ]
 
-[project.entry-points.&quot;zarrnii.plugins&quot;]
+[project.entry-points.&quot;zarrnii&quot;]
 my_external_plugin = &quot;my_zarrnii_plugin:MyExternalPlugin&quot;
 </code></pre>
 <h3 id="step-5-use-your-external-plugin">Step 5: Use Your External Plugin</h3>

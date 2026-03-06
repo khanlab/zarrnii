@@ -11947,7 +11947,9 @@ blockwise processing for efficient computation on large datasets.</p>
             <b><code>plugin</code></b>
           –
           <div class="doc-md-description">
-            <p>Segmentation plugin instance or class to apply</p>
+            <p>Segmentation plugin instance or class to apply.  The plugin
+must have a <code>segment(image, metadata=None)</code> method decorated
+with <code>@hookimpl</code> from :mod:<code>zarrnii_plugin_api</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -11964,7 +11966,7 @@ blockwise processing for efficient computation on large datasets.</p>
             <b><code>**kwargs</code></b>
           –
           <div class="doc-md-description">
-            <p>Additional arguments passed to the plugin</p>
+            <p>Additional arguments passed to the plugin when <em>plugin</em> is a class.</p>
           </div>
         </li>
     </ul>
@@ -12049,7 +12051,14 @@ blockwise processing for efficient computation on large datasets.</p>
 <span class="normal">4987</span>
 <span class="normal">4988</span>
 <span class="normal">4989</span>
-<span class="normal">4990</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment</span><span class="p">(</span>
+<span class="normal">4990</span>
+<span class="normal">4991</span>
+<span class="normal">4992</span>
+<span class="normal">4993</span>
+<span class="normal">4994</span>
+<span class="normal">4995</span>
+<span class="normal">4996</span>
+<span class="normal">4997</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="n">plugin</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -12059,21 +12068,22 @@ blockwise processing for efficient computation on large datasets.</p>
 <span class="sd">    blockwise processing for efficient computation on large datasets.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        plugin: Segmentation plugin instance or class to apply</span>
+<span class="sd">        plugin: Segmentation plugin instance or class to apply.  The plugin</span>
+<span class="sd">            must have a ``segment(image, metadata=None)`` method decorated</span>
+<span class="sd">            with ``@hookimpl`` from :mod:`zarrnii_plugin_api`.</span>
 <span class="sd">        chunk_size: Optional chunk size for dask processing. If None, uses current chunks.</span>
-<span class="sd">        **kwargs: Additional arguments passed to the plugin</span>
+<span class="sd">        **kwargs: Additional arguments passed to the plugin when *plugin* is a class.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        New ZarrNii instance with segmented data as labels</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">.plugins.segmentation</span><span class="w"> </span><span class="kn">import</span> <span class="n">SegmentationPlugin</span>
-
     <span class="c1"># Handle plugin instance or class</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="n">SegmentationPlugin</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
         <span class="n">plugin</span> <span class="o">=</span> <span class="n">plugin</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="n">SegmentationPlugin</span><span class="p">):</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="s2">&quot;segment&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)):</span>
         <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
-            <span class="s2">&quot;Plugin must be an instance or subclass of SegmentationPlugin&quot;</span>
+            <span class="s2">&quot;Plugin must have a callable &#39;segment&#39; method decorated with @hookimpl&quot;</span>
         <span class="p">)</span>
 
     <span class="c1"># Prepare chunk size</span>
@@ -12107,10 +12117,16 @@ blockwise processing for efficient computation on large datasets.</p>
         <span class="n">meta</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">),</span>  <span class="c1"># Provide meta information</span>
     <span class="p">)</span>
 
-    <span class="c1"># Create copy with segmented data</span>
-    <span class="n">segmented_znimg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span>
-        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_segmented_</span><span class="si">{</span><span class="n">plugin</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;_&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="c1"># Derive a name from the plugin&#39;s name hook if available, else use class name</span>
+    <span class="n">plugin_name_func</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="s2">&quot;segmentation_plugin_name&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">plugin_label</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">plugin_name_func</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">plugin_name_func</span><span class="p">)</span>
+        <span class="k">else</span> <span class="nb">type</span><span class="p">(</span><span class="n">plugin</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
     <span class="p">)</span>
+
+    <span class="c1"># Create copy with segmented data</span>
+    <span class="n">segmented_znimg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_segmented_</span><span class="si">{</span><span class="n">plugin_label</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
     <span class="n">segmented_znimg</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">segmented_data</span>
 
     <span class="c1"># Return new ZarrNii instance</span>
@@ -12176,14 +12192,7 @@ This computes the threshold locally for each processing block.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">4992</span>
-<span class="normal">4993</span>
-<span class="normal">4994</span>
-<span class="normal">4995</span>
-<span class="normal">4996</span>
-<span class="normal">4997</span>
-<span class="normal">4998</span>
-<span class="normal">4999</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">4999</span>
 <span class="normal">5000</span>
 <span class="normal">5001</span>
 <span class="normal">5002</span>
@@ -12195,7 +12204,14 @@ This computes the threshold locally for each processing block.</p>
 <span class="normal">5008</span>
 <span class="normal">5009</span>
 <span class="normal">5010</span>
-<span class="normal">5011</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment_otsu</span><span class="p">(</span>
+<span class="normal">5011</span>
+<span class="normal">5012</span>
+<span class="normal">5013</span>
+<span class="normal">5014</span>
+<span class="normal">5015</span>
+<span class="normal">5016</span>
+<span class="normal">5017</span>
+<span class="normal">5018</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment_otsu</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="n">nbins</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -12298,14 +12314,7 @@ If False, pixels &gt; threshold are labeled as foreground.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5013</span>
-<span class="normal">5014</span>
-<span class="normal">5015</span>
-<span class="normal">5016</span>
-<span class="normal">5017</span>
-<span class="normal">5018</span>
-<span class="normal">5019</span>
-<span class="normal">5020</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5020</span>
 <span class="normal">5021</span>
 <span class="normal">5022</span>
 <span class="normal">5023</span>
@@ -12333,7 +12342,14 @@ If False, pixels &gt; threshold are labeled as foreground.</p>
 <span class="normal">5045</span>
 <span class="normal">5046</span>
 <span class="normal">5047</span>
-<span class="normal">5048</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment_threshold</span><span class="p">(</span>
+<span class="normal">5048</span>
+<span class="normal">5049</span>
+<span class="normal">5050</span>
+<span class="normal">5051</span>
+<span class="normal">5052</span>
+<span class="normal">5053</span>
+<span class="normal">5054</span>
+<span class="normal">5055</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment_threshold</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">thresholds</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
     <span class="n">inclusive</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
@@ -12481,14 +12497,7 @@ where mask &gt; 0 are included in histogram computation</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5050</span>
-<span class="normal">5051</span>
-<span class="normal">5052</span>
-<span class="normal">5053</span>
-<span class="normal">5054</span>
-<span class="normal">5055</span>
-<span class="normal">5056</span>
-<span class="normal">5057</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5057</span>
 <span class="normal">5058</span>
 <span class="normal">5059</span>
 <span class="normal">5060</span>
@@ -12521,7 +12530,14 @@ where mask &gt; 0 are included in histogram computation</p>
 <span class="normal">5087</span>
 <span class="normal">5088</span>
 <span class="normal">5089</span>
-<span class="normal">5090</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_histogram</span><span class="p">(</span>
+<span class="normal">5090</span>
+<span class="normal">5091</span>
+<span class="normal">5092</span>
+<span class="normal">5093</span>
+<span class="normal">5094</span>
+<span class="normal">5095</span>
+<span class="normal">5096</span>
+<span class="normal">5097</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_histogram</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">bins</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="nb">range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -12693,14 +12709,7 @@ object showing the histogram with annotated threshold lines.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5092</span>
-<span class="normal">5093</span>
-<span class="normal">5094</span>
-<span class="normal">5095</span>
-<span class="normal">5096</span>
-<span class="normal">5097</span>
-<span class="normal">5098</span>
-<span class="normal">5099</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5099</span>
 <span class="normal">5100</span>
 <span class="normal">5101</span>
 <span class="normal">5102</span>
@@ -12764,7 +12773,14 @@ object showing the histogram with annotated threshold lines.</p>
 <span class="normal">5160</span>
 <span class="normal">5161</span>
 <span class="normal">5162</span>
-<span class="normal">5163</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_otsu_thresholds</span><span class="p">(</span>
+<span class="normal">5163</span>
+<span class="normal">5164</span>
+<span class="normal">5165</span>
+<span class="normal">5166</span>
+<span class="normal">5167</span>
+<span class="normal">5168</span>
+<span class="normal">5169</span>
+<span class="normal">5170</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_otsu_thresholds</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
     <span class="n">bins</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -13017,14 +13033,7 @@ Tuple of (mip_list, slab_info_list) where:
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5165</span>
-<span class="normal">5166</span>
-<span class="normal">5167</span>
-<span class="normal">5168</span>
-<span class="normal">5169</span>
-<span class="normal">5170</span>
-<span class="normal">5171</span>
-<span class="normal">5172</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5172</span>
 <span class="normal">5173</span>
 <span class="normal">5174</span>
 <span class="normal">5175</span>
@@ -13121,7 +13130,14 @@ Tuple of (mip_list, slab_info_list) where:
 <span class="normal">5266</span>
 <span class="normal">5267</span>
 <span class="normal">5268</span>
-<span class="normal">5269</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_mip</span><span class="p">(</span>
+<span class="normal">5269</span>
+<span class="normal">5270</span>
+<span class="normal">5271</span>
+<span class="normal">5272</span>
+<span class="normal">5273</span>
+<span class="normal">5274</span>
+<span class="normal">5275</span>
+<span class="normal">5276</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_mip</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">plane</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;axial&quot;</span><span class="p">,</span>
     <span class="n">slab_thickness_um</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">100.0</span><span class="p">,</span>
@@ -13421,14 +13437,7 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5271</span>
-<span class="normal">5272</span>
-<span class="normal">5273</span>
-<span class="normal">5274</span>
-<span class="normal">5275</span>
-<span class="normal">5276</span>
-<span class="normal">5277</span>
-<span class="normal">5278</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5278</span>
 <span class="normal">5279</span>
 <span class="normal">5280</span>
 <span class="normal">5281</span>
@@ -13548,7 +13557,14 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 <span class="normal">5395</span>
 <span class="normal">5396</span>
 <span class="normal">5397</span>
-<span class="normal">5398</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_region_properties</span><span class="p">(</span>
+<span class="normal">5398</span>
+<span class="normal">5399</span>
+<span class="normal">5400</span>
+<span class="normal">5401</span>
+<span class="normal">5402</span>
+<span class="normal">5403</span>
+<span class="normal">5404</span>
+<span class="normal">5405</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_region_properties</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">output_properties</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">depth</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
@@ -13707,7 +13723,10 @@ If output_path is provided, writes to Parquet file and returns None.</p>
             <b><code>plugin</code></b>
           –
           <div class="doc-md-description">
-            <p>ScaledProcessingPlugin instance or class to apply</p>
+            <p>Plugin instance or class to apply.  The plugin must have
+<code>lowres_func(lowres_array)</code> and <code>highres_func(fullres_array,
+upsampled_output)</code> methods decorated with <code>@hookimpl</code> from
+:mod:<code>zarrnii_plugin_api</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -13746,7 +13765,7 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
             <b><code>**kwargs</code></b>
           –
           <div class="doc-md-description">
-            <p>Additional arguments passed to the plugin</p>
+            <p>Additional arguments passed to the plugin when <em>plugin</em> is a class.</p>
           </div>
         </li>
     </ul>
@@ -13766,14 +13785,7 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5400</span>
-<span class="normal">5401</span>
-<span class="normal">5402</span>
-<span class="normal">5403</span>
-<span class="normal">5404</span>
-<span class="normal">5405</span>
-<span class="normal">5406</span>
-<span class="normal">5407</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5407</span>
 <span class="normal">5408</span>
 <span class="normal">5409</span>
 <span class="normal">5410</span>
@@ -13864,7 +13876,19 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
 <span class="normal">5495</span>
 <span class="normal">5496</span>
 <span class="normal">5497</span>
-<span class="normal">5498</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
+<span class="normal">5498</span>
+<span class="normal">5499</span>
+<span class="normal">5500</span>
+<span class="normal">5501</span>
+<span class="normal">5502</span>
+<span class="normal">5503</span>
+<span class="normal">5504</span>
+<span class="normal">5505</span>
+<span class="normal">5506</span>
+<span class="normal">5507</span>
+<span class="normal">5508</span>
+<span class="normal">5509</span>
+<span class="normal">5510</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">plugin</span><span class="p">,</span>
     <span class="n">downsample_factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
@@ -13882,25 +13906,30 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
 <span class="sd">    4. The plugin&#39;s highres_func applies the result to full-resolution data</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        plugin: ScaledProcessingPlugin instance or class to apply</span>
+<span class="sd">        plugin: Plugin instance or class to apply.  The plugin must have</span>
+<span class="sd">            ``lowres_func(lowres_array)`` and ``highres_func(fullres_array,</span>
+<span class="sd">            upsampled_output)`` methods decorated with ``@hookimpl`` from</span>
+<span class="sd">            :mod:`zarrnii_plugin_api`.</span>
 <span class="sd">        downsample_factor: Factor for downsampling (default: 4)</span>
 <span class="sd">        chunk_size: Optional chunk size for spatial dimensions in order [Z, Y, X] (or [X, Y, Z] if axes_order is &#39;XYZ&#39;).</span>
 <span class="sd">            If None, defaults to (10, 10, 10). Non-spatial dimensions (time, channel) are automatically</span>
 <span class="sd">            assigned singleton chunks (1). The order of spatial dimensions follows the axes_order of the data.</span>
 <span class="sd">        upsampled_ome_zarr_path: Path to save intermediate OME-Zarr, default saved in system temp directory.</span>
-<span class="sd">        **kwargs: Additional arguments passed to the plugin</span>
+<span class="sd">        **kwargs: Additional arguments passed to the plugin when *plugin* is a class.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        New ZarrNii instance with processed data</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">.plugins.scaled_processing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ScaledProcessingPlugin</span>
-
     <span class="c1"># Handle plugin instance or class</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="n">ScaledProcessingPlugin</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
         <span class="n">plugin</span> <span class="o">=</span> <span class="n">plugin</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="n">ScaledProcessingPlugin</span><span class="p">):</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="s2">&quot;lowres_func&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span>
+        <span class="nb">getattr</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="s2">&quot;highres_func&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="p">):</span>
         <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
-            <span class="s2">&quot;Plugin must be an instance or subclass of ScaledProcessingPlugin&quot;</span>
+            <span class="s2">&quot;Plugin must have callable &#39;lowres_func&#39; and &#39;highres_func&#39; methods &quot;</span>
+            <span class="s2">&quot;decorated with @hookimpl&quot;</span>
         <span class="p">)</span>
 
     <span class="c1"># Step 1: Downsample the data for low-resolution processing</span>
@@ -14009,19 +14038,7 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
 
             <details class="quote">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5511</span>
-<span class="normal">5512</span>
-<span class="normal">5513</span>
-<span class="normal">5514</span>
-<span class="normal">5515</span>
-<span class="normal">5516</span>
-<span class="normal">5517</span>
-<span class="normal">5518</span>
-<span class="normal">5519</span>
-<span class="normal">5520</span>
-<span class="normal">5521</span>
-<span class="normal">5522</span>
-<span class="normal">5523</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5523</span>
 <span class="normal">5524</span>
 <span class="normal">5525</span>
 <span class="normal">5526</span>
@@ -14051,7 +14068,19 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
 <span class="normal">5550</span>
 <span class="normal">5551</span>
 <span class="normal">5552</span>
-<span class="normal">5553</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">destripe</span><span class="p">(</span>
+<span class="normal">5553</span>
+<span class="normal">5554</span>
+<span class="normal">5555</span>
+<span class="normal">5556</span>
+<span class="normal">5557</span>
+<span class="normal">5558</span>
+<span class="normal">5559</span>
+<span class="normal">5560</span>
+<span class="normal">5561</span>
+<span class="normal">5562</span>
+<span class="normal">5563</span>
+<span class="normal">5564</span>
+<span class="normal">5565</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">destripe</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">channel</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
