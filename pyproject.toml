@@ -95,6 +95,10 @@ packages = ["zarrnii"]
 [tool.uv.workspace]
 members = ["packages/*"]
 
+[tool.uv.sources]
+zarrnii-plugin-api = { workspace = true }
+
+
 [tool.flake8]
 max-line-length = 88  # Matches Black's default line length
 extend-ignore = ["E203", "W503"]  # Compatibility with Black

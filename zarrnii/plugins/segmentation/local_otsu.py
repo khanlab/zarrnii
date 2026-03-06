@@ -11,7 +11,6 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 from skimage.filters import threshold_otsu
-
 from zarrnii_plugin_api import hookimpl
 
 

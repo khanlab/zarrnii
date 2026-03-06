@@ -12,7 +12,6 @@ from __future__ import annotations
 import dask.array as da
 import numpy as np
 from skimage.measure import label, regionprops
-
 from zarrnii_plugin_api import hookimpl
 
 
