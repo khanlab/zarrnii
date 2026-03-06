@@ -80,8 +80,13 @@ class TestGaussianBiasFieldCorrection:
         """Test GaussianBiasFieldCorrection plugin initialization."""
         plugin = GaussianBiasFieldCorrection(sigma=3.0, mode="constant")
 
-        assert plugin.scaled_processing_plugin_name() == "Gaussian Bias Field Correction"
-        assert "Multi-resolution bias field correction" in plugin.scaled_processing_plugin_description()
+        assert (
+            plugin.scaled_processing_plugin_name() == "Gaussian Bias Field Correction"
+        )
+        assert (
+            "Multi-resolution bias field correction"
+            in plugin.scaled_processing_plugin_description()
+        )
         assert plugin.sigma == 3.0
         assert plugin.mode == "constant"
 
@@ -394,7 +399,10 @@ class TestN4BiasFieldCorrection:
         )
 
         assert plugin.scaled_processing_plugin_name() == "N4 Bias Field Correction"
-        assert "Multi-resolution N4 bias field correction" in plugin.scaled_processing_plugin_description()
+        assert (
+            "Multi-resolution N4 bias field correction"
+            in plugin.scaled_processing_plugin_description()
+        )
         assert plugin.convergence == {"iters": [25], "tol": 0.002}
         assert plugin.shrink_factor == 2
 
@@ -524,7 +532,10 @@ class TestSegmentationCleaner:
         )
 
         assert plugin.scaled_processing_plugin_name() == "Segmentation Cleaner"
-        assert "Multi-resolution segmentation cleaning" in plugin.scaled_processing_plugin_description()
+        assert (
+            "Multi-resolution segmentation cleaning"
+            in plugin.scaled_processing_plugin_description()
+        )
         assert plugin.mask_threshold == 60
         assert plugin.max_extent == 0.2
         assert plugin.exclusion_threshold == 40

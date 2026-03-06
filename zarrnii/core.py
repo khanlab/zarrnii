@@ -4990,9 +4990,7 @@ class ZarrNii:
         )
 
         # Create copy with segmented data
-        segmented_znimg = self.copy(
-            name=f"{self.name}_segmented_{plugin_label}"
-        )
+        segmented_znimg = self.copy(name=f"{self.name}_segmented_{plugin_label}")
         segmented_znimg.data = segmented_data
 
         # Return new ZarrNii instance

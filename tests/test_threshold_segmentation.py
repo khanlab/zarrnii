@@ -129,13 +129,19 @@ class TestThresholdSegmentation:
         # Binary threshold
         plugin_binary = ThresholdSegmentation(thresholds=0.5)
         assert plugin_binary.segmentation_plugin_name() == "Binary Threshold"
-        assert "Binary threshold segmentation" in plugin_binary.segmentation_plugin_description()
+        assert (
+            "Binary threshold segmentation"
+            in plugin_binary.segmentation_plugin_description()
+        )
         assert "0.5" in plugin_binary.segmentation_plugin_description()
 
         # Multi-level threshold
         plugin_multi = ThresholdSegmentation(thresholds=[0.3, 0.7])
         assert plugin_multi.segmentation_plugin_name() == "Multi-level Threshold"
-        assert "Multi-level threshold segmentation" in plugin_multi.segmentation_plugin_description()
+        assert (
+            "Multi-level threshold segmentation"
+            in plugin_multi.segmentation_plugin_description()
+        )
         assert "[0.3, 0.7]" in plugin_multi.segmentation_plugin_description()
 
     def test_get_thresholds_method(self):

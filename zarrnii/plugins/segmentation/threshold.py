@@ -32,9 +32,7 @@ class ThresholdSegmentation:
             If False, pixels > threshold are labeled as foreground.
     """
 
-    def __init__(
-        self, thresholds: Union[float, List[float]], inclusive: bool = True
-    ):
+    def __init__(self, thresholds: Union[float, List[float]], inclusive: bool = True):
         """
         Initialize threshold segmentation plugin.
 
