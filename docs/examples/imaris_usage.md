@@ -65,10 +65,13 @@ data = np.random.rand(64, 128, 96).astype(np.float32)
 darr = da.from_array(data[np.newaxis, ...], chunks="auto")
 znimg = ZarrNii.from_darr(darr, spacing=[2.0, 1.0, 1.0])
 
-# Save to Imaris format
+# Save to Imaris format with automatic multi-resolution pyramid
 output_path = znimg.to_imaris("output_data.ims")
 print(f"Saved to: {output_path}")
 ```
+
+!!! note "Multi-Resolution Pyramid"
+    The `to_imaris()` method automatically generates multiple resolution levels (pyramid) for efficient visualization of large datasets. The number of levels is determined by the Imaris algorithm, which creates downsampled versions until the volume size drops below 1 MB. Each level uses memory-safe chunked processing with 16×256×256 (ZYX) chunks.
 
 ### Compression Options
 
@@ -170,9 +173,46 @@ znimg.to_imaris("output.ims", compression="gzip")
 
 **File Structure Created:**
 - Top-level attributes matching Imaris format (ImarisVersion, DataSetDirectoryName, etc.)
-- `DataSet/ResolutionLevel 0/TimePoint 0/Channel X/Data` hierarchy
+- `DataSet/ResolutionLevel 0/TimePoint 0/Channel X/Data` hierarchy (with multiple ResolutionLevels)
 - `DataSetInfo` group with channel metadata
 - Proper histogram data for each channel
+
+### Multi-Resolution Pyramids
+
+ZarrNii automatically generates multi-resolution pyramids when saving to Imaris format:
+
+```python
+import dask.array as da
+from zarrnii import ZarrNii
+
+# Create a large dataset
+shape = (256, 512, 384)  # Z, Y, X
+data = da.random.random(shape, chunks=(16, 256, 256)).astype('float32')
+data = data[None, ...]  # Add channel dimension
+
+znimg = ZarrNii.from_darr(data, spacing=[1.0, 1.0, 1.0])
+
+# Save with automatic pyramid generation
+znimg.to_imaris("large_dataset.ims")
+# Creates ResolutionLevel 0, 1, 2, 3, etc. automatically
+```
+
+**How Pyramid Levels Are Determined:**
+
+The number of resolution levels follows the Imaris specification:
+- For each dimension, downsample by 2 if `(10 × dimension)² > volume / dimension`
+- Continue creating levels until total volume ≤ 1 MB
+- Each level uses consistent 16×256×256 (ZYX) chunking
+
+**Example Pyramid Structures:**
+
+| Original Size | Levels | Level Sizes |
+|--------------|--------|-------------|
+| 64×128×96 | 2 | L0: 64×128×96, L1: 32×64×48 |
+| 128×256×192 | 3 | L0: 128×256×192, L1: 64×128×96, L2: 32×64×48 |
+| 256×512×384 | 4 | L0: 256×512×384, L1: 128×256×192, L2: 64×128×96, L3: 32×64×48 |
+
+All pyramid generation is **memory-safe**, processing data in small chunks to handle arbitrarily large datasets.
 
 ## Best Practices
 
