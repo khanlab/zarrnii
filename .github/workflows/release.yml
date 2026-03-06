@@ -4,8 +4,7 @@ on:
   push:
     tags:
       - "v*"
-  release:
-    types: [published]
+  workflow_dispatch:
 
 env:
   FORCE_COLOR: "1"
@@ -40,6 +39,9 @@ jobs:
 
     - name: Build package
       run: uv build
+
+    - name: Build zarrnii-plugin-api package
+      run: uv build --package zarrnii-plugin-api
 
     - name: Upload distributions
       uses: actions/upload-artifact@v4
@@ -105,10 +107,6 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ github.token }}
       run: |
-        if gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}"; then
-          echo "Release '${{ github.ref_name }}' already exists, skipping artifact upload."
-        else
-          gh release upload '${{ github.ref_name }}' dist/** --repo '${{ github.repository }}'
-        fi
+        gh release upload '${{ github.ref_name }}' dist/** --repo '${{ github.repository }}'
 
 
