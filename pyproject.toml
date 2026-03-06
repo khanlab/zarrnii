@@ -19,7 +19,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
 
-
 dependencies = [
     "zarr>=3.0.8",
     "nibabel>=5.2.0",
@@ -33,6 +32,7 @@ dependencies = [
     "pyyaml>=6.0",
     "ome-zarr>=0.12.0",
     "pluggy>=1.0.0",
+    "zarrnii-plugin-api",
 ]
 
 [project.optional-dependencies]
@@ -67,6 +67,13 @@ templateflow = [
     "templateflow>=0.8.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/khanlab/zarrnii"
+Documentation = "https://www.khanlab.ca/zarrnii"
+Repository = "https://github.com/khanlab/zarrnii"
+Issues = "https://github.com/khanlab/zarrnii/issues"
+
+
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
@@ -83,14 +90,13 @@ raw-options = { local_scheme = "no-local-version" }
 version-file = "zarrnii/_version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["zarrnii", "zarrnii_plugin_api"]
+packages = ["zarrnii"]
 
+[tool.uv.workspace]
+members = ["packages/*"]
 
-[project.urls]
-Homepage = "https://github.com/khanlab/zarrnii"
-Documentation = "https://www.khanlab.ca/zarrnii"
-Repository = "https://github.com/khanlab/zarrnii"
-Issues = "https://github.com/khanlab/zarrnii/issues"
+[tool.uv.sources]
+zarrnii-plugin-api = { workspace = true }
 
 
 [tool.flake8]
@@ -102,11 +108,12 @@ exclude = ["tests/*", ".venv", "build", "dist"]
 [tool.black]
 line-length = 88
 target-version = ['py39']  # Set to your target Python version
+force-exclude = '_version.py'
 
 [tool.isort]
 profile = "black"  # Ensure compatibility with Black
 line_length = 88
-skip_glob = ["zarrnii/_version.py"]
+skip_glob = ["zarrnii/_version.py","packages/zarrnii_plugin_api/zarrnii_plugin_api/_version.py"]
 skip = [".pixi",".venv"]
 
 [tool.coverage.run]

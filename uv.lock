@@ -7,6 +7,12 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 
+[manifest]
+members = [
+    "zarrnii",
+    "zarrnii-plugin-api",
+]
+
 [[package]]
 name = "acres"
 version = "0.5.0"
@@ -4231,6 +4237,7 @@ dependencies = [
     { name = "scikit-image" },
     { name = "scipy" },
     { name = "zarr" },
+    { name = "zarrnii-plugin-api" },
 ]
 
 [package.optional-dependencies]
@@ -4315,6 +4322,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.12.0" },
     { name = "templateflow", marker = "extra == 'templateflow'", specifier = ">=0.8.0" },
     { name = "zarr", specifier = ">=3.0.8" },
+    { name = "zarrnii-plugin-api", editable = "packages/zarrnii_plugin_api" },
 ]
 provides-extras = ["dev", "imaris", "n4", "templateflow"]
 
@@ -4337,6 +4345,16 @@ dev = [
     { name = "pytest", specifier = ">=8.2.0" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
 ]
+
+[[package]]
+name = "zarrnii-plugin-api"
+source = { editable = "packages/zarrnii_plugin_api" }
+dependencies = [
+    { name = "pluggy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pluggy", specifier = ">=1.0.0" }]
 
 [[package]]
 name = "zict"

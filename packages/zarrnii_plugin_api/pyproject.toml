@@ -1,0 +1,44 @@
+[project]
+name = "zarrnii-plugin-api"
+dynamic = ["version"]
+description = "Plugin API for extending zarrnii functionality"
+authors = [{ name = "Ali Khan", email = "alik@robarts.ca" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+
+keywords = ["neuroimaging", "plugin", "zarrnii", "api"]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "pluggy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/khanlab/zarrnii"
+Repository = "https://github.com/khanlab/zarrnii"
+Issues = "https://github.com/khanlab/zarrnii/issues"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+raw-options = { root = "../..", relative_to = "pyproject.toml", local_scheme = "no-local-version" }
+
+[tool.hatch.build.hooks.vcs]
+version-file = "zarrnii_plugin_api/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["zarrnii_plugin_api"]
+

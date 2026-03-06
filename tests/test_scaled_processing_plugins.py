@@ -9,10 +9,10 @@ import dask.array as da
 import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal
+from zarrnii_plugin_api import hookimpl
 
 from zarrnii import ZarrNii
 from zarrnii.plugins import GaussianBiasFieldCorrection
-from zarrnii_plugin_api import hookimpl
 
 # Import HAS_ANTSPYX for conditional tests
 try:
