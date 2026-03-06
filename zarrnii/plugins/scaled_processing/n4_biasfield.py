@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 import dask.array as da
 import numpy as np
 
-from .base import ScaledProcessingPlugin, hookimpl
+from zarrnii_plugin_api import hookimpl
 
 try:
     import ants
@@ -23,7 +23,7 @@ except ImportError:
     HAS_ANTSPYX = False
 
 
-class N4BiasFieldCorrection(ScaledProcessingPlugin):
+class N4BiasFieldCorrection:
     """
     N4 bias field correction plugin using multi-resolution processing.
 
@@ -45,7 +45,6 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
             "tol": 1e-07,
         },
         shrink_factor: int = 1,
-        **kwargs,
     ):
         """
         Initialize N4 bias field correction plugin.
@@ -54,7 +53,6 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
             spline_param: Spacing between knots for spline fitting
             convergence: Convergence criteria dict with 'iters' (list), 'tol'
             shrink_factor: Shrink factor for processing
-            **kwargs: Additional parameters passed to parent class
 
         Raises:
             ImportError: If antspyx is not installed
@@ -66,12 +64,6 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
                 "or pip install antspyx"
             )
 
-        super().__init__(
-            spline_param=spline_param,
-            convergence=convergence,
-            shrink_factor=shrink_factor,
-            **kwargs,
-        )
         self.spline_param = spline_param
         self.convergence = convergence
         self.shrink_factor = shrink_factor
@@ -198,12 +190,11 @@ class N4BiasFieldCorrection(ScaledProcessingPlugin):
             "correction to full resolution data by division."
         )
 
-    @property
-    def name(self) -> str:
-        """Return the name of the algorithm."""
-        return self.scaled_processing_plugin_name()
-
-    @property
-    def description(self) -> str:
-        """Return a description of the algorithm."""
-        return self.scaled_processing_plugin_description()
+    def __repr__(self) -> str:
+        """Return string representation of the plugin."""
+        return (
+            f"N4BiasFieldCorrection("
+            f"spline_param={self.spline_param}, "
+            f"convergence={self.convergence}, "
+            f"shrink_factor={self.shrink_factor})"
+        )

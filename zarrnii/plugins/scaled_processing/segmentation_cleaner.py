@@ -13,10 +13,10 @@ import dask.array as da
 import numpy as np
 from skimage.measure import label, regionprops
 
-from .base import ScaledProcessingPlugin, hookimpl
+from zarrnii_plugin_api import hookimpl
 
 
-class SegmentationCleaner(ScaledProcessingPlugin):
+class SegmentationCleaner:
     """
     Segmentation cleaning plugin using multi-resolution processing.
 
@@ -41,7 +41,6 @@ class SegmentationCleaner(ScaledProcessingPlugin):
         mask_threshold: float = 50,
         max_extent: float = 0.15,
         exclusion_threshold: float = 50,
-        **kwargs,
     ):
         """
         Initialize segmentation cleaner plugin.
@@ -51,14 +50,7 @@ class SegmentationCleaner(ScaledProcessingPlugin):
             max_extent: Maximum extent to include in exclusion mask (objects with
                        extent < max_extent are considered artifactual)
             exclusion_threshold: Threshold for applying upsampled exclusion mask
-            **kwargs: Additional parameters passed to parent class
         """
-        super().__init__(
-            mask_threshold=mask_threshold,
-            max_extent=max_extent,
-            exclusion_threshold=exclusion_threshold,
-            **kwargs,
-        )
         self.mask_threshold = mask_threshold
         self.max_extent = max_extent
         self.exclusion_threshold = exclusion_threshold
@@ -171,12 +163,11 @@ class SegmentationCleaner(ScaledProcessingPlugin):
             "full resolution data."
         )
 
-    @property
-    def name(self) -> str:
-        """Return the name of the algorithm."""
-        return self.scaled_processing_plugin_name()
-
-    @property
-    def description(self) -> str:
-        """Return a description of the algorithm."""
-        return self.scaled_processing_plugin_description()
+    def __repr__(self) -> str:
+        """Return string representation of the plugin."""
+        return (
+            f"SegmentationCleaner("
+            f"mask_threshold={self.mask_threshold}, "
+            f"max_extent={self.max_extent}, "
+            f"exclusion_threshold={self.exclusion_threshold})"
+        )

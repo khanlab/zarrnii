@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pluggy
 
-from . import hookspecs
+from zarrnii_plugin_api import ZarrNiiSpec
 
 
 def get_plugin_manager() -> pluggy.PluginManager:
@@ -20,7 +20,10 @@ def get_plugin_manager() -> pluggy.PluginManager:
         PluginManager instance configured for ZarrNii plugins
     """
     pm = pluggy.PluginManager("zarrnii")
-    pm.add_hookspecs(hookspecs)
+    pm.add_hookspecs(ZarrNiiSpec)
+    # Discover and register external plugins declared via setuptools entry points
+    # under the "zarrnii" group (matching the pluggy project name).
+    pm.load_setuptools_entrypoints("zarrnii")
     return pm
 
 

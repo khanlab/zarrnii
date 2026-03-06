@@ -4932,21 +4932,22 @@ class ZarrNii:
         blockwise processing for efficient computation on large datasets.
 
         Args:
-            plugin: Segmentation plugin instance or class to apply
+            plugin: Segmentation plugin instance or class to apply.  The plugin
+                must have a ``segment(image, metadata=None)`` method decorated
+                with ``@hookimpl`` from :mod:`zarrnii_plugin_api`.
             chunk_size: Optional chunk size for dask processing. If None, uses current chunks.
-            **kwargs: Additional arguments passed to the plugin
+            **kwargs: Additional arguments passed to the plugin when *plugin* is a class.
 
         Returns:
             New ZarrNii instance with segmented data as labels
         """
-        from .plugins.segmentation import SegmentationPlugin
-
         # Handle plugin instance or class
-        if isinstance(plugin, type) and issubclass(plugin, SegmentationPlugin):
+        if isinstance(plugin, type):
             plugin = plugin(**kwargs)
-        elif not isinstance(plugin, SegmentationPlugin):
+
+        if not callable(getattr(plugin, "segment", None)):
             raise TypeError(
-                "Plugin must be an instance or subclass of SegmentationPlugin"
+                "Plugin must have a callable 'segment' method decorated with @hookimpl"
             )
 
         # Prepare chunk size
@@ -4980,10 +4981,16 @@ class ZarrNii:
             meta=np.array([], dtype=np.uint8),  # Provide meta information
         )
 
-        # Create copy with segmented data
-        segmented_znimg = self.copy(
-            name=f"{self.name}_segmented_{plugin.name.lower().replace(' ', '_')}"
+        # Derive a name from the plugin's name hook if available, else use class name
+        plugin_name_func = getattr(plugin, "segmentation_plugin_name", None)
+        plugin_label = (
+            plugin_name_func().lower().replace(" ", "_")
+            if callable(plugin_name_func)
+            else type(plugin).__name__.lower()
         )
+
+        # Create copy with segmented data
+        segmented_znimg = self.copy(name=f"{self.name}_segmented_{plugin_label}")
         segmented_znimg.data = segmented_data
 
         # Return new ZarrNii instance
@@ -5415,25 +5422,30 @@ class ZarrNii:
         4. The plugin's highres_func applies the result to full-resolution data
 
         Args:
-            plugin: ScaledProcessingPlugin instance or class to apply
+            plugin: Plugin instance or class to apply.  The plugin must have
+                ``lowres_func(lowres_array)`` and ``highres_func(fullres_array,
+                upsampled_output)`` methods decorated with ``@hookimpl`` from
+                :mod:`zarrnii_plugin_api`.
             downsample_factor: Factor for downsampling (default: 4)
             chunk_size: Optional chunk size for spatial dimensions in order [Z, Y, X] (or [X, Y, Z] if axes_order is 'XYZ').
                 If None, defaults to (10, 10, 10). Non-spatial dimensions (time, channel) are automatically
                 assigned singleton chunks (1). The order of spatial dimensions follows the axes_order of the data.
             upsampled_ome_zarr_path: Path to save intermediate OME-Zarr, default saved in system temp directory.
-            **kwargs: Additional arguments passed to the plugin
+            **kwargs: Additional arguments passed to the plugin when *plugin* is a class.
 
         Returns:
             New ZarrNii instance with processed data
         """
-        from .plugins.scaled_processing import ScaledProcessingPlugin
-
         # Handle plugin instance or class
-        if isinstance(plugin, type) and issubclass(plugin, ScaledProcessingPlugin):
+        if isinstance(plugin, type):
             plugin = plugin(**kwargs)
-        elif not isinstance(plugin, ScaledProcessingPlugin):
+
+        if not callable(getattr(plugin, "lowres_func", None)) or not callable(
+            getattr(plugin, "highres_func", None)
+        ):
             raise TypeError(
-                "Plugin must be an instance or subclass of ScaledProcessingPlugin"
+                "Plugin must have callable 'lowres_func' and 'highres_func' methods "
+                "decorated with @hookimpl"
             )
 
         # Step 1: Downsample the data for low-resolution processing

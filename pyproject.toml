@@ -83,7 +83,7 @@ raw-options = { local_scheme = "no-local-version" }
 version-file = "zarrnii/_version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["zarrnii"]
+packages = ["zarrnii", "zarrnii_plugin_api"]
 
 
 [project.urls]

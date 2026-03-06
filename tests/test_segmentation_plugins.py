@@ -11,48 +11,56 @@ import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 from zarrnii import ZarrNii
-from zarrnii.plugins import SegmentationPlugin
+from zarrnii_plugin_api import hookimpl
+
+
+class TestPluginApiImport:
+    """Test that zarrnii_plugin_api can be imported independently."""
+
+    def test_hookimpl_importable(self):
+        """Test that hookimpl can be imported from zarrnii_plugin_api."""
+        from zarrnii_plugin_api import hookimpl
+
+        assert hookimpl is not None
+
+    def test_hookspec_importable(self):
+        """Test that hookspec can be imported from zarrnii_plugin_api."""
+        from zarrnii_plugin_api import hookspec
+
+        assert hookspec is not None
+
+    def test_zarrnispec_importable(self):
+        """Test that ZarrNiiSpec can be imported from zarrnii_plugin_api."""
+        from zarrnii_plugin_api import ZarrNiiSpec
+
+        assert ZarrNiiSpec is not None
 
 
 class TestSegmentationPlugin:
-    """Test the base SegmentationPlugin interface."""
-
-    def test_abstract_plugin_cannot_be_instantiated(self):
-        """Test that SegmentationPlugin base class raises NotImplementedError when methods are called."""
-        # With pluggy, we can instantiate the base class but methods should raise NotImplementedError
-        plugin = SegmentationPlugin()
-
-        test_image = np.random.rand(10, 10).astype(np.float32)
-
-        with pytest.raises(NotImplementedError):
-            plugin.segment(test_image)
-
-        with pytest.raises(NotImplementedError):
-            plugin.segmentation_plugin_name()
-
-        with pytest.raises(NotImplementedError):
-            plugin.segmentation_plugin_description()
+    """Test the pluggy-based segmentation plugin interface."""
 
     def test_plugin_interface(self):
-        """Test that plugins implement the required interface."""
+        """Test that plain pluggy-style plugins implement the required interface."""
 
-        # Create a minimal implementation for testing
-        class TestPlugin(SegmentationPlugin):
+        # Create a minimal implementation using @hookimpl only (no inheritance)
+        class TestPlugin:
+            @hookimpl
             def segment(self, image, metadata=None):
                 return np.ones_like(image, dtype=np.uint8)
 
+            @hookimpl
             def segmentation_plugin_name(self):
                 return "Test Plugin"
 
+            @hookimpl
             def segmentation_plugin_description(self):
                 return "A test plugin"
 
-        plugin = TestPlugin(param1=10, param2="test")
+        plugin = TestPlugin()
 
-        # Test basic properties
-        assert plugin.name == "Test Plugin"
-        assert plugin.description == "A test plugin"
-        assert plugin.params == {"param1": 10, "param2": "test"}
+        # Test methods directly (no properties required)
+        assert plugin.segmentation_plugin_name() == "Test Plugin"
+        assert plugin.segmentation_plugin_description() == "A test plugin"
 
         # Test segmentation
         test_image = np.random.rand(10, 10).astype(np.float32)
@@ -60,3 +68,29 @@ class TestSegmentationPlugin:
         assert result.shape == test_image.shape
         assert result.dtype == np.uint8
         assert np.all(result == 1)
+
+    def test_plugin_can_be_registered_with_manager(self):
+        """Test that a plain pluggy-style plugin can be registered with the manager."""
+        from zarrnii.plugins import get_plugin_manager
+
+        class TestPlugin:
+            @hookimpl
+            def segment(self, image, metadata=None):
+                return np.zeros_like(image, dtype=np.uint8)
+
+            @hookimpl
+            def segmentation_plugin_name(self):
+                return "Test Plugin"
+
+            @hookimpl
+            def segmentation_plugin_description(self):
+                return "A test plugin"
+
+        pm = get_plugin_manager()
+        plugin = TestPlugin()
+        pm.register(plugin)
+
+        results = pm.hook.segment(image=np.ones((5, 5), dtype=np.float32))
+        assert len(results) >= 1
+
+        pm.unregister(plugin)

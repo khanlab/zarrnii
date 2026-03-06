@@ -15,7 +15,7 @@ ZarrNii uses the [pluggy](https://pluggy.readthedocs.io/) framework for its plug
 
 ## Plugin Interface
 
-All scaled processing plugins must inherit from `ScaledProcessingPlugin` and implement the required hook methods decorated with `@hookimpl`:
+All scaled processing plugins are plain Python classes that implement the required hook methods using the `@hookimpl` decorator from `zarrnii_plugin_api`. **No inheritance from any base class is required.**
 
 ### `lowres_func(lowres_array: np.ndarray) -> np.ndarray`
 
@@ -108,20 +108,18 @@ Parameters:
 
 ## Creating Custom Plugins
 
-You can create custom plugins by inheriting from `ScaledProcessingPlugin` and implementing the required hook methods:
+You can create custom plugins as plain Python classes by implementing the required hook methods with `@hookimpl`. **No base class inheritance is required.**
 
 ```python
-from zarrnii.plugins import ScaledProcessingPlugin
-from zarrnii.plugins.scaled_processing.base import hookimpl
+from zarrnii_plugin_api import hookimpl
 import numpy as np
 import dask.array as da
 from scipy import ndimage
 
-class CustomPlugin(ScaledProcessingPlugin):
+class CustomPlugin:
     """Custom scaled processing plugin example."""
-    
-    def __init__(self, param1=1.0, **kwargs):
-        super().__init__(param1=param1, **kwargs)
+
+    def __init__(self, param1=1.0):
         self.param1 = param1
 
     @hookimpl
@@ -167,7 +165,7 @@ pm.register(plugin)
 
 ## External Plugin Development
 
-External plugins allow you to package and distribute your custom plugins as separate Python packages that can be discovered and used by ZarrNii. Here's a complete example of how to create an external plugin:
+External plugins allow you to package and distribute your custom plugins as separate Python packages that can be discovered and used by ZarrNii. They only need `zarrnii_plugin_api` as a dependency — no dependency on `zarrnii` core is required.
 
 ### Step 1: Create Your Plugin Package
 
@@ -187,47 +185,41 @@ In `my_plugin.py`:
 
 ```python
 """Custom external plugin for ZarrNii."""
-from zarrnii.plugins import ScaledProcessingPlugin
-from zarrnii.plugins.scaled_processing.base import hookimpl
+from zarrnii_plugin_api import hookimpl
 import numpy as np
 import dask.array as da
 from scipy import ndimage
 
-class MyExternalPlugin(ScaledProcessingPlugin):
+class MyExternalPlugin:
     """An example external plugin for demonstration."""
-    
-    def __init__(self, smoothing_sigma=2.0, scale_factor=1.5, **kwargs):
+
+    def __init__(self, smoothing_sigma=2.0, scale_factor=1.5):
         """Initialize the plugin with custom parameters.
-        
+
         Args:
             smoothing_sigma: Sigma for Gaussian smoothing
             scale_factor: Scaling factor for the correction
         """
-        super().__init__(
-            smoothing_sigma=smoothing_sigma,
-            scale_factor=scale_factor,
-            **kwargs
-        )
         self.smoothing_sigma = smoothing_sigma
         self.scale_factor = scale_factor
-    
+
     @hookimpl
     def lowres_func(self, lowres_array: np.ndarray) -> np.ndarray:
         """Compute correction map at low resolution."""
         if lowres_array.size == 0:
             raise ValueError("Input array is empty")
-        
+
         # Apply smoothing to estimate low-frequency components
         smoothed = ndimage.gaussian_filter(
             lowres_array.astype(np.float32),
             sigma=self.smoothing_sigma
         )
-        
+
         # Scale the correction map
         correction_map = smoothed * self.scale_factor
-        
+
         return correction_map
-    
+
     @hookimpl
     def highres_func(self, fullres_array: da.Array, upsampled_output: da.Array) -> da.Array:
         """Apply the correction to full-resolution data."""
@@ -235,12 +227,12 @@ class MyExternalPlugin(ScaledProcessingPlugin):
         epsilon = np.finfo(np.float32).eps
         corrected = fullres_array / da.maximum(upsampled_output, epsilon)
         return corrected
-    
+
     @hookimpl
     def scaled_processing_plugin_name(self) -> str:
         """Return plugin name."""
         return "My External Plugin"
-    
+
     @hookimpl
     def scaled_processing_plugin_description(self) -> str:
         """Return plugin description."""
@@ -271,11 +263,12 @@ name = "my-zarrnii-plugin"
 version = "0.1.0"
 description = "My custom ZarrNii processing plugin"
 dependencies = [
-    "zarrnii>=0.1.0",
+    # Only zarrnii_plugin_api is needed — no zarrnii dependency!
+    "zarrnii_plugin_api>=0.1.0",
     "scipy>=1.11.0",
 ]
 
-[project.entry-points."zarrnii.plugins"]
+[project.entry-points."zarrnii"]
 my_external_plugin = "my_zarrnii_plugin:MyExternalPlugin"
 ```
 
