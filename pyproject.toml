@@ -113,7 +113,7 @@ force-exclude = '_version.py'
 [tool.isort]
 profile = "black"  # Ensure compatibility with Black
 line_length = 88
-skip_glob = ["zarrnii/_version.py"]
+skip_glob = ["_version.py"]
 skip = [".pixi",".venv"]
 
 [tool.coverage.run]
