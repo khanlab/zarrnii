@@ -3263,6 +3263,220 @@ class ZarrNii:
 
         return grid_points, subvol
 
+    def sample_at_points(
+        self,
+        xyz_points: np.ndarray,
+        method: str = "linear",
+        fill_value: float = 0.0,
+    ) -> np.ndarray:
+        """Block-aware interpolation of image values at physical-space query points.
+
+        Interpolates image values at the specified physical coordinates without
+        loading the entire image into memory.  For zarr-backed images the data is
+        loaded chunk-by-chunk based on where the query points fall, making the
+        function suitable for very large datasets.
+
+        Args:
+            xyz_points: Query coordinates in physical space (x, y, z order).
+                Shape can be ``(N, 3)`` or ``(3, N)``.  A single point may also
+                be passed as a length-3 1-D array.
+            method: Interpolation method passed to ``scipy.interpolate.interpn``.
+                Supported values: ``'linear'`` (default) and ``'nearest'``.
+            fill_value: Value returned for query points that fall outside the
+                image domain.  Default ``0.0``.
+
+        Returns:
+            np.ndarray: Interpolated values with shape ``(C, N)`` where *C* is
+            the number of image channels and *N* is the number of query points.
+
+        Notes:
+            - Coordinates must be in the same physical space as the image (the
+              units are whatever the image metadata specifies, typically mm or µm).
+            - For zarr-backed images only the minimal set of data blocks that
+              cover the query points is loaded; the full array is never read into
+              memory.
+            - For non-zarr-backed (in-memory / pure-dask) images the bounding
+              box of all query points is computed and only that subregion is
+              materialised via ``dask.compute()``.
+            - Points outside the image domain receive ``fill_value``.
+
+        Examples:
+            >>> import numpy as np
+            >>> from zarrnii import ZarrNii
+            >>> znii = ZarrNii.from_ome_zarr("image.zarr")
+            >>> # Sample at three physical locations
+            >>> pts = np.array([[0.0, 0.0, 0.0],
+            ...                 [1.0, 1.0, 1.0],
+            ...                 [2.0, 2.0, 2.0]])   # shape (3, 3)
+            >>> values = znii.sample_at_points(pts)   # shape (C, 3)
+        """
+        # ---------------------------------------------------------------
+        # 1. Normalize input to shape (N, 3), xyz order
+        # ---------------------------------------------------------------
+        xyz = np.asarray(xyz_points, dtype=np.float64)
+        if xyz.ndim == 1:
+            if xyz.shape[0] != 3:
+                raise ValueError(
+                    f"1-D input must have exactly 3 elements (x, y, z), "
+                    f"got {xyz.shape[0]}"
+                )
+            xyz = xyz.reshape(1, 3)
+        elif xyz.ndim == 2:
+            if xyz.shape[1] == 3:
+                pass  # already (N, 3)
+            elif xyz.shape[0] == 3 and xyz.shape[1] != 3:
+                xyz = xyz.T  # (3, N) → (N, 3)
+            else:
+                raise ValueError(
+                    f"2-D input must be (N, 3) or (3, N), got shape {xyz.shape}"
+                )
+        else:
+            raise ValueError(f"Input must be a 1-D or 2-D array, got {xyz.ndim}-D")
+
+        n_points = xyz.shape[0]
+        n_channels = self.shape[0]
+
+        # Allocate output (C, N) filled with fill_value
+        results = np.full((n_channels, n_points), fill_value, dtype=np.float64)
+
+        if n_points == 0:
+            return results
+
+        # ---------------------------------------------------------------
+        # 2. Convert physical (x, y, z) → voxel coordinates in data order
+        # ---------------------------------------------------------------
+        # The XYZ affine maps (x, y, z) voxel indices → (x, y, z) physical.
+        # Its inverse converts physical → XYZ voxel indices.
+        affine_xyz = self.get_affine_matrix(axes_order="XYZ")
+        affine_xyz_inv = np.linalg.inv(affine_xyz)
+
+        xyz_homog = np.column_stack([xyz, np.ones(n_points)])  # (N, 4)
+        vox_xyz = (xyz_homog @ affine_xyz_inv.T)[:, :3]  # (N, 3) XYZ
+
+        # Convert to the data storage order (ZYX or XYZ)
+        if self.axes_order == "ZYX":
+            # Data array dims: (C, Z, Y, X) → query coords must be [z, y, x]
+            vox_data = vox_xyz[:, ::-1].copy()  # (N, 3): [z, y, x]
+        else:
+            # Data array dims: (C, X, Y, Z) → query coords stay as [x, y, z]
+            vox_data = vox_xyz.copy()
+
+        spatial_shape = np.array(self.shape[1:], dtype=int)  # (Z, Y, X) or (X, Y, Z)
+
+        # ---------------------------------------------------------------
+        # 3. Block-aware loading: group points by zarr chunk
+        # ---------------------------------------------------------------
+        store_info = self.get_zarr_store_info()
+
+        if store_info is not None:
+            import zarr
+
+            store_path = str(store_info["store_path"])
+            dataset_path = store_info["dataset_path"]
+
+            # Open the zarr store once and keep it open for all chunk reads
+            if _is_ome_zarr_zip_path(store_path):
+                _store = zarr.storage.ZipStore(store_path, mode="r")
+                root = zarr.open_group(_store, mode="r")
+            else:
+                _store = None
+                root = zarr.open_group(store_path, mode="r")
+
+            try:
+                arr = root[dataset_path]
+                # chunk_shape for spatial dims only (skip the channel dim)
+                chunk_shape = np.array(arr.chunks[1:], dtype=int)
+
+                # Assign each point to the chunk it falls in
+                chunk_indices = np.floor(vox_data / chunk_shape).astype(int)
+                unique_chunks = np.unique(chunk_indices, axis=0)
+
+                for chunk_idx in unique_chunks:
+                    mask = np.all(chunk_indices == chunk_idx, axis=1)
+                    chunk_points = vox_data[mask]  # (M, 3) in data order
+
+                    # Bounding box of this chunk's points + 1-voxel padding
+                    pad = 1
+                    min_ext = np.clip(
+                        np.floor(chunk_points.min(axis=0) - pad).astype(int),
+                        0,
+                        spatial_shape,
+                    )
+                    max_ext = np.clip(
+                        np.ceil(chunk_points.max(axis=0) + pad).astype(int),
+                        0,
+                        spatial_shape,
+                    )
+
+                    if np.any(max_ext <= min_ext):
+                        # All points in this group are outside the image bounds
+                        continue
+
+                    subvol = np.asarray(
+                        arr[
+                            :,
+                            min_ext[0] : max_ext[0],
+                            min_ext[1] : max_ext[1],
+                            min_ext[2] : max_ext[2],
+                        ]
+                    )
+
+                    grid = tuple(np.arange(min_ext[i], max_ext[i]) for i in range(3))
+
+                    for c in range(n_channels):
+                        results[c, mask] = interpn(
+                            grid,
+                            subvol[c],
+                            chunk_points,
+                            method=method,
+                            bounds_error=False,
+                            fill_value=fill_value,
+                        )
+
+            finally:
+                if _store is not None:
+                    _store.close()
+
+        else:
+            # ---------------------------------------------------------------
+            # 4. Fallback: load only the bounding box of all query points
+            # ---------------------------------------------------------------
+            pad = 1
+            min_ext = np.clip(
+                np.floor(vox_data.min(axis=0) - pad).astype(int),
+                0,
+                spatial_shape,
+            )
+            max_ext = np.clip(
+                np.ceil(vox_data.max(axis=0) + pad).astype(int),
+                0,
+                spatial_shape,
+            )
+
+            if np.any(max_ext <= min_ext):
+                return results  # All points outside the image domain
+
+            subvol = self.darr[
+                :,
+                min_ext[0] : max_ext[0],
+                min_ext[1] : max_ext[1],
+                min_ext[2] : max_ext[2],
+            ].compute()
+
+            grid = tuple(np.arange(min_ext[i], max_ext[i]) for i in range(3))
+
+            for c in range(n_channels):
+                results[c] = interpn(
+                    grid,
+                    subvol[c],
+                    vox_data,
+                    method=method,
+                    bounds_error=False,
+                    fill_value=fill_value,
+                )
+
+        return results
+
     def apply_transform(
         self,
         *transforms: Transform,
