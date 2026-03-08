@@ -1205,6 +1205,79 @@ def _select_dimensions_from_image_with_omero(
     return selected_ngff_image, filtered_omero
 
 
+def _interp_chunk_from_zarr(
+    store_path: str,
+    dataset_path: str,
+    is_zip: bool,
+    min_ext: np.ndarray,
+    max_ext: np.ndarray,
+    chunk_points: np.ndarray,
+    mask_indices: np.ndarray,
+    n_channels: int,
+    method: str,
+    fill_value: float,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Interpolate image values for one group of query points from a zarr store.
+
+    This function is designed to be called via ``dask.delayed`` so that multiple
+    chunks are processed in parallel.
+
+    Parameters:
+        store_path: Path or URI to the zarr store.
+        dataset_path: Path to the dataset within the zarr group.
+        is_zip: Whether the store is a ZIP archive.
+        min_ext: (3,) int array – lower bound of the subregion to load (inclusive).
+        max_ext: (3,) int array – upper bound of the subregion to load (exclusive).
+        chunk_points: (M, 3) float array of query voxel coordinates for this chunk.
+        mask_indices: (M,) int array of original point indices for this chunk.
+        n_channels: Number of image channels.
+        method: Interpolation method (``'linear'`` or ``'nearest'``).
+        fill_value: Value for out-of-bounds points.
+
+    Returns:
+        Tuple of (mask_indices, chunk_results) where ``chunk_results`` has shape
+        ``(n_channels, M)``.
+    """
+    import zarr
+    from scipy.interpolate import interpn
+
+    _store = None
+    try:
+        if is_zip:
+            _store = zarr.storage.ZipStore(store_path, mode="r")
+            root = zarr.open_group(_store, mode="r")
+        else:
+            # Directory / remote stores don't require explicit close()
+            _store = zarr.open_group(store_path, mode="r")
+            root = _store
+
+        arr = root[dataset_path]
+        subvol = np.asarray(
+            arr[
+                :,
+                min_ext[0] : max_ext[0],
+                min_ext[1] : max_ext[1],
+                min_ext[2] : max_ext[2],
+            ]
+        )
+    finally:
+        if is_zip and _store is not None:
+            _store.close()
+
+    grid = tuple(np.arange(min_ext[i], max_ext[i]) for i in range(3))
+    chunk_results = np.empty((n_channels, len(mask_indices)), dtype=np.float64)
+    for c in range(n_channels):
+        chunk_results[c] = interpn(
+            grid,
+            subvol[c],
+            chunk_points,
+            method=method,
+            bounds_error=False,
+            fill_value=fill_value,
+        )
+    return mask_indices, chunk_results
+
+
 def get_bounded_subregion_from_zarr(
     points: np.ndarray,
     store_path: str,
@@ -3364,78 +3437,79 @@ class ZarrNii:
         spatial_shape = np.array(self.shape[1:], dtype=int)  # (Z, Y, X) or (X, Y, Z)
 
         # ---------------------------------------------------------------
-        # 3. Block-aware loading: group points by zarr chunk
+        # 3. Block-aware loading: group points by zarr chunk (parallel)
         # ---------------------------------------------------------------
         store_info = self.get_zarr_store_info()
 
         if store_info is not None:
+            import dask
             import zarr
 
             store_path = str(store_info["store_path"])
             dataset_path = store_info["dataset_path"]
+            is_zip = _is_ome_zarr_zip_path(store_path)
 
-            # Open the zarr store once and keep it open for all chunk reads
-            if _is_ome_zarr_zip_path(store_path):
-                _store = zarr.storage.ZipStore(store_path, mode="r")
-                root = zarr.open_group(_store, mode="r")
+            # Open store briefly to read chunk shape metadata, then close
+            if is_zip:
+                _meta_store = zarr.storage.ZipStore(store_path, mode="r")
+                try:
+                    _root = zarr.open_group(_meta_store, mode="r")
+                    chunk_shape = np.array(_root[dataset_path].chunks[1:], dtype=int)
+                finally:
+                    _meta_store.close()
             else:
-                _store = None
-                root = zarr.open_group(store_path, mode="r")
+                # Directory / remote stores don't require explicit close()
+                _root = zarr.open_group(store_path, mode="r")
+                chunk_shape = np.array(_root[dataset_path].chunks[1:], dtype=int)
 
-            try:
-                arr = root[dataset_path]
-                # chunk_shape for spatial dims only (skip the channel dim)
-                chunk_shape = np.array(arr.chunks[1:], dtype=int)
+            # Assign each point to the chunk it falls in
+            chunk_indices = np.floor(vox_data / chunk_shape).astype(int)
+            unique_chunks = np.unique(chunk_indices, axis=0)
 
-                # Assign each point to the chunk it falls in
-                chunk_indices = np.floor(vox_data / chunk_shape).astype(int)
-                unique_chunks = np.unique(chunk_indices, axis=0)
+            # Build one delayed task per unique chunk
+            delayed_tasks = []
+            for chunk_idx in unique_chunks:
+                mask = np.all(chunk_indices == chunk_idx, axis=1)
+                chunk_points = vox_data[mask]  # (M, 3) in data order
+                mask_indices = np.where(mask)[0]
 
-                for chunk_idx in unique_chunks:
-                    mask = np.all(chunk_indices == chunk_idx, axis=1)
-                    chunk_points = vox_data[mask]  # (M, 3) in data order
+                # Bounding box of this chunk's points + 1-voxel padding
+                pad = 1
+                min_ext = np.clip(
+                    np.floor(chunk_points.min(axis=0) - pad).astype(int),
+                    0,
+                    spatial_shape,
+                )
+                max_ext = np.clip(
+                    np.ceil(chunk_points.max(axis=0) + pad).astype(int),
+                    0,
+                    spatial_shape,
+                )
 
-                    # Bounding box of this chunk's points + 1-voxel padding
-                    pad = 1
-                    min_ext = np.clip(
-                        np.floor(chunk_points.min(axis=0) - pad).astype(int),
-                        0,
-                        spatial_shape,
+                if np.any(max_ext <= min_ext):
+                    # All points in this group are outside the image bounds
+                    continue
+
+                delayed_tasks.append(
+                    dask.delayed(_interp_chunk_from_zarr)(
+                        store_path,
+                        dataset_path,
+                        is_zip,
+                        min_ext,
+                        max_ext,
+                        chunk_points,
+                        mask_indices,
+                        n_channels,
+                        method,
+                        fill_value,
                     )
-                    max_ext = np.clip(
-                        np.ceil(chunk_points.max(axis=0) + pad).astype(int),
-                        0,
-                        spatial_shape,
-                    )
+                )
 
-                    if np.any(max_ext <= min_ext):
-                        # All points in this group are outside the image bounds
-                        continue
-
-                    subvol = np.asarray(
-                        arr[
-                            :,
-                            min_ext[0] : max_ext[0],
-                            min_ext[1] : max_ext[1],
-                            min_ext[2] : max_ext[2],
-                        ]
-                    )
-
-                    grid = tuple(np.arange(min_ext[i], max_ext[i]) for i in range(3))
-
-                    for c in range(n_channels):
-                        results[c, mask] = interpn(
-                            grid,
-                            subvol[c],
-                            chunk_points,
-                            method=method,
-                            bounds_error=False,
-                            fill_value=fill_value,
-                        )
-
-            finally:
-                if _store is not None:
-                    _store.close()
+            # Execute all chunk tasks in parallel and assemble results.
+            # If delayed_tasks is empty (all points outside bounds) results
+            # already hold fill_value so the loop body simply never runs.
+            for mask_indices_out, chunk_results in dask.compute(*delayed_tasks):
+                results[:, mask_indices_out] = chunk_results
 
         else:
             # ---------------------------------------------------------------
