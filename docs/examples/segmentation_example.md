@@ -5,7 +5,7 @@ This example demonstrates how to use the segmentation plugin system in ZarrNii. 
 ## Plugin Architecture Overview
 
 ZarrNii's segmentation plugins use pluggy hook specifications and implementations:
-- **Hook specifications** are defined in `zarrnii_plugin_api` (a lightweight package with only a `pluggy` dependency)
+- **Hook specifications** are defined in `zarrnii.plugins` (the core `zarrnii` package)
 - **Hook implementations** (using `@hookimpl` decorator) provide the actual functionality
 - Plugins are plain Python classes — no inheritance from any base class is required
 - Plugins can be used directly or registered with the plugin manager for discovery
@@ -63,10 +63,10 @@ result_data = segmented.data.compute()
 
 ## Creating Custom Segmentation Plugins
 
-You can create your own segmentation plugins as plain Python classes using the `@hookimpl` decorator from `zarrnii_plugin_api`. **No inheritance is required.**
+You can create your own segmentation plugins as plain Python classes using the `@hookimpl` decorator from `zarrnii.plugins`. **No inheritance is required.**
 
 ```python
-from zarrnii_plugin_api import hookimpl
+from zarrnii.plugins import hookimpl
 import numpy as np
 
 class ThresholdSegmentation:
@@ -123,7 +123,7 @@ print(f"Registered {len(registered_plugins)} plugins")
 
 ## External Segmentation Plugin Development
 
-External plugins allow you to package and distribute your custom segmentation algorithms as separate Python packages. They only need `zarrnii_plugin_api` as a dependency — no dependency on `zarrnii` core is required.
+External plugins allow you to package and distribute your custom segmentation algorithms as separate Python packages. They only need `zarrnii` as a dependency.
 
 ### Step 1: Create Your Plugin Package Structure
 
@@ -141,7 +141,7 @@ In `adaptive_threshold.py`:
 
 ```python
 """Adaptive threshold segmentation plugin."""
-from zarrnii_plugin_api import hookimpl
+from zarrnii.plugins import hookimpl
 import numpy as np
 from skimage.filters import threshold_local
 
@@ -232,8 +232,7 @@ name = "my-segmentation-plugin"
 version = "0.1.0"
 description = "Adaptive threshold segmentation plugin for ZarrNii"
 dependencies = [
-    # Only zarrnii_plugin_api is needed — no zarrnii dependency!
-    "zarrnii_plugin_api>=0.1.0",
+    "zarrnii>=0.1.0",
     "scikit-image>=0.21.0",
 ]
 

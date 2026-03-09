@@ -9,29 +9,29 @@ import dask.array as da
 import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
-from zarrnii_plugin_api import hookimpl
 
 from zarrnii import ZarrNii
+from zarrnii.plugins import hookimpl
 
 
 class TestPluginApiImport:
-    """Test that zarrnii_plugin_api can be imported independently."""
+    """Test that zarrnii.plugins exports the expected markers."""
 
     def test_hookimpl_importable(self):
-        """Test that hookimpl can be imported from zarrnii_plugin_api."""
-        from zarrnii_plugin_api import hookimpl
+        """Test that hookimpl can be imported from zarrnii.plugins."""
+        from zarrnii.plugins import hookimpl
 
         assert hookimpl is not None
 
     def test_hookspec_importable(self):
-        """Test that hookspec can be imported from zarrnii_plugin_api."""
-        from zarrnii_plugin_api import hookspec
+        """Test that hookspec can be imported from zarrnii.plugins."""
+        from zarrnii.plugins import hookspec
 
         assert hookspec is not None
 
     def test_zarrnispec_importable(self):
-        """Test that ZarrNiiSpec can be imported from zarrnii_plugin_api."""
-        from zarrnii_plugin_api import ZarrNiiSpec
+        """Test that ZarrNiiSpec can be imported from zarrnii.plugins."""
+        from zarrnii.plugins.hookspecs import ZarrNiiSpec
 
         assert ZarrNiiSpec is not None
 

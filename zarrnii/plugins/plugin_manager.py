@@ -8,7 +8,8 @@ using the pluggy framework.
 from __future__ import annotations
 
 import pluggy
-from zarrnii_plugin_api import ZarrNiiSpec
+
+from .hookspecs import ZarrNiiSpec
 
 
 def get_plugin_manager() -> pluggy.PluginManager:

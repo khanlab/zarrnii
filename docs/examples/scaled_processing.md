@@ -15,7 +15,7 @@ ZarrNii uses the [pluggy](https://pluggy.readthedocs.io/) framework for its plug
 
 ## Plugin Interface
 
-All scaled processing plugins are plain Python classes that implement the required hook methods using the `@hookimpl` decorator from `zarrnii_plugin_api`. **No inheritance from any base class is required.**
+All scaled processing plugins are plain Python classes that implement the required hook methods using the `@hookimpl` decorator from `zarrnii.plugins`. **No inheritance from any base class is required.**
 
 ### `lowres_func(lowres_array: np.ndarray) -> np.ndarray`
 
@@ -111,7 +111,7 @@ Parameters:
 You can create custom plugins as plain Python classes by implementing the required hook methods with `@hookimpl`. **No base class inheritance is required.**
 
 ```python
-from zarrnii_plugin_api import hookimpl
+from zarrnii.plugins import hookimpl
 import numpy as np
 import dask.array as da
 from scipy import ndimage
@@ -165,7 +165,7 @@ pm.register(plugin)
 
 ## External Plugin Development
 
-External plugins allow you to package and distribute your custom plugins as separate Python packages that can be discovered and used by ZarrNii. They only need `zarrnii_plugin_api` as a dependency — no dependency on `zarrnii` core is required.
+External plugins allow you to package and distribute your custom plugins as separate Python packages that can be discovered and used by ZarrNii. They only need `zarrnii` as a dependency.
 
 ### Step 1: Create Your Plugin Package
 
@@ -185,7 +185,7 @@ In `my_plugin.py`:
 
 ```python
 """Custom external plugin for ZarrNii."""
-from zarrnii_plugin_api import hookimpl
+from zarrnii.plugins import hookimpl
 import numpy as np
 import dask.array as da
 from scipy import ndimage
@@ -263,8 +263,7 @@ name = "my-zarrnii-plugin"
 version = "0.1.0"
 description = "My custom ZarrNii processing plugin"
 dependencies = [
-    # Only zarrnii_plugin_api is needed — no zarrnii dependency!
-    "zarrnii_plugin_api>=0.1.0",
+    "zarrnii>=0.1.0",
     "scipy>=1.11.0",
 ]
 
