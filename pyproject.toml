@@ -32,7 +32,6 @@ dependencies = [
     "pyyaml>=6.0",
     "ome-zarr>=0.12.0",
     "pluggy>=1.0.0",
-    "zarrnii-plugin-api",
 ]
 
 [project.optional-dependencies]
@@ -92,13 +91,6 @@ version-file = "zarrnii/_version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["zarrnii"]
 
-[tool.uv.workspace]
-members = ["packages/*"]
-
-[tool.uv.sources]
-zarrnii-plugin-api = { workspace = true }
-
-
 [tool.flake8]
 max-line-length = 88  # Matches Black's default line length
 extend-ignore = ["E203", "W503"]  # Compatibility with Black
@@ -113,7 +105,7 @@ force-exclude = '_version.py'
 [tool.isort]
 profile = "black"  # Ensure compatibility with Black
 line_length = 88
-skip_glob = ["zarrnii/_version.py","packages/zarrnii_plugin_api/zarrnii_plugin_api/_version.py"]
+skip_glob = ["zarrnii/_version.py"]
 skip = [".pixi",".venv"]
 
 [tool.coverage.run]

@@ -5148,7 +5148,7 @@ class ZarrNii:
         Args:
             plugin: Segmentation plugin instance or class to apply.  The plugin
                 must have a ``segment(image, metadata=None)`` method decorated
-                with ``@hookimpl`` from :mod:`zarrnii_plugin_api`.
+                with ``@hookimpl`` from :mod:`zarrnii.plugins`.
             chunk_size: Optional chunk size for dask processing. If None, uses current chunks.
             **kwargs: Additional arguments passed to the plugin when *plugin* is a class.
 
@@ -5637,7 +5637,7 @@ class ZarrNii:
                 ``lowres_func(lowres_array: np.ndarray) -> np.ndarray`` and
                 ``highres_func(fullres_block: np.ndarray, upsampled_block:
                 np.ndarray) -> np.ndarray`` methods decorated with ``@hookimpl``
-                from :mod:`zarrnii_plugin_api`.
+                from :mod:`zarrnii.plugins`.
             downsample_factor: Factor for downsampling (default: 4)
             **kwargs: Additional arguments passed to the plugin constructor when
                 *plugin* is a class.  Passing kwargs together with a plugin

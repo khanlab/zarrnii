@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import numpy as np
 from skimage.measure import label, regionprops
-from zarrnii_plugin_api import hookimpl
+
+from zarrnii.plugins.markers import hookimpl
 
 
 class SegmentationCleaner:

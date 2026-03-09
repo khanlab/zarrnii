@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import numpy as np
 from scipy import ndimage
-from zarrnii_plugin_api import hookimpl
+
+from zarrnii.plugins.markers import hookimpl
 
 
 class GaussianBiasFieldCorrection:

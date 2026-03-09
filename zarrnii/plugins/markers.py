@@ -1,12 +1,12 @@
 """
-ZarrNii Plugin API.
+Pluggy hook markers for ZarrNii plugins.
 
-Minimal package for writing ZarrNii plugins.  Only ``pluggy`` is required —
-no dependency on the core ``zarrnii`` package is needed.
+This module defines the hook implementation and specification markers
+used by ZarrNii plugins.
 
-Usage::
+Example::
 
-    from zarrnii_plugin_api import hookimpl
+    from zarrnii.plugins import hookimpl
 
     class MySegmentationPlugin:
 
@@ -25,8 +25,10 @@ Usage::
 
 import pluggy
 
-from .hookspecs import ZarrNiiSpec, hookspec
-
+#: Hook implementation marker for ZarrNii plugins.
 hookimpl = pluggy.HookimplMarker("zarrnii")
 
-__all__ = ["hookspec", "hookimpl", "ZarrNiiSpec"]
+#: Hook specification marker for ZarrNii hook specs.
+hookspec = pluggy.HookspecMarker("zarrnii")
+
+__all__ = ["hookimpl", "hookspec"]
