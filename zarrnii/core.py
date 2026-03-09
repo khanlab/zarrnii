@@ -5664,10 +5664,10 @@ class ZarrNii:
             # Interpolate lowres_result at these coordinates
             # For spatial dims, use scipy.ndimage.map_coordinates for efficiency
             from scipy.ndimage import map_coordinates
-            
+
             upsampled_block = np.empty_like(block, dtype=np.float32)
 
-            for c_idx, c in enumerate(range(arr_loc[0][0], arr_loc[0][1])): 
+            for c_idx, c in enumerate(range(arr_loc[0][0], arr_loc[0][1])):
                 # Build coordinate arrays for this channel's spatial block
                 spatial_slices = slices[1:]  # skip channel dim
                 grids = np.meshgrid(*spatial_slices, indexing="ij")
@@ -5693,8 +5693,6 @@ class ZarrNii:
         )
 
         return corrected_znimg
-
-
 
     def __repr__(self) -> str:
         """String representation."""
