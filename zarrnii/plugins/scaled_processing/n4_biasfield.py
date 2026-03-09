@@ -8,9 +8,6 @@ resolution data.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-
-import dask.array as da
 import numpy as np
 from zarrnii_plugin_api import hookimpl
 
@@ -153,8 +150,8 @@ class N4BiasFieldCorrection:
 
     @hookimpl
     def highres_func(
-        self, fullres_array: da.Array, upsampled_output: da.Array
-    ) -> da.Array:
+        self, fullres_array: np.ndarray, upsampled_output: np.ndarray
+    ) -> np.ndarray:
         """
         Apply bias field correction to full-resolution data.
 
@@ -162,18 +159,18 @@ class N4BiasFieldCorrection:
         fullres_array) and applies it to the full-resolution data by division.
 
         Args:
-            fullres_array: Full-resolution dask array
+            fullres_array: Full-resolution NumPy array (one block)
             upsampled_output: Upsampled bias field (same shape as fullres)
 
         Returns:
-            Bias-corrected full-resolution array
+            Bias-corrected full-resolution array (float32)
         """
-        # Apply bias field correction by division using dask operations
-        # Avoid division by zero by adding small epsilon
+        # Apply bias field correction by division using NumPy operations.
+        # Avoid division by zero by clamping the bias field to a small epsilon.
         epsilon = np.finfo(np.float32).eps
-        corrected_array = fullres_array / da.maximum(upsampled_output, epsilon)
+        corrected_array = fullres_array / np.maximum(upsampled_output, epsilon)
 
-        return corrected_array
+        return corrected_array.astype(np.float32)
 
     @hookimpl
     def scaled_processing_plugin_name(self) -> str:
