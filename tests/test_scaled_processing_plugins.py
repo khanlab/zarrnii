@@ -59,18 +59,14 @@ class TestScaledProcessingPlugin:
         assert lowres_result.shape == test_lowres.shape
         np.testing.assert_array_equal(lowres_result, test_lowres)
 
-        # Test highres function - now both arrays should be same size
-        test_fullres = da.from_array(
-            np.random.rand(20, 20).astype(np.float32), chunks=(10, 10)
-        )
+        # Test highres function - now both arrays are NumPy arrays (block-level)
+        test_fullres = np.random.rand(20, 20).astype(np.float32)
         # Create upsampled version (same size as fullres for new interface)
-        upsampled_result = da.from_array(lowres_result, chunks=(10, 10))
+        upsampled_result = lowres_result
         highres_result = plugin.highres_func(test_fullres, upsampled_result)
         assert highres_result.shape == test_fullres.shape
         # Result should be double the original
-        np.testing.assert_array_almost_equal(
-            highres_result.compute(), test_fullres.compute() * 2
-        )
+        np.testing.assert_array_almost_equal(highres_result, test_fullres * 2)
 
 
 class TestGaussianBiasFieldCorrection:
@@ -134,13 +130,9 @@ class TestGaussianBiasFieldCorrection:
         """Test the highres_func with upsampled bias field."""
         plugin = GaussianBiasFieldCorrection()
 
-        # Create test data - both arrays same size now
-        fullres_data = (
-            da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 100
-        )  # Original image
-        upsampled_bias = (
-            da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 2
-        )  # Upsampled bias field (same size as fullres)
+        # Create test data - both arrays are NumPy arrays (block-level)
+        fullres_data = np.ones((40, 40), dtype=np.float32) * 100  # Original image
+        upsampled_bias = np.ones((40, 40), dtype=np.float32) * 2  # Upsampled bias field
 
         result = plugin.highres_func(fullres_data, upsampled_bias)
 
@@ -148,28 +140,22 @@ class TestGaussianBiasFieldCorrection:
         assert result.shape == fullres_data.shape
 
         # Result should be approximately original divided by bias (100/2 = 50)
-        result_computed = result.compute()
         expected = 50.0
-        assert_array_almost_equal(
-            result_computed, np.full_like(result_computed, expected), decimal=1
-        )
+        assert_array_almost_equal(result, np.full_like(result, expected), decimal=1)
 
     def test_highres_func_division_by_zero_protection(self):
         """Test highres_func protects against division by zero."""
         plugin = GaussianBiasFieldCorrection()
 
         # Test with some zero values in bias field
-        fullres_data = da.ones((20, 20), chunks=(10, 10), dtype=np.float32) * 100
-        upsampled_bias = da.zeros(
-            (20, 20), chunks=(10, 10), dtype=np.float32
-        )  # All zeros
+        fullres_data = np.ones((20, 20), dtype=np.float32) * 100
+        upsampled_bias = np.zeros((20, 20), dtype=np.float32)  # All zeros
 
         result = plugin.highres_func(fullres_data, upsampled_bias)
 
         assert result.shape == fullres_data.shape
         # Should not result in inf values
-        result_computed = result.compute()
-        assert np.all(np.isfinite(result_computed))
+        assert np.all(np.isfinite(result))
 
 
 class TestZarrNiiScaledProcessingIntegration:
@@ -251,48 +237,38 @@ class TestZarrNiiScaledProcessingIntegration:
             znimg.apply_scaled_processing("not_a_plugin")
 
     @pytest.mark.usefixtures("cleandir")
-    def test_apply_scaled_processing_with_custom_chunks(self, nifti_nib):
-        """Test apply_scaled_processing with custom chunk size (spatial dimensions only)."""
+    def test_apply_scaled_processing_basic(self, nifti_nib):
+        """Test apply_scaled_processing basic usage with a plugin instance."""
         nifti_nib.to_filename("test.nii")
         znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
 
         plugin = GaussianBiasFieldCorrection(sigma=1.0)
-        # chunk_size now only specifies spatial dimensions (Z, Y, X)
-        result = znimg.apply_scaled_processing(
-            plugin, downsample_factor=2, chunk_size=(32, 32, 32)
-        )
+        # map_blocks approach does not need a chunk_size parameter
+        result = znimg.apply_scaled_processing(plugin, downsample_factor=2)
 
         assert isinstance(result, ZarrNii)
         assert result.shape == znimg.shape
 
     @pytest.mark.usefixtures("cleandir")
-    def test_apply_scaled_processing_temp_zarr_options(self, nifti_nib):
-        """Test apply_scaled_processing with temp zarr options."""
+    def test_apply_scaled_processing_unknown_kwargs_with_instance_raises(
+        self, nifti_nib
+    ):
+        """Test apply_scaled_processing raises TypeError for unknown kwargs with instance."""
         nifti_nib.to_filename("test.nii")
         znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
 
         plugin = GaussianBiasFieldCorrection(sigma=1.0)
 
-        # Test with temp zarr disabled
-        result1 = znimg.apply_scaled_processing(
-            plugin, downsample_factor=2, use_temp_zarr=False
-        )
-        assert isinstance(result1, ZarrNii)
-        assert result1.shape == znimg.shape
-
-        # Test with custom temp zarr path
-        import os
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = os.path.join(temp_dir, "custom_temp.ome.zarr")
-            result2 = znimg.apply_scaled_processing(
-                plugin, downsample_factor=2, temp_zarr_path=temp_path
+        # Passing unknown kwargs with an instance should raise TypeError
+        with pytest.raises(TypeError, match="unexpected keyword arguments"):
+            znimg.apply_scaled_processing(
+                plugin, downsample_factor=2, use_temp_zarr=False
             )
-            assert isinstance(result2, ZarrNii)
-            assert result2.shape == znimg.shape
-            # Temp file should be cleaned up
-            assert not os.path.exists(temp_path)
+
+        with pytest.raises(TypeError, match="unexpected keyword arguments"):
+            znimg.apply_scaled_processing(
+                plugin, downsample_factor=2, temp_zarr_path="/tmp/test.zarr"
+            )
 
     @pytest.mark.usefixtures("cleandir")
     def test_apply_scaled_processing_5d_data(self):
@@ -315,8 +291,8 @@ class TestZarrNiiScaledProcessingIntegration:
         assert len(result.dims) == 5
 
     @pytest.mark.usefixtures("cleandir")
-    def test_apply_scaled_processing_5d_data_custom_chunks(self):
-        """Test apply_scaled_processing with 5D data and custom spatial chunks."""
+    def test_apply_scaled_processing_5d_data_plugin_instance_with_invalid_kwargs(self):
+        """Test apply_scaled_processing raises TypeError when kwargs passed with instance."""
         # Create 5D test data with singleton time and channel dimensions
         data_5d = np.random.rand(1, 1, 20, 20, 20).astype(np.float32) * 100
         dask_data = da.from_array(data_5d, chunks=(1, 1, 10, 10, 10))
@@ -327,14 +303,11 @@ class TestZarrNiiScaledProcessingIntegration:
 
         plugin = GaussianBiasFieldCorrection(sigma=1.0)
 
-        # Test with custom spatial chunk size (only Z, Y, X)
-        result = znimg_5d.apply_scaled_processing(
-            plugin, downsample_factor=2, chunk_size=(16, 16, 16)
-        )
-
-        assert isinstance(result, ZarrNii)
-        assert result.shape == znimg_5d.shape
-        assert len(result.dims) == 5
+        # Passing extra kwargs with a plugin instance should raise TypeError
+        with pytest.raises(TypeError, match="unexpected keyword arguments"):
+            znimg_5d.apply_scaled_processing(
+                plugin, downsample_factor=2, chunk_size=(16, 16, 16)
+            )
 
 
 class TestScaledProcessingWorkflow:
@@ -465,9 +438,9 @@ class TestN4BiasFieldCorrection:
 
         plugin = N4BiasFieldCorrection()
 
-        # Create test data - both arrays same size
-        fullres_data = da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 100
-        upsampled_bias = da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 2
+        # Create test data - both arrays are NumPy arrays (block-level)
+        fullres_data = np.ones((40, 40), dtype=np.float32) * 100
+        upsampled_bias = np.ones((40, 40), dtype=np.float32) * 2
 
         result = plugin.highres_func(fullres_data, upsampled_bias)
 
@@ -475,11 +448,8 @@ class TestN4BiasFieldCorrection:
         assert result.shape == fullres_data.shape
 
         # Result should be approximately original divided by bias (100/2 = 50)
-        result_computed = result.compute()
         expected = 50.0
-        assert_array_almost_equal(
-            result_computed, np.full_like(result_computed, expected), decimal=1
-        )
+        assert_array_almost_equal(result, np.full_like(result, expected), decimal=1)
 
     @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
     def test_n4_highres_func_division_by_zero_protection(self):
@@ -489,15 +459,14 @@ class TestN4BiasFieldCorrection:
         plugin = N4BiasFieldCorrection()
 
         # Test with some zero values in bias field
-        fullres_data = da.ones((20, 20), chunks=(10, 10), dtype=np.float32) * 100
-        upsampled_bias = da.zeros((20, 20), chunks=(10, 10), dtype=np.float32)
+        fullres_data = np.ones((20, 20), dtype=np.float32) * 100
+        upsampled_bias = np.zeros((20, 20), dtype=np.float32)
 
         result = plugin.highres_func(fullres_data, upsampled_bias)
 
         assert result.shape == fullres_data.shape
         # Should not result in inf values
-        result_computed = result.compute()
-        assert np.all(np.isfinite(result_computed))
+        assert np.all(np.isfinite(result))
 
     def test_n4_plugin_repr(self):
         """Test N4 plugin string representation."""
@@ -671,17 +640,12 @@ class TestSegmentationCleaner:
 
         plugin = SegmentationCleaner(exclusion_threshold=50)
 
-        # Create full-resolution segmentation data
-        fullres_data = da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 100
+        # Create full-resolution segmentation data as NumPy arrays (block-level)
+        fullres_data = np.ones((40, 40), dtype=np.float32) * 100
 
-        # Create upsampled exclusion mask
-        # Mark some regions for exclusion (value 100)
-        upsampled_mask = da.zeros((40, 40), chunks=(20, 20), dtype=np.uint8)
-        upsampled_mask = da.where(
-            (da.arange(40).reshape(-1, 1) < 20) & (da.arange(40).reshape(1, -1) < 20),
-            100,
-            0,
-        )
+        # Create upsampled exclusion mask: top-left quadrant is excluded (value 100)
+        upsampled_mask = np.zeros((40, 40), dtype=np.uint8)
+        upsampled_mask[:20, :20] = 100
 
         result = plugin.highres_func(fullres_data, upsampled_mask)
 
@@ -689,12 +653,11 @@ class TestSegmentationCleaner:
         assert result.shape == fullres_data.shape
 
         # Check that excluded regions are zeroed
-        result_computed = result.compute()
         # Top-left quadrant should be zero (excluded)
-        assert np.all(result_computed[:20, :20] == 0)
+        assert np.all(result[:20, :20] == 0)
         # Other regions should remain at 100
-        assert np.all(result_computed[20:, :] == 100)
-        assert np.all(result_computed[:, 20:] == 100)
+        assert np.all(result[20:, :] == 100)
+        assert np.all(result[:, 20:] == 100)
 
     def test_highres_func_threshold_boundary(self):
         """Test highres_func threshold behavior."""
@@ -704,22 +667,19 @@ class TestSegmentationCleaner:
 
         plugin = SegmentationCleaner(exclusion_threshold=50)
 
-        # Create full-resolution data
-        fullres_data = da.ones((20, 20), chunks=(10, 10), dtype=np.float32) * 100
+        # Create full-resolution data as NumPy arrays (block-level)
+        fullres_data = np.ones((20, 20), dtype=np.float32) * 100
 
         # Create exclusion mask with values at threshold boundary
-        upsampled_mask = da.full((20, 20), 49, chunks=(10, 10), dtype=np.uint8)
-        upsampled_mask = da.where(
-            da.arange(20).reshape(-1, 1) < 10, 50, upsampled_mask
-        )  # Set half to exactly 50
+        upsampled_mask = np.full((20, 20), 49, dtype=np.uint8)
+        upsampled_mask[:10, :] = 50  # Set top half to exactly 50
 
         result = plugin.highres_func(fullres_data, upsampled_mask)
-        result_computed = result.compute()
 
         # Values >= 50 should be excluded (zeroed)
-        assert np.all(result_computed[:10, :] == 0)
+        assert np.all(result[:10, :] == 0)
         # Values < 50 should be preserved
-        assert np.all(result_computed[10:, :] == 100)
+        assert np.all(result[10:, :] == 100)
 
     def test_segmentation_cleaner_integration(self):
         """Test complete segmentation cleaning workflow."""
@@ -751,12 +711,9 @@ class TestSegmentationCleaner:
         # Should have some exclusion mask
         assert np.any(lowres_result > 0)
 
-        # Test highres function
-        fullres_data = da.from_array(test_data, chunks=(50, 50))
-        upsampled_mask = da.from_array(lowres_result, chunks=(50, 50))
-
-        highres_result = plugin.highres_func(fullres_data, upsampled_mask)
-        cleaned = highres_result.compute()
+        # Test highres function - now accepts/returns NumPy arrays
+        highres_result = plugin.highres_func(test_data, lowres_result)
+        cleaned = highres_result
 
         # Verify that data was cleaned
         assert cleaned.shape == test_data.shape
