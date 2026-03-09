@@ -9,7 +9,6 @@ resolution data.
 
 from __future__ import annotations
 
-import dask.array as da
 import numpy as np
 from skimage.measure import label, regionprops
 from zarrnii_plugin_api import hookimpl
@@ -123,8 +122,8 @@ class SegmentationCleaner:
 
     @hookimpl
     def highres_func(
-        self, fullres_array: da.Array, upsampled_output: da.Array
-    ) -> da.Array:
+        self, fullres_array: np.ndarray, upsampled_output: np.ndarray
+    ) -> np.ndarray:
         """
         Apply exclusion mask to full-resolution segmentation data.
 
@@ -132,18 +131,18 @@ class SegmentationCleaner:
         the full-resolution segmentation by zeroing out the excluded regions.
 
         Args:
-            fullres_array: Full-resolution segmentation dask array
+            fullres_array: Full-resolution segmentation NumPy array (one block)
             upsampled_output: Upsampled exclusion mask (same shape as fullres)
 
         Returns:
             Cleaned full-resolution segmentation array
         """
-        # Threshold the upsampled exclusion mask
-        # Values >= exclusion_threshold (e.g., 50) indicate regions to exclude
+        # Threshold the upsampled exclusion mask.
+        # Values >= exclusion_threshold (e.g., 50) indicate regions to exclude.
         exclusion_mask = upsampled_output >= self.exclusion_threshold
 
-        # Apply mask: set excluded regions to zero
-        cleaned_array = da.where(exclusion_mask, 0, fullres_array)
+        # Apply mask: set excluded regions to zero using NumPy operations
+        cleaned_array = np.where(exclusion_mask, 0, fullres_array)
 
         return cleaned_array
 
