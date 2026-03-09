@@ -5624,7 +5624,23 @@ class ZarrNii:
         downsample_factor: int = 4,
         **kwargs,
     ) -> "ZarrNii":
+        """
+        Apply scaled processing plugin using multi-resolution approach.
 
+        This method implements a multi-resolution processing pipeline where:
+        1. The image is downsampled for efficient computation
+        2. The plugin's lowres_func is applied to the downsampled data
+        3. The result is upsampled and highres_func applied in single map_blocks
+        Args:
+            plugin: Plugin instance or class to apply.  The plugin must have
+                ``lowres_func(lowres_array)`` and ``highres_func(fullres_array,
+                upsampled_output)`` methods decorated with ``@hookimpl`` from
+                :mod:`zarrnii_plugin_api`.
+            downsample_factor: Factor for downsampling (default: 4)
+            **kwargs: Additional arguments passed to the plugin when *plugin* is a class.
+        Returns:
+            New ZarrNii instance with processed data
+        """
         if isinstance(plugin, type):
             plugin = plugin(**kwargs)
 
