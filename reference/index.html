@@ -12501,7 +12501,7 @@ blockwise processing for efficient computation on large datasets.</p>
           <div class="doc-md-description">
             <p>Segmentation plugin instance or class to apply.  The plugin
 must have a <code>segment(image, metadata=None)</code> method decorated
-with <code>@hookimpl</code> from :mod:<code>zarrnii_plugin_api</code>.</p>
+with <code>@hookimpl</code> from :mod:<code>zarrnii.plugins</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -12622,7 +12622,7 @@ with <code>@hookimpl</code> from :mod:<code>zarrnii_plugin_api</code>.</p>
 <span class="sd">    Args:</span>
 <span class="sd">        plugin: Segmentation plugin instance or class to apply.  The plugin</span>
 <span class="sd">            must have a ``segment(image, metadata=None)`` method decorated</span>
-<span class="sd">            with ``@hookimpl`` from :mod:`zarrnii_plugin_api`.</span>
+<span class="sd">            with ``@hookimpl`` from :mod:`zarrnii.plugins`.</span>
 <span class="sd">        chunk_size: Optional chunk size for dask processing. If None, uses current chunks.</span>
 <span class="sd">        **kwargs: Additional arguments passed to the plugin when *plugin* is a class.</span>
 
@@ -14278,7 +14278,7 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 <code>lowres_func(lowres_array: np.ndarray) -&gt; np.ndarray</code> and
 <code>highres_func(fullres_block: np.ndarray, upsampled_block:
 np.ndarray) -&gt; np.ndarray</code> methods decorated with <code>@hookimpl</code>
-from :mod:<code>zarrnii_plugin_api</code>.</p>
+from :mod:<code>zarrnii.plugins</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -14450,7 +14450,7 @@ from :mod:<code>zarrnii_plugin_api</code>.</p>
 <span class="sd">            ``lowres_func(lowres_array: np.ndarray) -&gt; np.ndarray`` and</span>
 <span class="sd">            ``highres_func(fullres_block: np.ndarray, upsampled_block:</span>
 <span class="sd">            np.ndarray) -&gt; np.ndarray`` methods decorated with ``@hookimpl``</span>
-<span class="sd">            from :mod:`zarrnii_plugin_api`.</span>
+<span class="sd">            from :mod:`zarrnii.plugins`.</span>
 <span class="sd">        downsample_factor: Factor for downsampling (default: 4)</span>
 <span class="sd">        **kwargs: Additional arguments passed to the plugin constructor when</span>
 <span class="sd">            *plugin* is a class.  Passing kwargs together with a plugin</span>

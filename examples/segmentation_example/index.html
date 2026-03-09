@@ -1035,7 +1035,7 @@
 <p>This example demonstrates how to use the segmentation plugin system in ZarrNii. The plugin system is built on the <a href="https://pluggy.readthedocs.io/">pluggy</a> framework, providing a flexible and extensible architecture for implementing custom segmentation algorithms.</p>
 <h2 id="plugin-architecture-overview">Plugin Architecture Overview</h2>
 <p>ZarrNii's segmentation plugins use pluggy hook specifications and implementations:
-- <strong>Hook specifications</strong> are defined in <code>zarrnii_plugin_api</code> (a lightweight package with only a <code>pluggy</code> dependency)
+- <strong>Hook specifications</strong> are defined in <code>zarrnii.plugins</code> (the core <code>zarrnii</code> package)
 - <strong>Hook implementations</strong> (using <code>@hookimpl</code> decorator) provide the actual functionality
 - Plugins are plain Python classes — no inheritance from any base class is required
 - Plugins can be used directly or registered with the plugin manager for discovery</p>
@@ -1084,8 +1084,8 @@ segmented = znimg.segment_otsu(chunk_size=custom_chunks)
 result_data = segmented.data.compute()
 </code></pre>
 <h2 id="creating-custom-segmentation-plugins">Creating Custom Segmentation Plugins</h2>
-<p>You can create your own segmentation plugins as plain Python classes using the <code>@hookimpl</code> decorator from <code>zarrnii_plugin_api</code>. <strong>No inheritance is required.</strong></p>
-<pre><code class="language-python">from zarrnii_plugin_api import hookimpl
+<p>You can create your own segmentation plugins as plain Python classes using the <code>@hookimpl</code> decorator from <code>zarrnii.plugins</code>. <strong>No inheritance is required.</strong></p>
+<pre><code class="language-python">from zarrnii.plugins import hookimpl
 import numpy as np
 
 class ThresholdSegmentation:
@@ -1140,7 +1140,7 @@ registered_plugins = pm.get_plugins()
 print(f&quot;Registered {len(registered_plugins)} plugins&quot;)
 </code></pre>
 <h2 id="external-segmentation-plugin-development">External Segmentation Plugin Development</h2>
-<p>External plugins allow you to package and distribute your custom segmentation algorithms as separate Python packages. They only need <code>zarrnii_plugin_api</code> as a dependency — no dependency on <code>zarrnii</code> core is required.</p>
+<p>External plugins allow you to package and distribute your custom segmentation algorithms as separate Python packages. They only need <code>zarrnii</code> as a dependency.</p>
 <h3 id="step-1-create-your-plugin-package-structure">Step 1: Create Your Plugin Package Structure</h3>
 <pre><code>my_segmentation_plugin/
 ├── pyproject.toml
@@ -1151,7 +1151,7 @@ print(f&quot;Registered {len(registered_plugins)} plugins&quot;)
 <h3 id="step-2-implement-your-segmentation-plugin">Step 2: Implement Your Segmentation Plugin</h3>
 <p>In <code>adaptive_threshold.py</code>:</p>
 <pre><code class="language-python">&quot;&quot;&quot;Adaptive threshold segmentation plugin.&quot;&quot;&quot;
-from zarrnii_plugin_api import hookimpl
+from zarrnii.plugins import hookimpl
 import numpy as np
 from skimage.filters import threshold_local
 
@@ -1235,8 +1235,7 @@ name = &quot;my-segmentation-plugin&quot;
 version = &quot;0.1.0&quot;
 description = &quot;Adaptive threshold segmentation plugin for ZarrNii&quot;
 dependencies = [
-    # Only zarrnii_plugin_api is needed — no zarrnii dependency!
-    &quot;zarrnii_plugin_api&gt;=0.1.0&quot;,
+    &quot;zarrnii&gt;=0.1.0&quot;,
     &quot;scikit-image&gt;=0.21.0&quot;,
 ]
 
