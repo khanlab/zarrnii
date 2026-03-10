@@ -59,7 +59,7 @@ class TestNgffImageFunctions:
 
         assert ngff_image is not None
         assert ngff_image.data.shape == (1, 32, 64, 64)
-        assert ngff_image.dims == ["c", "z", "y", "x"]
+        assert list(ngff_image.dims) == ["c", "z", "y", "x"]
         assert ngff_image.scale["z"] == 2.0
         assert ngff_image.scale["y"] == 1.0
         assert ngff_image.scale["x"] == 1.0
@@ -86,7 +86,7 @@ class TestNgffImageFunctions:
             # Load back and verify
             reloaded = load_ngff_image(output_path, level=0)
             assert reloaded.data.shape == simple_ngff_image.data.shape
-            assert reloaded.dims == simple_ngff_image.dims
+            assert list(reloaded.dims) == list(simple_ngff_image.dims)
 
     def test_get_multiscales(self, temp_zarr_store):
         """Test getting full multiscales object."""
@@ -254,7 +254,7 @@ class TestOmeZarrWriter:
             # Load back and verify with load_ngff_image
             reloaded = load_ngff_image(output_path, level=0)
             assert reloaded.data.shape == simple_ngff_image.data.shape
-            assert reloaded.dims == simple_ngff_image.dims
+            assert list(reloaded.dims) == list(simple_ngff_image.dims)
 
     def test_save_ngff_image_with_ome_zarr_custom_scale_factors(
         self, simple_ngff_image
@@ -312,7 +312,7 @@ class TestOmeZarrWriter:
             # Load back from ZIP and verify
             reloaded = load_ngff_image(output_path, level=0)
             assert reloaded.data.shape == simple_ngff_image.data.shape
-            assert reloaded.dims == simple_ngff_image.dims
+            assert list(reloaded.dims) == list(simple_ngff_image.dims)
 
     def test_save_ngff_image_with_ome_zarr_no_pyramid(self, simple_ngff_image):
         """Test saving without pyramid levels (max_layer=0)."""
