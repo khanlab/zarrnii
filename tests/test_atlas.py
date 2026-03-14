@@ -1281,6 +1281,87 @@ class TestZarrNiiAtlasFileIO:
             assert len(atlas.labels_df) == 4
 
 
+class TestAxesUnitsPreservation:
+    """Test that axes_units metadata is preserved when creating new ZarrNii instances."""
+
+    @pytest.fixture
+    def atlas_with_mm_units(self):
+        """Create a ZarrNiiAtlas whose dseg has millimeter axes_units."""
+        import ngff_zarr as nz
+
+        shape = (1, 10, 10, 10)  # (c, z, y, x)
+        dseg_data = np.zeros(shape, dtype=np.int32)
+        dseg_data[0, :, :, :5] = 1
+        dseg_data[0, :5, :, 5:] = 2
+        dseg_data[0, 5:, :, 5:] = 3
+
+        ngff_image = nz.NgffImage(
+            data=da.from_array(dseg_data),
+            dims=["c", "z", "y", "x"],
+            scale={"c": 1, "z": 0.5, "y": 0.5, "x": 0.5},
+            translation={"c": 0, "z": 0.0, "y": 0.0, "x": 0.0},
+            axes_units={"z": "millimeter", "y": "millimeter", "x": "millimeter"},
+        )
+        dseg = ZarrNii.from_ngff_image(ngff_image, axes_order="ZYX")
+
+        labels_df = pd.DataFrame(
+            {
+                "index": [0, 1, 2, 3],
+                "name": ["Background", "Left", "Right Top", "Right Bottom"],
+            }
+        )
+        return ZarrNiiAtlas.create_from_dseg(dseg, labels_df)
+
+    def test_create_feature_map_preserves_axes_units(self, atlas_with_mm_units):
+        """create_feature_map must propagate axes_units from the dseg image."""
+        atlas = atlas_with_mm_units
+
+        feature_df = pd.DataFrame(
+            {"index": [1, 2, 3], "feature_value": [10.0, 20.0, 30.0]}
+        )
+        feature_map = atlas.create_feature_map(feature_df, "feature_value")
+
+        assert feature_map.ngff_image.axes_units is not None, (
+            "axes_units lost in create_feature_map"
+        )
+        assert feature_map.ngff_image.axes_units.get("x") == "millimeter"
+        assert feature_map.ngff_image.axes_units.get("y") == "millimeter"
+        assert feature_map.ngff_image.axes_units.get("z") == "millimeter"
+
+    def test_get_region_mask_preserves_axes_units(self, atlas_with_mm_units):
+        """get_region_mask must propagate axes_units from the dseg image."""
+        atlas = atlas_with_mm_units
+
+        mask = atlas.get_region_mask(1)
+
+        assert mask.ngff_image.axes_units is not None, (
+            "axes_units lost in get_region_mask"
+        )
+        assert mask.ngff_image.axes_units.get("x") == "millimeter"
+        assert mask.ngff_image.axes_units.get("y") == "millimeter"
+        assert mask.ngff_image.axes_units.get("z") == "millimeter"
+
+    def test_create_feature_map_nifti_roundtrip(self, tmp_path, atlas_with_mm_units):
+        """Feature map from a mm-units dseg should produce correct NIfTI voxel sizes."""
+        atlas = atlas_with_mm_units
+        voxel_size_mm = 0.5  # as set in atlas_with_mm_units fixture
+
+        feature_df = pd.DataFrame(
+            {"index": [1, 2, 3], "feature_value": [1.0, 2.0, 3.0]}
+        )
+        feature_map = atlas.create_feature_map(feature_df, "feature_value")
+
+        nifti_img = feature_map.to_nifti()
+        actual_zooms = np.sqrt((nifti_img.affine[:3, :3] ** 2).sum(axis=0))
+
+        np.testing.assert_allclose(
+            actual_zooms,
+            [voxel_size_mm, voxel_size_mm, voxel_size_mm],
+            rtol=1e-5,
+            err_msg="NIfTI voxel size wrong after create_feature_map - axes_units likely lost",
+        )
+
+
 class TestAmbiguousTemplateFlowQueryError:
     """Test suite for AmbiguousTemplateFlowQueryError exception."""
 

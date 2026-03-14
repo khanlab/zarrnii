@@ -699,6 +699,47 @@ def _ngff_image_to_ome_zarr_transforms(
     return coordinate_transformations
 
 
+# Sentinel object used by _derive_ngff_image to distinguish explicitly passing
+# None (a valid override) from simply not providing a value (use source default).
+_UNSET = object()
+
+
+def _derive_ngff_image(
+    source: nz.NgffImage,
+    data,
+    dims=_UNSET,
+    scale=_UNSET,
+    translation=_UNSET,
+    name=_UNSET,
+    axes_units=_UNSET,
+) -> nz.NgffImage:
+    """Create a new NgffImage derived from *source*, inheriting all fields not explicitly overridden.
+
+    This helper guarantees that ``axes_units`` (and other metadata) are never
+    silently lost when constructing a derived image from an existing one.
+
+    Args:
+        source: The NgffImage to inherit default field values from.
+        data: New data array (required).
+        dims: Override dims; defaults to ``source.dims``.
+        scale: Override scale; defaults to ``source.scale``.
+        translation: Override translation; defaults to ``source.translation``.
+        name: Override name; defaults to ``source.name``.
+        axes_units: Override axes_units; defaults to ``source.axes_units``.
+
+    Returns:
+        New NgffImage with the supplied overrides and inherited source values.
+    """
+    return nz.NgffImage(
+        data=data,
+        dims=source.dims if dims is _UNSET else dims,
+        scale=source.scale if scale is _UNSET else scale,
+        translation=source.translation if translation is _UNSET else translation,
+        name=source.name if name is _UNSET else name,
+        axes_units=source.axes_units if axes_units is _UNSET else axes_units,
+    )
+
+
 def get_multiscales(
     store_or_path,
     storage_options: Optional[Dict] = None,
@@ -807,14 +848,7 @@ def _select_dimensions_from_image(
     new_data = image.data[tuple(slices)]
 
     # Create new NgffImage with selected data
-    new_image = nz.NgffImage(
-        data=new_data,
-        dims=new_dims,
-        scale=image.scale,
-        translation=image.translation,
-        name=image.name,
-        axes_units=image.axes_units,
-    )
+    new_image = _derive_ngff_image(image, data=new_data, dims=new_dims)
 
     return new_image
 
@@ -888,14 +922,7 @@ def _select_channels_from_image(
     new_data = image.data[tuple(slices)]
 
     # Create new NgffImage with selected data
-    new_image = nz.NgffImage(
-        data=new_data,
-        dims=image.dims,
-        scale=image.scale,
-        translation=image.translation,
-        name=image.name,
-        axes_units=image.axes_units,
-    )
+    new_image = _derive_ngff_image(image, data=new_data)
 
     return new_image
 
@@ -943,14 +970,7 @@ def crop_ngff_image(
         )
 
     # Create new NgffImage
-    return nz.NgffImage(
-        data=cropped_data,
-        dims=ngff_image.dims,
-        scale=ngff_image.scale,
-        translation=new_translation,
-        name=ngff_image.name,
-        axes_units=ngff_image.axes_units,
-    )
+    return _derive_ngff_image(ngff_image, data=cropped_data, translation=new_translation)
 
 
 def downsample_ngff_image(
@@ -1002,14 +1022,7 @@ def downsample_ngff_image(
                 spatial_idx += 1
 
     # Create new NgffImage
-    return nz.NgffImage(
-        data=downsampled_data,
-        dims=ngff_image.dims,
-        scale=new_scale,
-        translation=ngff_image.translation,
-        name=ngff_image.name,
-        axes_units=ngff_image.axes_units,
-    )
+    return _derive_ngff_image(ngff_image, data=downsampled_data, scale=new_scale)
 
 
 def _apply_near_isotropic_downsampling(znimg: "ZarrNii", axes_order: str) -> "ZarrNii":
@@ -1178,14 +1191,7 @@ def _select_dimensions_from_image_with_omero(
         data = data[tuple(slices)]
 
     # Create new NgffImage with selected data
-    selected_ngff_image = nz.NgffImage(
-        data=data,
-        dims=dims,
-        scale=ngff_image.scale,
-        translation=ngff_image.translation,
-        name=ngff_image.name,
-        axes_units=ngff_image.axes_units,
-    )
+    selected_ngff_image = _derive_ngff_image(ngff_image, data=data, dims=dims)
 
     # Filter omero metadata to match selected channels (timepoints don't affect omero metadata)
     filtered_omero = omero_metadata
@@ -2850,13 +2856,11 @@ class ZarrNii:
                     new_translation[dim] = self.ngff_image.translation[dim]
 
             # Create NgffImage with the padded data
-            padded_image = nz.NgffImage(
+            padded_image = _derive_ngff_image(
+                self.ngff_image,
                 data=padded_data,
-                dims=self.ngff_image.dims,
                 scale=self.ngff_image.scale.copy(),
                 translation=new_translation,
-                name=self.ngff_image.name,
-                axes_units=self.ngff_image.axes_units,
             )
 
             return ZarrNii(
@@ -2926,13 +2930,10 @@ class ZarrNii:
                 ] * pad_before_xyz[i] * cropped_image.scale.get(dim, 1.0)
 
             # Create padded NgffImage
-            cropped_image = nz.NgffImage(
+            cropped_image = _derive_ngff_image(
+                cropped_image,
                 data=padded_data,
-                dims=cropped_image.dims,
-                scale=cropped_image.scale,
                 translation=new_translation,
-                name=cropped_image.name,
-                axes_units=self.ngff_image.axes_units,
             )
 
         return ZarrNii(
@@ -4750,21 +4751,13 @@ class ZarrNii:
             new_translation["y"] = current_translation["y"]
             new_translation["x"] = current_translation["x"]
 
-        # Preserve axes_units if present
-        new_axes_units = None
-        if hasattr(self.ngff_image, "axes_units") and self.ngff_image.axes_units:
-            new_axes_units = {}
-            for key, value in self.ngff_image.axes_units.items():
-                new_axes_units[key] = value
-
         # Create new NgffImage with ZYX ordering
-        zyx_image = nz.NgffImage(
+        zyx_image = _derive_ngff_image(
+            self.ngff_image,
             data=transposed_data,
             dims=new_dims,
             scale=new_scale,
             translation=new_translation,
-            axes_units=new_axes_units,
-            name=self.ngff_image.name,
         )
 
         return zyx_image
@@ -4782,13 +4775,13 @@ class ZarrNii:
         copied_dims = dims if isinstance(dims, tuple) else list(dims)
 
         # Create a new NgffImage with the same properties
-        copied_image = nz.NgffImage(
+        copied_image = _derive_ngff_image(
+            self.ngff_image,
             data=self.ngff_image.data,  # Reuse lazy Dask array; no extra copy needed
             dims=copied_dims,
             scale=self.ngff_image.scale.copy(),
             translation=self.ngff_image.translation.copy(),
             name=self.ngff_image.name if name is None else name,
-            axes_units=self.ngff_image.axes_units,
         )
         return ZarrNii(
             ngff_image=copied_image,
@@ -4810,14 +4803,7 @@ class ZarrNii:
         computed_data = self.ngff_image.data.compute()
 
         # Create new NgffImage with computed data
-        computed_image = nz.NgffImage(
-            data=computed_data,
-            dims=self.ngff_image.dims,
-            scale=self.ngff_image.scale,
-            translation=self.ngff_image.translation,
-            name=self.ngff_image.name,
-            axes_units=self.ngff_image.axes_units,
-        )
+        computed_image = _derive_ngff_image(self.ngff_image, data=computed_data)
         return computed_image
 
     def get_orientation(self) -> str:
@@ -5044,14 +5030,7 @@ class ZarrNii:
         selected_data = self.data[tuple(slices)]
 
         # Create new NgffImage with selected data
-        new_ngff_image = nz.NgffImage(
-            data=selected_data,
-            dims=self.dims,
-            scale=self.scale,
-            translation=self.translation,
-            name=self.name,
-            axes_units=self.ngff_image.axes_units,
-        )
+        new_ngff_image = _derive_ngff_image(self.ngff_image, data=selected_data)
         filtered_omero = None
         if self.omero is not None and hasattr(self.omero, "channels"):
 
@@ -5098,14 +5077,7 @@ class ZarrNii:
         selected_data = self.data[tuple(slices)]
 
         # Create new NgffImage with selected data
-        new_ngff_image = nz.NgffImage(
-            data=selected_data,
-            dims=self.dims,
-            scale=self.scale,
-            translation=self.translation,
-            name=self.name,
-            axes_units=self.ngff_image.axes_units,
-        )
+        new_ngff_image = _derive_ngff_image(self.ngff_image, data=selected_data)
 
         return ZarrNii(
             ngff_image=new_ngff_image,
@@ -5127,14 +5099,7 @@ class ZarrNii:
         if name is None:
             name = self.name
 
-        return nz.NgffImage(
-            data=self.data,
-            dims=self.dims,
-            scale=self.scale,
-            translation=self.translation,
-            name=name,
-            axes_units=self.ngff_image.axes_units,
-        )
+        return _derive_ngff_image(self.ngff_image, data=self.data, name=name)
 
     def segment(
         self, plugin, chunk_size: Optional[Tuple[int, ...]] = None, **kwargs
