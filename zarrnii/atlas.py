@@ -634,6 +634,7 @@ class ZarrNiiAtlas(ZarrNii):
             scale=self.dseg.ngff_image.scale.copy(),
             translation=self.dseg.ngff_image.translation.copy(),
             name=f"{self.name}_masked",
+            axes_units=self.dseg.ngff_image.axes_units,
         )
 
         return ZarrNii.from_ngff_image(
@@ -883,6 +884,7 @@ class ZarrNiiAtlas(ZarrNii):
             scale=self.dseg.ngff_image.scale.copy(),
             translation=self.dseg.ngff_image.translation.copy(),
             name=f"{self.name}_feature_map",
+            axes_units=self.dseg.ngff_image.axes_units,
         )
 
         return ZarrNii.from_ngff_image(
