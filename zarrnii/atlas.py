@@ -30,7 +30,7 @@ except ImportError:
     TF_HOME = None
     requires_layout = lambda f: f  # noqa: E731
 
-from .core import ZarrNii
+from .core import ZarrNii, _derive_ngff_image
 
 
 class AmbiguousTemplateFlowQueryError(ValueError):
@@ -628,13 +628,10 @@ class ZarrNiiAtlas(ZarrNii):
         # Create binary mask
         mask_data = (self.dseg.data == label).astype(np.uint8)
 
-        mask_ngff = nz.NgffImage(
+        mask_ngff = _derive_ngff_image(
+            self.dseg.ngff_image,
             data=mask_data,
-            dims=self.dseg.ngff_image.dims.copy(),
-            scale=self.dseg.ngff_image.scale.copy(),
-            translation=self.dseg.ngff_image.translation.copy(),
             name=f"{self.name}_masked",
-            axes_units=self.dseg.ngff_image.axes_units,
         )
 
         return ZarrNii.from_ngff_image(
@@ -878,13 +875,10 @@ class ZarrNiiAtlas(ZarrNii):
         # broadcast the mapping in one go
         feature_map = dseg_data.map_blocks(lambda block: lut[block], dtype=np.float32)
 
-        feature_map_ngff = nz.NgffImage(
+        feature_map_ngff = _derive_ngff_image(
+            self.dseg.ngff_image,
             data=feature_map,
-            dims=self.dseg.ngff_image.dims.copy(),
-            scale=self.dseg.ngff_image.scale.copy(),
-            translation=self.dseg.ngff_image.translation.copy(),
             name=f"{self.name}_feature_map",
-            axes_units=self.dseg.ngff_image.axes_units,
         )
 
         return ZarrNii.from_ngff_image(
