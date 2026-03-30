@@ -177,6 +177,6 @@ In this section, you learned how to:
 - Save results back to OME-Zarr or NIfTI.
 
 Next:
-- Explore the [API Reference](../reference.md) for in-depth details about ZarrNii's classes and methods.
+- Explore the [API Reference](../reference/index.md) for in-depth details about ZarrNii's classes and methods.
 - Check the [FAQ](../faq.md) for answers to common questions.
 

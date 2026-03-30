@@ -125,4 +125,4 @@ result = downsampled.darr.compute()
 
 - [Multiscale Processing](multiscale.md) for advanced multi-resolution workflows  
 - [Working with Zarr and NIfTI](zarr_nifti.md) for basic format operations
-- [API Reference](../reference.md) for detailed method documentation
+- [API Reference](../reference/index.md) for detailed method documentation
