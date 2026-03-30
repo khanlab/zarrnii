@@ -21,10 +21,6 @@
          <lastmod>2026-03-30</lastmod>
     </url>
     <url>
-         <loc>http://www.khanlab.ca/zarrnii/reference/</loc>
-         <lastmod>2026-03-30</lastmod>
-    </url>
-    <url>
          <loc>http://www.khanlab.ca/zarrnii/examples/atlas_example/</loc>
          <lastmod>2026-03-30</lastmod>
     </url>
@@ -62,6 +58,26 @@
     </url>
     <url>
          <loc>http://www.khanlab.ca/zarrnii/examples/zarr_nifti/</loc>
+         <lastmod>2026-03-30</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/reference/</loc>
+         <lastmod>2026-03-30</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/reference/analysis/</loc>
+         <lastmod>2026-03-30</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/reference/atlas/</loc>
+         <lastmod>2026-03-30</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/reference/transform/</loc>
+         <lastmod>2026-03-30</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/reference/zarrnii/</loc>
          <lastmod>2026-03-30</lastmod>
     </url>
     <url>

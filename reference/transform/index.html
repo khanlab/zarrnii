@@ -1,0 +1,2823 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/reference/transform/">
+      
+      
+        <link rel="prev" href="../analysis/">
+      
+      
+        <link rel="next" href="../atlas/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>zarrnii.transform - ZarrNii Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#zarrniitransform" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ZarrNii Documentation" class="md-header__button md-logo" aria-label="ZarrNii Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZarrNii Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              zarrnii.transform
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ZarrNii Documentation" class="md-nav__button md-logo" aria-label="ZarrNii Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZarrNii Documentation
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Walkthrough
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../walkthrough/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../walkthrough/getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../walkthrough/basic_tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Basic Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../walkthrough/advanced_use_cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Use Cases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command Line Interface
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zarrnii/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii.analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii.transform
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii.transform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#zarrnii.transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transform
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zarrnii.transform-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.Transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transform
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Transform">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.Transform-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.Transform.apply_transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        apply_transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AffineTransform
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AffineTransform">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform.from_txt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_txt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform.from_array" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_array
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform.identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform.apply_transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        apply_transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform.invert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        invert
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform.update_for_orientation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        update_for_orientation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DisplacementTransform
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="DisplacementTransform">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform.from_nifti" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_nifti
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform.apply_transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        apply_transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../atlas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii.atlas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/zarr_nifti/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with Zarr and NIfTI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/imaris_usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with Imaris Files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/transformations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transformations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/downsampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downsampling and Upsampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/near_isotropic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Near-Isotropic Downsampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/atlas_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atlases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/ml_patch_sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Training - Patch Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/multiscale/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiscale OME-Zarr
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/segmentation_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Segmentation Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/scaled_processing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaled Processing Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#zarrnii.transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transform
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zarrnii.transform-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.Transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transform
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Transform">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.Transform-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.Transform.apply_transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        apply_transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AffineTransform
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AffineTransform">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform.from_txt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_txt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform.from_array" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_array
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform.identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform.apply_transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        apply_transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform.invert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        invert
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.AffineTransform.update_for_orientation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        update_for_orientation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DisplacementTransform
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="DisplacementTransform">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform.from_nifti" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_nifti
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform.apply_transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        apply_transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="zarrniitransform">zarrnii.transform</h1>
+<p>Spatial transform classes used for image registration and resampling.</p>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<a id="zarrnii.transform"></a>
+    <div class="doc doc-contents first">
+
+        <p>Transformation classes for spatial transformations in ZarrNii.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<h2 id="zarrnii.transform-classes">Classes</h2>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="zarrnii.transform.Transform" class="doc doc-heading">
+            <code>zarrnii.transform.Transform</code>
+
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="abc.ABC">ABC</span></code></p>
+
+
+
+        <p>Abstract base class for spatial transformations.</p>
+<p>This class defines the interface that all transformation classes must implement
+to be used with ZarrNii. Transformations convert coordinates from one space
+to another (e.g., subject space to template space).</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+<h4 id="zarrnii.transform.Transform-functions">Functions</h4>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.transform.Transform.apply_transform" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">Transform</span><span class="o">.</span><span class="n">apply_transform</span><span class="p">(</span><span class="n">vecs</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-abstractmethod"><code>abstractmethod</code></small>
+  </span>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Apply transformation to coordinate vectors.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>vecs</code></b>
+              (<code><span title="numpy.ndarray">ndarray</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Input coordinates as numpy array. Shape can be:
+- (3,) for single 3D point
+- (3, N) for N 3D points
+- (4,) for single homogeneous coordinate
+- (4, N) for N homogeneous coordinates</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="numpy.ndarray">ndarray</span></code>
+          –
+          <div class="doc-md-description">
+            <p>Transformed coordinates with same shape as input</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="NotImplementedError">NotImplementedError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If not implemented by subclass</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/transform.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">23</span>
+<span class="normal">24</span>
+<span class="normal">25</span>
+<span class="normal">26</span>
+<span class="normal">27</span>
+<span class="normal">28</span>
+<span class="normal">29</span>
+<span class="normal">30</span>
+<span class="normal">31</span>
+<span class="normal">32</span>
+<span class="normal">33</span>
+<span class="normal">34</span>
+<span class="normal">35</span>
+<span class="normal">36</span>
+<span class="normal">37</span>
+<span class="normal">38</span>
+<span class="normal">39</span>
+<span class="normal">40</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@abstractmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">apply_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vecs</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply transformation to coordinate vectors.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        vecs: Input coordinates as numpy array. Shape can be:</span>
+<span class="sd">            - (3,) for single 3D point</span>
+<span class="sd">            - (3, N) for N 3D points</span>
+<span class="sd">            - (4,) for single homogeneous coordinate</span>
+<span class="sd">            - (4, N) for N homogeneous coordinates</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Transformed coordinates with same shape as input</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        NotImplementedError: If not implemented by subclass</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="zarrnii.transform.AffineTransform" class="doc doc-heading">
+            <code>zarrnii.transform.AffineTransform</code>
+
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="zarrnii.transform.Transform" href="#zarrnii.transform.Transform">Transform</a></code></p>
+
+
+
+        <p>Affine transformation for spatial coordinate mapping.</p>
+<p>Represents a 4x4 affine transformation matrix that can be used to transform
+3D coordinates between different coordinate systems. Supports various
+operations including matrix multiplication, inversion, and point transformation.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.transform.AffineTransform.matrix">matrix</span></code></b>
+              (<code><span title="numpy.ndarray">ndarray</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>4x4 affine transformation matrix</p>
+          </div>
+        </li>
+    </ul>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+<h4 id="zarrnii.transform.AffineTransform-functions">Functions</h4>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.transform.AffineTransform.from_txt" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">AffineTransform</span><span class="o">.</span><span class="n">from_txt</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">invert</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create AffineTransform from text file containing matrix.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>path</code></b>
+              (<code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="bytes">bytes</span>]</code>)
+          –
+          <div class="doc-md-description">
+            <p>Path to text file containing 4x4 affine matrix</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>invert</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Whether to invert the matrix after loading</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code>&#39;AffineTransform&#39;</code>
+          –
+          <div class="doc-md-description">
+            <p>AffineTransform instance with loaded matrix</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="OSError">OSError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If file cannot be read</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><span title="ValueError">ValueError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If file does not contain valid 4x4 matrix</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/transform.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">57</span>
+<span class="normal">58</span>
+<span class="normal">59</span>
+<span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span>
+<span class="normal">63</span>
+<span class="normal">64</span>
+<span class="normal">65</span>
+<span class="normal">66</span>
+<span class="normal">67</span>
+<span class="normal">68</span>
+<span class="normal">69</span>
+<span class="normal">70</span>
+<span class="normal">71</span>
+<span class="normal">72</span>
+<span class="normal">73</span>
+<span class="normal">74</span>
+<span class="normal">75</span>
+<span class="normal">76</span>
+<span class="normal">77</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">from_txt</span><span class="p">(</span>
+    <span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">],</span> <span class="n">invert</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;AffineTransform&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create AffineTransform from text file containing matrix.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        path: Path to text file containing 4x4 affine matrix</span>
+<span class="sd">        invert: Whether to invert the matrix after loading</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        AffineTransform instance with loaded matrix</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        OSError: If file cannot be read</span>
+<span class="sd">        ValueError: If file does not contain valid 4x4 matrix</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">loadtxt</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">invert</span><span class="p">:</span>
+        <span class="n">matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">matrix</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">matrix</span><span class="o">=</span><span class="n">matrix</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.transform.AffineTransform.from_array" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">AffineTransform</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span><span class="n">matrix</span><span class="p">,</span> <span class="n">invert</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create AffineTransform from numpy array.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>matrix</code></b>
+              (<code><span title="numpy.ndarray">ndarray</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>4x4 numpy array representing affine transformation</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>invert</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Whether to invert the matrix</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code>&#39;AffineTransform&#39;</code>
+          –
+          <div class="doc-md-description">
+            <p>AffineTransform instance with the matrix</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="ValueError">ValueError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If matrix is not 4x4</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/transform.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">79</span>
+<span class="normal">80</span>
+<span class="normal">81</span>
+<span class="normal">82</span>
+<span class="normal">83</span>
+<span class="normal">84</span>
+<span class="normal">85</span>
+<span class="normal">86</span>
+<span class="normal">87</span>
+<span class="normal">88</span>
+<span class="normal">89</span>
+<span class="normal">90</span>
+<span class="normal">91</span>
+<span class="normal">92</span>
+<span class="normal">93</span>
+<span class="normal">94</span>
+<span class="normal">95</span>
+<span class="normal">96</span>
+<span class="normal">97</span>
+<span class="normal">98</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">from_array</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">matrix</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">invert</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;AffineTransform&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create AffineTransform from numpy array.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        matrix: 4x4 numpy array representing affine transformation</span>
+<span class="sd">        invert: Whether to invert the matrix</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        AffineTransform instance with the matrix</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If matrix is not 4x4</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">matrix</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Matrix must be 4x4, got shape </span><span class="si">{</span><span class="n">matrix</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">invert</span><span class="p">:</span>
+        <span class="n">matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">matrix</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">matrix</span><span class="o">=</span><span class="n">matrix</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.transform.AffineTransform.identity" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">AffineTransform</span><span class="o">.</span><span class="n">identity</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create identity transformation.</p>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code>&#39;AffineTransform&#39;</code>
+          –
+          <div class="doc-md-description">
+            <p>AffineTransform representing identity transformation (no change)</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/transform.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">identity</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;AffineTransform&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create identity transformation.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        AffineTransform representing identity transformation (no change)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">matrix</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.transform.AffineTransform.apply_transform" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">AffineTransform</span><span class="o">.</span><span class="n">apply_transform</span><span class="p">(</span><span class="n">vecs</span><span class="p">)</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Apply transformation to coordinate vectors.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>vecs</code></b>
+              (<code><span title="numpy.ndarray">ndarray</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Input coordinates to transform</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="numpy.ndarray">ndarray</span></code>
+          –
+          <div class="doc-md-description">
+            <p>Transformed coordinates</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/transform.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vecs</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply transformation to coordinate vectors.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        vecs: Input coordinates to transform</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Transformed coordinates</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span> <span class="o">@</span> <span class="n">vecs</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.transform.AffineTransform.invert" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">AffineTransform</span><span class="o">.</span><span class="n">invert</span><span class="p">()</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return the inverse of the matrix transformation.</p>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code>&#39;AffineTransform&#39;</code>
+          –
+          <div class="doc-md-description">
+            <p>New AffineTransform with inverted matrix</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="numpy.linalg.LinAlgError">LinAlgError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If matrix is singular and cannot be inverted</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/transform.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">invert</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;AffineTransform&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the inverse of the matrix transformation.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        New AffineTransform with inverted matrix</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        np.linalg.LinAlgError: If matrix is singular and cannot be inverted</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">AffineTransform</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">matrix</span><span class="p">))</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.transform.AffineTransform.update_for_orientation" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">AffineTransform</span><span class="o">.</span><span class="n">update_for_orientation</span><span class="p">(</span><span class="n">input_orientation</span><span class="p">,</span> <span class="n">output_orientation</span><span class="p">)</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Update the matrix to map from input orientation to output orientation.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>input_orientation</code></b>
+              (<code><span title="str">str</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Current anatomical orientation (e.g., 'RPI')</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>output_orientation</code></b>
+              (<code><span title="str">str</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Target anatomical orientation (e.g., 'RAS')</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code>&#39;AffineTransform&#39;</code>
+          –
+          <div class="doc-md-description">
+            <p>New AffineTransform updated for orientation mapping</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="ValueError">ValueError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If orientations are invalid or cannot be matched</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/transform.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">update_for_orientation</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span> <span class="n">input_orientation</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">output_orientation</span><span class="p">:</span> <span class="nb">str</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;AffineTransform&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Update the matrix to map from input orientation to output orientation.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        input_orientation: Current anatomical orientation (e.g., &#39;RPI&#39;)</span>
+<span class="sd">        output_orientation: Target anatomical orientation (e.g., &#39;RAS&#39;)</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        New AffineTransform updated for orientation mapping</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If orientations are invalid or cannot be matched</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Define a mapping of anatomical directions to axis indices and flips</span>
+    <span class="n">axis_map</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;R&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+        <span class="s2">&quot;L&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span>
+        <span class="s2">&quot;A&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+        <span class="s2">&quot;P&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span>
+        <span class="s2">&quot;S&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+        <span class="s2">&quot;I&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span>
+    <span class="p">}</span>
+
+    <span class="c1"># Parse the input and output orientations</span>
+    <span class="n">input_axes</span> <span class="o">=</span> <span class="p">[</span><span class="n">axis_map</span><span class="p">[</span><span class="n">ax</span><span class="p">]</span> <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">input_orientation</span><span class="p">]</span>
+    <span class="n">output_axes</span> <span class="o">=</span> <span class="p">[</span><span class="n">axis_map</span><span class="p">[</span><span class="n">ax</span><span class="p">]</span> <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">output_orientation</span><span class="p">]</span>
+
+    <span class="c1"># Create a mapping from input to output</span>
+    <span class="n">reorder_indices</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="mi">3</span>
+    <span class="n">flip_signs</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mi">3</span>
+
+    <span class="k">for</span> <span class="n">out_idx</span><span class="p">,</span> <span class="p">(</span><span class="n">out_axis</span><span class="p">,</span> <span class="n">out_sign</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">output_axes</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">in_idx</span><span class="p">,</span> <span class="p">(</span><span class="n">in_axis</span><span class="p">,</span> <span class="n">in_sign</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">input_axes</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">out_axis</span> <span class="o">==</span> <span class="n">in_axis</span><span class="p">:</span>  <span class="c1"># Match axis</span>
+                <span class="n">reorder_indices</span><span class="p">[</span><span class="n">out_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">in_idx</span>
+                <span class="n">flip_signs</span><span class="p">[</span><span class="n">out_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">out_sign</span> <span class="o">*</span> <span class="n">in_sign</span>
+                <span class="k">break</span>
+
+    <span class="c1"># Reorder and flip the affine matrix</span>
+    <span class="n">reordered_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">matrix</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">reorder_idx</span><span class="p">,</span> <span class="n">flip_sign</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">reorder_indices</span><span class="p">,</span> <span class="n">flip_signs</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">reorder_idx</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Cannot match all axes from </span><span class="si">{</span><span class="n">input_orientation</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">output_orientation</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+        <span class="n">reordered_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">flip_sign</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">matrix</span><span class="p">[</span><span class="n">reorder_idx</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">]</span>
+        <span class="n">reordered_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">flip_sign</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">matrix</span><span class="p">[</span><span class="n">reorder_idx</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>
+    <span class="n">reordered_matrix</span><span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">matrix</span><span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="p">:]</span>  <span class="c1"># Preserve the homogeneous row</span>
+
+    <span class="k">return</span> <span class="n">AffineTransform</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span><span class="n">reordered_matrix</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="zarrnii.transform.DisplacementTransform" class="doc doc-heading">
+            <code>zarrnii.transform.DisplacementTransform</code>
+
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="zarrnii.transform.Transform" href="#zarrnii.transform.Transform">Transform</a></code></p>
+
+
+
+        <p>Non-linear displacement field transformation.</p>
+<p>Represents a displacement field transformation where each point in space
+has an associated displacement vector. Uses interpolation to compute
+displacements for arbitrary coordinates.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.transform.DisplacementTransform.disp_xyz">disp_xyz</span></code></b>
+              (<code><span title="numpy.ndarray">ndarray</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Displacement vectors at grid points (4D array: x, y, z, vector_component)</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.transform.DisplacementTransform.disp_grid">disp_grid</span></code></b>
+              (<code><span title="typing.Tuple">Tuple</span>[<span title="numpy.ndarray">ndarray</span>, ...]</code>)
+          –
+          <div class="doc-md-description">
+            <p>Grid coordinates for displacement field</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.transform.DisplacementTransform.disp_affine">disp_affine</span></code></b>
+              (<code><a class="autorefs autorefs-internal" title="zarrnii.transform.AffineTransform" href="#zarrnii.transform.AffineTransform">AffineTransform</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>Affine transformation from world to displacement field coordinates</p>
+          </div>
+        </li>
+    </ul>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+<h4 id="zarrnii.transform.DisplacementTransform-functions">Functions</h4>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.transform.DisplacementTransform.from_nifti" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">DisplacementTransform</span><span class="o">.</span><span class="n">from_nifti</span><span class="p">(</span><span class="n">path</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Create DisplacementTransform from NIfTI file.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>path</code></b>
+              (<code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="bytes">bytes</span>]</code>)
+          –
+          <div class="doc-md-description">
+            <p>Path to NIfTI displacement field file</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code>&#39;DisplacementTransform&#39;</code>
+          –
+          <div class="doc-md-description">
+            <p>DisplacementTransform instance loaded from file</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="OSError">OSError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If file cannot be read</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><span title="ValueError">ValueError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If file format is invalid</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/transform.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span>
+<span class="normal">315</span>
+<span class="normal">316</span>
+<span class="normal">317</span>
+<span class="normal">318</span>
+<span class="normal">319</span>
+<span class="normal">320</span>
+<span class="normal">321</span>
+<span class="normal">322</span>
+<span class="normal">323</span>
+<span class="normal">324</span>
+<span class="normal">325</span>
+<span class="normal">326</span>
+<span class="normal">327</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">from_nifti</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;DisplacementTransform&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create DisplacementTransform from NIfTI file.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        path: Path to NIfTI displacement field file</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        DisplacementTransform instance loaded from file</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        OSError: If file cannot be read</span>
+<span class="sd">        ValueError: If file format is invalid</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">disp_nib</span> <span class="o">=</span> <span class="n">nib</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">disp_xyz</span> <span class="o">=</span> <span class="n">disp_nib</span><span class="o">.</span><span class="n">get_fdata</span><span class="p">()</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span>
+    <span class="n">disp_affine</span> <span class="o">=</span> <span class="n">AffineTransform</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span><span class="n">disp_nib</span><span class="o">.</span><span class="n">affine</span><span class="p">)</span>
+
+    <span class="c1"># Convert from ITK transform convention</span>
+    <span class="c1"># ITK uses opposite sign convention for x and y displacements</span>
+    <span class="n">disp_xyz</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">disp_xyz</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="n">disp_xyz</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">disp_xyz</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">]</span>
+
+    <span class="c1"># Create grid coordinates</span>
+    <span class="n">disp_grid</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">disp_xyz</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">disp_xyz</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">disp_xyz</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]),</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+        <span class="n">disp_xyz</span><span class="o">=</span><span class="n">disp_xyz</span><span class="p">,</span>
+        <span class="n">disp_grid</span><span class="o">=</span><span class="n">disp_grid</span><span class="p">,</span>
+        <span class="n">disp_affine</span><span class="o">=</span><span class="n">disp_affine</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.transform.DisplacementTransform.apply_transform" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">DisplacementTransform</span><span class="o">.</span><span class="n">apply_transform</span><span class="p">(</span><span class="n">vecs</span><span class="p">)</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Apply displacement transformation to coordinate vectors.</p>
+<p>Transforms input coordinates by interpolating displacement vectors
+from the displacement field and adding them to the input coordinates.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>vecs</code></b>
+              (<code><span title="numpy.ndarray">ndarray</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Input coordinates as numpy array. Shape should be (3, N) for
+N points or (3,) for single point</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="numpy.ndarray">ndarray</span></code>
+          –
+          <div class="doc-md-description">
+            <p>Transformed coordinates with same shape as input</p>
+          </div>
+        </li>
+    </ul>
+
+
+<details class="notes" open>
+  <summary>Notes</summary>
+  <p>Points outside the displacement field domain are filled with
+zero displacement (no transformation).</p>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/transform.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span>
+<span class="normal">334</span>
+<span class="normal">335</span>
+<span class="normal">336</span>
+<span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span>
+<span class="normal">355</span>
+<span class="normal">356</span>
+<span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span>
+<span class="normal">360</span>
+<span class="normal">361</span>
+<span class="normal">362</span>
+<span class="normal">363</span>
+<span class="normal">364</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vecs</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply displacement transformation to coordinate vectors.</span>
+
+<span class="sd">    Transforms input coordinates by interpolating displacement vectors</span>
+<span class="sd">    from the displacement field and adding them to the input coordinates.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        vecs: Input coordinates as numpy array. Shape should be (3, N) for</span>
+<span class="sd">            N points or (3,) for single point</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Transformed coordinates with same shape as input</span>
+
+<span class="sd">    Notes:</span>
+<span class="sd">        Points outside the displacement field domain are filled with</span>
+<span class="sd">        zero displacement (no transformation).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Transform points to voxel space of the displacement field</span>
+    <span class="n">vox_vecs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">disp_affine</span><span class="o">.</span><span class="n">invert</span><span class="p">()</span> <span class="o">@</span> <span class="n">vecs</span>
+
+    <span class="c1"># Initialize displacement vectors</span>
+    <span class="n">disp_vecs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">vox_vecs</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="c1"># Interpolate displacement for each spatial dimension (x, y, z)</span>
+    <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+        <span class="n">disp_vecs</span><span class="p">[</span><span class="n">ax</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">interpn</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">disp_grid</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">disp_xyz</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="n">ax</span><span class="p">]</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(),</span>
+            <span class="n">vox_vecs</span><span class="p">[:</span><span class="mi">3</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+            <span class="n">method</span><span class="o">=</span><span class="s2">&quot;linear&quot;</span><span class="p">,</span>
+            <span class="n">bounds_error</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">fill_value</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Add displacement to original coordinates</span>
+    <span class="k">return</span> <span class="n">vecs</span> <span class="o">+</span> <span class="n">disp_vecs</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
