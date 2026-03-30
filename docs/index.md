@@ -64,7 +64,7 @@ segmented_znimg.to_nifti("segmented_dataset.nii")
 Explore the documentation to get started:
 
  - [Walkthrough: Overview](walkthrough/overview.md): Understand the core concepts.
- - [API Reference](reference.md): Dive into the technical details.
+ - [API Reference](reference/index.md): Dive into the technical details.
  - [Examples](examples/zarr_nifti.md): Learn through practical examples.
  - [Segmentation Plugin Examples](examples/segmentation_example.md): Learn how to use and create segmentation plugins.
  - [FAQ](faq.md): Find answers to common questions.

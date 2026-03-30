@@ -76,7 +76,7 @@ Yes, ZarrNii updates the metadata to remain consistent with transformations like
 ## Getting Help
 
 If you encounter issues not covered here:
-1. Check the [API Reference](reference.md) for detailed information about ZarrNii methods.
+1. Check the [API Reference](reference/index.md) for detailed information about ZarrNii methods.
 2. Open an issue on the [GitHub repository](https://github.com/khanlab/zarrnii/issues).
 
 ---
@@ -85,5 +85,5 @@ If you encounter issues not covered here:
 
 This FAQ covers common questions about ZarrNii, troubleshooting tips, and best practices for working with large datasets and metadata. For more in-depth information, explore:
 - [Examples](examples/zarr_nifti.md)
-- [API Reference](reference.md)
+- [API Reference](reference/index.md)
 

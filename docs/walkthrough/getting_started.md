@@ -244,5 +244,5 @@ segmented.to_nifti("segmented_output.nii")
 
 - [Walkthrough: Basic Tasks](basic_tasks.md): Learn more about common workflows like cropping, interpolation, and combining transformations.
 - [Segmentation Plugin Examples](../examples/segmentation_example.md): Learn how to use and create segmentation plugins.
-- [API Reference](../reference.md): Explore the detailed API for ZarrNii.
+- [API Reference](../reference/index.md): Explore the detailed API for ZarrNii.
 

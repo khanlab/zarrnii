@@ -383,4 +383,4 @@ result.to_ome_zarr("processed.ome.zarr")
 
 - [Segmentation Plugins](segmentation_example.md) for other plugin architectures
 - [Downsampling and Upsampling](downsampling.md) for resolution operations
-- [API Reference](../reference.md) for detailed method documentation
+- [API Reference](../reference/index.md) for detailed method documentation

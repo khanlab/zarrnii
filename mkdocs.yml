@@ -9,7 +9,12 @@ nav:
       - Basic Tasks: walkthrough/basic_tasks.md
       - Advanced Use Cases: walkthrough/advanced_use_cases.md
   - Command Line Interface: cli.md
-  - API Reference: reference.md
+  - API Reference:
+      - Overview: reference/index.md
+      - zarrnii: reference/zarrnii.md
+      - zarrnii.analysis: reference/analysis.md
+      - zarrnii.transform: reference/transform.md
+      - zarrnii.atlas: reference/atlas.md
   - Examples:
       - Working with Zarr and NIfTI: examples/zarr_nifti.md
       - Working with Imaris Files: examples/imaris_usage.md

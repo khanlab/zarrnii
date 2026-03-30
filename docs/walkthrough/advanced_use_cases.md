@@ -136,5 +136,5 @@ This guide covered:
 
 Next, explore:
 - [Examples](../examples/zarr_nifti.md): Detailed workflows and practical use cases.
-- [API Reference](../reference.md): Technical details for ZarrNii classes and methods.
+- [API Reference](../reference/index.md): Technical details for ZarrNii classes and methods.
 

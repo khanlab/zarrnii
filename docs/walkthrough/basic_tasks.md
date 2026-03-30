@@ -219,5 +219,5 @@ This guide covered the essential operations you can perform with ZarrNii:
 - Transforming datasets through cropping, downsampling, upsampling, and affine transformations.
 - Saving datasets back to either format.
 
-Next, explore [Advanced Use Cases](advanced_use_cases.md) or dive into the [API Reference](../reference.md) for detailed technical documentation.
+Next, explore [Advanced Use Cases](advanced_use_cases.md) or dive into the [API Reference](../reference/index.md) for detailed technical documentation.
 

@@ -187,4 +187,4 @@ znimg = ZarrNii.from_ome_zarr("data.zarr", level=level)
 
 - [Downsampling and Upsampling](downsampling.md) for resolution change operations
 - [Working with Zarr and NIfTI](zarr_nifti.md) for basic format operations  
-- [API Reference](../reference.md) for detailed method documentation
+- [API Reference](../reference/index.md) for detailed method documentation

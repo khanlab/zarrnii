@@ -93,4 +93,4 @@ The automatic downsampling:
 
 - [Downsampling and Upsampling](downsampling.md) for general resolution operations
 - [Basic Tasks](../walkthrough/basic_tasks.md) for getting started with transformations
-- [API Reference](../reference.md) for detailed parameter documentation
+- [API Reference](../reference/index.md) for detailed parameter documentation
