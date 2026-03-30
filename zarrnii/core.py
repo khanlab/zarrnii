@@ -970,7 +970,9 @@ def crop_ngff_image(
         )
 
     # Create new NgffImage
-    return _derive_ngff_image(ngff_image, data=cropped_data, translation=new_translation)
+    return _derive_ngff_image(
+        ngff_image, data=cropped_data, translation=new_translation
+    )
 
 
 def downsample_ngff_image(

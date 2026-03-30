@@ -1321,9 +1321,9 @@ class TestAxesUnitsPreservation:
         )
         feature_map = atlas.create_feature_map(feature_df, "feature_value")
 
-        assert feature_map.ngff_image.axes_units is not None, (
-            "axes_units lost in create_feature_map"
-        )
+        assert (
+            feature_map.ngff_image.axes_units is not None
+        ), "axes_units lost in create_feature_map"
         assert feature_map.ngff_image.axes_units.get("x") == "millimeter"
         assert feature_map.ngff_image.axes_units.get("y") == "millimeter"
         assert feature_map.ngff_image.axes_units.get("z") == "millimeter"
@@ -1334,9 +1334,9 @@ class TestAxesUnitsPreservation:
 
         mask = atlas.get_region_mask(1)
 
-        assert mask.ngff_image.axes_units is not None, (
-            "axes_units lost in get_region_mask"
-        )
+        assert (
+            mask.ngff_image.axes_units is not None
+        ), "axes_units lost in get_region_mask"
         assert mask.ngff_image.axes_units.get("x") == "millimeter"
         assert mask.ngff_image.axes_units.get("y") == "millimeter"
         assert mask.ngff_image.axes_units.get("z") == "millimeter"
