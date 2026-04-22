@@ -2076,64 +2076,11 @@ class ZarrNii:
                 store = store_or_path
                 multiscales = nz.from_ngff_zarr(store)
 
-        # Extract omero metadata if available
-        omero_metadata = None
-        try:
-            import zarr
-
-            if isinstance(store_or_path, str):
-                if _is_ome_zarr_zip_path(store_or_path):
-                    zip_store = zarr.storage.ZipStore(store_or_path, mode="r")
-                    group = zarr.open_group(zip_store, mode="r")
-                    # Close zip store after getting group
-                    zip_store.close()
-                else:
-                    group = zarr.open_group(store_or_path, mode="r")
-
-            else:
-                group = zarr.open_group(store_or_path, mode="r")
-
-            if "omero" in group.attrs:
-                omero_dict = group.attrs["omero"]
-
-                # Create a simple object to hold omero metadata
-                class OmeroMetadata:
-                    def __init__(self, omero_dict):
-                        self.channels = []
-                        if "channels" in omero_dict:
-                            for ch_dict in omero_dict["channels"]:
-                                # Create channel objects
-                                class ChannelMetadata:
-                                    def __init__(self, ch_dict):
-                                        self.label = ch_dict.get("label", "")
-                                        self.color = ch_dict.get("color", "")
-                                        if "window" in ch_dict:
-
-                                            class WindowMetadata:
-                                                def __init__(self, win_dict):
-                                                    self.min = win_dict.get("min", 0.0)
-                                                    self.max = win_dict.get(
-                                                        "max", 65535.0
-                                                    )
-                                                    self.start = win_dict.get(
-                                                        "start", 0.0
-                                                    )
-                                                    self.end = win_dict.get(
-                                                        "end", 65535.0
-                                                    )
-
-                                            self.window = WindowMetadata(
-                                                ch_dict["window"]
-                                            )
-                                        else:
-                                            self.window = None
-
-                                self.channels.append(ChannelMetadata(ch_dict))
-
-                omero_metadata = OmeroMetadata(omero_dict)
-        except Exception:
-            # If we can't load omero metadata, that's okay
-            pass
+        # Extract omero metadata from the already-parsed multiscales metadata.
+        # ngff_zarr's from_ngff_zarr() correctly handles both v0.4 (omero at root
+        # group level) and v0.5 (omero nested under the 'ome' key), so we rely on
+        # it rather than hard-coding a group.attrs lookup.
+        omero_metadata = multiscales.metadata.omero
 
         # Read orientation metadata with backwards compatibility support
         # Priority: xyz_orientation (new) > orientation (legacy, with reversal)
