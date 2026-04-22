@@ -2080,7 +2080,7 @@ class ZarrNii:
         # ngff_zarr's from_ngff_zarr() correctly handles both v0.4 (omero at root
         # group level) and v0.5 (omero nested under the 'ome' key), so we rely on
         # it rather than hard-coding a group.attrs lookup.
-        omero_metadata = multiscales.metadata.omero
+        omero_metadata = getattr(multiscales.metadata, "omero", None)
 
         # Read orientation metadata with backwards compatibility support
         # Priority: xyz_orientation (new) > orientation (legacy, with reversal)
