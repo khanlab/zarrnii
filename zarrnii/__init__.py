@@ -6,13 +6,13 @@ from .analysis import (
     density_from_points,
 )
 from .atlas import ZarrNiiAtlas
+from .benchmark import BenchmarkSuite, DaskConfig
 from .core import (
     MetadataInvalidError,
     ZarrNii,
     save_ngff_image,
     save_ngff_image_with_ome_zarr,
 )
-from .benchmark import BenchmarkSuite, DaskConfig
 from .dask_utils import get_dask_client
 from .transform import AffineTransform, DisplacementTransform
 
