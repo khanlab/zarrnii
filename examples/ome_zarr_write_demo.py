@@ -27,17 +27,17 @@ def build_omero_metadata(n_channels: int) -> nz.Omero:
     """Return simple OMERO metadata for *n_channels* channels.
 
     Each channel gets:
-    - a colour (RRGGBB hex string)
+    - a color (RRGGBB hex string)
     - a display window computed from the data range
     - a human-readable label
     """
-    colours = ["FF0000", "00FF00", "0000FF", "FFFF00"]  # R, G, B, Y
+    colors = ["FF0000", "00FF00", "0000FF", "FFFF00"]  # R, G, B, Y
     labels = ["DAPI", "GFP", "mCherry", "BF"]
     channels = []
     for i in range(n_channels):
         window = nz.OmeroWindow(min=0, max=65535, start=100, end=2000)
         channel = nz.OmeroChannel(
-            color=colours[i % len(colours)],
+            color=colors[i % len(colors)],
             window=window,
             label=labels[i % len(labels)],
         )
@@ -58,7 +58,7 @@ def main() -> bool:
     chunks = (1, 8, 32, 32)
 
     print(f"\n1. Creating synthetic dask array  shape={shape}  chunks={chunks}")
-    rng = da.from_array(
+    data_array = da.from_array(
         np.random.default_rng(42).integers(0, 4096, size=shape, dtype=np.uint16),
         chunks=chunks,
     )
@@ -70,7 +70,7 @@ def main() -> bool:
     omero = build_omero_metadata(n_channels)
 
     znimg = zarrnii.ZarrNii.from_darr(
-        rng,
+        data_array,
         axes_order="ZYX",
         orientation="RAS",
         spacing=(5.0, 0.5, 0.5),  # z=5 µm, y=x=0.5 µm
