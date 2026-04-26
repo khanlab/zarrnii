@@ -433,16 +433,11 @@ def save_ngff_image_with_ome_zarr(
     import tempfile
 
     import zarr
-    from ome_zarr.scale import Scaler
     from ome_zarr.writer import write_image
 
-    # Note: ome-zarr's Scaler interprets max_layer as the highest pyramid level index
-    # (not count), so max_layer=N creates N+1 levels: 0, 1, ..., N
-    # To match save_ngff_image behavior where max_layer=N creates N total levels,
-    # we need to adjust: ome_zarr_max_layer = max_layer - 1
     if scale_factors is None:
-        # Generate scale factors for each additional level beyond level 0
-        # For max_layer total levels, we need max_layer-1 scale factors
+        # Generate scale factors for each additional level beyond level 0.
+        # For max_layer total levels, we need max_layer-1 scale factors.
         scale_factors = [2**i for i in range(1, max_layer)]
 
     # Convert NgffImage metadata to ome-zarr format
@@ -450,15 +445,6 @@ def save_ngff_image_with_ome_zarr(
     coordinate_transformations = _ngff_image_to_ome_zarr_transforms(
         ngff_image, scale_factors
     )
-
-    # Set up scaler for multi-resolution pyramid
-    # Adjust max_layer to match ome-zarr's interpretation (highest index, not count)
-    if max_layer <= 1:
-        # No pyramid, just one level
-        scaler = None
-    else:
-        # ome-zarr max_layer is the highest index, so max_layer-1 for N total levels
-        scaler = Scaler(max_layer=max_layer - 1, method=scaling_method)
 
     # Check if the target is an OME-Zarr zip file (based on extension)
     if isinstance(store_or_path, str) and _is_ome_zarr_zip_path(store_or_path):
@@ -469,11 +455,12 @@ def save_ngff_image_with_ome_zarr(
             temp_zarr_path = os.path.join(tmpdir, "temp.zarr")
             store = zarr.open_group(temp_zarr_path, mode="w", zarr_format=zarr_format)
 
-            # Write the data to OME-Zarr
+            # Write the data to OME-Zarr using the new scale_factors API
             write_image(
                 image=ngff_image.data,
                 group=store,
-                scaler=scaler,
+                scale_factors=scale_factors,
+                method=scaling_method,
                 coordinate_transformations=coordinate_transformations,
                 axes=axes,
                 metadata={} if omero is None else {"omero": _to_primitive(omero)},
@@ -498,11 +485,12 @@ def save_ngff_image_with_ome_zarr(
         else:
             store = store_or_path
 
-        # Write the data to OME-Zarr
+        # Write the data to OME-Zarr using the new scale_factors API
         write_image(
             image=ngff_image.data,
             group=store,
-            scaler=scaler,
+            scale_factors=scale_factors,
+            method=scaling_method,
             coordinate_transformations=coordinate_transformations,
             axes=axes,
             metadata={} if omero is None else {"omero": _to_primitive(omero)},

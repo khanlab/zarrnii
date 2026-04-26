@@ -20,17 +20,17 @@ classifiers = [
 ]
 
 dependencies = [
-    "zarr>=3.0.8",
+    "zarr>=3.1.6",
     "nibabel>=5.2.0",
-    "dask>=2025.5.1,<2025.12.0",
+    "dask>=2026.3.0",
     "numpy>=1.26.4",
     "scipy>=1.12.0",
     "pandas>=2.2.0",
-    "ngff-zarr[cli,dask-image,itk,tensorstore,validate]>=0.13.1",
+    "ngff-zarr[cli,dask-image,itk,tensorstore,validate]>=0.34.0",
     "scikit-image>=0.22.0",
     "h5py>=3.14.0",
     "pyyaml>=6.0",
-    "ome-zarr>=0.12.0",
+    "ome-zarr>=0.16.0",
     "pluggy>=1.0.0",
 ]
 
