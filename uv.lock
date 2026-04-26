@@ -4370,6 +4370,9 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
+distributed = [
+    { name = "dask", extra = ["distributed"] },
+]
 imaris = [
     { name = "h5py" },
 ]
@@ -4406,6 +4409,7 @@ requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.10.0" },
     { name = "bokeh", marker = "extra == 'dev'", specifier = ">=3.4.1" },
     { name = "dask", specifier = ">=2026.3.0" },
+    { name = "dask", extras = ["distributed"], marker = "extra == 'distributed'", specifier = ">=2026.3.0" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=7.3.0" },
     { name = "flake8-bugbear", marker = "extra == 'dev'", specifier = ">=24.12.12" },
     { name = "flake8-docstrings", marker = "extra == 'dev'", specifier = ">=1.7.0" },
@@ -4434,7 +4438,7 @@ requires-dist = [
     { name = "templateflow", marker = "extra == 'templateflow'", specifier = ">=0.8.0" },
     { name = "zarr", specifier = ">=3.1.6" },
 ]
-provides-extras = ["dev", "imaris", "n4", "templateflow"]
+provides-extras = ["dev", "distributed", "imaris", "n4", "templateflow"]
 
 [package.metadata.requires-dev]
 dev = [
