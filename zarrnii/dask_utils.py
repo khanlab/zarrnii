@@ -1,6 +1,9 @@
 """Dask scheduler setup utilities."""
 
+import logging
 from contextlib import contextmanager
+
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -35,7 +38,7 @@ def get_dask_client(scheduler, threads, threads_per_worker=2):
             dashboard_address=":8788",
         )
         client = Client(cluster)
-        print(cluster.dashboard_link)
+        logger.info("Dask dashboard: %s", cluster.dashboard_link)
         try:
             yield client
         finally:
