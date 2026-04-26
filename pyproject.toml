@@ -66,6 +66,10 @@ templateflow = [
     "templateflow>=0.8.0",
 ]
 
+distributed = [
+    "dask[distributed]>=2026.3.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/khanlab/zarrnii"
 Documentation = "https://www.khanlab.ca/zarrnii"
