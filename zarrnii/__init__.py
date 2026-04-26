@@ -12,6 +12,7 @@ from .core import (
     save_ngff_image,
     save_ngff_image_with_ome_zarr,
 )
+from .benchmark import BenchmarkSuite, DaskConfig
 from .dask_utils import get_dask_client
 from .transform import AffineTransform, DisplacementTransform
 
@@ -24,6 +25,8 @@ __all__ = [
     "save_ngff_image",
     "save_ngff_image_with_ome_zarr",
     "get_dask_client",
+    "BenchmarkSuite",
+    "DaskConfig",
     "create_mip_visualization",
     "compute_centroids",
     "compute_region_properties",

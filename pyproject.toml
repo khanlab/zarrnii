@@ -84,6 +84,7 @@ build-backend = "hatchling.build"
 [project.scripts]
 z2n = "zarrnii.cli:z2n"
 n2z = "zarrnii.cli:n2z"
+zarrnii-benchmark = "zarrnii.benchmark:benchmark_cli"
 
 [tool.hatch.version]
 source = "vcs"
