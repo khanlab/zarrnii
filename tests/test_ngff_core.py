@@ -329,10 +329,8 @@ class TestOmeZarrWriter:
             multiscales = get_multiscales(output_path)
             assert len(multiscales.images) == 1  # Only original level
 
-    def test_save_ngff_image_with_ome_zarr_z_axis_no_downsampling(
-        self, simple_ngff_image
-    ):
-        """Test that ome-zarr-py backend only downsamples in xy, not z."""
+    def test_save_ngff_image_with_ome_zarr_z_axis_downsampling(self, simple_ngff_image):
+        """Test that ome-zarr-py backend downsamples in z, y, and x by default."""
         from zarrnii.core import save_ngff_image_with_ome_zarr
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -342,25 +340,57 @@ class TestOmeZarrWriter:
             # Verify the output exists
             assert os.path.exists(output_path)
 
-            # Load back and check that z scale doesn't change across levels
+            # Load back and check that all spatial scales change across levels
             multiscales = get_multiscales(output_path)
             assert len(multiscales.images) == 3  # 3 pyramid levels
 
             # Get z scale for each level
-            z_scales = []
-            for img in multiscales.images:
-                # Z dimension is at index 1 (dims are ['c', 'z', 'y', 'x'])
-                z_scale = img.scale.get("z", 1.0)
-                z_scales.append(z_scale)
-
-            # All z scales should be the same (z axis not downsampled)
-            assert all(
-                z_scale == z_scales[0] for z_scale in z_scales
-            ), f"Z scales should be constant across pyramid levels, but got: {z_scales}"
-
-            # Check that x and y scales do change (they are downsampled)
+            z_scales = [img.scale.get("z", 1.0) for img in multiscales.images]
             x_scales = [img.scale.get("x", 1.0) for img in multiscales.images]
             y_scales = [img.scale.get("y", 1.0) for img in multiscales.images]
+
+            # Z scales should increase with pyramid level (z is now downsampled)
+            assert (
+                z_scales[0] < z_scales[1] < z_scales[2]
+            ), f"Z scales should increase: {z_scales}"
+
+            # X and Y scales should also increase with pyramid level
+            assert (
+                x_scales[0] < x_scales[1] < x_scales[2]
+            ), f"X scales should increase: {x_scales}"
+            assert (
+                y_scales[0] < y_scales[1] < y_scales[2]
+            ), f"Y scales should increase: {y_scales}"
+
+    def test_save_ngff_image_with_ome_zarr_xy_only_downsampling(
+        self, simple_ngff_image
+    ):
+        """Test that passing integer scale_factors only downsamples xy, not z."""
+        from zarrnii.core import save_ngff_image_with_ome_zarr
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "output.zarr")
+            # Integer scale_factors → xy-only downsampling (ome-zarr-py behaviour)
+            save_ngff_image_with_ome_zarr(
+                simple_ngff_image,
+                output_path,
+                max_layer=3,
+                scale_factors=[2, 4],
+            )
+
+            assert os.path.exists(output_path)
+
+            multiscales = get_multiscales(output_path)
+            assert len(multiscales.images) == 3
+
+            z_scales = [img.scale.get("z", 1.0) for img in multiscales.images]
+            x_scales = [img.scale.get("x", 1.0) for img in multiscales.images]
+            y_scales = [img.scale.get("y", 1.0) for img in multiscales.images]
+
+            # Z scales should be constant (integer factors → xy-only)
+            assert all(
+                z == z_scales[0] for z in z_scales
+            ), f"Z scales should be constant across pyramid levels, but got: {z_scales}"
 
             # X and Y scales should increase with pyramid level
             assert (
