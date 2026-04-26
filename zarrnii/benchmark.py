@@ -614,10 +614,10 @@ def _write_html_report(
             return ""
         return (
             f'<div class="callout"><strong>{label}</strong><br>'
-            f'Scheduler: {row.get("dask_label","?")}<br>'
-            f'Chunk: {row.get("chunk_shape","?")}<br>'
-            f'Shard: {row.get("shard_shape","") or "none"}<br>'
-            f'Mean time: {row.get(label.lower().replace(" ","_") + "_wall_s_mean", 0):.3f}s'
+            f'Scheduler: {row.get("dask_label", "?")}<br>'
+            f'Chunk: {row.get("chunk_shape", "?")}<br>'
+            f'Shard: {row.get("shard_shape", "") or "none"}<br>'
+            f'Mean time: {row.get(label.lower().replace(" ", "_") + "_wall_s_mean", 0):.3f}s'
             f"</div>"
         )
 
