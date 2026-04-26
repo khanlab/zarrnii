@@ -1,4 +1,3 @@
-from .dask_utils import get_dask_client
 from .analysis import (
     compute_histogram,
     compute_otsu_thresholds,
@@ -13,6 +12,7 @@ from .core import (
     save_ngff_image,
     save_ngff_image_with_ome_zarr,
 )
+from .dask_utils import get_dask_client
 from .transform import AffineTransform, DisplacementTransform
 
 __all__ = [
