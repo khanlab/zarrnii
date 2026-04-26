@@ -81,9 +81,17 @@ def create_test_dataset_with_omero_metadata(
     # Save to zarr
     nz.to_ngff_zarr(store_path, multiscales)
 
-    # Add omero metadata
+    # Add omero metadata inside the "ome" key (v0.5 format location)
+    # so that ngff_zarr can find it during read-back.
     group = zarr.open_group(store_path, mode="a")
-    group.attrs["omero"] = omero_metadata
+    current_attrs = dict(group.attrs)
+    if "ome" in current_attrs:
+        ome_attrs = dict(current_attrs["ome"])
+        ome_attrs["omero"] = omero_metadata
+        current_attrs["ome"] = ome_attrs
+    else:
+        current_attrs["omero"] = omero_metadata
+    group.attrs.update(current_attrs)
 
     return store_path
 
