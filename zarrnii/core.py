@@ -376,12 +376,13 @@ def save_ngff_image_with_ome_zarr(
     ngff_image: nz.NgffImage,
     store_or_path: Union[str, Any],
     max_layer: int = 4,
-    scale_factors: Optional[List[int]] = None,
+    scale_factors: Optional[List] = None,
     scaling_method: str = "local_mean",
     xyz_orientation: Optional[str] = None,
     omero: nz.Omero = None,
     compute: bool = True,
     zarr_format: int = 3,
+    storage_options: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None,
     **kwargs: Any,
 ) -> None:
     """Save an NgffImage to an OME-Zarr store using ome-zarr-py library.
@@ -396,15 +397,30 @@ def save_ngff_image_with_ome_zarr(
             and .ozx or .zip extensions for OME-Zarr zip creation
         max_layer: Maximum number of pyramid levels to create (including level 0)
         scale_factors: Custom scale factors for each pyramid level. If None,
-            uses powers of 2: [2, 4, 8, ...]
-        scaling_method: Method for downsampling ('nearest', 'gaussian', etc.)
+            defaults to ``[{"z": 2, "y": 2, "x": 2}, {"z": 4, "y": 4, "x": 4}, ...]``
+            which downsamples by a factor of 2 in all spatial dimensions at each
+            level.  Can also be a list of integers (xy-only downsampling) or a
+            list of dicts with per-axis factors, e.g.
+            ``[{"z": 2, "y": 2, "x": 2}, {"z": 4, "y": 4, "x": 4}]``.
+        scaling_method: Downsampling method to use. One of ``'nearest'``,
+            ``'resize'``, ``'local_mean'``, or ``'zoom'``. Defaults to
+            ``'local_mean'``.
         xyz_orientation: Anatomical orientation string (e.g., 'RAS', 'LPI') to store
             as metadata
+        omero: Optional OMERO channel metadata (``nz.Omero`` instance).
         compute: Whether to compute the write operations immediately (True) or
             return delayed operations (False)
         zarr_format: Zarr format version to use (2 or 3). Defaults to 3.
             Use 2 for backwards compatibility with tools that do not yet
             support Zarr v3 (e.g. older versions of napari).
+        storage_options: Storage options passed directly to the zarr backend via
+            ``ome_zarr.writer.write_image``.  A single dict applies to all
+            pyramid levels; a list of dicts must match the number of pyramid
+            levels and allows different options per level.  Typical uses include
+            selecting shards (zarr v3) or custom chunk sizes, e.g.::
+
+                storage_options={"shards": (1, 64, 64, 64)}
+
         **kwargs: Additional arguments passed to ome_zarr.writer.write_image
 
     Raises:
@@ -413,8 +429,14 @@ def save_ngff_image_with_ome_zarr(
         TypeError: If ngff_image is not a valid NgffImage object
 
     Examples:
-        >>> # Save with default pyramid levels
+        >>> # Save with default pyramid levels (all spatial dims downsampled)
         >>> save_ngff_image_with_ome_zarr(img, "/path/to/output.zarr")
+
+        >>> # Save with shards for efficient cloud storage
+        >>> save_ngff_image_with_ome_zarr(
+        ...     img, "/path/to/output.zarr",
+        ...     storage_options={"shards": (1, 64, 64, 64)},
+        ... )
 
         >>> # Save to OME-Zarr zip with custom pyramid (new .ozx extension)
         >>> save_ngff_image_with_ome_zarr(img, "/path/to/output.ozx",
@@ -433,12 +455,17 @@ def save_ngff_image_with_ome_zarr(
     import tempfile
 
     import zarr
+    from ome_zarr.scale import Methods
     from ome_zarr.writer import write_image
 
     if scale_factors is None:
         # Generate scale factors for each additional level beyond level 0.
         # For max_layer total levels, we need max_layer-1 scale factors.
-        scale_factors = [2**i for i in range(1, max_layer)]
+        # Use dict format so that z is also downsampled at each level.
+        scale_factors = [{"z": 2**i, "y": 2**i, "x": 2**i} for i in range(1, max_layer)]
+
+    # Convert scaling_method string to Methods enum for proper type safety
+    method = Methods(scaling_method)
 
     # Convert NgffImage metadata to ome-zarr format
     axes = _ngff_image_to_ome_zarr_axes(ngff_image)
@@ -460,10 +487,11 @@ def save_ngff_image_with_ome_zarr(
                 image=ngff_image.data,
                 group=store,
                 scale_factors=scale_factors,
-                method=scaling_method,
+                method=method,
                 coordinate_transformations=coordinate_transformations,
                 axes=axes,
                 metadata={} if omero is None else {"omero": _to_primitive(omero)},
+                storage_options=storage_options,
                 compute=compute,
                 **kwargs,
             )
@@ -490,10 +518,11 @@ def save_ngff_image_with_ome_zarr(
             image=ngff_image.data,
             group=store,
             scale_factors=scale_factors,
-            method=scaling_method,
+            method=method,
             coordinate_transformations=coordinate_transformations,
             axes=axes,
             metadata={} if omero is None else {"omero": _to_primitive(omero)},
+            storage_options=storage_options,
             compute=compute,
             **kwargs,
         )
@@ -626,13 +655,16 @@ def _ngff_image_to_ome_zarr_axes(ngff_image: nz.NgffImage) -> list:
 
 
 def _ngff_image_to_ome_zarr_transforms(
-    ngff_image: nz.NgffImage, scale_factors: List[int]
+    ngff_image: nz.NgffImage,
+    scale_factors: Union[List[int], List[Dict[str, int]]],
 ) -> list:
     """Convert NgffImage scale/translation to ome-zarr coordinate_transformations.
 
     Args:
         ngff_image: NgffImage object
-        scale_factors: List of scale factors for each pyramid level
+        scale_factors: List of scale factors for each pyramid level. Either a list
+            of integers (xy-only downsampling) or a list of dicts with per-axis
+            factors (e.g. ``[{"z": 2, "y": 2, "x": 2}, ...]``).
 
     Returns:
         List of coordinate transformations for each pyramid level
@@ -666,13 +698,14 @@ def _ngff_image_to_ome_zarr_transforms(
     )
 
     # Additional levels with downsampling
-    # Note: ome-zarr-py only downsamples in xy plane, not in z
     for factor in scale_factors:
         level_scale = []
         for i, dim in enumerate(ngff_image.dims):
-            # Only apply scaling to x and y dimensions (not z)
-            # ome-zarr-py Scaler only downsamples in the xy plane
-            if dim in ["x", "y"]:
+            if isinstance(factor, dict):
+                # Dict-based: apply per-axis factor; default to 1 for unlisted axes
+                level_scale.append(base_scale[i] * factor.get(dim, 1))
+            elif dim in ["x", "y"]:
+                # Integer-based: ome-zarr-py only downsamples in the xy plane
                 level_scale.append(base_scale[i] * factor)
             else:
                 level_scale.append(base_scale[i])
@@ -3511,9 +3544,10 @@ class ZarrNii:
         self,
         store_or_path: Union[str, Any],
         max_layer: int = 4,
-        scale_factors: Optional[List[int]] = None,
+        scale_factors: Optional[List] = None,
         backend: str = "ome-zarr-py",
         zarr_format: int = 3,
+        storage_options: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None,
         **kwargs: Any,
     ) -> "ZarrNii":
         """Save to OME-Zarr store with multiscale pyramid.
@@ -3531,17 +3565,33 @@ class ZarrNii:
             max_layer: Maximum number of pyramid levels to create (including level 0).
                 Higher values create more downsampled levels
             scale_factors: Custom downsampling factors for each pyramid level.
-                If None, uses powers of 2: [2, 4, 8, 16, ...]
+                If None, defaults to ``[{"z": 2, "y": 2, "x": 2}, ...]`` (all
+                spatial dims downsampled by factors of 2 at each level) for the
+                ``'ome-zarr-py'`` backend, or powers of 2 ``[2, 4, 8, ...]`` for
+                the ``'ngff-zarr'`` backend.
+                Pass a list of integers to downsample in xy only, or a list of
+                dicts to control per-axis factors, e.g.
+                ``[{"z": 2, "y": 2, "x": 2}, {"z": 4, "y": 4, "x": 4}]``.
             backend: Backend library to use for writing. Options:
-                - 'ngff-zarr': Use ngff-zarr library (default)
-                - 'ome-zarr-py': Use ome-zarr-py library for better dask integration
+                - 'ngff-zarr': Use ngff-zarr library
+                - 'ome-zarr-py': Use ome-zarr-py library for better dask
+                  integration (default)
             zarr_format: Zarr format version to use (2 or 3). Defaults to 3.
                 Use 2 for backwards compatibility with tools that do not yet
                 support Zarr v3 (e.g. older versions of napari).
                 Only applies to the 'ome-zarr-py' backend.
+            storage_options: Storage options passed to the zarr backend
+                (``'ome-zarr-py'`` backend only).  A single dict applies to all
+                pyramid levels; a list of dicts must match the number of pyramid
+                levels.  Common uses include sharding (zarr v3) and custom chunk
+                sizes, e.g.::
+
+                    storage_options={"shards": (1, 64, 64, 64)}
+
             **kwargs: Additional arguments passed to the save function.
                 For 'ngff-zarr': passed to to_ngff_zarr function
-                For 'ome-zarr-py': passed to write_image (e.g., scaling_method, compute)
+                For 'ome-zarr-py': passed to write_image (e.g., scaling_method,
+                compute)
 
         Returns:
             Self for method chaining
@@ -3551,8 +3601,14 @@ class ZarrNii:
             ValueError: If invalid scale_factors or backend provided
 
         Examples:
-            >>> # Save with default pyramid levels
+            >>> # Save with default pyramid levels (z+xy downsampled)
             >>> znii.to_ome_zarr("/path/to/output.zarr")
+
+            >>> # Save with shards for cloud-optimised storage
+            >>> znii.to_ome_zarr(
+            ...     "/path/to/output.zarr",
+            ...     storage_options={"shards": (1, 64, 64, 64)},
+            ... )
 
             >>> # Save to compressed ZIP with custom pyramid
             >>> znii.to_ome_zarr(
@@ -3561,11 +3617,10 @@ class ZarrNii:
             ...     scale_factors=[2, 4]
             ... )
 
-            >>> # Use ome-zarr-py backend for better dask performance
+            >>> # Use a specific downsampling method
             >>> znii.to_ome_zarr(
             ...     "/path/to/output.zarr",
-            ...     backend="ome-zarr-py",
-            ...     scaling_method="gaussian"
+            ...     scaling_method="nearest"
             ... )
 
             >>> # Chain with other operations
@@ -3619,6 +3674,7 @@ class ZarrNii:
                     self.xyz_orientation if hasattr(self, "xyz_orientation") else None
                 ),
                 zarr_format=zarr_format,
+                storage_options=storage_options,
                 **kwargs,
             )
 
