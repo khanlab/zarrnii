@@ -395,6 +395,12 @@ class BenchmarkSuite:
     output_dir:
         Directory where CSV results and HTML report are written.  Defaults
         to the current working directory.
+    tmp_dir:
+        Root directory used for the temporary OME-Zarr stores written during
+        benchmarking (passed as *dir* to :class:`tempfile.TemporaryDirectory`).
+        When ``None`` (the default) the system temporary directory is used.
+        Set this to a directory on a different filesystem (e.g. a network
+        mount) to measure I/O performance on that filesystem.
 
     Examples
     --------
@@ -420,6 +426,7 @@ class BenchmarkSuite:
         dask_configs: Optional[Sequence[Union[DaskConfig, Dict]]] = None,
         n_reps: int = 3,
         output_dir: str = ".",
+        tmp_dir: Optional[str] = None,
     ) -> None:
         self.shape = shape
         self.dtype = dtype
@@ -431,6 +438,7 @@ class BenchmarkSuite:
         )
         self.n_reps = n_reps
         self.output_dir = Path(output_dir)
+        self.tmp_dir = tmp_dir  # root dir for TemporaryDirectory; None → system default
 
         # Normalise dask_configs to DaskConfig objects
         raw_configs = dask_configs or [DaskConfig(scheduler="threads", n_threads=4)]
@@ -480,7 +488,9 @@ class BenchmarkSuite:
         )
 
         rows = []
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        with tempfile.TemporaryDirectory(dir=self.tmp_dir) as tmp_dir:
+            # Record the resolved root so it can be included in reports
+            tmp_dir_root = str(Path(tmp_dir).parent)
             for i, cfg in enumerate(configs):
                 for rep in range(self.n_reps):
                     run_num = i * self.n_reps + rep + 1
@@ -493,7 +503,9 @@ class BenchmarkSuite:
                         self.n_reps,
                     )
                     result = _run_single(cfg, rep, tmp_dir)
-                    rows.append(result.to_dict())
+                    row = result.to_dict()
+                    row["tmp_dir_root"] = tmp_dir_root
+                    rows.append(row)
                     _print_result(result)
 
         df = pd.DataFrame(rows)
@@ -556,7 +568,12 @@ class BenchmarkSuite:
 
         # HTML report
         html_path = self.output_dir / "benchmark_report.html"
-        _write_html_report(df, summary_df, html_path)
+        tmp_dir_root = (
+            df["tmp_dir_root"].iloc[0]
+            if "tmp_dir_root" in df.columns and not df.empty
+            else None
+        )
+        _write_html_report(df, summary_df, html_path, tmp_dir_root=tmp_dir_root)
         logger.info("HTML report saved to %s", html_path)
 
         # Print best configs
@@ -617,10 +634,14 @@ def _write_html_report(
     df: "pd.DataFrame",  # noqa: F821
     summary_df: "pd.DataFrame",  # noqa: F821
     html_path: Path,
+    tmp_dir_root: Optional[str] = None,
 ) -> None:
     """Write an HTML benchmark report to *html_path*."""
     title = "ZarrNii Benchmark Report"
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+    tmp_dir_line = (
+        f"<p><strong>Temp dir root:</strong> {tmp_dir_root}</p>" if tmp_dir_root else ""
+    )
 
     # Best config callouts
     best_write_row = best_read_row = best_total_row = None
@@ -686,6 +707,7 @@ def _write_html_report(
 <body>
   <h1>{title}</h1>
   <p>Generated: {timestamp}</p>
+  {tmp_dir_line}
 
   <h2>Best Configurations</h2>
   {callout_write}
@@ -778,6 +800,7 @@ Examples:
       --shards none 128,128,128 \\
       --dask-configs threads:8 distributed:8:2 \\
       --output-dir ./results --n-reps 5
+  zarrnii-benchmark --tmp-dir /mnt/network_fs --output-dir ./net_results
 """,
     )
     parser.add_argument(
@@ -836,6 +859,16 @@ Examples:
         help="Directory for CSV and HTML report output (default: current dir)",
     )
     parser.add_argument(
+        "--tmp-dir",
+        default=None,
+        metavar="DIR",
+        help=(
+            "Root directory for temporary OME-Zarr stores created during "
+            "benchmarking (default: system temp dir).  Use this to benchmark "
+            "I/O on a specific filesystem, e.g. a network mount."
+        ),
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -862,6 +895,7 @@ Examples:
         dask_configs=dask_configs,
         n_reps=args.n_reps,
         output_dir=args.output_dir,
+        tmp_dir=args.tmp_dir,
     )
 
     print(f"ZarrNii Benchmark")
@@ -871,6 +905,7 @@ Examples:
     print(f"  Shards:      {suite.shard_shapes}")
     print(f"  Dask configs:{[dc.label for dc in dask_configs]}")
     print(f"  Reps:        {args.n_reps}")
+    print(f"  Tmp dir:     {args.tmp_dir or '(system default)'}")
     print(f"  Output dir:  {args.output_dir}")
     print()
 

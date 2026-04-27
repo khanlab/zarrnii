@@ -48,6 +48,7 @@ zarrnii-benchmark \
 | `--shards` | One or more shard specs as `Z,Y,X` or `none` to disable | `none` |
 | `--dask-configs` | One or more scheduler specs (see below) | `threads:4` |
 | `--n-reps` | Repetitions per configuration | `3` |
+| `--tmp-dir` | Root directory for temporary OME-Zarr stores (use to benchmark different filesystems) | system temp dir |
 | `--output-dir` | Directory for CSV/HTML output | `.` (current dir) |
 | `-v` / `--verbose` | Enable debug logging | off |
 
@@ -82,6 +83,7 @@ suite = BenchmarkSuite(
     ],
     n_reps=3,
     output_dir="./bench_results",
+    tmp_dir=None,                          # None = system default temp dir
 )
 
 # Run all configurations – returns a pandas DataFrame
@@ -113,6 +115,7 @@ includes the columns below.
 | `write_cpu_efficiency` | `cpu_s / (wall_s × n_threads)` during write |
 | `read_cpu_efficiency` | `cpu_s / (wall_s × n_threads)` during read |
 | `peak_memory_mb` | Peak RSS memory (MB) during the run |
+| `tmp_dir_root` | Root directory where temporary stores were written |
 | `error` | Non-empty when the run raised an exception |
 
 ---
@@ -133,6 +136,24 @@ Open `benchmark_report.html` in your browser for a quick visual overview.
 ---
 
 ## Interpreting results
+
+### Comparing filesystems
+
+Use `--tmp-dir` to write the benchmark stores to a specific filesystem.  This
+is particularly useful for comparing local NVMe storage against network
+filesystems (e.g. NFS, GPFS, Lustre):
+
+```bash
+# Benchmark on local scratch disk
+zarrnii-benchmark --tmp-dir /scratch/local --output-dir ./results_local
+
+# Benchmark on shared network storage
+zarrnii-benchmark --tmp-dir /mnt/network_fs --output-dir ./results_network
+```
+
+The resolved temp directory root is recorded in the `tmp_dir_root` column of
+every result row, so results from different runs can be merged and compared
+directly in a single DataFrame or CSV.
 
 ### Chunk size
 
