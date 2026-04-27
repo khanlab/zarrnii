@@ -703,10 +703,7 @@ def _parse_shard(value: str) -> Optional[Tuple[int, ...]]:
     """
     if value.strip().lower() == "none":
         return None
-    try:
-        return tuple(int(x.strip()) for x in value.split(","))
-    except ValueError as exc:
-        raise ValueError(f"Cannot parse shard spec {value!r}: {exc}") from exc
+    return _parse_chunk(value)
 
 
 def _parse_dask_config(value: str) -> DaskConfig:
@@ -842,13 +839,11 @@ Examples:
         output_dir=args.output_dir,
     )
 
-    effective_chunks = chunk_shapes or [tuple(s // 2 for s in shape)]
-    effective_shards = shard_shapes or [None]
     print(f"ZarrNii Benchmark")
     print(f"  Shape:       {shape}")
     print(f"  Dtype:       {args.dtype}")
-    print(f"  Chunks:      {effective_chunks}")
-    print(f"  Shards:      {effective_shards}")
+    print(f"  Chunks:      {suite.chunk_shapes}")
+    print(f"  Shards:      {suite.shard_shapes}")
     print(f"  Dask configs:{[dc.label for dc in dask_configs]}")
     print(f"  Reps:        {args.n_reps}")
     print(f"  Output dir:  {args.output_dir}")
