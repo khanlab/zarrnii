@@ -48,7 +48,6 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import dask
 import dask.array as da
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -272,31 +271,46 @@ def _make_synthetic_dask_array(
     return da.random.random(shape, chunks=chunk_shape).astype(dtype)
 
 
-def _write_ome_zarr(
+def _write_zarrnii(
     arr: da.Array,
     store_path: str,
     chunk_shape: Tuple[int, ...],
+    shard_shape: Optional[Tuple[int, ...]],
 ) -> None:
-    """Write *arr* to an OME-Zarr store at *store_path*."""
-    import ngff_zarr as nz
+    """Write *arr* to an OME-Zarr store at *store_path* via ZarrNii.
 
-    # Build a single-scale NgffImage and save it
-    dims = ["z", "y", "x"][-len(arr.shape) :]  # basic spatial dims
-    ngff_image = nz.to_ngff_image(arr, dims=dims)
-    multiscales = nz.to_multiscales(ngff_image, scale_factors=[], chunks=chunk_shape)
-    nz.to_ngff_zarr(store_path, multiscales, version="0.4")
+    Uses :meth:`ZarrNii.from_darr` to construct a :class:`ZarrNii` instance
+    and :meth:`ZarrNii.to_ome_zarr` to write a single-resolution OME-Zarr
+    store, exercising the same code paths as a typical ZarrNii workflow.
+    Chunk and shard shapes are passed via ``storage_options`` and automatically
+    prepended with a channel dimension of 1.
+    """
+    from zarrnii import ZarrNii
+
+    # ZarrNii.from_darr expects a leading channel dimension (c, z, y, x)
+    arr_4d = arr[None] if arr.ndim == 3 else arr
+    img = ZarrNii.from_darr(arr_4d, axes_order="ZYX")
+
+    # Build storage_options: prepend a channel dimension of 1 to match 4-D data
+    storage_options: Dict = {"chunks": (1,) + tuple(chunk_shape)}
+    if shard_shape is not None:
+        storage_options["shards"] = (1,) + tuple(shard_shape)
+
+    img.to_ome_zarr(
+        store_path,
+        max_layer=1,
+        scale_factors=[],
+        backend="ome-zarr-py",
+        storage_options=storage_options,
+    )
 
 
-def _read_ome_zarr(store_path: str) -> np.ndarray:
-    """Read the OME-Zarr store at *store_path* and return a NumPy array."""
-    import ngff_zarr as nz
+def _read_zarrnii(store_path: str) -> None:
+    """Read the OME-Zarr store at *store_path* via ZarrNii and compute data."""
+    from zarrnii import ZarrNii
 
-    multiscales = nz.from_ngff_zarr(store_path)
-    # from_ngff_zarr returns an NgffMultiscales; grab the highest-resolution image
-    arr = multiscales.images[0].data
-    if hasattr(arr, "compute"):
-        return arr.compute()
-    return np.asarray(arr)
+    img = ZarrNii.from_ome_zarr(store_path)
+    img.darr.compute()
 
 
 def _run_single(
@@ -324,14 +338,14 @@ def _run_single(
                 )
                 cpu_before_write = _cpu_time_s()
                 t0_write = time.perf_counter()
-                _write_ome_zarr(arr, store_path, config.chunk_shape)
+                _write_zarrnii(arr, store_path, config.chunk_shape, config.shard_shape)
                 result.write_wall_s = time.perf_counter() - t0_write
                 result.write_cpu_s = _cpu_time_s() - cpu_before_write
 
                 # ----- READ -----
                 cpu_before_read = _cpu_time_s()
                 t0_read = time.perf_counter()
-                _read_ome_zarr(store_path)
+                _read_zarrnii(store_path)
                 result.read_wall_s = time.perf_counter() - t0_read
                 result.read_cpu_s = _cpu_time_s() - cpu_before_read
 
