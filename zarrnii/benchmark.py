@@ -287,8 +287,15 @@ def _write_zarrnii(
     """
     from zarrnii import ZarrNii
 
-    # ZarrNii.from_darr expects a leading channel dimension (c, z, y, x)
-    arr_4d = arr[None] if arr.ndim == 3 else arr
+    if arr.ndim != 3:
+        raise ValueError(
+            f"Benchmark synthetic array must be 3-D (Z, Y, X), got {arr.ndim}-D"
+        )
+
+    # ZarrNii.from_darr expects a leading channel dimension → (1, Z, Y, X).
+    # axes_order="ZYX" refers to the *spatial* axes only; "c" is always prepended
+    # automatically, giving dims = ["c", "z", "y", "x"].
+    arr_4d = arr[None]
     img = ZarrNii.from_darr(arr_4d, axes_order="ZYX")
 
     # Build storage_options: prepend a channel dimension of 1 to match 4-D data
@@ -305,12 +312,16 @@ def _write_zarrnii(
     )
 
 
-def _read_zarrnii(store_path: str) -> None:
-    """Read the OME-Zarr store at *store_path* via ZarrNii and compute data."""
+def _read_zarrnii(store_path: str) -> da.Array:
+    """Read the OME-Zarr store at *store_path* via ZarrNii and compute data.
+
+    Returns the fully computed array so that the benchmark measures the
+    complete read-and-materialise path exercised by :meth:`ZarrNii.from_ome_zarr`.
+    """
     from zarrnii import ZarrNii
 
     img = ZarrNii.from_ome_zarr(store_path)
-    img.darr.compute()
+    return img.darr.compute()
 
 
 def _run_single(
