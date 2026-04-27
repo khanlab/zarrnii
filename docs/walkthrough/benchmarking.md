@@ -34,6 +34,7 @@ zarrnii-benchmark \
     --shape 128 512 512 \
     --dtype float32 \
     --chunks 32,32,32 64,64,64 128,128,128 \
+    --shards none 128,128,128 \
     --dask-configs threads:4 threads:8 distributed:8:2 \
     --n-reps 5 \
     --output-dir ./bench_results
@@ -44,6 +45,7 @@ zarrnii-benchmark \
 | `--shape Z Y X` | Spatial dimensions of the synthetic array | `64 256 256` |
 | `--dtype` | NumPy dtype (e.g. `float32`, `uint16`) | `float32` |
 | `--chunks` | One or more chunk specs as `Z,Y,X` | half the array shape |
+| `--shards` | One or more shard specs as `Z,Y,X` or `none` to disable | `none` |
 | `--dask-configs` | One or more scheduler specs (see below) | `threads:4` |
 | `--n-reps` | Repetitions per configuration | `3` |
 | `--output-dir` | Directory for CSV/HTML output | `.` (current dir) |

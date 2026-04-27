@@ -14,6 +14,7 @@ Run from the command line::
 
     zarrnii-benchmark --shape 64 256 256 \\
         --chunks 32,32,32 64,64,64 \\
+        --shards none 64,64,64 \\
         --dask-configs threads:4 distributed:4:2 \\
         --output-dir ./bench_results
 
@@ -568,16 +569,19 @@ def _print_best_configs(summary_df: "pd.DataFrame") -> None:  # noqa: F821
         print(
             f"Fastest WRITE : {fastest_write['dask_label']}  "
             f"chunk={fastest_write['chunk_shape']}  "
+            f"shard={fastest_write['shard_shape'] or 'none'}  "
             f"{fastest_write['write_wall_s_mean']:.3f}s"
         )
         print(
             f"Fastest READ  : {fastest_read['dask_label']}  "
             f"chunk={fastest_read['chunk_shape']}  "
+            f"shard={fastest_read['shard_shape'] or 'none'}  "
             f"{fastest_read['read_wall_s_mean']:.3f}s"
         )
         print(
             f"Fastest TOTAL : {fastest_total['dask_label']}  "
             f"chunk={fastest_total['chunk_shape']}  "
+            f"shard={fastest_total['shard_shape'] or 'none'}  "
             f"{fastest_total['total_wall_s_mean']:.3f}s"
         )
     except Exception:  # noqa: BLE001
@@ -689,6 +693,22 @@ def _parse_chunk(value: str) -> Tuple[int, ...]:
         raise ValueError(f"Cannot parse chunk spec {value!r}: {exc}") from exc
 
 
+def _parse_shard(value: str) -> Optional[Tuple[int, ...]]:
+    """Parse a shard spec into a tuple or ``None``.
+
+    Accepted values:
+
+    * ``"none"`` / ``"None"`` → ``None`` (disable sharding)
+    * ``"32,64,64"``          → ``(32, 64, 64)``
+    """
+    if value.strip().lower() == "none":
+        return None
+    try:
+        return tuple(int(x.strip()) for x in value.split(","))
+    except ValueError as exc:
+        raise ValueError(f"Cannot parse shard spec {value!r}: {exc}") from exc
+
+
 def _parse_dask_config(value: str) -> DaskConfig:
     """Parse a dask config spec string into a :class:`DaskConfig`.
 
@@ -730,8 +750,10 @@ def benchmark_cli(argv: Optional[List[str]] = None) -> None:
 Examples:
   zarrnii-benchmark
   zarrnii-benchmark --shape 64 256 256 --chunks 32,32,32 64,64,64
+  zarrnii-benchmark --shape 64 256 256 --chunks 32,32,32 --shards none 64,64,64
   zarrnii-benchmark --dask-configs threads:4 distributed:8:2
   zarrnii-benchmark --shape 128 512 512 --chunks 64,64,64 \\
+      --shards none 128,128,128 \\
       --dask-configs threads:8 distributed:8:2 \\
       --output-dir ./results --n-reps 5
 """,
@@ -757,6 +779,16 @@ Examples:
         help=(
             "One or more chunk shapes as comma-separated integers, "
             "e.g. --chunks 32,32,32 64,64,64  (default: half the array shape)"
+        ),
+    )
+    parser.add_argument(
+        "--shards",
+        nargs="+",
+        default=None,
+        metavar="Z,Y,X|none",
+        help=(
+            "One or more shard shapes as comma-separated integers, or 'none' to "
+            "disable sharding, e.g. --shards none 128,128,128  (default: none)"
         ),
     )
     parser.add_argument(
@@ -797,21 +829,26 @@ Examples:
 
     shape = tuple(args.shape)
     chunk_shapes = [_parse_chunk(c) for c in args.chunks] if args.chunks else None
+    shard_shapes = [_parse_shard(s) for s in args.shards] if args.shards else None
     dask_configs = [_parse_dask_config(s) for s in args.dask_configs]
 
     suite = BenchmarkSuite(
         shape=shape,
         dtype=args.dtype,
         chunk_shapes=chunk_shapes,
+        shard_shapes=shard_shapes,
         dask_configs=dask_configs,
         n_reps=args.n_reps,
         output_dir=args.output_dir,
     )
 
+    effective_chunks = chunk_shapes or [tuple(s // 2 for s in shape)]
+    effective_shards = shard_shapes or [None]
     print(f"ZarrNii Benchmark")
     print(f"  Shape:       {shape}")
     print(f"  Dtype:       {args.dtype}")
-    print(f"  Chunks:      {chunk_shapes or [tuple(s // 2 for s in shape)]}")
+    print(f"  Chunks:      {effective_chunks}")
+    print(f"  Shards:      {effective_shards}")
     print(f"  Dask configs:{[dc.label for dc in dask_configs]}")
     print(f"  Reps:        {args.n_reps}")
     print(f"  Output dir:  {args.output_dir}")
