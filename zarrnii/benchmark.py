@@ -489,8 +489,14 @@ class BenchmarkSuite:
 
         rows = []
         with tempfile.TemporaryDirectory(dir=self.tmp_dir) as tmp_dir:
-            # Record the resolved root so it can be included in reports
-            tmp_dir_root = str(Path(tmp_dir).parent)
+            # tmp_dir_root is a suite-level value shared across all runs:
+            # use the user-specified root if provided, otherwise derive it
+            # from the actual temp directory created by the OS.
+            tmp_dir_root = (
+                str(self.tmp_dir)
+                if self.tmp_dir is not None
+                else str(Path(tmp_dir).parent)
+            )
             for i, cfg in enumerate(configs):
                 for rep in range(self.n_reps):
                     run_num = i * self.n_reps + rep + 1
@@ -568,6 +574,8 @@ class BenchmarkSuite:
 
         # HTML report
         html_path = self.output_dir / "benchmark_report.html"
+        # tmp_dir_root is the same for every row in a single suite run;
+        # take the first value if present.
         tmp_dir_root = (
             df["tmp_dir_root"].iloc[0]
             if "tmp_dir_root" in df.columns and not df.empty
