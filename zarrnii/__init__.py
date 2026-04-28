@@ -6,6 +6,7 @@ from .analysis import (
     density_from_points,
 )
 from .atlas import ZarrNiiAtlas
+from .benchmark import BenchmarkSuite, DaskConfig
 from .core import (
     MetadataInvalidError,
     ZarrNii,
@@ -24,6 +25,8 @@ __all__ = [
     "save_ngff_image",
     "save_ngff_image_with_ome_zarr",
     "get_dask_client",
+    "BenchmarkSuite",
+    "DaskConfig",
     "create_mip_visualization",
     "compute_centroids",
     "compute_region_properties",

@@ -8,6 +8,7 @@ nav:
       - Getting Started: walkthrough/getting_started.md
       - Basic Tasks: walkthrough/basic_tasks.md
       - Advanced Use Cases: walkthrough/advanced_use_cases.md
+      - Benchmarking: walkthrough/benchmarking.md
   - Command Line Interface: cli.md
   - API Reference:
       - Overview: reference/index.md
