@@ -372,6 +372,89 @@ def save_ngff_image(
                 pass
 
 
+def _compute_isotropic_scale_factors(
+    ngff_image: nz.NgffImage,
+    max_layer: int,
+) -> List[Dict[str, int]]:
+    """Compute anisotropy-aware cumulative scale factors for pyramid generation.
+
+    For anisotropic data the first pyramid level downsamples only the
+    fine-resolution spatial dimensions so that all dimensions reach
+    approximately the same (coarsest) resolution.  Subsequent levels apply
+    uniform 2× downsampling in every dimension.  If the data are already
+    isotropic, uniform 2× downsampling is used for every level.
+
+    The returned factors are *cumulative* from level 0, matching the convention
+    used by ``save_ngff_image_with_ome_zarr`` and
+    ``_ngff_image_to_ome_zarr_transforms``.
+
+    Args:
+        ngff_image: NgffImage whose ``scale`` attribute contains the voxel sizes
+            (dict keyed by dimension name, e.g. ``{"z": 4.0, "y": 2.0, "x": 2.0}``).
+        max_layer: Total number of pyramid levels (including level 0). The
+            returned list has ``max_layer - 1`` entries.
+
+    Returns:
+        List of per-axis cumulative scale factor dicts, one per additional
+        pyramid level.
+
+    Examples:
+        For z=4, y=2, x=2 voxel sizes and max_layer=4 the function returns::
+
+            [{"z": 1, "y": 2, "x": 2},   # level 1 → z=4, y=4, x=4 (isotropic)
+             {"z": 2, "y": 4, "x": 4},   # level 2 → z=8, y=8, x=8
+             {"z": 4, "y": 8, "x": 8}]   # level 3 → z=16, y=16, x=16
+
+        For already-isotropic data (z=y=x=1) and max_layer=4::
+
+            [{"z": 2, "y": 2, "x": 2},
+             {"z": 4, "y": 4, "x": 4},
+             {"z": 8, "y": 8, "x": 8}]
+    """
+    spatial_dims = ["z", "y", "x"]
+    scale = ngff_image.scale or {}
+    n_levels = max_layer - 1
+
+    if n_levels <= 0:
+        return []
+
+    # Collect scales for available spatial dimensions (skip zero or missing)
+    available: Dict[str, float] = {
+        dim: scale[dim] for dim in spatial_dims if dim in scale and scale[dim] > 0
+    }
+
+    if len(available) < 2:
+        # Not enough spatial dims to reason about isotropy → uniform scaling
+        return [{"z": 2**i, "y": 2**i, "x": 2**i} for i in range(1, max_layer)]
+
+    # Coarsest resolution = largest voxel size
+    max_scale = max(available.values())
+
+    # Isotropy-correction factor per dimension (power-of-2 ratio to coarsest)
+    iso_factors: Dict[str, int] = {}
+    for dim in spatial_dims:
+        if dim not in available:
+            iso_factors[dim] = 1
+        else:
+            current = available[dim]
+            if current < max_scale:
+                ratio = max_scale / current
+                level = int(np.log2(round(ratio)))
+                iso_factors[dim] = 2**level if level > 0 else 1
+            else:
+                iso_factors[dim] = 1
+
+    # If already isotropic, fall back to uniform scaling
+    if all(v == 1 for v in iso_factors.values()):
+        return [{"z": 2**i, "y": 2**i, "x": 2**i} for i in range(1, max_layer)]
+
+    # Build cumulative factors: level k → iso_factor[dim] * 2^(k-1)
+    result = []
+    for k in range(1, max_layer):
+        result.append({dim: iso_factors[dim] * (2 ** (k - 1)) for dim in spatial_dims})
+    return result
+
+
 def save_ngff_image_with_ome_zarr(
     ngff_image: nz.NgffImage,
     store_or_path: Union[str, Any],
@@ -397,11 +480,14 @@ def save_ngff_image_with_ome_zarr(
             and .ozx or .zip extensions for OME-Zarr zip creation
         max_layer: Maximum number of pyramid levels to create (including level 0)
         scale_factors: Custom scale factors for each pyramid level. If None,
-            defaults to ``[{"z": 2, "y": 2, "x": 2}, {"z": 4, "y": 4, "x": 4}, ...]``
-            which downsamples by a factor of 2 in all spatial dimensions at each
-            level.  Can also be a list of integers (xy-only downsampling) or a
-            list of dicts with per-axis factors, e.g.
-            ``[{"z": 2, "y": 2, "x": 2}, {"z": 4, "y": 4, "x": 4}]``.
+            automatically computes anisotropy-aware cumulative factors so that
+            the first pyramid level brings all spatial dimensions to
+            approximately the same (coarsest) resolution, and subsequent levels
+            apply uniform 2× downsampling.  Falls back to uniform 2× per level
+            when the data are already isotropic.  Can also be an explicit list
+            of integers (xy-only downsampling) or a list of dicts with
+            per-axis cumulative factors from level 0, e.g.
+            ``[{"z": 1, "y": 2, "x": 2}, {"z": 2, "y": 4, "x": 4}]``.
         scaling_method: Downsampling method to use. One of ``'nearest'``,
             ``'resize'``, ``'local_mean'``, or ``'zoom'``. Defaults to
             ``'local_mean'``.
@@ -459,10 +545,11 @@ def save_ngff_image_with_ome_zarr(
     from ome_zarr.writer import write_image
 
     if scale_factors is None:
-        # Generate scale factors for each additional level beyond level 0.
-        # For max_layer total levels, we need max_layer-1 scale factors.
-        # Use dict format so that z is also downsampled at each level.
-        scale_factors = [{"z": 2**i, "y": 2**i, "x": 2**i} for i in range(1, max_layer)]
+        # Generate anisotropy-aware scale factors so that the first pyramid
+        # level corrects any voxel-size anisotropy before subsequent levels
+        # apply uniform 2× downsampling.  Falls back to uniform 2× per level
+        # when the data are already isotropic.
+        scale_factors = _compute_isotropic_scale_factors(ngff_image, max_layer)
 
     # Convert scaling_method string to Methods enum for proper type safety
     method = Methods(scaling_method)
@@ -3565,13 +3652,18 @@ class ZarrNii:
             max_layer: Maximum number of pyramid levels to create (including level 0).
                 Higher values create more downsampled levels
             scale_factors: Custom downsampling factors for each pyramid level.
-                If None, defaults to ``[{"z": 2, "y": 2, "x": 2}, ...]`` (all
-                spatial dims downsampled by factors of 2 at each level) for the
-                ``'ome-zarr-py'`` backend, or powers of 2 ``[2, 4, 8, ...]`` for
-                the ``'ngff-zarr'`` backend.
+                If None (default), automatically computes anisotropy-aware
+                cumulative scale factors for the ``'ome-zarr-py'`` backend:
+                the first pyramid level corrects any voxel-size anisotropy by
+                downsampling only the fine-resolution dimensions (using per-axis
+                factors of 1 or a power of 2) so that all spatial dimensions
+                reach the same coarsest resolution; subsequent levels then apply
+                uniform 2× downsampling.  For already-isotropic data, uniform
+                2× per level is used.  For the ``'ngff-zarr'`` backend the
+                default remains powers of 2 ``[2, 4, 8, ...]``.
                 Pass a list of integers to downsample in xy only, or a list of
-                dicts to control per-axis factors, e.g.
-                ``[{"z": 2, "y": 2, "x": 2}, {"z": 4, "y": 4, "x": 4}]``.
+                dicts for explicit per-axis cumulative factors, e.g.
+                ``[{"z": 1, "y": 2, "x": 2}, {"z": 2, "y": 4, "x": 4}]``.
             backend: Backend library to use for writing. Options:
                 - 'ngff-zarr': Use ngff-zarr library
                 - 'ome-zarr-py': Use ome-zarr-py library for better dask

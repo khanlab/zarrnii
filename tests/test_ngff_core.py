@@ -330,7 +330,12 @@ class TestOmeZarrWriter:
             assert len(multiscales.images) == 1  # Only original level
 
     def test_save_ngff_image_with_ome_zarr_z_axis_downsampling(self, simple_ngff_image):
-        """Test that ome-zarr-py backend downsamples in z, y, and x by default."""
+        """Test that ome-zarr-py backend uses isotropic-aware scale factors by default.
+
+        simple_ngff_image has anisotropic voxels (z=2, y=1, x=1).  The default
+        behaviour should correct isotropy at level 1 (y and x downsampled 2×,
+        z unchanged) and then downsample all dimensions uniformly at level 2.
+        """
         from zarrnii.core import save_ngff_image_with_ome_zarr
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -340,21 +345,35 @@ class TestOmeZarrWriter:
             # Verify the output exists
             assert os.path.exists(output_path)
 
-            # Load back and check that all spatial scales change across levels
+            # Load back and check scales
             multiscales = get_multiscales(output_path)
             assert len(multiscales.images) == 3  # 3 pyramid levels
 
-            # Get z scale for each level
             z_scales = [img.scale.get("z", 1.0) for img in multiscales.images]
             x_scales = [img.scale.get("x", 1.0) for img in multiscales.images]
             y_scales = [img.scale.get("y", 1.0) for img in multiscales.images]
 
-            # Z scales should increase with pyramid level (z is now downsampled)
+            # Level 1 corrects isotropy: z stays at 2.0, y and x go from 1.0 → 2.0
             assert (
-                z_scales[0] < z_scales[1] < z_scales[2]
-            ), f"Z scales should increase: {z_scales}"
+                z_scales[0] == z_scales[1]
+            ), f"Z should be unchanged at level 1 (already coarsest): {z_scales}"
+            assert (
+                y_scales[1] == 2 * y_scales[0]
+            ), f"Y should double at level 1: {y_scales}"
+            assert (
+                x_scales[1] == 2 * x_scales[0]
+            ), f"X should double at level 1: {x_scales}"
 
-            # X and Y scales should also increase with pyramid level
+            # All dimensions should be isotropic at level 1
+            assert z_scales[1] == y_scales[1] == x_scales[1], (
+                f"All scales should be equal at level 1: z={z_scales[1]}, "
+                f"y={y_scales[1]}, x={x_scales[1]}"
+            )
+
+            # Level 2 doubles all dimensions
+            assert (
+                z_scales[2] == 2 * z_scales[1]
+            ), f"Z should double from level 1 to 2: {z_scales}"
             assert (
                 x_scales[0] < x_scales[1] < x_scales[2]
             ), f"X scales should increase: {x_scales}"
@@ -399,3 +418,122 @@ class TestOmeZarrWriter:
             assert (
                 y_scales[0] < y_scales[1] < y_scales[2]
             ), f"Y scales should increase: {y_scales}"
+
+    def test_compute_isotropic_scale_factors_anisotropic(self):
+        """Test _compute_isotropic_scale_factors for anisotropic input."""
+        import dask.array as da
+
+        from zarrnii.core import _compute_isotropic_scale_factors
+
+        # z=4, y=2, x=2: z is coarsest; y and x need 2× correction
+        data = da.zeros((1, 32, 64, 64), chunks=(1, 16, 32, 32))
+        ngff_image = nz.NgffImage(
+            data=data,
+            dims=["c", "z", "y", "x"],
+            scale={"z": 4.0, "y": 2.0, "x": 2.0},
+            translation={"z": 0.0, "y": 0.0, "x": 0.0},
+        )
+
+        factors = _compute_isotropic_scale_factors(ngff_image, max_layer=4)
+
+        assert len(factors) == 3, f"Expected 3 factor dicts, got {len(factors)}"
+
+        # Level 1: z=1 (no change), y=2, x=2
+        assert factors[0] == {
+            "z": 1,
+            "y": 2,
+            "x": 2,
+        }, f"Unexpected level-1 factors: {factors[0]}"
+        # Level 2: z=2, y=4, x=4
+        assert factors[1] == {
+            "z": 2,
+            "y": 4,
+            "x": 4,
+        }, f"Unexpected level-2 factors: {factors[1]}"
+        # Level 3: z=4, y=8, x=8
+        assert factors[2] == {
+            "z": 4,
+            "y": 8,
+            "x": 8,
+        }, f"Unexpected level-3 factors: {factors[2]}"
+
+    def test_compute_isotropic_scale_factors_isotropic(self):
+        """Test _compute_isotropic_scale_factors falls back to uniform 2× for isotropic input."""
+        import dask.array as da
+
+        from zarrnii.core import _compute_isotropic_scale_factors
+
+        # All scales equal → uniform downsampling
+        data = da.zeros((1, 32, 64, 64), chunks=(1, 16, 32, 32))
+        ngff_image = nz.NgffImage(
+            data=data,
+            dims=["c", "z", "y", "x"],
+            scale={"z": 1.0, "y": 1.0, "x": 1.0},
+            translation={"z": 0.0, "y": 0.0, "x": 0.0},
+        )
+
+        factors = _compute_isotropic_scale_factors(ngff_image, max_layer=4)
+
+        assert len(factors) == 3
+        assert factors[0] == {
+            "z": 2,
+            "y": 2,
+            "x": 2,
+        }, f"Expected uniform 2× factors, got: {factors[0]}"
+        assert factors[1] == {
+            "z": 4,
+            "y": 4,
+            "x": 4,
+        }, f"Expected uniform 4× factors, got: {factors[1]}"
+        assert factors[2] == {
+            "z": 8,
+            "y": 8,
+            "x": 8,
+        }, f"Expected uniform 8× factors, got: {factors[2]}"
+
+    def test_to_ome_zarr_isotropic_scale_factors(self):
+        """Test that to_ome_zarr produces isotropic-aware pyramid for anisotropic data."""
+        import dask.array as da
+
+        from zarrnii import ZarrNii
+
+        # Build a ZarrNii with anisotropic voxels z=4, y=2, x=2
+        data = da.zeros((1, 16, 32, 32), chunks=(1, 8, 16, 16))
+        ngff_image = nz.NgffImage(
+            data=data,
+            dims=["c", "z", "y", "x"],
+            scale={"c": 1.0, "z": 4.0, "y": 2.0, "x": 2.0},
+            translation={"c": 0.0, "z": 0.0, "y": 0.0, "x": 0.0},
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Save source zarr then load as ZarrNii
+            src_path = os.path.join(tmpdir, "src.zarr")
+            multiscales = nz.to_multiscales(ngff_image)
+            nz.to_ngff_zarr(src_path, multiscales)
+            znimg = ZarrNii.from_ome_zarr(src_path)
+
+            # Write pyramid with default (isotropic-aware) scale factors
+            out_path = os.path.join(tmpdir, "out.zarr")
+            znimg.to_ome_zarr(out_path, max_layer=3)
+
+            # Load resulting pyramid and inspect scales
+            ms = get_multiscales(out_path)
+            assert len(ms.images) == 3
+
+            z_scales = [img.scale.get("z", 1.0) for img in ms.images]
+            y_scales = [img.scale.get("y", 1.0) for img in ms.images]
+            x_scales = [img.scale.get("x", 1.0) for img in ms.images]
+
+            # At level 1 all spatial scales should be equal (isotropic)
+            assert y_scales[1] == z_scales[1] == x_scales[1], (
+                f"Level 1 should be isotropic: z={z_scales[1]}, "
+                f"y={y_scales[1]}, x={x_scales[1]}"
+            )
+            # z stays the same from level 0 to level 1 (it was already coarsest)
+            assert (
+                z_scales[1] == z_scales[0]
+            ), f"Z should be unchanged at level 1: {z_scales}"
+            # y and x double at level 1
+            assert y_scales[1] == 2 * y_scales[0]
+            assert x_scales[1] == 2 * x_scales[0]

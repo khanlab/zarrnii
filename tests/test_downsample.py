@@ -135,7 +135,17 @@ def test_read_from_downsampled_level(nifti_nib):
     znimg = ZarrNii.from_nifti("test.nii")
 
     # now we have znimg with axes_order == 'XYZ'
-    znimg.to_ome_zarr("test_fromznimg.ome.zarr", max_layer=4)
+    # Use explicit uniform scale_factors so the expected shape at each level is
+    # well-defined regardless of voxel-size anisotropy.
+    znimg.to_ome_zarr(
+        "test_fromznimg.ome.zarr",
+        max_layer=4,
+        scale_factors=[
+            {"z": 2, "y": 2, "x": 2},
+            {"z": 4, "y": 4, "x": 4},
+            {"z": 8, "y": 8, "x": 8},
+        ],
+    )
 
     level = 2
     znimg2 = ZarrNii.from_ome_zarr("test_fromznimg.ome.zarr", level=level)
@@ -144,8 +154,7 @@ def test_read_from_downsampled_level(nifti_nib):
     xyz_orig = znimg.darr.shape[1:]
     xyz_ds = znimg2.darr.shape[:0:-1]
 
-    # x, y, and z are all downsampled by 2^level (default dict-based scale_factors
-    # downsample all spatial axes)
+    # x, y, and z are all downsampled by 2^level with the explicit uniform factors
     assert_array_equal(int(xyz_orig[0] / (2**level)), xyz_ds[0])
     assert_array_equal(int(xyz_orig[1] / (2**level)), xyz_ds[1])
     assert_array_equal(int(xyz_orig[2] / (2**level)), xyz_ds[2])
