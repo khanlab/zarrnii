@@ -439,7 +439,7 @@ def _compute_isotropic_scale_factors(
             current = available[dim]
             if current < max_scale:
                 ratio = max_scale / current
-                level = int(np.log2(round(ratio)))
+                level = int(round(np.log2(ratio)))
                 iso_factors[dim] = 2**level if level > 0 else 1
             else:
                 iso_factors[dim] = 1

@@ -353,7 +353,7 @@ class TestOmeZarrWriter:
             x_scales = [img.scale.get("x", 1.0) for img in multiscales.images]
             y_scales = [img.scale.get("y", 1.0) for img in multiscales.images]
 
-            # Level 1 corrects isotropy: z stays at 2.0, y and x go from 1.0 → 2.0
+            # Level 1 achieves isotropy: z stays at 2.0, y and x go from 1.0 → 2.0
             assert (
                 z_scales[0] == z_scales[1]
             ), f"Z should be unchanged at level 1 (already coarsest): {z_scales}"
