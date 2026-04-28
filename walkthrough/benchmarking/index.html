@@ -1,0 +1,3805 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/walkthrough/benchmarking/">
+      
+      
+        <link rel="prev" href="../advanced_use_cases/">
+      
+      
+        <link rel="next" href="../../cli/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Benchmarking - ZarrNii Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#benchmarking-chunking-and-dask-configuration" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ZarrNii Documentation" class="md-header__button md-logo" aria-label="ZarrNii Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZarrNii Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Benchmarking
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ZarrNii Documentation" class="md-nav__button md-logo" aria-label="ZarrNii Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZarrNii Documentation
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Walkthrough
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../basic_tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Basic Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_use_cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Use Cases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarking
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#command-line-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command-line interface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#customise-the-sweep" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customise the sweep
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dask-configuration-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dask configuration specs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interpreting-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interpreting results
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Interpreting results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#comparing-filesystems" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparing filesystems
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chunk-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chunk size
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dask-scheduler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dask scheduler
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dask-distributed-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dask Distributed dashboard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zarrnii.benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        benchmark
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="benchmark">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark--typical-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Typical usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zarrnii.benchmark-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.DaskConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DaskConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BenchmarkConfig
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="BenchmarkConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkConfig-attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attributes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attributes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkConfig.label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        label
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BenchmarkResult
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="BenchmarkResult">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult-attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attributes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attributes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult.total_wall_s" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        total_wall_s
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult.write_cpu_efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_cpu_efficiency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult.read_cpu_efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_cpu_efficiency
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult.to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BenchmarkSuite
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="BenchmarkSuite">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite--parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite--examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite.run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="run">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite.run--returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite.generate_report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        generate_report
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="generate_report">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite.generate_report--parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zarrnii.benchmark-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.benchmark_cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        benchmark_cli
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="benchmark_cli">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.benchmark_cli--parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command Line Interface
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/zarrnii/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii.analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/transform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii.transform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/atlas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii.atlas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/zarr_nifti/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with Zarr and NIfTI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/imaris_usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with Imaris Files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/transformations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Transformations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/downsampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downsampling and Upsampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/near_isotropic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Near-Isotropic Downsampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/atlas_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atlases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/ml_patch_sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Training - Patch Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/multiscale/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiscale OME-Zarr
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/segmentation_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Segmentation Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/scaled_processing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaled Processing Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#command-line-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command-line interface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#customise-the-sweep" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customise the sweep
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dask-configuration-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dask configuration specs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interpreting-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interpreting results
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Interpreting results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#comparing-filesystems" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparing filesystems
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chunk-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chunk size
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dask-scheduler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dask scheduler
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dask-distributed-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dask Distributed dashboard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zarrnii.benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        benchmark
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="benchmark">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark--typical-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Typical usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zarrnii.benchmark-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.DaskConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DaskConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BenchmarkConfig
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="BenchmarkConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkConfig-attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attributes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attributes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkConfig.label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        label
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BenchmarkResult
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="BenchmarkResult">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult-attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attributes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attributes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult.total_wall_s" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        total_wall_s
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult.write_cpu_efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_cpu_efficiency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult.read_cpu_efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_cpu_efficiency
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkResult.to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BenchmarkSuite
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="BenchmarkSuite">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite--parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite--examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite.run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="run">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite.run--returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Returns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite.generate_report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        generate_report
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="generate_report">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.BenchmarkSuite.generate_report--parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zarrnii.benchmark-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.benchmark_cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        benchmark_cli
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="benchmark_cli">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.benchmark.benchmark_cli--parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="benchmarking-chunking-and-dask-configuration">Benchmarking Chunking and Dask Configuration</h1>
+<p>ZarrNii ships with a built-in benchmarking tool that helps you choose the
+optimal <strong>chunk size</strong>, <strong>shard size</strong>, and <strong>Dask scheduler setup</strong> for your
+specific dataset and hardware.  The tool measures:</p>
+<ul>
+<li><strong>Wall-clock time</strong> for writing an OME-Zarr store and reading it back.</li>
+<li><strong>Peak RSS memory</strong> consumed during the run.</li>
+<li><strong>CPU efficiency</strong> – how well your cores are utilised relative to wall time.</li>
+</ul>
+<p>Results are saved as a CSV file and an HTML report that is easy to open in
+any browser.</p>
+<hr />
+<h2 id="quick-start">Quick Start</h2>
+<h3 id="command-line-interface">Command-line interface</h3>
+<p>The simplest way to run a benchmark is via the <code>zarrnii-benchmark</code> command:</p>
+<pre><code class="language-bash">zarrnii-benchmark
+</code></pre>
+<p>This runs a small default sweep (shape <code>64×256×256</code>, a couple of chunk sizes,
+threaded scheduler with 4 threads, 3 repetitions) and writes the results to
+the current directory.</p>
+<h3 id="customise-the-sweep">Customise the sweep</h3>
+<pre><code class="language-bash">zarrnii-benchmark \
+    --shape 128 512 512 \
+    --dtype float32 \
+    --chunks 32,32,32 64,64,64 128,128,128 \
+    --shards none 128,128,128 \
+    --dask-configs threads:4 threads:8 distributed:8:2 \
+    --n-reps 5 \
+    --output-dir ./bench_results
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--shape Z Y X</code></td>
+<td>Spatial dimensions of the synthetic array</td>
+<td><code>64 256 256</code></td>
+</tr>
+<tr>
+<td><code>--dtype</code></td>
+<td>NumPy dtype (e.g. <code>float32</code>, <code>uint16</code>)</td>
+<td><code>float32</code></td>
+</tr>
+<tr>
+<td><code>--chunks</code></td>
+<td>One or more chunk specs as <code>Z,Y,X</code></td>
+<td>half the array shape</td>
+</tr>
+<tr>
+<td><code>--shards</code></td>
+<td>One or more shard specs as <code>Z,Y,X</code> or <code>none</code> to disable</td>
+<td><code>none</code></td>
+</tr>
+<tr>
+<td><code>--dask-configs</code></td>
+<td>One or more scheduler specs (see below)</td>
+<td><code>threads:4</code></td>
+</tr>
+<tr>
+<td><code>--n-reps</code></td>
+<td>Repetitions per configuration</td>
+<td><code>3</code></td>
+</tr>
+<tr>
+<td><code>--tmp-dir</code></td>
+<td>Root directory for temporary OME-Zarr stores (use to benchmark different filesystems)</td>
+<td>system temp dir</td>
+</tr>
+<tr>
+<td><code>--output-dir</code></td>
+<td>Directory for CSV/HTML output</td>
+<td><code>.</code> (current dir)</td>
+</tr>
+<tr>
+<td><code>-v</code> / <code>--verbose</code></td>
+<td>Enable debug logging</td>
+<td>off</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dask-configuration-specs">Dask configuration specs</h3>
+<p>The <code>--dask-configs</code> flag accepts one or more space-separated spec strings:</p>
+<table>
+<thead>
+<tr>
+<th>Spec</th>
+<th>Scheduler</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>threads:N</code></td>
+<td>Threaded scheduler with <em>N</em> workers</td>
+<td><code>threads:8</code></td>
+</tr>
+<tr>
+<td><code>distributed:N:M</code></td>
+<td>Distributed (LocalCluster) with <em>N</em> total threads, <em>M</em> per worker</td>
+<td><code>distributed:8:2</code></td>
+</tr>
+</tbody>
+</table>
+<p>The number of distributed workers is derived as <code>⌊N / M⌋</code>.</p>
+<hr />
+<h2 id="python-api">Python API</h2>
+<p>You can also drive the benchmarks programmatically:</p>
+<pre><code class="language-python">from zarrnii.benchmark import BenchmarkSuite, DaskConfig
+
+suite = BenchmarkSuite(
+    shape=(64, 256, 256),
+    dtype=&quot;float32&quot;,
+    chunk_shapes=[(32, 32, 32), (64, 64, 64)],
+    shard_shapes=[None],                   # None = no sharding
+    dask_configs=[
+        DaskConfig(scheduler=&quot;threads&quot;, n_threads=4),
+        DaskConfig(scheduler=&quot;distributed&quot;, n_threads=8, threads_per_worker=2),
+    ],
+    n_reps=3,
+    output_dir=&quot;./bench_results&quot;,
+    tmp_dir=None,                          # None = system default temp dir
+)
+
+# Run all configurations – returns a pandas DataFrame
+df = suite.run()
+
+# Write CSV + HTML report
+suite.generate_report(df)
+</code></pre>
+<p>The returned <code>DataFrame</code> has one row per <em>(configuration, repetition)</em> and
+includes the columns below.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>shape</code></td>
+<td>Array shape</td>
+</tr>
+<tr>
+<td><code>dtype</code></td>
+<td>Data type</td>
+</tr>
+<tr>
+<td><code>chunk_shape</code></td>
+<td>Zarr chunk shape used</td>
+</tr>
+<tr>
+<td><code>shard_shape</code></td>
+<td>Zarr shard shape (empty = none)</td>
+</tr>
+<tr>
+<td><code>scheduler</code></td>
+<td><code>threads</code> or <code>distributed</code></td>
+</tr>
+<tr>
+<td><code>n_threads</code></td>
+<td>Total threads/cores</td>
+</tr>
+<tr>
+<td><code>threads_per_worker</code></td>
+<td>Threads per distributed worker</td>
+</tr>
+<tr>
+<td><code>dask_label</code></td>
+<td>Human-readable Dask config label</td>
+</tr>
+<tr>
+<td><code>repetition</code></td>
+<td>0-based repetition index</td>
+</tr>
+<tr>
+<td><code>write_wall_s</code></td>
+<td>Wall-clock seconds for OME-Zarr write</td>
+</tr>
+<tr>
+<td><code>read_wall_s</code></td>
+<td>Wall-clock seconds for OME-Zarr read</td>
+</tr>
+<tr>
+<td><code>total_wall_s</code></td>
+<td>Sum of write + read wall time</td>
+</tr>
+<tr>
+<td><code>write_cpu_s</code></td>
+<td>User+system CPU seconds during write</td>
+</tr>
+<tr>
+<td><code>read_cpu_s</code></td>
+<td>User+system CPU seconds during read</td>
+</tr>
+<tr>
+<td><code>write_cpu_efficiency</code></td>
+<td><code>cpu_s / (wall_s × n_threads)</code> during write</td>
+</tr>
+<tr>
+<td><code>read_cpu_efficiency</code></td>
+<td><code>cpu_s / (wall_s × n_threads)</code> during read</td>
+</tr>
+<tr>
+<td><code>peak_memory_mb</code></td>
+<td>Peak RSS memory (MB) during the run</td>
+</tr>
+<tr>
+<td><code>tmp_dir_root</code></td>
+<td>Root directory where temporary stores were written</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td>Non-empty when the run raised an exception</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="output-files">Output files</h2>
+<p>After calling <code>generate_report()</code> (or finishing a CLI run) the following files
+are created in <code>output_dir</code>:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>benchmark_results.csv</code></td>
+<td>Full raw results (one row per run)</td>
+</tr>
+<tr>
+<td><code>benchmark_summary.csv</code></td>
+<td>Per-configuration averages</td>
+</tr>
+<tr>
+<td><code>benchmark_report.html</code></td>
+<td>Self-contained HTML report with best-config callouts</td>
+</tr>
+</tbody>
+</table>
+<p>Open <code>benchmark_report.html</code> in your browser for a quick visual overview.</p>
+<hr />
+<h2 id="interpreting-results">Interpreting results</h2>
+<h3 id="comparing-filesystems">Comparing filesystems</h3>
+<p>Use <code>--tmp-dir</code> to write the benchmark stores to a specific filesystem.  This
+is particularly useful for comparing local NVMe storage against network
+filesystems (e.g. NFS, GPFS, Lustre):</p>
+<pre><code class="language-bash"># Benchmark on local scratch disk
+zarrnii-benchmark --tmp-dir /scratch/local --output-dir ./results_local
+
+# Benchmark on shared network storage
+zarrnii-benchmark --tmp-dir /mnt/network_fs --output-dir ./results_network
+</code></pre>
+<p>The resolved temp directory root is recorded in the <code>tmp_dir_root</code> column of
+every result row, so results from different runs can be merged and compared
+directly in a single DataFrame or CSV.</p>
+<h3 id="chunk-size">Chunk size</h3>
+<ul>
+<li>Smaller chunks improve random-access read performance and reduce peak
+  memory per task, but increase metadata overhead and scheduler overhead
+  for sequential access patterns.</li>
+<li>Larger chunks are better for sequential reads (e.g. whole-volume
+  processing) but require more memory per task.</li>
+<li>A common starting point for 3-D biomedical images is <strong>64×64×64</strong> voxels.</li>
+</ul>
+<h3 id="dask-scheduler">Dask scheduler</h3>
+<table>
+<thead>
+<tr>
+<th>Scheduler</th>
+<th>Best for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>threads</code></td>
+<td>Single-machine workloads; low overhead; shared memory</td>
+</tr>
+<tr>
+<td><code>distributed</code></td>
+<td>Multi-core machines; enables the Dask dashboard and detailed task graphs</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>For <strong>I/O-bound</strong> operations (reading/writing Zarr) more workers rarely
+  helps beyond saturating the storage bandwidth; start with <code>threads:N</code>
+  where <em>N</em> equals the number of physical cores.</li>
+<li><strong>CPU efficiency</strong> close to <code>1.0</code> means all cores are busy throughout the
+  operation.  Low values suggest I/O bottlenecks or excessive scheduler
+  overhead.</li>
+</ul>
+<h3 id="memory">Memory</h3>
+<p>Peak memory scales roughly with <code>chunk_size × dtype_bytes × n_tasks_in_flight</code>.
+If you are hitting memory limits, try smaller chunks or fewer workers.</p>
+<hr />
+<h2 id="dask-distributed-dashboard">Dask Distributed dashboard</h2>
+<p>When <code>scheduler="distributed"</code> is used, a local Dask dashboard is started on
+port <strong>8788</strong> (configurable via <code>dask_utils.get_dask_client</code>).  Open
+<code>http://localhost:8788</code> in your browser while the benchmark is running to
+observe task scheduling in real time.</p>
+<p>The HTML report captures summary statistics after the run so you do not need
+to monitor the dashboard live.</p>
+<hr />
+<h2 id="api-reference">API reference</h2>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<a id="zarrnii.benchmark"></a>
+    <div class="doc doc-contents first">
+
+        <p>Benchmarking tool for OME-Zarr chunking, sharding, and Dask configuration.</p>
+<p>This module provides utilities to help users choose optimal chunking, sharding,
+and Dask scheduler settings for their workloads.  It measures wall-clock time,
+peak memory, and CPU efficiency for the key operations:</p>
+<ol>
+<li>Create a synthetic Dask array of configurable shape / dtype.</li>
+<li>Write the array to an OME-Zarr store (via :func:<code>zarrnii.save_ngff_image</code>).</li>
+<li>Read the array back from the store.</li>
+</ol>
+<h3 id="zarrnii.benchmark--typical-usage">Typical usage</h3>
+<p>Run from the command line::</p>
+<pre><code>zarrnii-benchmark --shape 64 256 256 \
+    --chunks 32,32,32 64,64,64 \
+    --shards none 64,64,64 \
+    --dask-configs threads:4 distributed:4:2 \
+    --output-dir ./bench_results
+</code></pre>
+<p>Or use the Python API::</p>
+<pre><code>from zarrnii.benchmark import BenchmarkSuite
+
+suite = BenchmarkSuite(
+    shape=(64, 256, 256),
+    dtype="float32",
+    chunk_shapes=[(32, 32, 32), (64, 64, 64)],
+    dask_configs=[{"scheduler": "threads", "n_threads": 4}],
+    output_dir="./bench_results",
+)
+results_df = suite.run()
+suite.generate_report(results_df)
+</code></pre>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<h2 id="zarrnii.benchmark-classes">Classes</h2>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="zarrnii.benchmark.DaskConfig" class="doc doc-heading">
+              <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">benchmark</span><span class="o">.</span><span class="n">DaskConfig</span><span class="p">(</span><span class="n">scheduler</span><span class="o">=</span><span class="s1">&#39;threads&#39;</span><span class="p">,</span> <span class="n">n_threads</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">threads_per_worker</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Specification for a Dask scheduler setup.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.DaskConfig.scheduler">scheduler</span></code></b>
+              (<code><span title="str">str</span></code>)
+          –
+          <div class="doc-md-description">
+            <p><code>"threads"</code> for the built-in threaded scheduler or
+<code>"distributed"</code> for a <code>dask.distributed.LocalCluster</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.DaskConfig.n_threads">n_threads</span></code></b>
+              (<code><span title="int">int</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Total number of threads/cores available.  For the
+<code>"threads"</code> scheduler this is passed directly as
+<code>num_workers</code>.  For <code>"distributed"</code> it is used together
+with <em>threads_per_worker</em> to derive the worker count.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.DaskConfig.threads_per_worker">threads_per_worker</span></code></b>
+              (<code><span title="int">int</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Threads allocated to each distributed worker.
+Ignored when <em>scheduler</em> is <code>"threads"</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.DaskConfig.label">label</span></code></b>
+              (<code><span title="str">str</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Human-readable identifier used in reports.  Auto-generated
+when not provided.</p>
+          </div>
+        </li>
+    </ul>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="zarrnii.benchmark.BenchmarkConfig" class="doc doc-heading">
+              <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">benchmark</span><span class="o">.</span><span class="n">BenchmarkConfig</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">chunk_shape</span><span class="p">,</span> <span class="n">shard_shape</span><span class="p">,</span> <span class="n">dask_config</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Full configuration for one benchmark scenario.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkConfig.shape">shape</span></code></b>
+              (<code><span title="typing.Tuple">Tuple</span>[<span title="int">int</span>, ...]</code>)
+          –
+          <div class="doc-md-description">
+            <p>Spatial shape of the synthetic array, e.g. <code>(64, 256, 256)</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkConfig.dtype">dtype</span></code></b>
+              (<code><span title="str">str</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>NumPy dtype string, e.g. <code>"float32"</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkConfig.chunk_shape">chunk_shape</span></code></b>
+              (<code><span title="typing.Tuple">Tuple</span>[<span title="int">int</span>, ...]</code>)
+          –
+          <div class="doc-md-description">
+            <p>Zarr chunk shape.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkConfig.shard_shape">shard_shape</span></code></b>
+              (<code><span title="typing.Optional">Optional</span>[<span title="typing.Tuple">Tuple</span>[<span title="int">int</span>, ...]]</code>)
+          –
+          <div class="doc-md-description">
+            <p>Zarr shard shape (<code>None</code> disables sharding).</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkConfig.dask_config">dask_config</span></code></b>
+              (<code><a class="autorefs autorefs-internal" title="zarrnii.benchmark.DaskConfig(scheduler='threads', n_threads=4, threads_per_worker=2, label='')
+
+  
+      dataclass
+   (zarrnii.benchmark.DaskConfig)" href="#zarrnii.benchmark.DaskConfig">DaskConfig</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>Dask scheduler configuration.</p>
+          </div>
+        </li>
+    </ul>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+<h4 id="zarrnii.benchmark.BenchmarkConfig-attributes">Attributes</h4>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="zarrnii.benchmark.BenchmarkConfig.label" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">benchmark</span><span class="o">.</span><span class="n">BenchmarkConfig</span><span class="o">.</span><span class="n">label</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Short human-readable identifier for this config.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="zarrnii.benchmark.BenchmarkResult" class="doc doc-heading">
+              <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">benchmark</span><span class="o">.</span><span class="n">BenchmarkResult</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">repetition</span><span class="p">,</span> <span class="n">write_wall_s</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">read_wall_s</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">write_cpu_s</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">read_cpu_s</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">peak_memory_mb</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Timing and resource metrics for one benchmark run.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkResult.config">config</span></code></b>
+              (<code><a class="autorefs autorefs-internal" title="zarrnii.benchmark.BenchmarkConfig(shape, dtype, chunk_shape, shard_shape, dask_config)
+
+  
+      dataclass
+   (zarrnii.benchmark.BenchmarkConfig)" href="#zarrnii.benchmark.BenchmarkConfig">BenchmarkConfig</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The configuration that produced this result.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkResult.repetition">repetition</span></code></b>
+              (<code><span title="int">int</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>0-based repetition index.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkResult.write_wall_s">write_wall_s</span></code></b>
+              (<code><span title="float">float</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Wall-clock seconds for the OME-Zarr write.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkResult.read_wall_s">read_wall_s</span></code></b>
+              (<code><span title="float">float</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Wall-clock seconds for the OME-Zarr read-back.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkResult.write_cpu_s">write_cpu_s</span></code></b>
+              (<code><span title="float">float</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>User+system CPU seconds consumed during write.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkResult.read_cpu_s">read_cpu_s</span></code></b>
+              (<code><span title="float">float</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>User+system CPU seconds consumed during read.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkResult.peak_memory_mb">peak_memory_mb</span></code></b>
+              (<code><span title="float">float</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Peak RSS memory in megabytes during the run.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.benchmark.BenchmarkResult.error">error</span></code></b>
+              (<code><span title="str">str</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Non-empty string when the run raised an exception.</p>
+          </div>
+        </li>
+    </ul>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+<h4 id="zarrnii.benchmark.BenchmarkResult-attributes">Attributes</h4>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="zarrnii.benchmark.BenchmarkResult.total_wall_s" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">benchmark</span><span class="o">.</span><span class="n">BenchmarkResult</span><span class="o">.</span><span class="n">total_wall_s</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Total wall time (write + read).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="zarrnii.benchmark.BenchmarkResult.write_cpu_efficiency" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">benchmark</span><span class="o">.</span><span class="n">BenchmarkResult</span><span class="o">.</span><span class="n">write_cpu_efficiency</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>CPU efficiency during write (cpu_s / wall_s / n_threads).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="zarrnii.benchmark.BenchmarkResult.read_cpu_efficiency" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">benchmark</span><span class="o">.</span><span class="n">BenchmarkResult</span><span class="o">.</span><span class="n">read_cpu_efficiency</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>CPU efficiency during read (cpu_s / wall_s / n_threads).</p>
+
+    </div>
+
+</div>
+
+
+<h4 id="zarrnii.benchmark.BenchmarkResult-functions">Functions</h4>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.benchmark.BenchmarkResult.to_dict" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">benchmark</span><span class="o">.</span><span class="n">BenchmarkResult</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Serialise to a flat dictionary suitable for CSV / pandas.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/benchmark.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Serialise to a flat dictionary suitable for CSV / pandas.&quot;&quot;&quot;</span>
+    <span class="n">cfg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span>
+    <span class="n">dc</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">dask_config</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;shape&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span>
+        <span class="s2">&quot;dtype&quot;</span><span class="p">:</span> <span class="n">cfg</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+        <span class="s2">&quot;chunk_shape&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">chunk_shape</span><span class="p">),</span>
+        <span class="s2">&quot;shard_shape&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">shard_shape</span><span class="p">)</span> <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">shard_shape</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;scheduler&quot;</span><span class="p">:</span> <span class="n">dc</span><span class="o">.</span><span class="n">scheduler</span><span class="p">,</span>
+        <span class="s2">&quot;n_threads&quot;</span><span class="p">:</span> <span class="n">dc</span><span class="o">.</span><span class="n">n_threads</span><span class="p">,</span>
+        <span class="s2">&quot;threads_per_worker&quot;</span><span class="p">:</span> <span class="n">dc</span><span class="o">.</span><span class="n">threads_per_worker</span><span class="p">,</span>
+        <span class="s2">&quot;dask_label&quot;</span><span class="p">:</span> <span class="n">dc</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
+        <span class="s2">&quot;repetition&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">repetition</span><span class="p">,</span>
+        <span class="s2">&quot;write_wall_s&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">write_wall_s</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+        <span class="s2">&quot;read_wall_s&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">read_wall_s</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+        <span class="s2">&quot;total_wall_s&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total_wall_s</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+        <span class="s2">&quot;write_cpu_s&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">write_cpu_s</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+        <span class="s2">&quot;read_cpu_s&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">read_cpu_s</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+        <span class="s2">&quot;write_cpu_efficiency&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">write_cpu_efficiency</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+        <span class="s2">&quot;read_cpu_efficiency&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">read_cpu_efficiency</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+        <span class="s2">&quot;peak_memory_mb&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">peak_memory_mb</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+        <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">error</span><span class="p">,</span>
+    <span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="zarrnii.benchmark.BenchmarkSuite" class="doc doc-heading">
+              <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">benchmark</span><span class="o">.</span><span class="n">BenchmarkSuite</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float32&#39;</span><span class="p">,</span> <span class="n">chunk_shapes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">shard_shapes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dask_configs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">n_reps</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="n">tmp_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Orchestrate a set of ZarrNii read/write benchmarks.</p>
+<h5 id="zarrnii.benchmark.BenchmarkSuite--parameters">Parameters</h5>
+<p>shape:
+    Spatial shape of the synthetic 3-D array, e.g. <code>(64, 256, 256)</code>.
+dtype:
+    NumPy dtype string, e.g. <code>"float32"</code>.
+chunk_shapes:
+    List of chunk shapes to sweep.
+shard_shapes:
+    List of shard shapes (use <code>[None]</code> to disable sharding).
+dask_configs:
+    List of :class:<code>DaskConfig</code> objects (or plain dicts with keys
+    <code>scheduler</code>, <code>n_threads</code>, <code>threads_per_worker</code>).
+n_reps:
+    Number of repetitions per configuration (results are averaged).
+output_dir:
+    Directory where CSV results and HTML report are written.  Defaults
+    to the current working directory.
+tmp_dir:
+    Root directory used for the temporary OME-Zarr stores written during
+    benchmarking (passed as <em>dir</em> to :class:<code>tempfile.TemporaryDirectory</code>).
+    When <code>None</code> (the default) the system temporary directory is used.
+    Set this to a directory on a different filesystem (e.g. a network
+    mount) to measure I/O performance on that filesystem.</p>
+<h5 id="zarrnii.benchmark.BenchmarkSuite--examples">Examples</h5>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>from zarrnii.benchmark import BenchmarkSuite, DaskConfig
+suite = BenchmarkSuite(
+...     shape=(32, 128, 128),
+...     dtype="float32",
+...     chunk_shapes=[(16, 64, 64), (32, 128, 128)],
+...     dask_configs=[DaskConfig(scheduler="threads", n_threads=4)],
+...     n_reps=1,
+...     output_dir="/tmp/bench",
+... )
+df = suite.run()
+suite.generate_report(df)</p>
+</blockquote>
+</blockquote>
+</blockquote>
+
+
+
+
+
+
+
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>zarrnii/benchmark.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">420</span>
+<span class="normal">421</span>
+<span class="normal">422</span>
+<span class="normal">423</span>
+<span class="normal">424</span>
+<span class="normal">425</span>
+<span class="normal">426</span>
+<span class="normal">427</span>
+<span class="normal">428</span>
+<span class="normal">429</span>
+<span class="normal">430</span>
+<span class="normal">431</span>
+<span class="normal">432</span>
+<span class="normal">433</span>
+<span class="normal">434</span>
+<span class="normal">435</span>
+<span class="normal">436</span>
+<span class="normal">437</span>
+<span class="normal">438</span>
+<span class="normal">439</span>
+<span class="normal">440</span>
+<span class="normal">441</span>
+<span class="normal">442</span>
+<span class="normal">443</span>
+<span class="normal">444</span>
+<span class="normal">445</span>
+<span class="normal">446</span>
+<span class="normal">447</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">shape</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;float32&quot;</span><span class="p">,</span>
+    <span class="n">chunk_shapes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">shard_shapes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">dask_configs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">DaskConfig</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">n_reps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="p">,</span>
+    <span class="n">tmp_dir</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">=</span> <span class="n">shape</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">chunk_shapes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span>
+        <span class="n">chunk_shapes</span> <span class="ow">or</span> <span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">s</span> <span class="o">//</span> <span class="mi">2</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shape</span><span class="p">)]</span>
+    <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">shard_shapes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span>
+        <span class="n">shard_shapes</span> <span class="ow">or</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span>
+    <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">n_reps</span> <span class="o">=</span> <span class="n">n_reps</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">output_dir</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">tmp_dir</span> <span class="o">=</span> <span class="n">tmp_dir</span>  <span class="c1"># root dir for TemporaryDirectory; None → system default</span>
+
+    <span class="c1"># Normalise dask_configs to DaskConfig objects</span>
+    <span class="n">raw_configs</span> <span class="o">=</span> <span class="n">dask_configs</span> <span class="ow">or</span> <span class="p">[</span><span class="n">DaskConfig</span><span class="p">(</span><span class="n">scheduler</span><span class="o">=</span><span class="s2">&quot;threads&quot;</span><span class="p">,</span> <span class="n">n_threads</span><span class="o">=</span><span class="mi">4</span><span class="p">)]</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">dask_configs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">DaskConfig</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">DaskConfig</span><span class="p">(</span><span class="o">**</span><span class="n">c</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">raw_configs</span>
+    <span class="p">]</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+<h4 id="zarrnii.benchmark.BenchmarkSuite-functions">Functions</h4>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.benchmark.BenchmarkSuite.run" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">benchmark</span><span class="o">.</span><span class="n">BenchmarkSuite</span><span class="o">.</span><span class="n">run</span><span class="p">()</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Run all benchmark configurations and return a :class:<code>pandas.DataFrame</code>.</p>
+<h6 id="zarrnii.benchmark.BenchmarkSuite.run--returns">Returns</h6>
+<p>pandas.DataFrame
+    One row per (configuration, repetition) with timing and resource
+    columns.  See :class:<code>BenchmarkResult</code> for column descriptions.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/benchmark.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">467</span>
+<span class="normal">468</span>
+<span class="normal">469</span>
+<span class="normal">470</span>
+<span class="normal">471</span>
+<span class="normal">472</span>
+<span class="normal">473</span>
+<span class="normal">474</span>
+<span class="normal">475</span>
+<span class="normal">476</span>
+<span class="normal">477</span>
+<span class="normal">478</span>
+<span class="normal">479</span>
+<span class="normal">480</span>
+<span class="normal">481</span>
+<span class="normal">482</span>
+<span class="normal">483</span>
+<span class="normal">484</span>
+<span class="normal">485</span>
+<span class="normal">486</span>
+<span class="normal">487</span>
+<span class="normal">488</span>
+<span class="normal">489</span>
+<span class="normal">490</span>
+<span class="normal">491</span>
+<span class="normal">492</span>
+<span class="normal">493</span>
+<span class="normal">494</span>
+<span class="normal">495</span>
+<span class="normal">496</span>
+<span class="normal">497</span>
+<span class="normal">498</span>
+<span class="normal">499</span>
+<span class="normal">500</span>
+<span class="normal">501</span>
+<span class="normal">502</span>
+<span class="normal">503</span>
+<span class="normal">504</span>
+<span class="normal">505</span>
+<span class="normal">506</span>
+<span class="normal">507</span>
+<span class="normal">508</span>
+<span class="normal">509</span>
+<span class="normal">510</span>
+<span class="normal">511</span>
+<span class="normal">512</span>
+<span class="normal">513</span>
+<span class="normal">514</span>
+<span class="normal">515</span>
+<span class="normal">516</span>
+<span class="normal">517</span>
+<span class="normal">518</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;pd.DataFrame&quot;</span><span class="p">:</span>  <span class="c1"># noqa: F821</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run all benchmark configurations and return a :class:`pandas.DataFrame`.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        One row per (configuration, repetition) with timing and resource</span>
+<span class="sd">        columns.  See :class:`BenchmarkResult` for column descriptions.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+    <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">&quot;pandas is required for benchmark reporting&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+
+    <span class="n">configs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_configs</span><span class="p">()</span>
+    <span class="n">total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">configs</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_reps</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Starting benchmark: </span><span class="si">%d</span><span class="s2"> configs × </span><span class="si">%d</span><span class="s2"> reps = </span><span class="si">%d</span><span class="s2"> runs&quot;</span><span class="p">,</span>
+        <span class="nb">len</span><span class="p">(</span><span class="n">configs</span><span class="p">),</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_reps</span><span class="p">,</span>
+        <span class="n">total</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">(</span><span class="nb">dir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tmp_dir</span><span class="p">)</span> <span class="k">as</span> <span class="n">tmp_dir</span><span class="p">:</span>
+        <span class="c1"># tmp_dir_root is a suite-level value shared across all runs:</span>
+        <span class="c1"># use the user-specified root if provided, otherwise derive it</span>
+        <span class="c1"># from the actual temp directory created by the OS.</span>
+        <span class="n">tmp_dir_root</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tmp_dir</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">tmp_dir</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">tmp_dir</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">cfg</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">configs</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">rep</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_reps</span><span class="p">):</span>
+                <span class="n">run_num</span> <span class="o">=</span> <span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_reps</span> <span class="o">+</span> <span class="n">rep</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;[</span><span class="si">%d</span><span class="s2">/</span><span class="si">%d</span><span class="s2">] </span><span class="si">%s</span><span class="s2"> (rep </span><span class="si">%d</span><span class="s2">/</span><span class="si">%d</span><span class="s2">)&quot;</span><span class="p">,</span>
+                    <span class="n">run_num</span><span class="p">,</span>
+                    <span class="n">total</span><span class="p">,</span>
+                    <span class="n">cfg</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
+                    <span class="n">rep</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">n_reps</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">_run_single</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">rep</span><span class="p">,</span> <span class="n">tmp_dir</span><span class="p">)</span>
+                <span class="n">row</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+                <span class="n">row</span><span class="p">[</span><span class="s2">&quot;tmp_dir_root&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tmp_dir_root</span>
+                <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+                <span class="n">_print_result</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">df</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.benchmark.BenchmarkSuite.generate_report" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">benchmark</span><span class="o">.</span><span class="n">BenchmarkSuite</span><span class="o">.</span><span class="n">generate_report</span><span class="p">(</span><span class="n">df</span><span class="p">)</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Write CSV and HTML summary reports to :attr:<code>output_dir</code>.</p>
+<h6 id="zarrnii.benchmark.BenchmarkSuite.generate_report--parameters">Parameters</h6>
+<p>df:
+    DataFrame returned by :meth:<code>run</code>.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/benchmark.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">521</span>
+<span class="normal">522</span>
+<span class="normal">523</span>
+<span class="normal">524</span>
+<span class="normal">525</span>
+<span class="normal">526</span>
+<span class="normal">527</span>
+<span class="normal">528</span>
+<span class="normal">529</span>
+<span class="normal">530</span>
+<span class="normal">531</span>
+<span class="normal">532</span>
+<span class="normal">533</span>
+<span class="normal">534</span>
+<span class="normal">535</span>
+<span class="normal">536</span>
+<span class="normal">537</span>
+<span class="normal">538</span>
+<span class="normal">539</span>
+<span class="normal">540</span>
+<span class="normal">541</span>
+<span class="normal">542</span>
+<span class="normal">543</span>
+<span class="normal">544</span>
+<span class="normal">545</span>
+<span class="normal">546</span>
+<span class="normal">547</span>
+<span class="normal">548</span>
+<span class="normal">549</span>
+<span class="normal">550</span>
+<span class="normal">551</span>
+<span class="normal">552</span>
+<span class="normal">553</span>
+<span class="normal">554</span>
+<span class="normal">555</span>
+<span class="normal">556</span>
+<span class="normal">557</span>
+<span class="normal">558</span>
+<span class="normal">559</span>
+<span class="normal">560</span>
+<span class="normal">561</span>
+<span class="normal">562</span>
+<span class="normal">563</span>
+<span class="normal">564</span>
+<span class="normal">565</span>
+<span class="normal">566</span>
+<span class="normal">567</span>
+<span class="normal">568</span>
+<span class="normal">569</span>
+<span class="normal">570</span>
+<span class="normal">571</span>
+<span class="normal">572</span>
+<span class="normal">573</span>
+<span class="normal">574</span>
+<span class="normal">575</span>
+<span class="normal">576</span>
+<span class="normal">577</span>
+<span class="normal">578</span>
+<span class="normal">579</span>
+<span class="normal">580</span>
+<span class="normal">581</span>
+<span class="normal">582</span>
+<span class="normal">583</span>
+<span class="normal">584</span>
+<span class="normal">585</span>
+<span class="normal">586</span>
+<span class="normal">587</span>
+<span class="normal">588</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">generate_report</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">:</span> <span class="s2">&quot;pd.DataFrame&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># noqa: F821</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Write CSV and HTML summary reports to :attr:`output_dir`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    df:</span>
+<span class="sd">        DataFrame returned by :meth:`run`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+    <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">&quot;pandas is required for benchmark reporting&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Raw CSV</span>
+    <span class="n">csv_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span> <span class="o">/</span> <span class="s2">&quot;benchmark_results.csv&quot;</span>
+    <span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">csv_path</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Raw results saved to </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">csv_path</span><span class="p">)</span>
+
+    <span class="c1"># JSON summary (averages per config key)</span>
+    <span class="n">summary_df</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="s2">&quot;error&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">]</span>
+        <span class="o">.</span><span class="n">groupby</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="s2">&quot;shape&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;dtype&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;chunk_shape&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;shard_shape&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;scheduler&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;n_threads&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;threads_per_worker&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;dask_label&quot;</span><span class="p">,</span>
+            <span class="p">],</span>
+            <span class="n">dropna</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="o">.</span><span class="n">agg</span><span class="p">(</span>
+            <span class="n">write_wall_s_mean</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;write_wall_s&quot;</span><span class="p">,</span> <span class="s2">&quot;mean&quot;</span><span class="p">),</span>
+            <span class="n">write_wall_s_std</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;write_wall_s&quot;</span><span class="p">,</span> <span class="s2">&quot;std&quot;</span><span class="p">),</span>
+            <span class="n">read_wall_s_mean</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;read_wall_s&quot;</span><span class="p">,</span> <span class="s2">&quot;mean&quot;</span><span class="p">),</span>
+            <span class="n">read_wall_s_std</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;read_wall_s&quot;</span><span class="p">,</span> <span class="s2">&quot;std&quot;</span><span class="p">),</span>
+            <span class="n">total_wall_s_mean</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;total_wall_s&quot;</span><span class="p">,</span> <span class="s2">&quot;mean&quot;</span><span class="p">),</span>
+            <span class="n">write_cpu_efficiency_mean</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;write_cpu_efficiency&quot;</span><span class="p">,</span> <span class="s2">&quot;mean&quot;</span><span class="p">),</span>
+            <span class="n">read_cpu_efficiency_mean</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;read_cpu_efficiency&quot;</span><span class="p">,</span> <span class="s2">&quot;mean&quot;</span><span class="p">),</span>
+            <span class="n">peak_memory_mb_max</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;peak_memory_mb&quot;</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">),</span>
+            <span class="n">n_reps</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;repetition&quot;</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+    <span class="p">)</span>
+
+    <span class="n">summary_csv</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span> <span class="o">/</span> <span class="s2">&quot;benchmark_summary.csv&quot;</span>
+    <span class="n">summary_df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">summary_csv</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Summary saved to </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">summary_csv</span><span class="p">)</span>
+
+    <span class="c1"># HTML report</span>
+    <span class="n">html_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_dir</span> <span class="o">/</span> <span class="s2">&quot;benchmark_report.html&quot;</span>
+    <span class="c1"># tmp_dir_root is the same for every row in a single suite run;</span>
+    <span class="c1"># take the first value if present.</span>
+    <span class="n">tmp_dir_root</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">df</span><span class="p">[</span><span class="s2">&quot;tmp_dir_root&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s2">&quot;tmp_dir_root&quot;</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">df</span><span class="o">.</span><span class="n">empty</span>
+        <span class="k">else</span> <span class="kc">None</span>
+    <span class="p">)</span>
+    <span class="n">_write_html_report</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">summary_df</span><span class="p">,</span> <span class="n">html_path</span><span class="p">,</span> <span class="n">tmp_dir_root</span><span class="o">=</span><span class="n">tmp_dir_root</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;HTML report saved to </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">html_path</span><span class="p">)</span>
+
+    <span class="c1"># Print best configs</span>
+    <span class="n">_print_best_configs</span><span class="p">(</span><span class="n">summary_df</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+<h2 id="zarrnii.benchmark-functions">Functions</h2>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="zarrnii.benchmark.benchmark_cli" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">benchmark</span><span class="o">.</span><span class="n">benchmark_cli</span><span class="p">(</span><span class="n">argv</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Entry point for the <code>zarrnii-benchmark</code> command-line tool.</p>
+<h5 id="zarrnii.benchmark.benchmark_cli--parameters">Parameters</h5>
+<p>argv:
+    Argument list (uses <code>sys.argv[1:]</code> when <code>None</code>).</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/benchmark.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">783</span>
+<span class="normal">784</span>
+<span class="normal">785</span>
+<span class="normal">786</span>
+<span class="normal">787</span>
+<span class="normal">788</span>
+<span class="normal">789</span>
+<span class="normal">790</span>
+<span class="normal">791</span>
+<span class="normal">792</span>
+<span class="normal">793</span>
+<span class="normal">794</span>
+<span class="normal">795</span>
+<span class="normal">796</span>
+<span class="normal">797</span>
+<span class="normal">798</span>
+<span class="normal">799</span>
+<span class="normal">800</span>
+<span class="normal">801</span>
+<span class="normal">802</span>
+<span class="normal">803</span>
+<span class="normal">804</span>
+<span class="normal">805</span>
+<span class="normal">806</span>
+<span class="normal">807</span>
+<span class="normal">808</span>
+<span class="normal">809</span>
+<span class="normal">810</span>
+<span class="normal">811</span>
+<span class="normal">812</span>
+<span class="normal">813</span>
+<span class="normal">814</span>
+<span class="normal">815</span>
+<span class="normal">816</span>
+<span class="normal">817</span>
+<span class="normal">818</span>
+<span class="normal">819</span>
+<span class="normal">820</span>
+<span class="normal">821</span>
+<span class="normal">822</span>
+<span class="normal">823</span>
+<span class="normal">824</span>
+<span class="normal">825</span>
+<span class="normal">826</span>
+<span class="normal">827</span>
+<span class="normal">828</span>
+<span class="normal">829</span>
+<span class="normal">830</span>
+<span class="normal">831</span>
+<span class="normal">832</span>
+<span class="normal">833</span>
+<span class="normal">834</span>
+<span class="normal">835</span>
+<span class="normal">836</span>
+<span class="normal">837</span>
+<span class="normal">838</span>
+<span class="normal">839</span>
+<span class="normal">840</span>
+<span class="normal">841</span>
+<span class="normal">842</span>
+<span class="normal">843</span>
+<span class="normal">844</span>
+<span class="normal">845</span>
+<span class="normal">846</span>
+<span class="normal">847</span>
+<span class="normal">848</span>
+<span class="normal">849</span>
+<span class="normal">850</span>
+<span class="normal">851</span>
+<span class="normal">852</span>
+<span class="normal">853</span>
+<span class="normal">854</span>
+<span class="normal">855</span>
+<span class="normal">856</span>
+<span class="normal">857</span>
+<span class="normal">858</span>
+<span class="normal">859</span>
+<span class="normal">860</span>
+<span class="normal">861</span>
+<span class="normal">862</span>
+<span class="normal">863</span>
+<span class="normal">864</span>
+<span class="normal">865</span>
+<span class="normal">866</span>
+<span class="normal">867</span>
+<span class="normal">868</span>
+<span class="normal">869</span>
+<span class="normal">870</span>
+<span class="normal">871</span>
+<span class="normal">872</span>
+<span class="normal">873</span>
+<span class="normal">874</span>
+<span class="normal">875</span>
+<span class="normal">876</span>
+<span class="normal">877</span>
+<span class="normal">878</span>
+<span class="normal">879</span>
+<span class="normal">880</span>
+<span class="normal">881</span>
+<span class="normal">882</span>
+<span class="normal">883</span>
+<span class="normal">884</span>
+<span class="normal">885</span>
+<span class="normal">886</span>
+<span class="normal">887</span>
+<span class="normal">888</span>
+<span class="normal">889</span>
+<span class="normal">890</span>
+<span class="normal">891</span>
+<span class="normal">892</span>
+<span class="normal">893</span>
+<span class="normal">894</span>
+<span class="normal">895</span>
+<span class="normal">896</span>
+<span class="normal">897</span>
+<span class="normal">898</span>
+<span class="normal">899</span>
+<span class="normal">900</span>
+<span class="normal">901</span>
+<span class="normal">902</span>
+<span class="normal">903</span>
+<span class="normal">904</span>
+<span class="normal">905</span>
+<span class="normal">906</span>
+<span class="normal">907</span>
+<span class="normal">908</span>
+<span class="normal">909</span>
+<span class="normal">910</span>
+<span class="normal">911</span>
+<span class="normal">912</span>
+<span class="normal">913</span>
+<span class="normal">914</span>
+<span class="normal">915</span>
+<span class="normal">916</span>
+<span class="normal">917</span>
+<span class="normal">918</span>
+<span class="normal">919</span>
+<span class="normal">920</span>
+<span class="normal">921</span>
+<span class="normal">922</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">benchmark_cli</span><span class="p">(</span><span class="n">argv</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Entry point for the ``zarrnii-benchmark`` command-line tool.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    argv:</span>
+<span class="sd">        Argument list (uses ``sys.argv[1:]`` when ``None``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span>
+        <span class="n">prog</span><span class="o">=</span><span class="s2">&quot;zarrnii-benchmark&quot;</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="p">(</span>
+            <span class="s2">&quot;Benchmark OME-Zarr write/read performance across different &quot;</span>
+            <span class="s2">&quot;chunking and Dask configurations.&quot;</span>
+        <span class="p">),</span>
+        <span class="n">formatter_class</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">RawDescriptionHelpFormatter</span><span class="p">,</span>
+        <span class="n">epilog</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">Examples:</span>
+<span class="s2">  zarrnii-benchmark</span>
+<span class="s2">  zarrnii-benchmark --shape 64 256 256 --chunks 32,32,32 64,64,64</span>
+<span class="s2">  zarrnii-benchmark --shape 64 256 256 --chunks 32,32,32 --shards none 64,64,64</span>
+<span class="s2">  zarrnii-benchmark --dask-configs threads:4 distributed:8:2</span>
+<span class="s2">  zarrnii-benchmark --shape 128 512 512 --chunks 64,64,64 </span><span class="se">\\</span>
+<span class="s2">      --shards none 128,128,128 </span><span class="se">\\</span>
+<span class="s2">      --dask-configs threads:8 distributed:8:2 </span><span class="se">\\</span>
+<span class="s2">      --output-dir ./results --n-reps 5</span>
+<span class="s2">  zarrnii-benchmark --tmp-dir /mnt/network_fs --output-dir ./net_results</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--shape&quot;</span><span class="p">,</span>
+        <span class="n">nargs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="p">[</span><span class="mi">64</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">],</span>
+        <span class="n">metavar</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;Z&quot;</span><span class="p">,</span> <span class="s2">&quot;Y&quot;</span><span class="p">,</span> <span class="s2">&quot;X&quot;</span><span class="p">),</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Shape of the synthetic 3-D array (default: 64 256 256)&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--dtype&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;float32&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;NumPy dtype for the synthetic array (default: float32)&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--chunks&quot;</span><span class="p">,</span>
+        <span class="n">nargs</span><span class="o">=</span><span class="s2">&quot;+&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">metavar</span><span class="o">=</span><span class="s2">&quot;Z,Y,X&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="p">(</span>
+            <span class="s2">&quot;One or more chunk shapes as comma-separated integers, &quot;</span>
+            <span class="s2">&quot;e.g. --chunks 32,32,32 64,64,64  (default: half the array shape)&quot;</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--shards&quot;</span><span class="p">,</span>
+        <span class="n">nargs</span><span class="o">=</span><span class="s2">&quot;+&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">metavar</span><span class="o">=</span><span class="s2">&quot;Z,Y,X|none&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="p">(</span>
+            <span class="s2">&quot;One or more shard shapes as comma-separated integers, or &#39;none&#39; to &quot;</span>
+            <span class="s2">&quot;disable sharding, e.g. --shards none 128,128,128  (default: none)&quot;</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--dask-configs&quot;</span><span class="p">,</span>
+        <span class="n">nargs</span><span class="o">=</span><span class="s2">&quot;+&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;threads:4&quot;</span><span class="p">],</span>
+        <span class="n">metavar</span><span class="o">=</span><span class="s2">&quot;SPEC&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="p">(</span>
+            <span class="s2">&quot;One or more Dask scheduler specs.  &quot;</span>
+            <span class="s2">&quot;Format: threads:N or distributed:N:M  &quot;</span>
+            <span class="s2">&quot;(default: threads:4)&quot;</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--n-reps&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Number of repetitions per configuration (default: 3)&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--output-dir&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;.&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Directory for CSV and HTML report output (default: current dir)&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--tmp-dir&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">metavar</span><span class="o">=</span><span class="s2">&quot;DIR&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="p">(</span>
+            <span class="s2">&quot;Root directory for temporary OME-Zarr stores created during &quot;</span>
+            <span class="s2">&quot;benchmarking (default: system temp dir).  Use this to benchmark &quot;</span>
+            <span class="s2">&quot;I/O on a specific filesystem, e.g. a network mount.&quot;</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;-v&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;--verbose&quot;</span><span class="p">,</span>
+        <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Enable verbose logging&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">(</span><span class="n">argv</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span>
+        <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span> <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span> <span class="k">else</span> <span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">,</span>
+        <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">%(asctime)s</span><span class="s2"> </span><span class="si">%(levelname)s</span><span class="s2"> </span><span class="si">%(name)s</span><span class="s2">: </span><span class="si">%(message)s</span><span class="s2">&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="n">chunk_shapes</span> <span class="o">=</span> <span class="p">[</span><span class="n">_parse_chunk</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">chunks</span><span class="p">]</span> <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">chunks</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">shard_shapes</span> <span class="o">=</span> <span class="p">[</span><span class="n">_parse_shard</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">shards</span><span class="p">]</span> <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">shards</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">dask_configs</span> <span class="o">=</span> <span class="p">[</span><span class="n">_parse_dask_config</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">dask_configs</span><span class="p">]</span>
+
+    <span class="n">suite</span> <span class="o">=</span> <span class="n">BenchmarkSuite</span><span class="p">(</span>
+        <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span>
+        <span class="n">dtype</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+        <span class="n">chunk_shapes</span><span class="o">=</span><span class="n">chunk_shapes</span><span class="p">,</span>
+        <span class="n">shard_shapes</span><span class="o">=</span><span class="n">shard_shapes</span><span class="p">,</span>
+        <span class="n">dask_configs</span><span class="o">=</span><span class="n">dask_configs</span><span class="p">,</span>
+        <span class="n">n_reps</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">n_reps</span><span class="p">,</span>
+        <span class="n">output_dir</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span>
+        <span class="n">tmp_dir</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">tmp_dir</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ZarrNii Benchmark&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Shape:       </span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Dtype:       </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Chunks:      </span><span class="si">{</span><span class="n">suite</span><span class="o">.</span><span class="n">chunk_shapes</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Shards:      </span><span class="si">{</span><span class="n">suite</span><span class="o">.</span><span class="n">shard_shapes</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Dask configs:</span><span class="si">{</span><span class="p">[</span><span class="n">dc</span><span class="o">.</span><span class="n">label</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">dc</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">dask_configs</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Reps:        </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">n_reps</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Tmp dir:     </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">tmp_dir</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;(system default)&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Output dir:  </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">()</span>
+
+    <span class="n">df</span> <span class="o">=</span> <span class="n">suite</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+    <span class="n">suite</span><span class="o">.</span><span class="n">generate_report</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Report written to: </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
