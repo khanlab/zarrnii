@@ -4402,41 +4402,143 @@ class ZarrNii:
             if len(data_array.shape) == 3:
                 data_array = data_array[np.newaxis, ...]
 
-            # Extract spatial metadata
-            # Try to get spacing information from Imaris metadata
+            # Extract spatial metadata from OME XML tags
+            # spacing order: [z, y, x] for ZYX axes_order
             spacing = [1.0, 1.0, 1.0]  # Default spacing
             origin = [0.0, 0.0, 0.0]  # Default origin
+            unit_label = "micrometer"  # Default unit
 
-            # Look for ImageSizeX, ImageSizeY, ImageSizeZ attributes
+            ome_spacing_loaded = False
+
+            # Try to read spacing from OME XML metadata
+            # (stored by Imaris as DataSetInfo/OME Image Tags/Image 0)
             try:
-                # Navigate back to get image info
-                if "ImageSizeX" in f.attrs:
-                    x_size = f.attrs["ImageSizeX"]
-                    y_size = f.attrs["ImageSizeY"]
-                    z_size = f.attrs["ImageSizeZ"]
+                import xml.etree.ElementTree as ET
 
-                    # Calculate spacing based on physical size and voxel count
-                    if data_array.shape[-1] > 0:  # X dimension
-                        spacing[0] = x_size / data_array.shape[-1]
-                    if data_array.shape[-2] > 0:  # Y dimension
-                        spacing[1] = y_size / data_array.shape[-2]
-                    if data_array.shape[-3] > 0:  # Z dimension
-                        spacing[2] = z_size / data_array.shape[-3]
-            except (KeyError, IndexError):
-                # Use default spacing if metadata is not available
+                ome_key = "DataSetInfo/OME Image Tags/Image 0"
+                if ome_key in f:
+                    xml_bytes = f[ome_key][:]
+                    # Imaris stores XML as individual bytes in Latin-1 encoding
+                    # (µ = 0xB5 in Latin-1, a single byte)
+                    xml_str = b"".join(
+                        b if isinstance(b, bytes) else b.tobytes() for b in xml_bytes
+                    ).decode("latin-1")
+
+                    root = ET.fromstring(xml_str)
+
+                    # Find CustomAttributes - may be namespaced (ca:CustomAttributes)
+                    ns_map = {
+                        node[0]: node[1]
+                        for _, node in ET.iterparse(
+                            __import__("io").StringIO(xml_str), events=["start-ns"]
+                        )
+                    }
+                    ca_tag = None
+                    for elem in root.iter():
+                        local = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+                        if local == "CustomAttributes":
+                            ca_tag = elem
+                            break
+
+                    if ca_tag is not None:
+                        # DataAxis0 = X, DataAxis1 = Y, DataAxis2 = Z (Imaris convention)
+                        def _get_axis_unit(ca, axis_name):
+                            for child in ca:
+                                local = (
+                                    child.tag.split("}")[-1]
+                                    if "}" in child.tag
+                                    else child.tag
+                                )
+                                if local == axis_name:
+                                    val = child.get("PhysicalUnit")
+                                    if val is not None:
+                                        return float(val)
+                            return None
+
+                        px_x = _get_axis_unit(ca_tag, "DataAxis0")
+                        px_y = _get_axis_unit(ca_tag, "DataAxis1")
+                        px_z = _get_axis_unit(ca_tag, "DataAxis2")
+
+                        if px_x is not None and px_y is not None and px_z is not None:
+                            # spacing in ZYX order
+                            spacing = [abs(px_z), abs(px_y), abs(px_x)]
+                            ome_spacing_loaded = True
+
+                        # Get unit label from AxesLabels element
+                        for child in ca_tag:
+                            local = (
+                                child.tag.split("}")[-1]
+                                if "}" in child.tag
+                                else child.tag
+                            )
+                            if local == "AxesLabels":
+                                raw_unit = child.get("FirstAxis-Unit", "µm")
+                                # Normalise µ -> u and map to OME-Zarr unit name
+                                raw_unit = raw_unit.replace("µ", "u")
+                                imaris_unit_map = {
+                                    "um": "micrometer",
+                                    "mm": "millimeter",
+                                    "m": "meter",
+                                    "nm": "nanometer",
+                                }
+                                unit_label = imaris_unit_map.get(raw_unit, raw_unit)
+                                break
+            except Exception:
                 pass
+
+            # Fallback: derive spacing from DataSetInfo/Image ExtMin/ExtMax
+            # (this is what to_imaris() writes)
+            if not ome_spacing_loaded:
+                try:
+                    img_info = f["DataSetInfo/Image"]
+
+                    def _decode_attr(attr_val):
+                        """Decode byte-array or string attribute to float."""
+                        if hasattr(attr_val, "__iter__") and not isinstance(
+                            attr_val, (str, bytes)
+                        ):
+                            return float(
+                                b"".join(
+                                    v if isinstance(v, bytes) else v.tobytes()
+                                    for v in attr_val
+                                ).decode()
+                            )
+                        return float(attr_val)
+
+                    ext_min0 = _decode_attr(img_info.attrs["ExtMin0"])
+                    ext_max0 = _decode_attr(img_info.attrs["ExtMax0"])
+                    ext_min1 = _decode_attr(img_info.attrs["ExtMin1"])
+                    ext_max1 = _decode_attr(img_info.attrs["ExtMax1"])
+                    ext_min2 = _decode_attr(img_info.attrs["ExtMin2"])
+                    ext_max2 = _decode_attr(img_info.attrs["ExtMax2"])
+
+                    nx = data_array.shape[-1]  # X voxels
+                    ny = data_array.shape[-2]  # Y voxels
+                    nz_vox = data_array.shape[-3]  # Z voxels
+
+                    if nx > 0 and ny > 0 and nz_vox > 0:
+                        spacing = [
+                            (ext_max2 - ext_min2) / nz_vox,  # Z
+                            (ext_max1 - ext_min1) / ny,  # Y
+                            (ext_max0 - ext_min0) / nx,  # X
+                        ]
+                        origin = [ext_min2, ext_min1, ext_min0]  # ZYX
+                except Exception:
+                    pass
 
             # Create dimensions
             dims = ["c"] + list(axes_order.lower())
 
-            # Create scale and translation dictionaries
+            # Create scale, translation and axes_units dictionaries
             scale_dict = {}
             translation_dict = {}
+            axes_units_dict = {}
             spatial_dims = ["z", "y", "x"] if axes_order == "ZYX" else ["x", "y", "z"]
 
             for i, dim in enumerate(spatial_dims):
                 scale_dict[dim] = spacing[i]
                 translation_dict[dim] = origin[i]
+                axes_units_dict[dim] = unit_label
 
             # Create NgffImage
             ngff_image = nz.NgffImage(
@@ -4444,6 +4546,7 @@ class ZarrNii:
                 dims=dims,
                 scale=scale_dict,
                 translation=translation_dict,
+                axes_units=axes_units_dict,
                 name=f"imaris_image_{path}_{level}_{timepoint}_{channel}",
             )
 
@@ -4715,6 +4818,36 @@ class ZarrNii:
             log_group.attrs["Entry0"] = _string_to_byte_array(
                 f"<ZarrNiiExport channels=\"{' '.join(['on'] * n_channels)}\"/>"
             )
+
+            # Write OME XML metadata so that from_imaris() can read voxel sizes
+            # and units on round-trip. Axis order: DataAxis0=X, DataAxis1=Y, DataAxis2=Z
+            omezarr_to_imaris_units = {
+                "micrometer": "µm",
+                "millimeter": "mm",
+                "meter": "m",
+                "nanometer": "nm",
+            }
+            axes_units_map = (
+                ngff_image_to_save.axes_units
+                if hasattr(ngff_image_to_save, "axes_units")
+                and ngff_image_to_save.axes_units
+                else {}
+            )
+            x_unit_omezarr = axes_units_map.get("x", "micrometer")
+            imaris_unit = omezarr_to_imaris_units.get(x_unit_omezarr, "µm")
+            ome_xml = (
+                '<root xmlns:ca="urn:info.openmicroscopy.org/linkedAnnotation/customAttributes">'
+                "<ca:CustomAttributes>"
+                f'<DataAxis0 PhysicalUnit="{sx:.6g}"/>'
+                f'<DataAxis1 PhysicalUnit="{sy:.6g}"/>'
+                f'<DataAxis2 PhysicalUnit="{sz:.6g}"/>'
+                f'<AxesLabels FirstAxis-Unit="{imaris_unit}"/>'
+                "</ca:CustomAttributes>"
+                "</root>"
+            )
+            ome_bytes = np.frombuffer(ome_xml.encode("latin-1"), dtype="|S1")
+            ome_tags_group = info_group.create_group("OME Image Tags")
+            ome_tags_group.create_dataset("Image 0", data=ome_bytes)
 
             # Create thumbnail group with proper multi-channel thumbnail
             thumbnail_group = f.create_group("Thumbnail")

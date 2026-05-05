@@ -227,16 +227,28 @@ class TestImarisIO:
         assert_array_almost_equal(original_data, loaded_data, decimal=5)
 
     def test_imaris_metadata_extraction(self, tmp_path, sample_3d_data):
-        """Test extraction of spatial metadata from Imaris file."""
+        """Test extraction of spatial metadata from Imaris OME XML tags."""
         imaris_path = tmp_path / "test_metadata.ims"
 
-        # Create Imaris file with specific metadata
+        # Expected voxel sizes: X=2.0, Y=1.5, Z=2.0 um
+        px_x, px_y, px_z = 2.0, 1.5, 2.0
+
+        ome_xml = (
+            '<root xmlns:ca="urn:info.openmicroscopy.org/linkedAnnotation/customAttributes">'
+            "<ca:CustomAttributes>"
+            f'<DataAxis0 PhysicalUnit="{px_x}"/>'
+            f'<DataAxis1 PhysicalUnit="{px_y}"/>'
+            f'<DataAxis2 PhysicalUnit="{px_z}"/>'
+            '<AxesLabels FirstAxis-Unit="µm"/>'
+            "</ca:CustomAttributes>"
+            "</root>"
+        )
+        ome_bytes = np.frombuffer(ome_xml.encode("latin-1"), dtype="|S1")
+
+        # Create Imaris file with OME XML metadata
         with h5py.File(str(imaris_path), "w") as f:
             f.attrs["ImarisVersion"] = "9.0.0"
             f.attrs["ImarisDataSet"] = "ImarisDataSet"
-            f.attrs["ImageSizeX"] = 192.0  # 96 * 2.0 spacing
-            f.attrs["ImageSizeY"] = 192.0  # 128 * 1.5 spacing
-            f.attrs["ImageSizeZ"] = 128.0  # 64 * 2.0 spacing
 
             dataset_group = f.create_group("DataSet")
             res_group = dataset_group.create_group("ResolutionLevel 0")
@@ -244,19 +256,27 @@ class TestImarisIO:
             channel_group = time_group.create_group("Channel 0")
             channel_group.create_dataset("Data", data=sample_3d_data)
 
-            # Add basic info groups
+            # Add DataSetInfo with OME XML tags
             info_group = f.create_group("DataSetInfo")
             info_group.create_group("Image")
+            ome_tags = info_group.create_group("OME Image Tags")
+            ome_tags.create_dataset("Image 0", data=ome_bytes)
+
             time_info_group = f.create_group("DataSetTimes")
             time_info_group.create_dataset("Time", data=[0.0])
 
-        # Load and check spacing calculation
+        # Load and check spacing from OME XML
         znimg = ZarrNii.from_imaris(str(imaris_path))
 
-        # The spacing should be calculated from ImageSize attributes
+        # Spacing should be read directly from OME XML PhysicalUnit values [Z, Y, X]
         zooms = znimg.get_zooms(axes_order="ZYX")
-        expected_zooms = [128.0 / 64, 192.0 / 128, 192.0 / 96]  # [Z, Y, X]
-        assert_array_almost_equal(zooms, expected_zooms, decimal=3)
+        expected_zooms = [px_z, px_y, px_x]
+        assert_array_almost_equal(zooms, expected_zooms, decimal=6)
+
+        # Unit should be micrometer (mapped from µm)
+        assert znimg.ngff_image.axes_units.get("z") == "micrometer"
+        assert znimg.ngff_image.axes_units.get("y") == "micrometer"
+        assert znimg.ngff_image.axes_units.get("x") == "micrometer"
 
     def test_malformed_imaris_files(self, tmp_path):
         """Test error handling for various malformed Imaris files."""
