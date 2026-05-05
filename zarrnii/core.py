@@ -4427,12 +4427,6 @@ class ZarrNii:
                     root = ET.fromstring(xml_str)
 
                     # Find CustomAttributes - may be namespaced (ca:CustomAttributes)
-                    ns_map = {
-                        node[0]: node[1]
-                        for _, node in ET.iterparse(
-                            __import__("io").StringIO(xml_str), events=["start-ns"]
-                        )
-                    }
                     ca_tag = None
                     for elem in root.iter():
                         local = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
@@ -4442,7 +4436,7 @@ class ZarrNii:
 
                     if ca_tag is not None:
                         # DataAxis0 = X, DataAxis1 = Y, DataAxis2 = Z (Imaris convention)
-                        def _get_axis_unit(ca, axis_name):
+                        def _get_physical_unit_value(ca, axis_name):
                             for child in ca:
                                 local = (
                                     child.tag.split("}")[-1]
@@ -4452,15 +4446,19 @@ class ZarrNii:
                                 if local == axis_name:
                                     val = child.get("PhysicalUnit")
                                     if val is not None:
-                                        return float(val)
+                                        try:
+                                            return float(val)
+                                        except ValueError:
+                                            return None
                             return None
 
-                        px_x = _get_axis_unit(ca_tag, "DataAxis0")
-                        px_y = _get_axis_unit(ca_tag, "DataAxis1")
-                        px_z = _get_axis_unit(ca_tag, "DataAxis2")
+                        px_x = _get_physical_unit_value(ca_tag, "DataAxis0")
+                        px_y = _get_physical_unit_value(ca_tag, "DataAxis1")
+                        px_z = _get_physical_unit_value(ca_tag, "DataAxis2")
 
                         if px_x is not None and px_y is not None and px_z is not None:
-                            # spacing in ZYX order
+                            # spacing in ZYX order; abs() handles files where Imaris
+                            # stores negative step values along reversed axes
                             spacing = [abs(px_z), abs(px_y), abs(px_x)]
                             ome_spacing_loaded = True
 
@@ -4473,7 +4471,8 @@ class ZarrNii:
                             )
                             if local == "AxesLabels":
                                 raw_unit = child.get("FirstAxis-Unit", "µm")
-                                # Normalise µ -> u and map to OME-Zarr unit name
+                                # Normalise µ (Latin-1 0xB5) to u so the lookup
+                                # below handles both µm and um consistently
                                 raw_unit = raw_unit.replace("µ", "u")
                                 imaris_unit_map = {
                                     "um": "micrometer",
@@ -4492,25 +4491,31 @@ class ZarrNii:
                 try:
                     img_info = f["DataSetInfo/Image"]
 
-                    def _decode_attr(attr_val):
-                        """Decode byte-array or string attribute to float."""
-                        if hasattr(attr_val, "__iter__") and not isinstance(
-                            attr_val, (str, bytes)
-                        ):
-                            return float(
-                                b"".join(
-                                    v if isinstance(v, bytes) else v.tobytes()
-                                    for v in attr_val
-                                ).decode()
-                            )
-                        return float(attr_val)
+                    def _decode_attr(attr_val, attr_name=""):
+                        """Decode Imaris byte-array or string attribute to float."""
+                        try:
+                            if hasattr(attr_val, "__iter__") and not isinstance(
+                                attr_val, (str, bytes)
+                            ):
+                                return float(
+                                    b"".join(
+                                        v if isinstance(v, bytes) else v.tobytes()
+                                        for v in attr_val
+                                    ).decode()
+                                )
+                            return float(attr_val)
+                        except (ValueError, TypeError) as exc:
+                            raise ValueError(
+                                f"Could not decode DataSetInfo/Image attribute "
+                                f"'{attr_name}': {exc}"
+                            ) from exc
 
-                    ext_min0 = _decode_attr(img_info.attrs["ExtMin0"])
-                    ext_max0 = _decode_attr(img_info.attrs["ExtMax0"])
-                    ext_min1 = _decode_attr(img_info.attrs["ExtMin1"])
-                    ext_max1 = _decode_attr(img_info.attrs["ExtMax1"])
-                    ext_min2 = _decode_attr(img_info.attrs["ExtMin2"])
-                    ext_max2 = _decode_attr(img_info.attrs["ExtMax2"])
+                    ext_min0 = _decode_attr(img_info.attrs["ExtMin0"], "ExtMin0")
+                    ext_max0 = _decode_attr(img_info.attrs["ExtMax0"], "ExtMax0")
+                    ext_min1 = _decode_attr(img_info.attrs["ExtMin1"], "ExtMin1")
+                    ext_max1 = _decode_attr(img_info.attrs["ExtMax1"], "ExtMax1")
+                    ext_min2 = _decode_attr(img_info.attrs["ExtMin2"], "ExtMin2")
+                    ext_max2 = _decode_attr(img_info.attrs["ExtMax2"], "ExtMax2")
 
                     nx = data_array.shape[-1]  # X voxels
                     ny = data_array.shape[-2]  # Y voxels
@@ -4821,6 +4826,8 @@ class ZarrNii:
 
             # Write OME XML metadata so that from_imaris() can read voxel sizes
             # and units on round-trip. Axis order: DataAxis0=X, DataAxis1=Y, DataAxis2=Z
+            import xml.sax.saxutils as _saxutils
+
             omezarr_to_imaris_units = {
                 "micrometer": "µm",
                 "millimeter": "mm",
@@ -4841,7 +4848,7 @@ class ZarrNii:
                 f'<DataAxis0 PhysicalUnit="{sx:.6g}"/>'
                 f'<DataAxis1 PhysicalUnit="{sy:.6g}"/>'
                 f'<DataAxis2 PhysicalUnit="{sz:.6g}"/>'
-                f'<AxesLabels FirstAxis-Unit="{imaris_unit}"/>'
+                f'<AxesLabels FirstAxis-Unit="{_saxutils.escape(imaris_unit)}"/>'
                 "</ca:CustomAttributes>"
                 "</root>"
             )
