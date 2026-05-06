@@ -4348,6 +4348,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "scikit-image" },
     { name = "scipy" },
+    { name = "tifffile" },
     { name = "zarr" },
 ]
 
@@ -4436,6 +4437,7 @@ requires-dist = [
     { name = "scikit-image", specifier = ">=0.22.0" },
     { name = "scipy", specifier = ">=1.12.0" },
     { name = "templateflow", marker = "extra == 'templateflow'", specifier = ">=0.8.0" },
+    { name = "tifffile", specifier = ">=2024.1.30" },
     { name = "zarr", specifier = ">=3.1.6" },
 ]
 provides-extras = ["dev", "distributed", "imaris", "n4", "templateflow"]

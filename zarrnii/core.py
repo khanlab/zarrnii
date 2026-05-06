@@ -1880,6 +1880,8 @@ class ZarrNii:
             return cls.from_nifti(path, **kwargs)
         elif path.endswith(".zarr") or _is_ome_zarr_zip_path(path):
             return cls.from_ome_zarr(path, **kwargs)
+        elif path.endswith((".tif", ".tiff")):
+            return cls.from_ome_tif(path, **kwargs)
         else:
             raise ValueError(f"Unknown file extension: {path}")
 
@@ -4448,6 +4450,250 @@ class ZarrNii:
             )
 
         # Create and return ZarrNii instance
+        return cls(
+            ngff_image=ngff_image,
+            axes_order=axes_order,
+            xyz_orientation=orientation,
+            _omero=None,
+        )
+
+    @classmethod
+    def from_ome_tif(
+        cls,
+        path: str,
+        axes_order: str = "ZYX",
+        orientation: str = "RAS",
+        level: int = 0,
+        series: int = 0,
+        chunks: Union[str, Tuple] = "auto",
+        name: Optional[str] = None,
+    ) -> "ZarrNii":
+        """Load ZarrNii from an OME-TIFF file (e.g. a z-stack).
+
+        Lazily reads the image data using tifffile and wraps it as a ZarrNii
+        object with spatial metadata extracted from the embedded OME-XML or
+        ImageJ metadata.  The method mirrors the signature and behaviour of
+        other constructors such as :meth:`from_darr` and :meth:`from_imaris`.
+
+        Args:
+            path: Path to the OME-TIFF file (.tif or .tiff).
+            axes_order: Target spatial axes order for ZarrNii.  Either
+                ``"ZYX"`` (default, most common for microscopy z-stacks) or
+                ``"XYZ"``.  The loaded array is transposed to this order
+                regardless of how the TIFF was written.
+            orientation: Anatomical orientation string in XYZ axes order
+                (e.g. ``"RAS"``, ``"LPI"``).  Passed through to the
+                ZarrNii instance unchanged.
+            level: Pyramid level to load (0 = full resolution).  Most
+                OME-TIFF z-stacks are single-level, so this defaults to 0.
+            series: OME-TIFF series index to load (default: 0).  Multi-
+                series files (e.g. from plate acquisitions) may contain
+                more than one series.
+            chunks: Dask chunking strategy.  ``"auto"`` lets Dask choose
+                chunk sizes automatically; a tuple of ints sets explicit
+                chunk sizes matching the array dimensions.
+            name: Optional name for the resulting NgffImage.  Defaults to
+                the basename of *path*.
+
+        Returns:
+            ZarrNii instance with lazily-loaded data and spatial metadata.
+
+        Raises:
+            ImportError: If *tifffile* is not installed.
+            ValueError: If *series* or *level* is out of range.
+            ValueError: If *axes_order* is not ``"ZYX"`` or ``"XYZ"``.
+
+        Examples:
+            >>> # Load a single-channel z-stack
+            >>> znii = ZarrNii.from_ome_tif("/path/to/zstack.ome.tif")
+
+            >>> # Load with explicit axes order and orientation
+            >>> znii = ZarrNii.from_ome_tif(
+            ...     "/path/to/zstack.ome.tif",
+            ...     axes_order="ZYX",
+            ...     orientation="RAS",
+            ... )
+
+            >>> # Load a specific series at a lower resolution level
+            >>> znii = ZarrNii.from_ome_tif(
+            ...     "/path/to/multiresolution.ome.tif",
+            ...     level=1,
+            ...     series=0,
+            ... )
+
+        Notes:
+            - Spacing is read from ``PhysicalSizeX/Y/Z`` in the OME-XML, or
+              from the equivalent ImageJ metadata fields when the file is in
+              ImageJ format.  Falls back to 1.0 if no physical size is found.
+            - The spatial unit (``PhysicalSizeXUnit``) is mapped to the
+              corresponding OME-Zarr unit name (e.g. ``"um"`` →
+              ``"micrometer"``).
+            - Data are kept as a lazy Dask array backed by the TIFF file;
+              they are not read into memory until explicitly computed.
+        """
+        try:
+            import tifffile
+        except ImportError:
+            raise ImportError(
+                "tifffile is required for OME-TIFF support. "
+                "Install with: pip install tifffile"
+            )
+
+        import os
+        from xml.etree import ElementTree as ET
+
+        import zarr
+
+        if axes_order not in ("ZYX", "XYZ"):
+            raise ValueError(f"axes_order must be 'ZYX' or 'XYZ', got '{axes_order}'")
+
+        # --- Step 1: collect metadata from within the context manager ----------
+        with tifffile.TiffFile(path) as tif:
+            if series >= len(tif.series):
+                raise ValueError(
+                    f"Series {series} not available. "
+                    f"File has {len(tif.series)} series (0-{len(tif.series)-1})."
+                )
+
+            tif_series = tif.series[series]
+            # tifffile reports axes in Python array order, e.g. 'ZYX', 'CZYX'
+            tif_axes = tif_series.axes.upper()
+
+            # Validate the requested level
+            n_levels = len(tif_series.levels)
+            if level >= n_levels:
+                raise ValueError(
+                    f"Level {level} not available. "
+                    f"Series has {n_levels} level(s) (0-{n_levels-1})."
+                )
+
+            # --- Parse physical spacing -----------------------------------------
+            spacing_x, spacing_y, spacing_z = 1.0, 1.0, 1.0
+            axes_unit = "micrometer"
+
+            _ome_to_zarr_units = {
+                "um": "micrometer",
+                "µm": "micrometer",
+                "nm": "nanometer",
+                "mm": "millimeter",
+                "m": "meter",
+                "cm": "centimeter",
+            }
+
+            if tif.is_ome and tif.ome_metadata:
+                root = ET.fromstring(tif.ome_metadata)
+                ns_uri = root.tag.split("}")[0][1:] if "{" in root.tag else ""
+                ns_prefix = f"{{{ns_uri}}}" if ns_uri else ""
+                pixels_elem = root.find(f"{ns_prefix}Image/{ns_prefix}Pixels")
+                if pixels_elem is not None:
+                    spacing_x = float(pixels_elem.get("PhysicalSizeX", 1.0))
+                    spacing_y = float(pixels_elem.get("PhysicalSizeY", 1.0))
+                    spacing_z = float(pixels_elem.get("PhysicalSizeZ", 1.0))
+                    unit = pixels_elem.get("PhysicalSizeXUnit", "um")
+                    axes_unit = _ome_to_zarr_units.get(unit, "micrometer")
+
+            elif tif.is_imagej and tif.imagej_metadata:
+                ij = tif.imagej_metadata
+                spacing_x = float(ij.get("physicalsizex", 1.0))
+                spacing_y = float(ij.get("physicalsizey", 1.0))
+                spacing_z = float(ij.get("physicalsizez", 1.0))
+                unit = ij.get("unit", "um")
+                axes_unit = _ome_to_zarr_units.get(unit, "micrometer")
+
+        # --- Step 2: open the zarr store outside the context manager so that
+        #     the dask array can be lazily evaluated later ---------------------
+        zarr_store = tifffile.imread(path, aszarr=True, series=series, level=level)
+        z_arr = zarr.open(zarr_store, mode="r")
+
+        dask_chunks = None if chunks == "auto" else chunks
+        darr = da.from_zarr(z_arr, chunks=dask_chunks)
+
+        # --- Step 3: normalise axes to (C, Z, Y, X) or (C, X, Y, Z) ----------
+        current_axes = list(tif_axes)
+
+        # Map any unrecognised axes labels to known ones.  tifffile uses 'Q'
+        # for pages whose dimension is not identified from metadata.  Treat the
+        # first unknown axis as Z (z-stack), any further unknown axes as T.
+        # Iterate in reverse so that index-based removal stays valid.
+        _known = {"T", "C", "Z", "Y", "X"}
+        for i in range(len(current_axes) - 1, -1, -1):
+            ax = current_axes[i]
+            if ax not in _known:
+                if "Z" not in current_axes:
+                    current_axes[i] = "Z"
+                elif "T" not in current_axes:
+                    current_axes[i] = "T"
+                else:
+                    # Drop unrecognised surplus dimension by squeezing
+                    darr = darr.squeeze(axis=i)
+                    current_axes.pop(i)
+
+        # Add channel dimension if absent
+        if "C" not in current_axes:
+            darr = darr[np.newaxis, ...]
+            current_axes = ["C"] + current_axes
+
+        # Build target axes list
+        if axes_order == "ZYX":
+            spatial = ["Z", "Y", "X"]
+        else:
+            spatial = ["X", "Y", "Z"]
+
+        has_time = "T" in current_axes
+        target_axes = (["T"] if has_time else []) + ["C"] + spatial
+
+        # Add any axes that are still missing as size-1 dimensions, inserting
+        # each one at the correct position relative to axes already present so
+        # that the subsequent transpose is straightforward.
+        for ax in target_axes:
+            if ax not in current_axes:
+                ax_pos = target_axes.index(ax)
+                # Insert just before the first following target axis present in
+                # current_axes, defaulting to the end.
+                insert_idx = len(current_axes)
+                for following_ax in target_axes[ax_pos + 1 :]:
+                    if following_ax in current_axes:
+                        insert_idx = current_axes.index(following_ax)
+                        break
+                darr = da.expand_dims(darr, axis=insert_idx)
+                current_axes.insert(insert_idx, ax)
+
+        # Transpose to target order
+        transpose_order = [current_axes.index(ax) for ax in target_axes]
+        darr = darr.transpose(transpose_order)
+
+        final_dims = [ax.lower() for ax in target_axes]
+
+        # --- Step 4: build scale / translation dicts --------------------------
+        if axes_order == "ZYX":
+            scale = {"z": spacing_z, "y": spacing_y, "x": spacing_x}
+            translation = {"z": 0.0, "y": 0.0, "x": 0.0}
+            axes_units_dict = {
+                "z": axes_unit,
+                "y": axes_unit,
+                "x": axes_unit,
+            }
+        else:  # XYZ
+            scale = {"x": spacing_x, "y": spacing_y, "z": spacing_z}
+            translation = {"x": 0.0, "y": 0.0, "z": 0.0}
+            axes_units_dict = {
+                "x": axes_unit,
+                "y": axes_unit,
+                "z": axes_unit,
+            }
+
+        if name is None:
+            name = os.path.basename(path)
+
+        ngff_image = nz.NgffImage(
+            data=darr,
+            dims=final_dims,
+            scale=scale,
+            translation=translation,
+            axes_units=axes_units_dict,
+            name=name,
+        )
+
         return cls(
             ngff_image=ngff_image,
             axes_order=axes_order,
