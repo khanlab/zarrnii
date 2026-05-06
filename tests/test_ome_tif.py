@@ -227,5 +227,10 @@ class TestFromOmeTif:
             assert znii.scale["z"] == pytest.approx(1.0)
             assert znii.scale["y"] == pytest.approx(1.0)
             assert znii.scale["x"] == pytest.approx(1.0)
+            # Dims should include c, z, y, x
+            assert "z" in znii.dims
+            assert "y" in znii.dims
+            assert "x" in znii.dims
+            assert "c" in znii.dims
         finally:
             os.unlink(tmpf)

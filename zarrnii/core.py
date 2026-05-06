@@ -4614,20 +4614,19 @@ class ZarrNii:
         # Map any unrecognised axes labels to known ones.  tifffile uses 'Q'
         # for pages whose dimension is not identified from metadata.  Treat the
         # first unknown axis as Z (z-stack), any further unknown axes as T.
+        # Iterate in reverse so that index-based removal stays valid.
         _known = {"T", "C", "Z", "Y", "X"}
-        _unknown_mapped_z = False
-        for i, ax in enumerate(current_axes):
+        for i in range(len(current_axes) - 1, -1, -1):
+            ax = current_axes[i]
             if ax not in _known:
-                if not _unknown_mapped_z and "Z" not in current_axes:
+                if "Z" not in current_axes:
                     current_axes[i] = "Z"
-                    _unknown_mapped_z = True
                 elif "T" not in current_axes:
                     current_axes[i] = "T"
                 else:
-                    # Drop unrecognised surplus dimensions by squeezing them
+                    # Drop unrecognised surplus dimension by squeezing
                     darr = darr.squeeze(axis=i)
                     current_axes.pop(i)
-                    break  # re-evaluation needed; keep it simple
 
         # Add channel dimension if absent
         if "C" not in current_axes:
@@ -4643,13 +4642,19 @@ class ZarrNii:
         has_time = "T" in current_axes
         target_axes = (["T"] if has_time else []) + ["C"] + spatial
 
-        # Only keep axes that are present; add missing ones as size-1 dims
+        # Add any axes that are still missing as size-1 dimensions, inserting
+        # each one at the correct position relative to axes already present so
+        # that the subsequent transpose is straightforward.
         for ax in target_axes:
             if ax not in current_axes:
-                # Determine where to insert: before the first spatial dim
-                insert_idx = len(darr.shape) - len(
-                    [a for a in current_axes if a in ("Z", "Y", "X")]
-                )
+                ax_pos = target_axes.index(ax)
+                # Insert just before the first following target axis present in
+                # current_axes, defaulting to the end.
+                insert_idx = len(current_axes)
+                for following_ax in target_axes[ax_pos + 1 :]:
+                    if following_ax in current_axes:
+                        insert_idx = current_axes.index(following_ax)
+                        break
                 darr = da.expand_dims(darr, axis=insert_idx)
                 current_axes.insert(insert_idx, ax)
 
