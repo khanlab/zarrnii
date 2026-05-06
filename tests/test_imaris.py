@@ -227,11 +227,16 @@ class TestImarisIO:
         assert_array_almost_equal(original_data, loaded_data, decimal=5)
 
     def test_imaris_metadata_extraction(self, tmp_path, sample_3d_data):
-        """Test extraction of spatial metadata from Imaris OME XML tags."""
+        """Test extraction of spatial metadata from Imaris OME XML tags.
+
+        Uses three *distinct* voxel sizes so that any Z<->X dimension swap is
+        immediately visible (a common pitfall with ZYX vs. XYZ ordering).
+        """
         imaris_path = tmp_path / "test_metadata.ims"
 
-        # Expected voxel sizes: X=2.0, Y=1.5, Z=2.0 um
-        px_x, px_y, px_z = 2.0, 1.5, 2.0
+        # Use fully distinct values: px_x != px_y != px_z
+        # DataAxis0 = X, DataAxis1 = Y, DataAxis2 = Z (Imaris convention)
+        px_x, px_y, px_z = 1.0, 2.0, 3.0
 
         ome_xml = (
             '<root xmlns:ca="urn:info.openmicroscopy.org/linkedAnnotation/customAttributes">'
@@ -268,7 +273,9 @@ class TestImarisIO:
         # Load and check spacing from OME XML
         znimg = ZarrNii.from_imaris(str(imaris_path))
 
-        # Spacing should be read directly from OME XML PhysicalUnit values [Z, Y, X]
+        # Spacing must be [Z, Y, X] = [px_z, px_y, px_x]
+        # Any Z<->X swap would give [px_x, px_y, px_z] = [1.0, 2.0, 3.0] instead
+        # of the correct [3.0, 2.0, 1.0]
         zooms = znimg.get_zooms(axes_order="ZYX")
         expected_zooms = [px_z, px_y, px_x]
         assert_array_almost_equal(zooms, expected_zooms, decimal=6)
@@ -511,3 +518,100 @@ class TestImarisIntegration:
         original_data = znimg_xyz.darr.compute()[0]
         # XYZ[x, y, z] should equal ZYX[z, y, x]
         assert_array_equal(original_data[5, 10, 15], loaded_data[15, 10, 5])
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_imaris_to_nifti_spacing_roundtrip(self, tmp_path):
+        """Test from_imaris -> to_nifti -> from_nifti preserves voxel sizes and
+        data positions correctly with a non-trivial (RPI) orientation.
+
+        Uses three fully distinct voxel sizes so that any Z<->X dimension swap is
+        immediately detected.
+        """
+        import nibabel as nib
+
+        # --- Create Imaris file with OME XML metadata ---
+        # Unique voxel sizes per axis so a Z<->X swap is immediately visible
+        sx, sy, sz = 1.0, 2.0, 3.0  # X, Y, Z physical voxel sizes (micrometers)
+        nx, ny, nz = 30, 40, 50  # X, Y, Z voxel counts
+
+        data_zyx = np.zeros((nz, ny, nx), dtype=np.float32)
+        data_zyx[10, 20, 25] = 100.0  # marker at ZYX = (10, 20, 25)
+
+        ome_xml = (
+            '<root xmlns:ca="urn:info.openmicroscopy.org/linkedAnnotation/customAttributes">'
+            "<ca:CustomAttributes>"
+            f'<DataAxis0 PhysicalUnit="{sx}"/>'  # X
+            f'<DataAxis1 PhysicalUnit="{sy}"/>'  # Y
+            f'<DataAxis2 PhysicalUnit="{sz}"/>'  # Z
+            '<AxesLabels FirstAxis-Unit="um"/>'
+            "</ca:CustomAttributes>"
+            "</root>"
+        )
+        ome_bytes = np.frombuffer(ome_xml.encode("latin-1"), dtype="|S1")
+
+        imaris_path = str(tmp_path / "test_spacing.ims")
+        with h5py.File(imaris_path, "w") as f:
+            f.attrs["ImarisVersion"] = "9.0.0"
+            ch = (
+                f.create_group("DataSet")
+                .create_group("ResolutionLevel 0")
+                .create_group("TimePoint 0")
+                .create_group("Channel 0")
+            )
+            ch.create_dataset("Data", data=data_zyx)
+            info = f.create_group("DataSetInfo")
+            info.create_group("Image")
+            info.create_group("OME Image Tags").create_dataset(
+                "Image 0", data=ome_bytes
+            )
+
+        # --- Load from Imaris with RPI orientation ---
+        znii = ZarrNii.from_imaris(imaris_path, orientation="RPI")
+
+        # Verify ZYX scale: [sz, sy, sx] = [3, 2, 1]
+        assert znii.axes_order == "ZYX"
+        assert_array_almost_equal(
+            znii.get_zooms(axes_order="ZYX"), [sz, sy, sx], decimal=6
+        )
+        # Data shape must be (1, nz, ny, nx)
+        assert znii.darr.shape == (1, nz, ny, nx)
+
+        # --- Convert to NIfTI (preserve original units) ---
+        nii_path = str(tmp_path / "test_spacing.nii")
+        znii.to_nifti(nii_path, convert_units_to_mm=False)
+
+        nii = nib.load(nii_path)
+
+        # NIfTI is always XYZ: shape must be (nx, ny, nz) = (30, 40, 50)
+        assert nii.shape == (
+            nx,
+            ny,
+            nz,
+        ), f"Expected NIfTI shape (nx={nx}, ny={ny}, nz={nz}), got {nii.shape}"
+
+        # Voxel sizes in NIfTI must be (sx, sy, sz) = (1, 2, 3)
+        nii_zooms = nii.header.get_zooms()[:3]
+        assert_array_almost_equal(nii_zooms, [sx, sy, sz], decimal=5)
+
+        # Affine diagonal signs must reflect RPI (R=+, P=-, I=-)
+        aff_diag = np.diag(nii.affine)[:3]
+        assert aff_diag[0] > 0, "X direction should be positive (R)"
+        assert aff_diag[1] < 0, "Y direction should be negative (P = -A)"
+        assert aff_diag[2] < 0, "Z direction should be negative (I = -S)"
+
+        # Marker was at ZYX=(10,20,25); after ZYX->XYZ transpose it should
+        # be at XYZ voxel position (X=25, Y=20, Z=10)
+        nii_data = nii.get_fdata()
+        marker_pos = np.unravel_index(np.argmax(nii_data), nii_data.shape)
+        assert marker_pos == (
+            25,
+            20,
+            10,
+        ), f"Expected marker at (X=25, Y=20, Z=10), got {marker_pos}"
+
+        # --- Round-trip: load NIfTI back ---
+        znii2 = ZarrNii.from_nifti(nii_path)
+        # XYZ scales must match original sx, sy, sz
+        assert_array_almost_equal(
+            znii2.get_zooms(axes_order="XYZ"), [sx, sy, sz], decimal=5
+        )
