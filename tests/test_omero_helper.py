@@ -24,7 +24,7 @@ def test_make_omero_defaults():
         assert channel.window.end == 1.0
 
 
-def test_make_omero_accepts_plain_windows_and_colors():
+def test_make_omero_with_custom_colors_and_windows():
     """Helper should accept plain color and window inputs."""
     omero = make_omero(
         ["A", "B"],

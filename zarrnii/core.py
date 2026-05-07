@@ -1231,8 +1231,15 @@ def apply_transform_to_ngff_image(
 
 
 def _make_omero_window(
-    window: Optional[Union[object, Dict[str, float], Tuple]],
-) -> object:
+    window: Optional[
+        Union[
+            nz.OmeroWindow,
+            Dict[str, float],
+            Tuple[float, float, float, float],
+            List[float],
+        ]
+    ],
+) -> nz.OmeroWindow:
     """Create an OMERO window object from supported plain inputs."""
     if window is None:
         return nz.OmeroWindow(min=0.0, max=1.0, start=0.0, end=1.0)
@@ -1291,7 +1298,16 @@ def _normalize_omero_color(color: str) -> str:
 def make_omero(
     channel_labels: List[str],
     channel_colors: Optional[List[str]] = None,
-    channel_windows: Optional[List[Union[object, Dict[str, float], Tuple]]] = None,
+    channel_windows: Optional[
+        List[
+            Union[
+                nz.OmeroWindow,
+                Dict[str, float],
+                Tuple[float, float, float, float],
+                List[float],
+            ]
+        ]
+    ] = None,
 ) -> nz.Omero:
     """Build OMERO metadata from plain channel labels/colors/windows.
 
@@ -1306,7 +1322,7 @@ def make_omero(
     Returns:
         ``nz.Omero`` metadata object with one channel entry per label.
     """
-    if channel_labels is None or len(channel_labels) == 0:
+    if not channel_labels:
         raise ValueError("channel_labels must contain at least one label.")
 
     labels = list(channel_labels)
@@ -1347,9 +1363,18 @@ def make_omero(
 def make_omero_channels(
     channel_labels: List[str],
     channel_colors: Optional[List[str]] = None,
-    channel_windows: Optional[List[Union[object, Dict[str, float], Tuple]]] = None,
+    channel_windows: Optional[
+        List[
+            Union[
+                nz.OmeroWindow,
+                Dict[str, float],
+                Tuple[float, float, float, float],
+                List[float],
+            ]
+        ]
+    ] = None,
 ) -> nz.Omero:
-    """Alias for ``make_omero``."""
+    """Alias for ``make_omero`` with identical parameters and behavior."""
     return make_omero(
         channel_labels=channel_labels,
         channel_colors=channel_colors,
