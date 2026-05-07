@@ -88,6 +88,33 @@ print("Data shape:", znimg.darr.shape)
 print("Affine matrix:\n", znimg.affine.matrix)
 ```
 
+#### **From TIFF stacks / volumes**:
+```python
+# 1) Flat 2D slices -> stack along z (single channel)
+znimg = ZarrNii.from_tif_stack(
+    ["z000.tif", "z001.tif", "z002.tif"],
+    stack_mode="z",
+    spacing=(2.0, 0.65, 0.65),  # z, y, x for axes_order="ZYX"
+)
+
+# 2) Nested lists (per-channel stacks of 2D slices)
+znimg = ZarrNii.from_tif_stack(
+    [
+        ["dapi_z000.tif", "dapi_z001.tif"],
+        ["gfp_z000.tif", "gfp_z001.tif"],
+    ],
+    stack_mode="channel_z",
+    channel_labels=["DAPI", "GFP"],
+    channel_colors=["0000FF", "00FF00"],
+)
+
+# 3) Flat list of 3D TIFF volumes -> stack as channels
+znimg = ZarrNii.from_tif_stack(
+    ["channel0_volume.tif", "channel1_volume.tif"],
+    stack_mode="c",
+)
+```
+
 ---
 
 ### **2. Working with 5D Data**
