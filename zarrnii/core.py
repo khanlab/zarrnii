@@ -1229,6 +1229,126 @@ def apply_transform_to_ngff_image(
 # Utility functions for compatibility
 
 
+def _make_omero_window(
+    window: Optional[Union[object, Dict[str, float], Tuple]],
+) -> object:
+    """Create an OMERO window object from supported plain inputs."""
+    if window is None:
+        return nz.OmeroWindow(min=0.0, max=1.0, start=0.0, end=1.0)
+
+    if all(hasattr(window, attr) for attr in ("min", "max", "start", "end")):
+        return window
+
+    if isinstance(window, dict):
+        required_fields = {"min", "max", "start", "end"}
+        missing = required_fields - set(window.keys())
+        if missing:
+            missing_str = ", ".join(sorted(missing))
+            raise ValueError(
+                f"Each channel window dictionary must include min/max/start/end. Missing: {missing_str}"
+            )
+        return nz.OmeroWindow(
+            min=float(window["min"]),
+            max=float(window["max"]),
+            start=float(window["start"]),
+            end=float(window["end"]),
+        )
+
+    if isinstance(window, (list, tuple)) and len(window) == 4:
+        return nz.OmeroWindow(
+            min=float(window[0]),
+            max=float(window[1]),
+            start=float(window[2]),
+            end=float(window[3]),
+        )
+
+    raise ValueError(
+        "Each channel window must be an OmeroWindow-like object, "
+        "a dict with min/max/start/end, or a 4-item tuple/list."
+    )
+
+
+def _normalize_omero_color(color: str) -> str:
+    """Normalize and validate OMERO channel color as a 6-digit hex string."""
+    if not isinstance(color, str):
+        raise ValueError("Each channel color must be a hex string like 'FF0000'.")
+
+    normalized = color.strip().lstrip("#").upper()
+    if len(normalized) != 6 or any(c not in "0123456789ABCDEF" for c in normalized):
+        raise ValueError(
+            "Each channel color must be a 6-digit hex string like 'FF0000'."
+        )
+
+    return normalized
+
+
+def make_omero(
+    channel_labels: List[str],
+    channel_colors: Optional[List[str]] = None,
+    channel_windows: Optional[List[Union[object, Dict[str, float], Tuple]]] = None,
+) -> nz.Omero:
+    """Build OMERO metadata from plain channel labels/colors/windows.
+
+    Args:
+        channel_labels: Channel names in order.
+        channel_colors: Optional per-channel colors as ``RRGGBB`` (``#RRGGBB`` also accepted).
+        channel_windows: Optional per-channel display windows. Each item can be:
+            - ``nz.OmeroWindow`` (or object with min/max/start/end attributes)
+            - dict with keys ``min``, ``max``, ``start``, ``end``
+            - 4-item tuple/list ``(min, max, start, end)``
+
+    Returns:
+        ``nz.Omero`` metadata object with one channel entry per label.
+    """
+    if channel_labels is None or len(channel_labels) == 0:
+        raise ValueError("channel_labels must contain at least one label.")
+
+    labels = list(channel_labels)
+    if any(not isinstance(label, str) or label == "" for label in labels):
+        raise ValueError("Each channel label must be a non-empty string.")
+
+    n_channels = len(labels)
+    if channel_colors is not None and len(channel_colors) != n_channels:
+        raise ValueError("channel_colors must have the same length as channel_labels.")
+    if channel_windows is not None and len(channel_windows) != n_channels:
+        raise ValueError("channel_windows must have the same length as channel_labels.")
+
+    default_colors = ["0000FF", "00FF00", "FF0000", "FFFF00", "FF00FF", "00FFFF"]
+    colors = (
+        [_normalize_omero_color(c) for c in channel_colors]
+        if channel_colors is not None
+        else [default_colors[i % len(default_colors)] for i in range(n_channels)]
+    )
+    windows = (
+        list(channel_windows) if channel_windows is not None else [None] * n_channels
+    )
+
+    channels = []
+    for label, color, window in zip(labels, colors, windows):
+        channels.append(
+            nz.OmeroChannel(
+                color=color,
+                window=_make_omero_window(window),
+                label=label,
+            )
+        )
+
+    return nz.Omero(channels=channels)
+
+
+def make_omero_channels(
+    channel_labels: List[str],
+    channel_colors: Optional[List[str]] = None,
+    channel_windows: Optional[List[Union[object, Dict[str, float], Tuple]]] = None,
+) -> nz.Omero:
+    """Alias for ``make_omero``."""
+    return make_omero(
+        channel_labels=channel_labels,
+        channel_colors=channel_colors,
+        channel_windows=channel_windows,
+    )
+
+
 def _extract_channel_labels_from_omero(channel_info):
     """
     Extract channel labels from omero metadata, handling both legacy and modern formats.
@@ -2516,27 +2636,7 @@ class ZarrNii:
 
             # Only use channel labels if count matches
             if len(channel_labels) == num_channels:
-                # Create OMERO metadata with channel labels
-                try:
-                    from ngff_zarr import Omero, OmeroChannel, OmeroWindow
-
-                    # Create OMERO channels with labels
-                    omero_channels = []
-                    for label in channel_labels:
-                        # Create a minimal channel object with label
-                        # Use default color (white) and window values
-                        window = OmeroWindow(min=0.0, max=1.0, start=0.0, end=1.0)
-                        omero_channels.append(
-                            OmeroChannel(
-                                color="FFFFFF", window=window, label=label  # white
-                            )
-                        )
-
-                    # Create OMERO metadata
-                    omero_metadata = Omero(channels=omero_channels)
-                except (ImportError, AttributeError, TypeError):
-                    # If OMERO classes aren't available or fail, skip
-                    pass
+                omero_metadata = make_omero(channel_labels)
 
         zarrnii_instance = cls(
             ngff_image=ngff_image,
