@@ -1240,7 +1240,11 @@ def _make_omero_window(
         ]
     ],
 ) -> nz.OmeroWindow:
-    """Create an OMERO window object from supported plain inputs."""
+    """Create an OMERO window object from supported plain inputs.
+
+    Accepts ``nz.OmeroWindow`` plus compatible objects exposing
+    ``min``/``max``/``start``/``end`` attributes.
+    """
     if window is None:
         return nz.OmeroWindow(min=0.0, max=1.0, start=0.0, end=1.0)
 
@@ -1374,7 +1378,10 @@ def make_omero_channels(
         ]
     ] = None,
 ) -> nz.Omero:
-    """Alias for ``make_omero`` with identical parameters and behavior."""
+    """Alias for ``make_omero`` with identical parameters and behavior.
+
+    Use this alias if you prefer a channel-centric name.
+    """
     return make_omero(
         channel_labels=channel_labels,
         channel_colors=channel_colors,

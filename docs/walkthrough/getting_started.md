@@ -109,7 +109,7 @@ znimg_labels = ZarrNii.from_ome_zarr("labeled.zarr", channel_labels=["DAPI", "GF
 znimg_subset = ZarrNii.from_ome_zarr("data.zarr", timepoints=[1, 3], channels=[0])
 ```
 
-#### **Creating OMERO channel metadata from plain lists**:
+#### **Building OMERO metadata from channel labels**:
 ```python
 from zarrnii import ZarrNii, make_omero
 
