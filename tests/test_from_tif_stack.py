@@ -120,3 +120,93 @@ def test_from_tif_stack_validation_errors():
             ZarrNii.from_tif_stack(
                 [p2d], stack_mode="z", omero=object(), channel_labels=["A"]
             )
+
+        with pytest.raises(ValueError, match="Provide either 'omero'"):
+            ZarrNii.from_tif_stack(
+                [p2d], stack_mode="z", omero=object(), channel_windows=[None]
+            )
+
+
+def test_from_tif_stack_with_channel_windows():
+    """channel_windows are forwarded to OMERO metadata."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        paths = []
+        for c in range(2):
+            channel_paths = []
+            for z in range(2):
+                path = os.path.join(tmpdir, f"c{c}_z{z}.tif")
+                _write_tif(path, np.full((3, 4), c * 10 + z, dtype=np.uint16))
+                channel_paths.append(path)
+            paths.append(channel_paths)
+
+        znii = ZarrNii.from_tif_stack(
+            paths,
+            stack_mode="channel_z",
+            channel_labels=["DAPI", "GFP"],
+            channel_colors=["0000FF", "00FF00"],
+            channel_windows=[
+                {"min": 0, "max": 65535, "start": 100, "end": 2000},
+                {"min": 0, "max": 65535, "start": 200, "end": 4000},
+            ],
+        )
+
+        assert znii.omero is not None
+        assert znii.omero.channels[0].window.end == 2000.0
+        assert znii.omero.channels[1].window.end == 4000.0
+
+
+def test_from_darr_with_channel_labels():
+    """from_darr accepts channel_labels and builds OMERO metadata."""
+    import dask.array as da
+
+    data = da.zeros((2, 4, 8, 8), dtype=np.uint16)
+    znii = ZarrNii.from_darr(
+        data,
+        channel_labels=["DAPI", "GFP"],
+        channel_colors=["0000FF", "00FF00"],
+    )
+    assert znii.omero is not None
+    assert [ch.label for ch in znii.omero.channels] == ["DAPI", "GFP"]
+    assert [ch.color for ch in znii.omero.channels] == ["0000FF", "00FF00"]
+
+
+def test_from_darr_with_channel_windows():
+    """from_darr forwards channel_windows into OMERO metadata."""
+    import dask.array as da
+
+    data = da.zeros((2, 4, 8, 8), dtype=np.uint16)
+    znii = ZarrNii.from_darr(
+        data,
+        channel_labels=["A", "B"],
+        channel_windows=[
+            {"min": 0, "max": 4095, "start": 10, "end": 1000},
+            (0, 65535, 100, 2000),
+        ],
+    )
+    assert znii.omero is not None
+    assert znii.omero.channels[0].window.max == 4095.0
+    assert znii.omero.channels[1].window.end == 2000.0
+
+
+def test_from_darr_omero_conflict_raises():
+    """from_darr raises when omero and channel convenience args are both given."""
+    import dask.array as da
+
+    data = da.zeros((2, 4, 8, 8), dtype=np.uint16)
+    with pytest.raises(ValueError, match="Provide either 'omero'"):
+        ZarrNii.from_darr(data, omero=object(), channel_labels=["A", "B"])
+
+    with pytest.raises(ValueError, match="Provide either 'omero'"):
+        ZarrNii.from_darr(data, omero=object(), channel_colors=["0000FF", "00FF00"])
+
+    with pytest.raises(ValueError, match="Provide either 'omero'"):
+        ZarrNii.from_darr(data, omero=object(), channel_windows=[None, None])
+
+
+def test_from_darr_channel_label_length_mismatch_raises():
+    """from_darr raises when channel_labels length != number of channels."""
+    import dask.array as da
+
+    data = da.zeros((3, 4, 8, 8), dtype=np.uint16)
+    with pytest.raises(ValueError, match="channel_labels length"):
+        ZarrNii.from_darr(data, channel_labels=["A", "B"])  # 2 != 3

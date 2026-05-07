@@ -2082,6 +2082,18 @@ class ZarrNii:
         origin: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         name: str = "image",
         omero: Optional[object] = None,
+        channel_labels: Optional[List[str]] = None,
+        channel_colors: Optional[List[str]] = None,
+        channel_windows: Optional[
+            List[
+                Union[
+                    "nz.OmeroWindow",
+                    Dict[str, float],
+                    Tuple[float, float, float, float],
+                    List[float],
+                ]
+            ]
+        ] = None,
         affine: Optional[AffineTransform] = None,
         **kwargs,
     ) -> "ZarrNii":
@@ -2095,7 +2107,19 @@ class ZarrNii:
             spacing: Voxel spacing, in axes_order
             origin: Origin offset, in axes_order
             name: Image name
-            omero: Optional omero metadata
+            omero: Optional full OMERO metadata object (escape hatch).  Mutually
+                exclusive with *channel_labels* / *channel_colors* /
+                *channel_windows*.
+            channel_labels: Optional channel names.  When provided, OMERO metadata
+                is built automatically via :func:`make_omero`.
+            channel_colors: Optional per-channel colors as ``RRGGBB`` hex strings
+                (``#RRGGBB`` also accepted).  Must have the same length as
+                *channel_labels* when supplied.
+            channel_windows: Optional per-channel display windows.  Each entry may
+                be an ``nz.OmeroWindow``, a dict with keys ``min``/``max``/
+                ``start``/``end``, or a 4-item tuple/list ``(min, max, start,
+                end)``.  Must have the same length as *channel_labels* when
+                supplied.
             affine: Deprecated parameter - no longer supported
 
         Returns:
@@ -2103,6 +2127,10 @@ class ZarrNii:
 
         Raises:
             ValueError: If affine parameter is provided
+            ValueError: If both *omero* and any of the channel convenience
+                arguments are provided simultaneously.
+            ValueError: If *channel_labels* length does not match the number of
+                channels in *darr*.
         """
         # Check for deprecated affine parameter
         if affine is not None:
@@ -2111,6 +2139,37 @@ class ZarrNii:
                 "Please use 'spacing' and 'origin' parameters instead. "
                 "If you need to specify a full affine transformation, use from_nifti() "
                 "or construct the NgffImage directly."
+            )
+
+        # Validate channel convenience args vs explicit omero
+        if omero is not None and (
+            channel_labels is not None
+            or channel_colors is not None
+            or channel_windows is not None
+        ):
+            raise ValueError(
+                "Provide either 'omero' or channel_labels/channel_colors/"
+                "channel_windows, not both."
+            )
+        if (
+            channel_colors is not None or channel_windows is not None
+        ) and channel_labels is None:
+            raise ValueError(
+                "channel_labels is required when channel_colors or channel_windows are provided and omero is not set."
+            )
+
+        # Build omero from convenience args if labels were provided
+        if omero is None and channel_labels is not None:
+            n_channels = darr.shape[0] if darr.ndim >= 4 else 1
+            if len(channel_labels) != n_channels:
+                raise ValueError(
+                    f"channel_labels length ({len(channel_labels)}) must match "
+                    f"number of channels ({n_channels})."
+                )
+            omero = make_omero(
+                channel_labels=channel_labels,
+                channel_colors=channel_colors,
+                channel_windows=channel_windows,
             )
 
         # Use spacing and origin
@@ -4615,6 +4674,16 @@ class ZarrNii:
         name: str = "image",
         channel_labels: Optional[List[str]] = None,
         channel_colors: Optional[List[str]] = None,
+        channel_windows: Optional[
+            List[
+                Union[
+                    "nz.OmeroWindow",
+                    Dict[str, float],
+                    Tuple[float, float, float, float],
+                    List[float],
+                ]
+            ]
+        ] = None,
         omero: Optional[object] = None,
     ) -> "ZarrNii":
         """Load TIFF files into a single multi-dimensional ZarrNii image.
@@ -4639,15 +4708,29 @@ class ZarrNii:
             origin: Spatial origin for the three spatial axes.
             chunks: Dask chunking strategy for final stacked array.
             name: Name for resulting image.
-            channel_labels: Optional channel labels for OMERO metadata convenience.
-            channel_colors: Optional channel colors (hex strings) paired with labels.
-            omero: Optional full OMERO metadata object (escape hatch).
+            channel_labels: Optional channel names.  When provided, OMERO metadata
+                is built automatically via :func:`make_omero`.
+            channel_colors: Optional per-channel colors as ``RRGGBB`` hex strings
+                (``#RRGGBB`` also accepted).  Must have the same length as
+                *channel_labels* when supplied.
+            channel_windows: Optional per-channel display windows.  Each entry may
+                be an ``nz.OmeroWindow``, a dict with keys ``min``/``max``/
+                ``start``/``end``, or a 4-item tuple/list ``(min, max, start,
+                end)``.  Must have the same length as *channel_labels* when
+                supplied.
+            omero: Optional full OMERO metadata object (escape hatch).  Mutually
+                exclusive with *channel_labels* / *channel_colors* /
+                *channel_windows*.
 
         Returns:
             ZarrNii instance containing TIFF data as lazy dask array.
 
         Raises:
             ValueError: If input layout and stack_mode are incompatible.
+            ValueError: If both *omero* and any of the channel convenience
+                arguments are provided simultaneously.
+            ValueError: If *channel_labels* length does not match the number of
+                channels in the stacked data.
         """
         import os
 
@@ -4666,14 +4749,21 @@ class ZarrNii:
         if not paths:
             raise ValueError("paths must contain at least one TIFF path.")
         if omero is not None and (
-            channel_labels is not None or channel_colors is not None
+            channel_labels is not None
+            or channel_colors is not None
+            or channel_windows is not None
         ):
             raise ValueError(
-                "Provide either 'omero' or channel_labels/channel_colors, not both."
+                "Provide either 'omero' or channel_labels/channel_colors/"
+                "channel_windows, not both."
             )
-        if channel_colors is not None and channel_labels is None and omero is None:
+        if (
+            (channel_colors is not None or channel_windows is not None)
+            and channel_labels is None
+            and omero is None
+        ):
             raise ValueError(
-                "channel_colors requires channel_labels when omero is not set."
+                "channel_labels is required when channel_colors or channel_windows are provided and omero is not set."
             )
 
         def _read_tif(path_like: Union[str, bytes]) -> da.Array:
@@ -4841,7 +4931,9 @@ class ZarrNii:
                     f"channel_labels length ({len(channel_labels)}) must match number of channels ({data.shape[0]})."
                 )
             omero = make_omero(
-                channel_labels=channel_labels, channel_colors=channel_colors
+                channel_labels=channel_labels,
+                channel_colors=channel_colors,
+                channel_windows=channel_windows,
             )
 
         return cls.from_darr(
