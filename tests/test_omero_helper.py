@@ -61,3 +61,20 @@ def test_make_omero_channels_alias():
     omero = make_omero_channels(["DAPI"])
     assert len(omero.channels) == 1
     assert omero.channels[0].label == "DAPI"
+
+
+@pytest.mark.parametrize(
+    "kwargs, expected_message",
+    [
+        ({"channel_labels": []}, "at least one"),
+        ({"channel_labels": ["A"], "channel_colors": ["nothex"]}, "6-digit hex"),
+        (
+            {"channel_labels": ["A"], "channel_windows": [{"min": 0, "max": 1}]},
+            "min/max/start/end",
+        ),
+    ],
+)
+def test_make_omero_validates_content(kwargs, expected_message):
+    """Helper should validate labels, colors, and window payload content."""
+    with pytest.raises(ValueError, match=expected_message):
+        make_omero(**kwargs)

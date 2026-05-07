@@ -17,12 +17,13 @@ import os
 import tempfile
 
 import dask.array as da
+import ngff_zarr as nz
 import numpy as np
 
 import zarrnii
 
 
-def build_omero_metadata(n_channels: int):
+def build_omero_metadata(n_channels: int) -> nz.Omero:
     """Return simple OMERO metadata for *n_channels* channels.
 
     Each channel gets:

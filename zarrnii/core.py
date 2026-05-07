@@ -99,6 +99,7 @@ class MetadataInvalidError(Exception):
 
 # OME-Zarr version for ZIP archive comment
 _OME_ZARR_VERSION = "0.5"
+_DEFAULT_OMERO_COLORS = ("0000FF", "00FF00", "FF0000", "FFFF00", "FF00FF", "00FFFF")
 
 
 def _is_ome_zarr_zip_path(path: str) -> bool:
@@ -1237,7 +1238,12 @@ def _make_omero_window(
         return nz.OmeroWindow(min=0.0, max=1.0, start=0.0, end=1.0)
 
     if all(hasattr(window, attr) for attr in ("min", "max", "start", "end")):
-        return window
+        return nz.OmeroWindow(
+            min=float(window.min),
+            max=float(window.max),
+            start=float(window.start),
+            end=float(window.end),
+        )
 
     if isinstance(window, dict):
         required_fields = {"min", "max", "start", "end"}
@@ -1313,11 +1319,13 @@ def make_omero(
     if channel_windows is not None and len(channel_windows) != n_channels:
         raise ValueError("channel_windows must have the same length as channel_labels.")
 
-    default_colors = ["0000FF", "00FF00", "FF0000", "FFFF00", "FF00FF", "00FFFF"]
     colors = (
         [_normalize_omero_color(c) for c in channel_colors]
         if channel_colors is not None
-        else [default_colors[i % len(default_colors)] for i in range(n_channels)]
+        else [
+            _DEFAULT_OMERO_COLORS[i % len(_DEFAULT_OMERO_COLORS)]
+            for i in range(n_channels)
+        ]
     )
     windows = (
         list(channel_windows) if channel_windows is not None else [None] * n_channels
