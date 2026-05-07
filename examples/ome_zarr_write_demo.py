@@ -34,8 +34,10 @@ def build_omero_metadata(n_channels: int) -> nz.Omero:
     labels = ["DAPI", "GFP", "mCherry", "BF"]
     return zarrnii.make_omero(
         channel_labels=[labels[i % len(labels)] for i in range(n_channels)],
-        channel_windows=[{"min": 0, "max": 65535, "start": 100, "end": 2000}]
-        * n_channels,
+        channel_windows=[
+            {"min": 0, "max": 65535, "start": 100, "end": 2000}
+            for _ in range(n_channels)
+        ],
     )
 
 
