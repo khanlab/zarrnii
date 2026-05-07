@@ -22,6 +22,7 @@ Key Functions:
 from __future__ import annotations
 
 import copy
+import typing
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dask.array as da
@@ -100,6 +101,35 @@ class MetadataInvalidError(Exception):
 # OME-Zarr version for ZIP archive comment
 _OME_ZARR_VERSION = "0.5"
 _DEFAULT_OMERO_COLORS = ("0000FF", "00FF00", "FF0000", "FFFF00", "FF00FF", "00FFFF")
+
+# Valid OME-Zarr space unit strings (derived from ngff_zarr.SpaceUnits).
+# ``nz.SpaceUnits`` is a ``Union[Literal['angstrom'], Literal['attometer'], ...]``
+# type alias; each argument is a ``Literal[value]`` whose single argument is the
+# string we want.  Accessing index 0 is safe because every member of the union
+# is guaranteed to be ``Literal[<str>]`` by the ngff-zarr spec.
+VALID_AXES_UNITS: frozenset = frozenset(
+    typing.get_args(_a)[0] for _a in typing.get_args(nz.SpaceUnits)
+)
+
+
+def _validate_axes_units(axes_units: Optional[Dict[str, str]]) -> None:
+    """Validate that all values in *axes_units* are accepted OME-Zarr space units.
+
+    Args:
+        axes_units: Mapping of axis name to unit string, or ``None``.
+
+    Raises:
+        ValueError: If any unit value is not a valid OME-Zarr space unit.
+    """
+    if axes_units is None:
+        return
+    for axis, unit in axes_units.items():
+        if unit not in VALID_AXES_UNITS:
+            raise ValueError(
+                f"Invalid axes_units value '{unit}' for axis '{axis}'. "
+                f"Must be one of the OME-Zarr accepted space units: "
+                f"{sorted(VALID_AXES_UNITS)}"
+            )
 
 
 def _is_ome_zarr_zip_path(path: str) -> bool:
@@ -2094,6 +2124,7 @@ class ZarrNii:
                 ]
             ]
         ] = None,
+        axes_units: Optional[Dict[str, str]] = None,
         affine: Optional[AffineTransform] = None,
         **kwargs,
     ) -> "ZarrNii":
@@ -2120,6 +2151,11 @@ class ZarrNii:
                 ``start``/``end``, or a 4-item tuple/list ``(min, max, start,
                 end)``.  Must have the same length as *channel_labels* when
                 supplied.
+            axes_units: Optional mapping of axis name to unit string (e.g.
+                ``{"x": "micrometer", "y": "micrometer", "z": "micrometer"}``).
+                All values must be valid OME-Zarr space units (see
+                :data:`VALID_AXES_UNITS`).  When ``None``, no unit metadata is
+                stored and viewers fall back to their defaults.
             affine: Deprecated parameter - no longer supported
 
         Returns:
@@ -2131,6 +2167,8 @@ class ZarrNii:
                 arguments are provided simultaneously.
             ValueError: If *channel_labels* length does not match the number of
                 channels in *darr*.
+            ValueError: If any value in *axes_units* is not a valid OME-Zarr
+                space unit.
         """
         # Check for deprecated affine parameter
         if affine is not None:
@@ -2140,6 +2178,9 @@ class ZarrNii:
                 "If you need to specify a full affine transformation, use from_nifti() "
                 "or construct the NgffImage directly."
             )
+
+        # Validate axes_units
+        _validate_axes_units(axes_units)
 
         # Validate channel convenience args vs explicit omero
         if omero is not None and (
@@ -2194,7 +2235,12 @@ class ZarrNii:
 
         # Create NgffImage
         ngff_image = nz.NgffImage(
-            data=darr, dims=dims, scale=scale, translation=translation, name=name
+            data=darr,
+            dims=dims,
+            scale=scale,
+            translation=translation,
+            name=name,
+            axes_units=axes_units,
         )
 
         return cls(
@@ -4487,6 +4533,7 @@ class ZarrNii:
         chunks: str = "auto",
         axes_order: str = "ZYX",
         orientation: str = "RAS",
+        axes_units: Optional[Dict[str, str]] = None,
     ) -> "ZarrNii":
         """
         Load from Imaris (.ims) file format.
@@ -4502,6 +4549,11 @@ class ZarrNii:
             chunks: Chunking strategy for dask array
             axes_order: Spatial axes order for compatibility (default: "ZYX")
             orientation: Default orientation (default: "RAS")
+            axes_units: Optional mapping of axis name to unit string (e.g.
+                ``{"x": "micrometer", "y": "micrometer", "z": "micrometer"}``).
+                All values must be valid OME-Zarr space units (see
+                :data:`VALID_AXES_UNITS`).  When ``None``, no unit metadata is
+                stored.
 
         Returns:
             ZarrNii instance
@@ -4509,7 +4561,10 @@ class ZarrNii:
         Raises:
             ImportError: If h5py is not available
             ValueError: If the file is not a valid Imaris file
+            ValueError: If any value in *axes_units* is not a valid OME-Zarr
+                space unit.
         """
+        _validate_axes_units(axes_units)
         try:
             import h5py
         except ImportError:
@@ -4646,6 +4701,7 @@ class ZarrNii:
                 scale=scale_dict,
                 translation=translation_dict,
                 name=f"imaris_image_{path}_{level}_{timepoint}_{channel}",
+                axes_units=axes_units,
             )
 
         # Create and return ZarrNii instance
@@ -4685,6 +4741,7 @@ class ZarrNii:
             ]
         ] = None,
         omero: Optional[object] = None,
+        axes_units: Optional[Dict[str, str]] = None,
     ) -> "ZarrNii":
         """Load TIFF files into a single multi-dimensional ZarrNii image.
 
@@ -4721,6 +4778,11 @@ class ZarrNii:
             omero: Optional full OMERO metadata object (escape hatch).  Mutually
                 exclusive with *channel_labels* / *channel_colors* /
                 *channel_windows*.
+            axes_units: Optional mapping of axis name to unit string (e.g.
+                ``{"x": "micrometer", "y": "micrometer", "z": "micrometer"}``).
+                All values must be valid OME-Zarr space units (see
+                :data:`VALID_AXES_UNITS`).  When ``None``, no unit metadata is
+                stored.
 
         Returns:
             ZarrNii instance containing TIFF data as lazy dask array.
@@ -4731,6 +4793,8 @@ class ZarrNii:
                 arguments are provided simultaneously.
             ValueError: If *channel_labels* length does not match the number of
                 channels in the stacked data.
+            ValueError: If any value in *axes_units* is not a valid OME-Zarr
+                space unit.
         """
         import os
 
@@ -4944,6 +5008,7 @@ class ZarrNii:
             origin=origin,
             name=name,
             omero=omero,
+            axes_units=axes_units,
         )
 
     @classmethod
@@ -4956,6 +5021,7 @@ class ZarrNii:
         series: int = 0,
         chunks: Union[str, Tuple] = "auto",
         name: Optional[str] = None,
+        axes_units: Optional[Dict[str, str]] = None,
     ) -> "ZarrNii":
         """Load ZarrNii from an OME-TIFF file (e.g. a z-stack).
 
@@ -4983,6 +5049,13 @@ class ZarrNii:
                 chunk sizes matching the array dimensions.
             name: Optional name for the resulting NgffImage.  Defaults to
                 the basename of *path*.
+            axes_units: Optional mapping of axis name to unit string that
+                overrides the unit read from the file metadata (e.g.
+                ``{"x": "micrometer", "y": "micrometer", "z": "micrometer"}``).
+                All values must be valid OME-Zarr space units (see
+                :data:`VALID_AXES_UNITS`).  When ``None``, the unit is inferred
+                from ``PhysicalSizeXUnit`` in the OME-XML (or ImageJ metadata),
+                defaulting to ``"micrometer"`` when no unit is present.
 
         Returns:
             ZarrNii instance with lazily-loaded data and spatial metadata.
@@ -4991,6 +5064,8 @@ class ZarrNii:
             ImportError: If *tifffile* is not installed.
             ValueError: If *series* or *level* is out of range.
             ValueError: If *axes_order* is not ``"ZYX"`` or ``"XYZ"``.
+            ValueError: If any value in *axes_units* is not a valid OME-Zarr
+                space unit.
 
         Examples:
             >>> # Load a single-channel z-stack
@@ -5020,6 +5095,7 @@ class ZarrNii:
             - Data are kept as a lazy Dask array backed by the TIFF file;
               they are not read into memory until explicitly computed.
         """
+        _validate_axes_units(axes_units)
         try:
             import tifffile
         except ImportError:
@@ -5171,6 +5247,10 @@ class ZarrNii:
                 "z": axes_unit,
             }
 
+        # Use the caller-supplied override when provided (already validated above),
+        # otherwise fall back to the unit derived from the file metadata.
+        final_axes_units = axes_units if axes_units is not None else axes_units_dict
+
         if name is None:
             name = os.path.basename(path)
 
@@ -5179,7 +5259,7 @@ class ZarrNii:
             dims=final_dims,
             scale=scale,
             translation=translation,
-            axes_units=axes_units_dict,
+            axes_units=final_axes_units,
             name=name,
         )
 
