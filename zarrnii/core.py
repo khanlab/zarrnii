@@ -22,6 +22,7 @@ Key Functions:
 from __future__ import annotations
 
 import copy
+import typing
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dask.array as da
@@ -101,11 +102,13 @@ class MetadataInvalidError(Exception):
 _OME_ZARR_VERSION = "0.5"
 _DEFAULT_OMERO_COLORS = ("0000FF", "00FF00", "FF0000", "FFFF00", "FF00FF", "00FFFF")
 
-# Valid OME-Zarr space unit strings (derived from ngff_zarr.SpaceUnits)
-import typing as _typing
-
+# Valid OME-Zarr space unit strings (derived from ngff_zarr.SpaceUnits).
+# ``nz.SpaceUnits`` is a ``Union[Literal['angstrom'], Literal['attometer'], ...]``
+# type alias; each argument is a ``Literal[value]`` whose single argument is the
+# string we want.  Accessing index 0 is safe because every member of the union
+# is guaranteed to be ``Literal[<str>]`` by the ngff-zarr spec.
 VALID_AXES_UNITS: frozenset = frozenset(
-    _typing.get_args(_a)[0] for _a in _typing.get_args(nz.SpaceUnits)
+    typing.get_args(_a)[0] for _a in typing.get_args(nz.SpaceUnits)
 )
 
 
@@ -5244,9 +5247,9 @@ class ZarrNii:
                 "z": axes_unit,
             }
 
-        # Apply user-supplied axes_units override (already validated above)
-        if axes_units is not None:
-            axes_units_dict = axes_units
+        # Use the caller-supplied override when provided (already validated above),
+        # otherwise fall back to the unit derived from the file metadata.
+        final_axes_units = axes_units if axes_units is not None else axes_units_dict
 
         if name is None:
             name = os.path.basename(path)
@@ -5256,7 +5259,7 @@ class ZarrNii:
             dims=final_dims,
             scale=scale,
             translation=translation,
-            axes_units=axes_units_dict,
+            axes_units=final_axes_units,
             name=name,
         )
 
