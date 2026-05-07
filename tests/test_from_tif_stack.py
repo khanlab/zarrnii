@@ -86,6 +86,22 @@ def test_from_tif_stack_flat_3d_volumes_stacked_as_channels_auto():
         )
 
 
+def test_from_tif_stack_flat_3d_volumes_concatenate_along_z():
+    """stack_mode='z' concatenates flat 3D TIFF volumes along the z dimension."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        p0 = os.path.join(tmpdir, "vol0.tif")
+        p1 = os.path.join(tmpdir, "vol1.tif")
+        _write_tif(p0, np.full((2, 5, 6), 7, dtype=np.uint16))
+        _write_tif(p1, np.full((3, 5, 6), 9, dtype=np.uint16))
+
+        znii = ZarrNii.from_tif_stack([p0, p1], stack_mode="z")
+        assert znii.data.shape == (1, 5, 5, 6)
+
+        computed = znii.data.compute()
+        np.testing.assert_array_equal(computed[0, :2, 0, 0], np.array([7, 7]))
+        np.testing.assert_array_equal(computed[0, 2:, 0, 0], np.array([9, 9, 9]))
+
+
 def test_from_tif_stack_validation_errors():
     """Method raises clear errors for misused or ambiguous inputs."""
     with tempfile.TemporaryDirectory() as tmpdir:

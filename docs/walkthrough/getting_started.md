@@ -97,6 +97,12 @@ znimg = ZarrNii.from_tif_stack(
     spacing=(2.0, 0.65, 0.65),  # z, y, x for axes_order="ZYX"
 )
 
+# 1b) Flat 3D volumes -> concatenate along z (single channel)
+znimg = ZarrNii.from_tif_stack(
+    ["tile0.tif", "tile1.tif"],  # each file is a 3D z-stack
+    stack_mode="z",
+)
+
 # 2) Nested lists (per-channel stacks of 2D slices)
 znimg = ZarrNii.from_tif_stack(
     [

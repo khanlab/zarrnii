@@ -4628,7 +4628,8 @@ class ZarrNii:
             paths: Flat or nested TIFF path list.
             stack_mode: One of:
                 - ``"auto"``: infer from input layout
-                - ``"z"``: flat list of 2D files -> stack along Z
+                - ``"z"``: flat list of 2D files (stack) or 3D volumes (concatenate)
+                  -> stack/concatenate along Z
                 - ``"c"``: flat list of 3D volumes (or 2D per-channel single slices)
                   -> stack along channel
                 - ``"channel_z"``: nested list of per-channel 2D stacks
@@ -4803,11 +4804,14 @@ class ZarrNii:
             if inferred_mode == "channel_z":
                 raise ValueError("stack_mode='channel_z' requires nested path input.")
             if inferred_mode == "z":
-                if ndims != {2}:
+                if ndims == {2}:
+                    data = da.expand_dims(da.stack(flat_arrays, axis=0), axis=0)
+                elif ndims == {3}:
+                    data = da.expand_dims(da.concatenate(flat_arrays, axis=0), axis=0)
+                else:
                     raise ValueError(
-                        "stack_mode='z' requires a flat list of 2D TIFF files."
+                        "stack_mode='z' requires a flat list of only 2D TIFF files or only 3D TIFF volumes."
                     )
-                data = da.expand_dims(da.stack(flat_arrays, axis=0), axis=0)
             elif inferred_mode == "c":
                 if ndims == {2}:
                     channel_volumes = [
