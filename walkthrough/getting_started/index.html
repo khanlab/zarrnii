@@ -481,6 +481,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#from-tiff-stacks-volumes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From TIFF stacks / volumes:
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1582,6 +1593,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#from-tiff-stacks-volumes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From TIFF stacks / volumes:
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1883,6 +1905,37 @@ znimg = ZarrNii.from_imaris(&quot;path/to/dataset.ims&quot;)
 
 print(&quot;Data shape:&quot;, znimg.darr.shape)
 print(&quot;Affine matrix:\n&quot;, znimg.affine.matrix)
+</code></pre>
+<h4 id="from-tiff-stacks-volumes"><strong>From TIFF stacks / volumes</strong>:</h4>
+<pre><code class="language-python"># 1) Flat 2D slices -&gt; stack along z (single channel)
+znimg = ZarrNii.from_tif_stack(
+    [&quot;z000.tif&quot;, &quot;z001.tif&quot;, &quot;z002.tif&quot;],
+    stack_mode=&quot;z&quot;,
+    spacing=(2.0, 0.65, 0.65),  # z, y, x for axes_order=&quot;ZYX&quot;
+)
+
+# 1b) Flat 3D volumes -&gt; concatenate along z (single channel)
+znimg = ZarrNii.from_tif_stack(
+    [&quot;tile0.tif&quot;, &quot;tile1.tif&quot;],  # each file is a 3D z-stack
+    stack_mode=&quot;z&quot;,
+)
+
+# 2) Nested lists (per-channel stacks of 2D slices)
+znimg = ZarrNii.from_tif_stack(
+    [
+        [&quot;dapi_z000.tif&quot;, &quot;dapi_z001.tif&quot;],
+        [&quot;gfp_z000.tif&quot;, &quot;gfp_z001.tif&quot;],
+    ],
+    stack_mode=&quot;channel_z&quot;,
+    channel_labels=[&quot;DAPI&quot;, &quot;GFP&quot;],
+    channel_colors=[&quot;0000FF&quot;, &quot;00FF00&quot;],
+)
+
+# 3) Flat list of 3D TIFF volumes -&gt; stack as channels
+znimg = ZarrNii.from_tif_stack(
+    [&quot;channel0_volume.tif&quot;, &quot;channel1_volume.tif&quot;],
+    stack_mode=&quot;c&quot;,
+)
 </code></pre>
 <hr />
 <h3 id="2-working-with-5d-data"><strong>2. Working with 5D Data</strong></h3>
