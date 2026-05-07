@@ -8,6 +8,7 @@ from .analysis import (
 from .atlas import ZarrNiiAtlas
 from .benchmark import BenchmarkSuite, DaskConfig
 from .core import (
+    VALID_AXES_UNITS,
     MetadataInvalidError,
     ZarrNii,
     make_omero,
@@ -24,6 +25,7 @@ __all__ = [
     "AffineTransform",
     "DisplacementTransform",
     "MetadataInvalidError",
+    "VALID_AXES_UNITS",
     "make_omero",
     "make_omero_channels",
     "save_ngff_image",
