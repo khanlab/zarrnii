@@ -4598,6 +4598,263 @@ class ZarrNii:
         )
 
     @classmethod
+    def from_tif_stack(
+        cls,
+        paths: Union[
+            List[Union[str, bytes]],
+            Tuple[Union[str, bytes], ...],
+            List[List[Union[str, bytes]]],
+            Tuple[Tuple[Union[str, bytes], ...], ...],
+        ],
+        stack_mode: str = "auto",
+        axes_order: str = "ZYX",
+        orientation: str = "RAS",
+        spacing: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        origin: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        chunks: Union[str, Tuple[int, ...]] = "auto",
+        name: str = "image",
+        channel_labels: Optional[List[str]] = None,
+        channel_colors: Optional[List[str]] = None,
+        omero: Optional[object] = None,
+    ) -> "ZarrNii":
+        """Load TIFF files into a single multi-dimensional ZarrNii image.
+
+        Supports flat lists (single stack) and nested lists (per-channel stacks):
+        - Flat list of 2D slices: ``["z0.tif", "z1.tif", ...]``
+        - Flat list of 3D volumes: ``["ch0.tif", "ch1.tif", ...]``
+        - Nested per-channel stacks: ``[["ch0_z0.tif", ...], ["ch1_z0.tif", ...]]``
+
+        Args:
+            paths: Flat or nested TIFF path list.
+            stack_mode: One of:
+                - ``"auto"``: infer from input layout
+                - ``"z"``: flat list of 2D files (stack) or 3D volumes (concatenate)
+                  -> stack/concatenate along Z
+                - ``"c"``: flat list of 3D volumes (or 2D per-channel single slices)
+                  -> stack along channel
+                - ``"channel_z"``: nested list of per-channel 2D stacks
+            axes_order: Spatial axes order for output metadata (``"ZYX"`` or ``"XYZ"``).
+            orientation: Anatomical orientation string in XYZ order.
+            spacing: Spatial voxel spacing for the three spatial axes.
+            origin: Spatial origin for the three spatial axes.
+            chunks: Dask chunking strategy for final stacked array.
+            name: Name for resulting image.
+            channel_labels: Optional channel labels for OMERO metadata convenience.
+            channel_colors: Optional channel colors (hex strings) paired with labels.
+            omero: Optional full OMERO metadata object (escape hatch).
+
+        Returns:
+            ZarrNii instance containing TIFF data as lazy dask array.
+
+        Raises:
+            ValueError: If input layout and stack_mode are incompatible.
+        """
+        import os
+
+        from dask.array.image import imread
+
+        if stack_mode not in {"auto", "z", "c", "channel_z"}:
+            raise ValueError(
+                "stack_mode must be one of {'auto', 'z', 'c', 'channel_z'}."
+            )
+        if axes_order not in {"ZYX", "XYZ"}:
+            raise ValueError("axes_order must be 'ZYX' or 'XYZ'.")
+        if len(spacing) != 3:
+            raise ValueError("spacing must have 3 values for spatial axes.")
+        if len(origin) != 3:
+            raise ValueError("origin must have 3 values for spatial axes.")
+        if not paths:
+            raise ValueError("paths must contain at least one TIFF path.")
+        if omero is not None and (
+            channel_labels is not None or channel_colors is not None
+        ):
+            raise ValueError(
+                "Provide either 'omero' or channel_labels/channel_colors, not both."
+            )
+        if channel_colors is not None and channel_labels is None and omero is None:
+            raise ValueError(
+                "channel_colors requires channel_labels when omero is not set."
+            )
+
+        def _read_tif(path_like: Union[str, bytes]) -> da.Array:
+            p = os.fspath(path_like)
+            try:
+                arr = imread(p)
+            except Exception as e:
+                raise ValueError(
+                    f"Failed to read TIFF file '{p}' with dask imread."
+                ) from e
+
+            while arr.ndim > 3 and arr.shape[0] == 1:
+                arr = arr[0]
+            if arr.ndim == 3 and arr.shape[0] == 1:
+                arr = arr[0]
+            if arr.ndim == 3:
+                tif_axes = ""
+                tif_shape: Tuple[int, ...] = ()
+                try:
+                    import tifffile
+
+                    with tifffile.TiffFile(p) as tif:
+                        tif_axes = tif.series[0].axes.upper()
+                        tif_shape = tuple(tif.series[0].shape)
+                except Exception:
+                    pass
+
+                normalized_axes = []
+                for ax in tif_axes:
+                    if ax in {"I", "Q", "S"}:
+                        normalized_axes.append("Z")
+                    else:
+                        normalized_axes.append(ax)
+
+                if (
+                    len(normalized_axes) == 3
+                    and len(set(normalized_axes)) == 3
+                    and set(normalized_axes) == {"Z", "Y", "X"}
+                ):
+                    arr_shape = tuple(int(v) for v in arr.shape)
+                    size_to_index = {}
+                    for idx, size in enumerate(arr_shape):
+                        size_to_index.setdefault(size, []).append(idx)
+
+                    axis_sizes = {
+                        axis: int(tif_shape[i])
+                        for i, axis in enumerate(normalized_axes)
+                        if i < len(tif_shape)
+                    }
+
+                    permutation = []
+                    used_indices = set()
+                    for axis in ("Z", "Y", "X"):
+                        target_size = axis_sizes.get(axis)
+                        candidates = [
+                            i
+                            for i in size_to_index.get(target_size, [])
+                            if i not in used_indices
+                        ]
+                        if len(candidates) == 1:
+                            permutation.append(candidates[0])
+                            used_indices.add(candidates[0])
+                        else:
+                            permutation = []
+                            break
+
+                    if len(permutation) == 3:
+                        arr = arr.transpose(tuple(permutation))
+                    else:
+                        arr = arr.transpose(
+                            (
+                                normalized_axes.index("Z"),
+                                normalized_axes.index("Y"),
+                                normalized_axes.index("X"),
+                            )
+                        )
+            if arr.ndim not in (2, 3):
+                raise ValueError(
+                    f"TIFF file '{p}' produced shape {arr.shape}; only 2D or 3D TIFF inputs are supported."
+                )
+            return arr
+
+        first_item = paths[0]
+        is_nested = isinstance(first_item, (list, tuple))
+
+        if is_nested:
+            if stack_mode not in {"auto", "channel_z"}:
+                raise ValueError(
+                    "Nested paths require stack_mode='channel_z' (or 'auto')."
+                )
+
+            channel_volumes = []
+            for i, channel_paths in enumerate(paths):
+                if (
+                    not isinstance(channel_paths, (list, tuple))
+                    or len(channel_paths) == 0
+                ):
+                    raise ValueError(
+                        f"Nested channel entry at index {i} must be a non-empty list of TIFF paths."
+                    )
+                channel_arrays = [_read_tif(p) for p in channel_paths]
+                ndims = {arr.ndim for arr in channel_arrays}
+                if len(ndims) != 1:
+                    raise ValueError(
+                        f"All TIFF files within channel index {i} must be consistently 2D or 3D."
+                    )
+                if channel_arrays[0].ndim == 2:
+                    channel_volumes.append(da.stack(channel_arrays, axis=0))
+                elif len(channel_arrays) == 1:
+                    channel_volumes.append(channel_arrays[0])
+                else:
+                    raise ValueError(
+                        "Nested 3D TIFF channels are ambiguous; provide one 3D volume per channel."
+                    )
+            data = da.stack(channel_volumes, axis=0)
+        else:
+            flat_arrays = [_read_tif(p) for p in paths]
+            ndims = {arr.ndim for arr in flat_arrays}
+
+            inferred_mode = stack_mode
+            if inferred_mode == "auto":
+                if len(ndims) != 1:
+                    raise ValueError(
+                        "Cannot infer stack_mode from mixed 2D and 3D flat TIFF inputs."
+                    )
+                inferred_mode = "z" if flat_arrays[0].ndim == 2 else "c"
+
+            if inferred_mode == "channel_z":
+                raise ValueError("stack_mode='channel_z' requires nested path input.")
+            if inferred_mode == "z":
+                if ndims == {2}:
+                    data = da.expand_dims(da.stack(flat_arrays, axis=0), axis=0)
+                elif ndims == {3}:
+                    data = da.expand_dims(da.concatenate(flat_arrays, axis=0), axis=0)
+                else:
+                    raise ValueError(
+                        "stack_mode='z' requires a flat list of only 2D TIFF files or only 3D TIFF volumes."
+                    )
+            elif inferred_mode == "c":
+                if ndims == {2}:
+                    channel_volumes = [
+                        da.expand_dims(arr, axis=0) for arr in flat_arrays
+                    ]
+                    data = da.stack(channel_volumes, axis=0)
+                elif ndims == {3}:
+                    data = da.stack(flat_arrays, axis=0)
+                else:
+                    raise ValueError(
+                        "stack_mode='c' requires either all 2D or all 3D TIFF files."
+                    )
+            else:
+                raise ValueError(
+                    "stack_mode must be one of {'auto', 'z', 'c', 'channel_z'}."
+                )
+
+        if chunks != "auto":
+            data = data.rechunk(chunks)
+
+        if axes_order == "XYZ":
+            data = data.transpose((0, 3, 2, 1))
+
+        if omero is None and channel_labels is not None:
+            if len(channel_labels) != data.shape[0]:
+                raise ValueError(
+                    f"channel_labels length ({len(channel_labels)}) must match number of channels ({data.shape[0]})."
+                )
+            omero = make_omero(
+                channel_labels=channel_labels, channel_colors=channel_colors
+            )
+
+        return cls.from_darr(
+            data,
+            axes_order=axes_order,
+            orientation=orientation,
+            spacing=spacing,
+            origin=origin,
+            name=name,
+            omero=omero,
+        )
+
+    @classmethod
     def from_ome_tif(
         cls,
         path: str,
