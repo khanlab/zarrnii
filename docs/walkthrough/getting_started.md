@@ -109,6 +109,19 @@ znimg_labels = ZarrNii.from_ome_zarr("labeled.zarr", channel_labels=["DAPI", "GF
 znimg_subset = ZarrNii.from_ome_zarr("data.zarr", timepoints=[1, 3], channels=[0])
 ```
 
+#### **Building OMERO metadata from channel labels**:
+```python
+from zarrnii import ZarrNii, make_omero
+
+omero = make_omero(
+    channel_labels=["DAPI", "GFP", "RFP"],
+    channel_colors=["0000FF", "00FF00", "FF0000"],  # optional
+)
+
+znimg = ZarrNii.from_darr(data, omero=omero)
+znimg.to_ome_zarr("multichannel.ome.zarr")
+```
+
 #### **Post-loading Selection**:
 ```python
 # Load full dataset first
@@ -245,4 +258,3 @@ segmented.to_nifti("segmented_output.nii")
 - [Walkthrough: Basic Tasks](basic_tasks.md): Learn more about common workflows like cropping, interpolation, and combining transformations.
 - [Segmentation Plugin Examples](../examples/segmentation_example.md): Learn how to use and create segmentation plugins.
 - [API Reference](../reference/index.md): Explore the detailed API for ZarrNii.
-

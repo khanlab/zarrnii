@@ -10,6 +10,8 @@ from .benchmark import BenchmarkSuite, DaskConfig
 from .core import (
     MetadataInvalidError,
     ZarrNii,
+    make_omero,
+    make_omero_channels,
     save_ngff_image,
     save_ngff_image_with_ome_zarr,
 )
@@ -22,6 +24,8 @@ __all__ = [
     "AffineTransform",
     "DisplacementTransform",
     "MetadataInvalidError",
+    "make_omero",
+    "make_omero_channels",
     "save_ngff_image",
     "save_ngff_image_with_ome_zarr",
     "get_dask_client",

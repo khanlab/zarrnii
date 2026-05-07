@@ -31,18 +31,14 @@ def build_omero_metadata(n_channels: int) -> nz.Omero:
     - a display window computed from the data range
     - a human-readable label
     """
-    colors = ["FF0000", "00FF00", "0000FF", "FFFF00"]  # R, G, B, Y
     labels = ["DAPI", "GFP", "mCherry", "BF"]
-    channels = []
-    for i in range(n_channels):
-        window = nz.OmeroWindow(min=0, max=65535, start=100, end=2000)
-        channel = nz.OmeroChannel(
-            color=colors[i % len(colors)],
-            window=window,
-            label=labels[i % len(labels)],
-        )
-        channels.append(channel)
-    return nz.Omero(channels=channels)
+    return zarrnii.make_omero(
+        channel_labels=[labels[i % len(labels)] for i in range(n_channels)],
+        channel_windows=[
+            {"min": 0, "max": 65535, "start": 100, "end": 2000}
+            for _ in range(n_channels)
+        ],
+    )
 
 
 def main() -> bool:
