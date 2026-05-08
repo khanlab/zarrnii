@@ -2071,6 +2071,8 @@ class ZarrNii:
             return cls.from_nifti(path, **kwargs)
         elif path.endswith(".zarr") or _is_ome_zarr_zip_path(path):
             return cls.from_ome_zarr(path, **kwargs)
+        elif path.endswith(".ims"):
+            return cls.from_imaris(path, **kwargs)
         elif path.endswith((".tif", ".tiff")):
             return cls.from_ome_tif(path, **kwargs)
         else:
