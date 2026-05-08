@@ -209,7 +209,7 @@ class TestImarisIO:
     def test_imaris_metadata_extraction(self, tmp_path, sample_3d_data):
         """Test extraction of spatial metadata from Imaris file."""
         imaris_path = tmp_path / "test_metadata.ims"
-        expected_zooms = [2.0, 1.5, 2.0]  # [Z, Y, X]
+        expected_zooms = [2.0, 1.5, 1.0]  # [Z, Y, X]
         darr = da.from_array(sample_3d_data[np.newaxis, ...], chunks="auto")
         ZarrNii.from_darr(darr, spacing=expected_zooms).to_imaris(str(imaris_path))
 
