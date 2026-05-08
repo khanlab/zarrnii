@@ -4568,10 +4568,6 @@ class ZarrNii:
                 space unit.
         """
         _validate_axes_units(axes_units)
-        if not os.path.exists(path):
-            raise ValueError(
-                f"Unable to read Imaris file '{path}': file does not exist"
-            )
         try:
             from imaris_ims_file_reader.ims import ims
         except ImportError:
@@ -4579,15 +4575,24 @@ class ZarrNii:
                 "imaris_ims_file_reader is required for Imaris support. "
                 "Install with: pip install imaris-ims-file-reader"
             )
+        if not os.path.exists(path):
+            raise ValueError(
+                f"Unable to read Imaris file '{path}': file does not exist"
+            )
 
+        # The reader may surface multiple low-level exceptions (h5py/zarr/reader),
+        # all of which should map to a consistent user-facing read error.
+        imaris_read_errors = (OSError, KeyError, ValueError, RuntimeError, TypeError)
         try:
             level0_store = ims(path, ResolutionLevelLock=0, aszarr=True)
-        except Exception as exc:
+        except imaris_read_errors as exc:
             raise ValueError(f"Unable to read Imaris file '{path}': {exc}") from exc
 
-        available_levels = getattr(
-            getattr(level0_store, "ims", None), "ResolutionLevels", 1
-        )
+        available_levels = 1
+        if hasattr(level0_store, "ims") and hasattr(
+            level0_store.ims, "ResolutionLevels"
+        ):
+            available_levels = level0_store.ims.ResolutionLevels
         if not 0 <= level < available_levels:
             raise ValueError(
                 f"Level {level} not available. Available levels: 0-{available_levels - 1}"
@@ -4597,7 +4602,7 @@ class ZarrNii:
         if level != 0:
             try:
                 imaris_store = ims(path, ResolutionLevelLock=level, aszarr=True)
-            except Exception as exc:
+            except imaris_read_errors as exc:
                 raise ValueError(f"Unable to read Imaris file '{path}': {exc}") from exc
 
         data_array = da.from_zarr(imaris_store, chunks=chunks)
@@ -4646,7 +4651,7 @@ class ZarrNii:
             axes_order=axes_order,
             orientation=orientation,
             spacing=spacing,
-            name=f"imaris_image_{path}_{level}_{timepoint}_{channel}",
+            name=f"imaris_image_{os.path.basename(path)}_{level}_{timepoint}_{channel}",
             axes_units=axes_units,
         )
 

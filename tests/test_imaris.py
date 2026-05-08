@@ -39,7 +39,7 @@ class TestImarisIO:
         original_import = __import__
 
         def mock_import(name, *args, **kwargs):
-            if name.startswith("imaris_ims_file_reader"):
+            if name == "imaris_ims_file_reader" or name == "imaris_ims_file_reader.ims":
                 raise ImportError("No module named 'imaris_ims_file_reader'")
             return original_import(name, *args, **kwargs)
 
@@ -84,7 +84,7 @@ class TestImarisIO:
 
     def test_from_imaris_nonexistent_file(self):
         """Test error handling for nonexistent file."""
-        with pytest.raises(ValueError, match="Unable to read Imaris file"):
+        with pytest.raises(ValueError, match="file does not exist"):
             ZarrNii.from_imaris("nonexistent_file.ims")
 
     def test_from_imaris_invalid_level(self, sample_imaris_file):
