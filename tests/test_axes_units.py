@@ -103,18 +103,10 @@ class TestFromImarisAxesUnits:
 
     @pytest.fixture
     def imaris_path(self, tmp_path):
-        """Create a minimal valid Imaris (.ims) HDF5 file."""
-        try:
-            import h5py
-        except ImportError:
-            pytest.skip("h5py not available")
+        """Create a minimal valid Imaris (.ims) file."""
         path = str(tmp_path / "test.ims")
-        with h5py.File(path, "w") as f:
-            dg = f.create_group("DataSet")
-            rl = dg.create_group("ResolutionLevel 0")
-            tp = rl.create_group("TimePoint 0")
-            ch = tp.create_group("Channel 0")
-            ch.create_dataset("Data", data=np.zeros((4, 4, 4), dtype=np.uint16))
+        data = da.from_array(np.zeros((1, 4, 4, 4), dtype=np.uint16), chunks="auto")
+        ZarrNii.from_darr(data).to_imaris(path)
         return path
 
     def test_axes_units_stored(self, imaris_path):
