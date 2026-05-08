@@ -4575,7 +4575,10 @@ class ZarrNii:
         except ImportError:
             raise ImportError(
                 "imaris_ims_file_reader is required for Imaris support. "
-                "Install with: pip install imaris-ims-file-reader"
+                "Install ZarrNii using the project's supported dependency set "
+                "(for example, run `uv sync` in a source checkout) so the "
+                "expected Imaris reader revision is installed, rather than "
+                "installing `imaris-ims-file-reader` directly from PyPI."
             )
         if not os.path.exists(path):
             raise ValueError(
