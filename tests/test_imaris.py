@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-from zarrnii import ZarrNii
+from zarrnii import ZarrNii, get_dask_client
 
 # Skip all tests if h5py is not available
 h5py = pytest.importorskip("h5py", reason="h5py required for Imaris support")
@@ -110,6 +110,20 @@ class TestImarisIO:
 
         assert znimg.axes_order == "XYZ"
         assert znimg.orientation == "LPI"
+
+    def test_from_imaris_to_ome_zarr_with_distributed_scheduler(
+        self, sample_imaris_file, tmp_path
+    ):
+        """Test Imaris-backed arrays can be written under distributed scheduler."""
+        pytest.importorskip("dask.distributed", reason="dask.distributed not installed")
+
+        output_path = tmp_path / "from_imaris_distributed.ome.zarr"
+        znimg = ZarrNii.from_imaris(sample_imaris_file)
+        with get_dask_client("distributed", threads=2, threads_per_worker=1):
+            znimg.to_ome_zarr(str(output_path), max_layer=0)
+
+        reloaded = ZarrNii.from_ome_zarr(str(output_path))
+        assert reloaded.darr.shape == znimg.darr.shape
 
     @pytest.mark.usefixtures("cleandir")
     def test_to_imaris_basic(self, sample_3d_data):
