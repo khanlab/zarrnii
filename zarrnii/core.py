@@ -4564,6 +4564,7 @@ class ZarrNii:
 
         Raises:
             ImportError: If ``imaris_ims_file_reader`` is not available
+            FileNotFoundError: If *path* does not exist.
             ValueError: If the file cannot be read, has unexpected dimensions,
                 or if *level*/*timepoint*/*channel* are out of range.
             ValueError: If any value in *axes_units* is not a valid OME-Zarr
@@ -4581,7 +4582,7 @@ class ZarrNii:
                 "installing `imaris-ims-file-reader` directly from PyPI."
             )
         if not os.path.exists(path):
-            raise ValueError(
+            raise FileNotFoundError(
                 f"Unable to read Imaris file '{path}': file does not exist"
             )
 

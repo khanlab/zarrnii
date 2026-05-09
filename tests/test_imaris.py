@@ -84,7 +84,7 @@ class TestImarisIO:
 
     def test_from_imaris_nonexistent_file(self):
         """Test error handling for nonexistent file."""
-        with pytest.raises(ValueError, match="file does not exist"):
+        with pytest.raises(FileNotFoundError, match="file does not exist"):
             ZarrNii.from_imaris("nonexistent_file.ims")
 
     def test_from_imaris_invalid_level(self, sample_imaris_file):
