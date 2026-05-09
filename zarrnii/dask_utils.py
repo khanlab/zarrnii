@@ -34,7 +34,6 @@ def get_dask_client(scheduler, threads, threads_per_worker=2):
         cluster = LocalCluster(
             n_workers=n_workers,
             threads_per_worker=threads_per_worker,
-            processes=False,
             memory_limit="auto",
             dashboard_address=":8788",
         )

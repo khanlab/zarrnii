@@ -119,7 +119,8 @@ class TestImarisIO:
 
         output_path = tmp_path / "from_imaris_distributed.ome.zarr"
         znimg = ZarrNii.from_imaris(sample_imaris_file)
-        with get_dask_client("distributed", threads=2, threads_per_worker=1):
+        with get_dask_client("distributed", threads=2, threads_per_worker=1) as client:
+            assert client.cluster.processes is True
             znimg.to_ome_zarr(str(output_path), max_layer=0)
 
         reloaded = ZarrNii.from_ome_zarr(str(output_path))
