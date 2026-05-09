@@ -145,7 +145,6 @@ class _ImarisProcessSafeStore(Store):
         self.dtype = store.dtype
         self.ndim = store.ndim
         self.resolution = tuple(float(v) for v in store.ims.resolution)
-        store.ims = None
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -156,23 +155,26 @@ class _ImarisProcessSafeStore(Store):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        if state.get("_store", None) is not None and hasattr(state["_store"], "ims"):
-            state["_store"].ims = None
+        state["_store"] = None
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self._store = self._create_store()
+
+    def _create_store(self):
+        from imaris_ims_file_reader.ims_zarr_store import ims_zarr_store
+
+        return ims_zarr_store(
+            self.path,
+            ResolutionLevelLock=self.ResolutionLevelLock,
+            normalize_keys=self.normalize_keys,
+            verbose=self.verbose,
+        )
 
     def _ensure_store(self):
         if self._store is None:
-            from imaris_ims_file_reader.ims_zarr_store import ims_zarr_store
-
-            self._store = ims_zarr_store(
-                self.path,
-                ResolutionLevelLock=self.ResolutionLevelLock,
-                normalize_keys=self.normalize_keys,
-                verbose=self.verbose,
-            )
+            self._store = self._create_store()
         elif getattr(self._store, "ims", None) is None:
             self._store.ims = self._store.open_ims()
         return self._store
