@@ -4626,7 +4626,6 @@ class ZarrNii:
 
         data_array = da.from_zarr(imaris_store, chunks=chunks)
         selected_channel_labels = None
-        selected_channel_name = "all"
 
         if data_array.ndim == 5:
             if not 0 <= timepoint < data_array.shape[0]:
@@ -4675,11 +4674,12 @@ class ZarrNii:
                 raise ValueError(
                     "Timepoint selection is not supported for 3D Imaris data"
                 )
-            if channels is not None and channels != [0]:
-                raise ValueError(
-                    "Channel selection is not supported for 3D Imaris data "
-                    "(single channel only)"
-                )
+            if channels is not None:
+                if len(channels) != 1 or channels[0] != 0:
+                    raise ValueError(
+                        "Channel selection is not supported for 3D Imaris data "
+                        "(single channel only)"
+                    )
             if set_channel_labels is not None and len(set_channel_labels) != 1:
                 raise ValueError(
                     f"set_channel_labels length ({len(set_channel_labels)}) must match "
