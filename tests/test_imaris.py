@@ -1,6 +1,7 @@
 """Tests for Imaris I/O functionality."""
 
 import os
+import sys
 import tempfile
 
 import dask.array as da
@@ -8,7 +9,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-from zarrnii import ZarrNii
+from zarrnii import ZarrNii, get_dask_client
 
 # Skip all tests if h5py is not available
 h5py = pytest.importorskip("h5py", reason="h5py required for Imaris support")
@@ -24,33 +25,8 @@ def sample_3d_data():
 def sample_imaris_file(tmp_path, sample_3d_data):
     """Create a sample Imaris file for testing."""
     imaris_path = tmp_path / "test_sample.ims"
-
-    # Create a basic Imaris file structure
-    with h5py.File(str(imaris_path), "w") as f:
-        # Set file attributes
-        f.attrs["ImarisVersion"] = "9.0.0"
-        f.attrs["ImarisDataSet"] = "ImarisDataSet"
-        f.attrs["ImageSizeX"] = 96.0
-        f.attrs["ImageSizeY"] = 128.0
-        f.attrs["ImageSizeZ"] = 64.0
-
-        # Create dataset structure
-        dataset_group = f.create_group("DataSet")
-        res_group = dataset_group.create_group("ResolutionLevel 0")
-        time_group = res_group.create_group("TimePoint 0")
-        channel_group = time_group.create_group("Channel 0")
-
-        # Save the data
-        channel_group.create_dataset("Data", data=sample_3d_data, compression="gzip")
-
-        # Add basic metadata
-        info_group = f.create_group("DataSetInfo")
-        info_group.create_group("Image")
-        channel_info_group = info_group.create_group("Channel 0")
-        channel_info_group.attrs["Name"] = "Test Channel"
-
-        time_info_group = f.create_group("DataSetTimes")
-        time_info_group.create_dataset("Time", data=[0.0])
+    darr = da.from_array(sample_3d_data[np.newaxis, ...], chunks="auto")
+    ZarrNii.from_darr(darr, spacing=[1.0, 1.0, 1.0]).to_imaris(str(imaris_path))
 
     return str(imaris_path)
 
@@ -58,19 +34,25 @@ def sample_imaris_file(tmp_path, sample_3d_data):
 class TestImarisIO:
     """Test Imaris I/O functionality."""
 
-    def test_import_error_without_h5py(self, monkeypatch):
-        """Test that appropriate error is raised when h5py is not available."""
+    def test_import_error_without_imaris_reader(self, monkeypatch, tmp_path):
+        """Test that appropriate error is raised when imaris reader is unavailable."""
+        original_import = __import__
 
-        # Mock h5py import to fail
         def mock_import(name, *args, **kwargs):
-            if name == "h5py":
-                raise ImportError("No module named 'h5py'")
-            return __import__(name, *args, **kwargs)
+            if name == "imaris_ims_file_reader" or name == "imaris_ims_file_reader.ims":
+                raise ImportError("No module named 'imaris_ims_file_reader'")
+            return original_import(name, *args, **kwargs)
 
         monkeypatch.setattr("builtins.__import__", mock_import)
+        monkeypatch.delitem(sys.modules, "imaris_ims_file_reader", raising=False)
+        monkeypatch.delitem(sys.modules, "imaris_ims_file_reader.ims", raising=False)
+        dummy_path = tmp_path / "dummy.ims"
+        dummy_path.write_bytes(b"")
 
-        with pytest.raises(ImportError, match="h5py is required for Imaris support"):
-            ZarrNii.from_imaris("dummy_path.ims")
+        with pytest.raises(
+            ImportError, match="imaris_ims_file_reader is required for Imaris support"
+        ):
+            ZarrNii.from_imaris(str(dummy_path))
 
     def test_from_imaris_basic(self, sample_imaris_file, sample_3d_data):
         """Test basic loading from Imaris file."""
@@ -97,14 +79,12 @@ class TestImarisIO:
         with h5py.File(str(invalid_file), "w") as f:
             f.create_dataset("dummy", data=[1, 2, 3])
 
-        with pytest.raises(
-            ValueError, match="does not appear to be a valid Imaris file"
-        ):
+        with pytest.raises(ValueError, match="Unable to read Imaris file"):
             ZarrNii.from_imaris(str(invalid_file))
 
     def test_from_imaris_nonexistent_file(self):
         """Test error handling for nonexistent file."""
-        with pytest.raises(OSError):
+        with pytest.raises(FileNotFoundError, match="file does not exist"):
             ZarrNii.from_imaris("nonexistent_file.ims")
 
     def test_from_imaris_invalid_level(self, sample_imaris_file):
@@ -130,6 +110,21 @@ class TestImarisIO:
 
         assert znimg.axes_order == "XYZ"
         assert znimg.orientation == "LPI"
+
+    def test_from_imaris_to_ome_zarr_with_distributed_scheduler(
+        self, sample_imaris_file, tmp_path
+    ):
+        """Test Imaris-backed arrays can be written under distributed scheduler."""
+        pytest.importorskip("dask.distributed", reason="dask.distributed not installed")
+
+        output_path = tmp_path / "from_imaris_distributed.ome.zarr"
+        znimg = ZarrNii.from_imaris(sample_imaris_file)
+        with get_dask_client("distributed", threads=2, threads_per_worker=1) as client:
+            assert client.cluster.processes is True
+            znimg.to_ome_zarr(str(output_path), max_layer=0)
+
+        reloaded = ZarrNii.from_ome_zarr(str(output_path))
+        assert reloaded.darr.shape == znimg.darr.shape
 
     @pytest.mark.usefixtures("cleandir")
     def test_to_imaris_basic(self, sample_3d_data):
@@ -229,33 +224,15 @@ class TestImarisIO:
     def test_imaris_metadata_extraction(self, tmp_path, sample_3d_data):
         """Test extraction of spatial metadata from Imaris file."""
         imaris_path = tmp_path / "test_metadata.ims"
-
-        # Create Imaris file with specific metadata
-        with h5py.File(str(imaris_path), "w") as f:
-            f.attrs["ImarisVersion"] = "9.0.0"
-            f.attrs["ImarisDataSet"] = "ImarisDataSet"
-            f.attrs["ImageSizeX"] = 192.0  # 96 * 2.0 spacing
-            f.attrs["ImageSizeY"] = 192.0  # 128 * 1.5 spacing
-            f.attrs["ImageSizeZ"] = 128.0  # 64 * 2.0 spacing
-
-            dataset_group = f.create_group("DataSet")
-            res_group = dataset_group.create_group("ResolutionLevel 0")
-            time_group = res_group.create_group("TimePoint 0")
-            channel_group = time_group.create_group("Channel 0")
-            channel_group.create_dataset("Data", data=sample_3d_data)
-
-            # Add basic info groups
-            info_group = f.create_group("DataSetInfo")
-            info_group.create_group("Image")
-            time_info_group = f.create_group("DataSetTimes")
-            time_info_group.create_dataset("Time", data=[0.0])
+        expected_zooms = [2.0, 1.5, 1.0]  # [Z, Y, X]
+        darr = da.from_array(sample_3d_data[np.newaxis, ...], chunks="auto")
+        ZarrNii.from_darr(darr, spacing=expected_zooms).to_imaris(str(imaris_path))
 
         # Load and check spacing calculation
         znimg = ZarrNii.from_imaris(str(imaris_path))
 
-        # The spacing should be calculated from ImageSize attributes
+        # The spacing should be loaded from Imaris extent metadata
         zooms = znimg.get_zooms(axes_order="ZYX")
-        expected_zooms = [128.0 / 64, 192.0 / 128, 192.0 / 96]  # [Z, Y, X]
         assert_array_almost_equal(zooms, expected_zooms, decimal=3)
 
     def test_malformed_imaris_files(self, tmp_path):
@@ -268,7 +245,7 @@ class TestImarisIO:
             dataset_group = f.create_group("DataSet")
             # Don't add any ResolutionLevel groups
 
-        with pytest.raises(ValueError, match="No resolution levels found"):
+        with pytest.raises(ValueError, match="Unable to read Imaris file"):
             ZarrNii.from_imaris(str(imaris_path_1))
 
         # Test file with no timepoints
@@ -279,7 +256,7 @@ class TestImarisIO:
             res_group = dataset_group.create_group("ResolutionLevel 0")
             # Don't add any TimePoint groups
 
-        with pytest.raises(ValueError, match="No timepoints found"):
+        with pytest.raises(ValueError, match="Unable to read Imaris file"):
             ZarrNii.from_imaris(str(imaris_path_2))
 
         # Test file with no channels
@@ -291,7 +268,7 @@ class TestImarisIO:
             time_group = res_group.create_group("TimePoint 0")
             # Don't add any Channel groups
 
-        with pytest.raises(ValueError, match="No channels found"):
+        with pytest.raises(ValueError, match="Unable to read Imaris file"):
             ZarrNii.from_imaris(str(imaris_path_3))
 
         # Test file with missing Data dataset
@@ -304,7 +281,7 @@ class TestImarisIO:
             channel_group = time_group.create_group("Channel 0")
             # Don't add Data dataset
 
-        with pytest.raises(ValueError, match="No Data dataset found"):
+        with pytest.raises(ValueError, match="Unable to read Imaris file"):
             ZarrNii.from_imaris(str(imaris_path_4))
 
         # Test inconsistent structure (ResolutionLevel exists but key doesn't match)
@@ -320,7 +297,7 @@ class TestImarisIO:
             channel_group = time_group.create_group("Channel 0")
             channel_group.create_dataset("Data", data=np.ones((10, 10, 10)))
 
-        with pytest.raises(ValueError, match="Resolution level 0 not found"):
+        with pytest.raises(ValueError, match="Unable to read Imaris file"):
             ZarrNii.from_imaris(str(imaris_path_5), level=0)
 
         # Test inconsistent timepoint structure
@@ -335,7 +312,7 @@ class TestImarisIO:
             channel_group = time_group.create_group("Channel 0")
             channel_group.create_dataset("Data", data=np.ones((10, 10, 10)))
 
-        with pytest.raises(ValueError, match="Timepoint 0 not found"):
+        with pytest.raises(ValueError, match="Unable to read Imaris file"):
             ZarrNii.from_imaris(str(imaris_path_6), timepoint=0)
 
         # Test inconsistent channel structure
@@ -350,11 +327,11 @@ class TestImarisIO:
             )  # But we'll try to access channel 0
             channel_group.create_dataset("Data", data=np.ones((10, 10, 10)))
 
-        with pytest.raises(ValueError, match="Channel 0 not found"):
+        with pytest.raises(ValueError, match="Unable to read Imaris file"):
             ZarrNii.from_imaris(str(imaris_path_7), channel=0)
 
     def test_imaris_without_metadata(self, tmp_path):
-        """Test loading Imaris file without spatial metadata attributes."""
+        """Test malformed Imaris file without required metadata."""
         imaris_path = tmp_path / "no_metadata.ims"
         sample_data = np.random.rand(32, 64, 48).astype(np.float32)
 
@@ -375,13 +352,8 @@ class TestImarisIO:
             time_info_group = f.create_group("DataSetTimes")
             time_info_group.create_dataset("Time", data=[0.0])
 
-        # This should work and use default spacing
-        znimg = ZarrNii.from_imaris(str(imaris_path))
-
-        # Should have default spacing of [1.0, 1.0, 1.0]
-        zooms = znimg.get_zooms()
-        expected_zooms = [1.0, 1.0, 1.0]
-        assert_array_almost_equal(zooms, expected_zooms)
+        with pytest.raises(ValueError, match="Unable to read Imaris file"):
+            ZarrNii.from_imaris(str(imaris_path))
 
 
 class TestImarisIntegration:

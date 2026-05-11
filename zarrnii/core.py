@@ -22,6 +22,7 @@ Key Functions:
 from __future__ import annotations
 
 import copy
+import os
 import typing
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -33,6 +34,7 @@ import numpy as np
 from attrs import define
 from scipy.interpolate import interpn
 from scipy.ndimage import zoom
+from zarr.abc.store import Store
 
 from .transform import AffineTransform, Transform
 
@@ -110,6 +112,101 @@ _DEFAULT_OMERO_COLORS = ("0000FF", "00FF00", "FF0000", "FFFF00", "FF00FF", "00FF
 VALID_AXES_UNITS: frozenset = frozenset(
     typing.get_args(_a)[0] for _a in typing.get_args(nz.SpaceUnits)
 )
+
+
+class _ImarisProcessSafeStore(Store):
+    """IMS zarr store wrapper that can be serialized across distributed workers."""
+
+    __hash__ = None
+    supports_writes: bool = False
+    supports_deletes: bool = False
+    supports_listing: bool = True
+
+    def __init__(
+        self,
+        ims_file: str,
+        ResolutionLevelLock: int = 0,
+        normalize_keys: bool = True,
+        verbose: bool = False,
+    ):
+        super().__init__(read_only=True)
+        self.path = ims_file
+        self.ResolutionLevelLock = ResolutionLevelLock
+        self.normalize_keys = normalize_keys
+        self.verbose = verbose
+        self._store = None
+
+        store = self._ensure_store()
+        self.ResolutionLevels = store.ResolutionLevels
+        self.TimePoints = store.TimePoints
+        self.Channels = store.Channels
+        self.chunks = store.chunks
+        self.shape = store.shape
+        self.dtype = store.dtype
+        self.ndim = store.ndim
+        self.resolution = tuple(float(v) for v in store.ims.resolution)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, _ImarisProcessSafeStore)
+            and self.path == other.path
+            and self.ResolutionLevelLock == other.ResolutionLevelLock
+        )
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_store"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._store = self._create_store()
+
+    def _create_store(self):
+        from imaris_ims_file_reader.ims_zarr_store import ims_zarr_store
+
+        return ims_zarr_store(
+            self.path,
+            ResolutionLevelLock=self.ResolutionLevelLock,
+            normalize_keys=self.normalize_keys,
+            verbose=self.verbose,
+        )
+
+    def _ensure_store(self):
+        if self._store is None:
+            self._store = self._create_store()
+        elif getattr(self._store, "ims", None) is None:
+            self._store.ims = self._store.open_ims()
+        return self._store
+
+    async def get(self, key, prototype=None, byte_range=None):
+        return await self._ensure_store().get(
+            key, prototype=prototype, byte_range=byte_range
+        )
+
+    async def get_partial_values(self, prototype, key_ranges):
+        return await self._ensure_store().get_partial_values(prototype, key_ranges)
+
+    async def exists(self, key):
+        return await self._ensure_store().exists(key)
+
+    async def set(self, key, value):
+        self._check_writable()
+
+    async def delete(self, key):
+        self._check_writable()
+
+    async def list(self):
+        async for key in self._ensure_store().list():
+            yield key
+
+    async def list_prefix(self, prefix):
+        async for key in self._ensure_store().list_prefix(prefix):
+            yield key
+
+    async def list_dir(self, prefix):
+        async for key in self._ensure_store().list_dir(prefix):
+            yield key
 
 
 def _validate_axes_units(axes_units: Optional[Dict[str, str]]) -> None:
@@ -2070,6 +2167,8 @@ class ZarrNii:
             return cls.from_nifti(path, **kwargs)
         elif path.endswith(".zarr") or _is_ome_zarr_zip_path(path):
             return cls.from_ome_zarr(path, **kwargs)
+        elif path.endswith(".ims"):
+            return cls.from_imaris(path, **kwargs)
         elif path.endswith((".tif", ".tiff")):
             return cls.from_ome_tif(path, **kwargs)
         else:
@@ -4538,8 +4637,9 @@ class ZarrNii:
         """
         Load from Imaris (.ims) file format.
 
-        Imaris files use HDF5 format with specific dataset structure.
-        This method requires the 'imaris' extra dependency (h5py).
+        This method uses ``imaris_ims_file_reader`` to expose the IMS file as a
+        Zarr store, loads it with Dask, then delegates construction to
+        :meth:`from_darr`.
 
         Args:
             path: Path to Imaris (.ims) file
@@ -4559,157 +4659,104 @@ class ZarrNii:
             ZarrNii instance
 
         Raises:
-            ImportError: If h5py is not available
-            ValueError: If the file is not a valid Imaris file
+            ImportError: If ``imaris_ims_file_reader`` is not available
+            FileNotFoundError: If *path* does not exist.
+            ValueError: If the file cannot be read, has unexpected dimensions,
+                or if *level*/*timepoint*/*channel* are out of range.
             ValueError: If any value in *axes_units* is not a valid OME-Zarr
                 space unit.
         """
         _validate_axes_units(axes_units)
         try:
-            import h5py
+            __import__("imaris_ims_file_reader")
         except ImportError:
             raise ImportError(
-                "h5py is required for Imaris support. "
-                "Install with: pip install zarrnii[imaris] or pip install h5py"
+                "imaris_ims_file_reader is required for Imaris support. "
+                "Install ZarrNii using the project's supported dependency set "
+                "(for example, run `uv sync` in a source checkout) so the "
+                "expected Imaris reader revision is installed, rather than "
+                "installing `imaris-ims-file-reader` directly from PyPI."
+            )
+        if not os.path.exists(path):
+            raise FileNotFoundError(
+                f"Unable to read Imaris file '{path}': file does not exist"
             )
 
-        # Open Imaris file
-        with h5py.File(path, "r") as f:
-            # Verify it's an Imaris file by checking for standard structure
-            if "DataSet" not in f:
-                raise ValueError(
-                    f"File {path} does not appear to be a valid Imaris file (missing DataSet group)"
-                )
+        # The reader may surface multiple low-level exceptions (h5py/zarr/reader),
+        # all of which should map to a consistent user-facing read error.
+        imaris_read_errors = (OSError, KeyError, ValueError, RuntimeError, TypeError)
+        try:
+            level0_store = _ImarisProcessSafeStore(path, ResolutionLevelLock=0)
+        except imaris_read_errors as exc:
+            raise ValueError(f"Unable to read Imaris file '{path}': {exc}") from exc
 
-            # Navigate to the specific dataset
-            dataset_group = f["DataSet"]
+        available_levels = 1
+        if hasattr(level0_store, "ims") and hasattr(
+            level0_store.ims, "ResolutionLevels"
+        ):
+            available_levels = level0_store.ims.ResolutionLevels
+        if not 0 <= level < available_levels:
+            raise ValueError(
+                f"Level {level} not available. Available levels: 0-{available_levels - 1}"
+            )
 
-            # Find available resolution levels
-            resolution_levels = [
-                key for key in dataset_group.keys() if key.startswith("ResolutionLevel")
-            ]
-            if not resolution_levels:
-                raise ValueError("No resolution levels found in Imaris file")
-
-            # Validate level parameter
-            if level >= len(resolution_levels):
-                raise ValueError(
-                    f"Level {level} not available. Available levels: 0-{len(resolution_levels)-1}"
-                )
-
-            # Navigate to specified resolution level
-            res_level_key = f"ResolutionLevel {level}"
-            if res_level_key not in dataset_group:
-                raise ValueError(f"Resolution level {level} not found")
-
-            res_group = dataset_group[res_level_key]
-
-            # Find available timepoints
-            timepoints = [
-                key for key in res_group.keys() if key.startswith("TimePoint")
-            ]
-            if not timepoints:
-                raise ValueError("No timepoints found in Imaris file")
-
-            # Validate timepoint parameter
-            if timepoint >= len(timepoints):
-                raise ValueError(
-                    f"Timepoint {timepoint} not available. Available timepoints: 0-{len(timepoints)-1}"
-                )
-
-            # Navigate to specified timepoint
-            time_key = f"TimePoint {timepoint}"
-            if time_key not in res_group:
-                raise ValueError(f"Timepoint {timepoint} not found")
-
-            time_group = res_group[time_key]
-
-            # Find available channels
-            channels = [key for key in time_group.keys() if key.startswith("Channel")]
-            if not channels:
-                raise ValueError("No channels found in Imaris file")
-
-            # Validate channel parameter
-            if channel >= len(channels):
-                raise ValueError(
-                    f"Channel {channel} not available. Available channels: 0-{len(channels)-1}"
-                )
-
-            # Navigate to specified channel
-            channel_key = f"Channel {channel}"
-            if channel_key not in time_group:
-                raise ValueError(f"Channel {channel} not found")
-
-            channel_group = time_group[channel_key]
-
-            # Load the actual data
-            if "Data" not in channel_group:
-                raise ValueError("No Data dataset found in channel group")
-
-            data_dataset = channel_group["Data"]
-
-            # Load data into memory first (necessary because HDF5 file will be closed)
-            data_numpy = data_dataset[:]
-
-            # Create dask array from numpy array
-            data_array = da.from_array(data_numpy, chunks=chunks)
-
-            # Add channel dimension if not present
-            if len(data_array.shape) == 3:
-                data_array = data_array[np.newaxis, ...]
-
-            # Extract spatial metadata
-            # Try to get spacing information from Imaris metadata
-            spacing = [1.0, 1.0, 1.0]  # Default spacing
-            origin = [0.0, 0.0, 0.0]  # Default origin
-
-            # Look for ImageSizeX, ImageSizeY, ImageSizeZ attributes
+        imaris_store = level0_store
+        if level != 0:
             try:
-                # Navigate back to get image info
-                if "ImageSizeX" in f.attrs:
-                    x_size = f.attrs["ImageSizeX"]
-                    y_size = f.attrs["ImageSizeY"]
-                    z_size = f.attrs["ImageSizeZ"]
+                imaris_store = _ImarisProcessSafeStore(path, ResolutionLevelLock=level)
+            except imaris_read_errors as exc:
+                raise ValueError(f"Unable to read Imaris file '{path}': {exc}") from exc
 
-                    # Calculate spacing based on physical size and voxel count
-                    if data_array.shape[-1] > 0:  # X dimension
-                        spacing[0] = x_size / data_array.shape[-1]
-                    if data_array.shape[-2] > 0:  # Y dimension
-                        spacing[1] = y_size / data_array.shape[-2]
-                    if data_array.shape[-3] > 0:  # Z dimension
-                        spacing[2] = z_size / data_array.shape[-3]
-            except (KeyError, IndexError):
-                # Use default spacing if metadata is not available
-                pass
+        data_array = da.from_zarr(imaris_store, chunks=chunks)
 
-            # Create dimensions
-            dims = ["c"] + list(axes_order.lower())
-
-            # Create scale and translation dictionaries
-            scale_dict = {}
-            translation_dict = {}
-            spatial_dims = ["z", "y", "x"] if axes_order == "ZYX" else ["x", "y", "z"]
-
-            for i, dim in enumerate(spatial_dims):
-                scale_dict[dim] = spacing[i]
-                translation_dict[dim] = origin[i]
-
-            # Create NgffImage
-            ngff_image = nz.NgffImage(
-                data=data_array,
-                dims=dims,
-                scale=scale_dict,
-                translation=translation_dict,
-                name=f"imaris_image_{path}_{level}_{timepoint}_{channel}",
-                axes_units=axes_units,
+        if data_array.ndim == 5:
+            if not 0 <= timepoint < data_array.shape[0]:
+                raise ValueError(
+                    f"Timepoint {timepoint} not available. Available timepoints: "
+                    f"0-{data_array.shape[0] - 1}"
+                )
+            if not 0 <= channel < data_array.shape[1]:
+                raise ValueError(
+                    f"Channel {channel} not available. Available channels: "
+                    f"0-{data_array.shape[1] - 1}"
+                )
+            data_array = data_array[timepoint, channel, ...]
+        elif data_array.ndim == 3:
+            if timepoint != 0:
+                raise ValueError(
+                    "Timepoint selection is not supported for 3D Imaris data"
+                )
+            if channel != 0:
+                raise ValueError(
+                    "Channel selection is not supported for 3D Imaris data"
+                )
+        else:
+            raise ValueError(
+                f"Unexpected Imaris data dimensions: {data_array.ndim}. "
+                "Expected 3D or 5D data."
             )
 
-        # Create and return ZarrNii instance
-        return cls(
-            ngff_image=ngff_image,
+        if data_array.ndim == 3:
+            data_array = data_array[np.newaxis, ...]
+
+        spacing = (1.0, 1.0, 1.0)
+        if hasattr(imaris_store, "resolution") and len(imaris_store.resolution) == 3:
+            if axes_order == "ZYX":
+                spacing = imaris_store.resolution
+            else:
+                spacing = (
+                    imaris_store.resolution[2],
+                    imaris_store.resolution[1],
+                    imaris_store.resolution[0],
+                )
+
+        return cls.from_darr(
+            data_array,
             axes_order=axes_order,
-            xyz_orientation=orientation,
-            _omero=None,
+            orientation=orientation,
+            spacing=spacing,
+            name=f"imaris_image_{os.path.basename(path)}_{level}_{timepoint}_{channel}",
+            axes_units=axes_units,
         )
 
     @classmethod
