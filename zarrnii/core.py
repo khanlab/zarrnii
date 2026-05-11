@@ -4640,7 +4640,7 @@ class ZarrNii:
             if set_channel_labels is not None and len(set_channel_labels) != n_channels:
                 raise ValueError(
                     f"set_channel_labels length ({len(set_channel_labels)}) must match "
-                    f"number of channels ({n_channels})."
+                    f"number of channels in source data ({n_channels})."
                 )
 
             if channel_labels is not None:
@@ -4680,12 +4680,12 @@ class ZarrNii:
             if set_channel_labels is not None and len(set_channel_labels) != 1:
                 raise ValueError(
                     "set_channel_labels length ("
-                    f"{len(set_channel_labels)}) must match number of channels (1)."
+                    f"{len(set_channel_labels)}) must match number of channels in source data (1)."
                 )
             if channel_labels is not None:
                 if len(channel_labels) != 1:
                     raise ValueError(
-                        "3D Imaris data supports selecting exactly one channel label"
+                        "3D Imaris data only supports selecting one channel label"
                     )
                 if channel_labels[0] != set_channel_labels[0]:
                     raise KeyError(

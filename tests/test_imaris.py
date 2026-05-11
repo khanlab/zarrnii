@@ -35,6 +35,7 @@ def sample_imaris_file(tmp_path, sample_3d_data):
 def sample_multichannel_imaris_file(tmp_path):
     """Create a multi-channel Imaris file for channel selection tests."""
     imaris_path = tmp_path / "test_multichannel.ims"
+    # Shape: (channels=3, z=16, y=32, x=24)
     sample_data = np.random.rand(3, 16, 32, 24).astype(np.float32)
     darr = da.from_array(sample_data, chunks="auto")
     ZarrNii.from_darr(darr, spacing=[1.0, 1.0, 1.0]).to_imaris(str(imaris_path))
