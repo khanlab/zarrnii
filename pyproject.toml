@@ -33,7 +33,7 @@ dependencies = [
     "ome-zarr>=0.16.0",
     "pluggy>=1.0.0",
     "tifffile>=2024.1.30",
-    "imaris-ims-zarr>=0.1.0",
+    "imaris-ims-zarr>=0.2.0",
 ]
 
 [project.optional-dependencies]
