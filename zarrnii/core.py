@@ -34,7 +34,6 @@ import numpy as np
 from attrs import define
 from scipy.interpolate import interpn
 from scipy.ndimage import zoom
-from zarr.abc.store import Store
 
 from .transform import AffineTransform, Transform
 
@@ -112,101 +111,6 @@ _DEFAULT_OMERO_COLORS = ("0000FF", "00FF00", "FF0000", "FFFF00", "FF00FF", "00FF
 VALID_AXES_UNITS: frozenset = frozenset(
     typing.get_args(_a)[0] for _a in typing.get_args(nz.SpaceUnits)
 )
-
-
-class _ImarisProcessSafeStore(Store):
-    """IMS zarr store wrapper that can be serialized across distributed workers."""
-
-    __hash__ = None
-    supports_writes: bool = False
-    supports_deletes: bool = False
-    supports_listing: bool = True
-
-    def __init__(
-        self,
-        ims_file: str,
-        ResolutionLevelLock: int = 0,
-        normalize_keys: bool = True,
-        verbose: bool = False,
-    ):
-        super().__init__(read_only=True)
-        self.path = ims_file
-        self.ResolutionLevelLock = ResolutionLevelLock
-        self.normalize_keys = normalize_keys
-        self.verbose = verbose
-        self._store = None
-
-        store = self._ensure_store()
-        self.ResolutionLevels = store.ResolutionLevels
-        self.TimePoints = store.TimePoints
-        self.Channels = store.Channels
-        self.chunks = store.chunks
-        self.shape = store.shape
-        self.dtype = store.dtype
-        self.ndim = store.ndim
-        self.resolution = tuple(float(v) for v in store.ims.resolution)
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            isinstance(other, _ImarisProcessSafeStore)
-            and self.path == other.path
-            and self.ResolutionLevelLock == other.ResolutionLevelLock
-        )
-
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state["_store"] = None
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        self._store = self._create_store()
-
-    def _create_store(self):
-        from imaris_ims_file_reader.ims_zarr_store import ims_zarr_store
-
-        return ims_zarr_store(
-            self.path,
-            ResolutionLevelLock=self.ResolutionLevelLock,
-            normalize_keys=self.normalize_keys,
-            verbose=self.verbose,
-        )
-
-    def _ensure_store(self):
-        if self._store is None:
-            self._store = self._create_store()
-        elif getattr(self._store, "ims", None) is None:
-            self._store.ims = self._store.open_ims()
-        return self._store
-
-    async def get(self, key, prototype=None, byte_range=None):
-        return await self._ensure_store().get(
-            key, prototype=prototype, byte_range=byte_range
-        )
-
-    async def get_partial_values(self, prototype, key_ranges):
-        return await self._ensure_store().get_partial_values(prototype, key_ranges)
-
-    async def exists(self, key):
-        return await self._ensure_store().exists(key)
-
-    async def set(self, key, value):
-        self._check_writable()
-
-    async def delete(self, key):
-        self._check_writable()
-
-    async def list(self):
-        async for key in self._ensure_store().list():
-            yield key
-
-    async def list_prefix(self, prefix):
-        async for key in self._ensure_store().list_prefix(prefix):
-            yield key
-
-    async def list_dir(self, prefix):
-        async for key in self._ensure_store().list_dir(prefix):
-            yield key
 
 
 def _validate_axes_units(axes_units: Optional[Dict[str, str]]) -> None:
@@ -4637,7 +4541,7 @@ class ZarrNii:
         """
         Load from Imaris (.ims) file format.
 
-        This method uses ``imaris_ims_file_reader`` to expose the IMS file as a
+        This method uses ``imaris_ims_zarr`` to expose the IMS file as a
         Zarr store, loads it with Dask, then delegates construction to
         :meth:`from_darr`.
 
@@ -4659,7 +4563,7 @@ class ZarrNii:
             ZarrNii instance
 
         Raises:
-            ImportError: If ``imaris_ims_file_reader`` is not available
+            ImportError: If ``imaris_ims_zarr`` is not available
             FileNotFoundError: If *path* does not exist.
             ValueError: If the file cannot be read, has unexpected dimensions,
                 or if *level*/*timepoint*/*channel* are out of range.
@@ -4668,14 +4572,11 @@ class ZarrNii:
         """
         _validate_axes_units(axes_units)
         try:
-            __import__("imaris_ims_file_reader")
+            from imaris_ims_zarr import ImsProcessSafeStore
         except ImportError:
             raise ImportError(
-                "imaris_ims_file_reader is required for Imaris support. "
-                "Install ZarrNii using the project's supported dependency set "
-                "(for example, run `uv sync` in a source checkout) so the "
-                "expected Imaris reader revision is installed, rather than "
-                "installing `imaris-ims-file-reader` directly from PyPI."
+                "imaris_ims_zarr is required for Imaris support. "
+                "Install with: pip install imaris-ims-zarr"
             )
         if not os.path.exists(path):
             raise FileNotFoundError(
@@ -4686,7 +4587,7 @@ class ZarrNii:
         # all of which should map to a consistent user-facing read error.
         imaris_read_errors = (OSError, KeyError, ValueError, RuntimeError, TypeError)
         try:
-            level0_store = _ImarisProcessSafeStore(path, ResolutionLevelLock=0)
+            level0_store = ImsProcessSafeStore(path, ResolutionLevelLock=0)
         except imaris_read_errors as exc:
             raise ValueError(f"Unable to read Imaris file '{path}': {exc}") from exc
 
@@ -4703,7 +4604,7 @@ class ZarrNii:
         imaris_store = level0_store
         if level != 0:
             try:
-                imaris_store = _ImarisProcessSafeStore(path, ResolutionLevelLock=level)
+                imaris_store = ImsProcessSafeStore(path, ResolutionLevelLock=level)
             except imaris_read_errors as exc:
                 raise ValueError(f"Unable to read Imaris file '{path}': {exc}") from exc
 

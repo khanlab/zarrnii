@@ -39,18 +39,17 @@ class TestImarisIO:
         original_import = __import__
 
         def mock_import(name, *args, **kwargs):
-            if name == "imaris_ims_file_reader" or name == "imaris_ims_file_reader.ims":
-                raise ImportError("No module named 'imaris_ims_file_reader'")
+            if name == "imaris_ims_zarr" or name.startswith("imaris_ims_zarr."):
+                raise ImportError("No module named 'imaris_ims_zarr'")
             return original_import(name, *args, **kwargs)
 
         monkeypatch.setattr("builtins.__import__", mock_import)
-        monkeypatch.delitem(sys.modules, "imaris_ims_file_reader", raising=False)
-        monkeypatch.delitem(sys.modules, "imaris_ims_file_reader.ims", raising=False)
+        monkeypatch.delitem(sys.modules, "imaris_ims_zarr", raising=False)
         dummy_path = tmp_path / "dummy.ims"
         dummy_path.write_bytes(b"")
 
         with pytest.raises(
-            ImportError, match="imaris_ims_file_reader is required for Imaris support"
+            ImportError, match="imaris_ims_zarr is required for Imaris support"
         ):
             ZarrNii.from_imaris(str(dummy_path))
 
