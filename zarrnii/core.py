@@ -4644,7 +4644,9 @@ class ZarrNii:
                 )
 
             if channel_labels is not None:
-                label_to_index = {label: idx for idx, label in enumerate(set_channel_labels)}
+                label_to_index = {
+                    label: idx for idx, label in enumerate(set_channel_labels)
+                }
                 selected_channels = []
                 for label in channel_labels:
                     if label not in label_to_index:
