@@ -74,6 +74,13 @@ def matlab_stretchlim(img: np.ndarray, tol: tuple[float, float] = (0.01, 0.99)) 
     if hi <= lo:
         return lo, lo + 1.0
     return lo, hi
+    
+def _odd(n: int) -> int:
+    """Return the next odd integer >= n (minimum 1)."""
+    n = int(n)
+    if n <= 1:
+        return 1
+    return n if (n % 2 == 1) else n + 1
 
 
 def matlab_imadjust_default(img: np.ndarray) -> np.ndarray:
