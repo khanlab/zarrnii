@@ -4626,6 +4626,7 @@ class ZarrNii:
 
         data_array = da.from_zarr(imaris_store, chunks=chunks)
         selected_channel_labels = None
+        selected_channel_name = "all"
 
         if data_array.ndim == 5:
             if not 0 <= timepoint < data_array.shape[0]:
@@ -4664,6 +4665,7 @@ class ZarrNii:
                     )
 
             data_array = data_array[timepoint, selected_channels, ...]
+            selected_channel_name = "-".join(str(idx) for idx in selected_channels)
             if set_channel_labels is not None:
                 selected_channel_labels = [
                     set_channel_labels[idx] for idx in selected_channels
@@ -4675,7 +4677,8 @@ class ZarrNii:
                 )
             if channels is not None and channels != [0]:
                 raise ValueError(
-                    "Channel selection for 3D Imaris data only supports [0]"
+                    "Channel selection is not supported for 3D Imaris data "
+                    "(single channel only)"
                 )
             if set_channel_labels is not None and len(set_channel_labels) != 1:
                 raise ValueError(
@@ -4694,6 +4697,7 @@ class ZarrNii:
                     )
             if set_channel_labels is not None:
                 selected_channel_labels = [set_channel_labels[0]]
+            selected_channel_name = "0"
         else:
             raise ValueError(
                 f"Unexpected Imaris data dimensions: {data_array.ndim}. "
@@ -4719,7 +4723,10 @@ class ZarrNii:
             axes_order=axes_order,
             orientation=orientation,
             spacing=spacing,
-            name=f"imaris_image_{os.path.basename(path)}_{level}_{timepoint}",
+            name=(
+                f"imaris_image_{os.path.basename(path)}_{level}_{timepoint}_"
+                f"{selected_channel_name}"
+            ),
             channel_labels=selected_channel_labels,
             axes_units=axes_units,
         )
