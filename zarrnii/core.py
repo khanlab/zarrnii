@@ -5272,7 +5272,7 @@ class ZarrNii:
         final_dims = [ax.lower() for ax in target_axes]
 
         # --- Step 4: build scale / translation dicts --------------------------
-        n_channels = darr.shape[target_axes.index("C")]
+        n_channels = darr.shape[target_axes.index("C")] if "C" in target_axes else 1
         omero_metadata = None
         if set_channel_labels is not None:
             if len(set_channel_labels) != n_channels:
