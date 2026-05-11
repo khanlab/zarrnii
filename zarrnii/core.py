@@ -4576,7 +4576,7 @@ class ZarrNii:
         except ImportError:
             raise ImportError(
                 "imaris_ims_zarr is required for Imaris support. "
-                "Install with: pip install imaris-ims-zarr"
+                "Install with: pip install imaris-ims-zarr or uv add imaris-ims-zarr"
             )
         if not os.path.exists(path):
             raise FileNotFoundError(
