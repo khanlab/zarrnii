@@ -4532,7 +4532,9 @@ class ZarrNii:
         path: str,
         level: int = 0,
         timepoint: int = 0,
-        channel: int = 0,
+        channels: Optional[List[int]] = None,
+        channel_labels: Optional[List[str]] = None,
+        set_channel_labels: Optional[List[str]] = None,
         chunks: str = "auto",
         axes_order: str = "ZYX",
         orientation: str = "RAS",
@@ -4549,7 +4551,13 @@ class ZarrNii:
             path: Path to Imaris (.ims) file
             level: Resolution level to load (0 = full resolution)
             timepoint: Time point to load (default: 0)
-            channel: Channel to load (default: 0)
+            channels: List of channel indices to load (0-based). Mutually
+                exclusive with channel_labels. If None, loads all channels.
+            channel_labels: List of channel names to load by label. Mutually
+                exclusive with channels. Requires set_channel_labels.
+            set_channel_labels: Channel labels that define the channels present
+                in the Imaris data, in channel index order. Required when
+                channel_labels is used.
             chunks: Chunking strategy for dask array
             axes_order: Spatial axes order for compatibility (default: "ZYX")
             orientation: Default orientation (default: "RAS")
@@ -4566,11 +4574,19 @@ class ZarrNii:
             ImportError: If ``imaris_ims_zarr`` is not available
             FileNotFoundError: If *path* does not exist.
             ValueError: If the file cannot be read, has unexpected dimensions,
-                or if *level*/*timepoint*/*channel* are out of range.
+                if *level*/*timepoint*/*channels* are out of range, or if
+                selection arguments are invalid.
             ValueError: If any value in *axes_units* is not a valid OME-Zarr
                 space unit.
         """
         _validate_axes_units(axes_units)
+        if channels is not None and channel_labels is not None:
+            raise ValueError("Cannot specify both 'channels' and 'channel_labels'")
+        if channel_labels is not None and set_channel_labels is None:
+            raise ValueError(
+                "'set_channel_labels' is required when 'channel_labels' is provided"
+            )
+
         try:
             from imaris_ims_zarr import ImsProcessSafeStore
         except ImportError:
@@ -4609,6 +4625,7 @@ class ZarrNii:
                 raise ValueError(f"Unable to read Imaris file '{path}': {exc}") from exc
 
         data_array = da.from_zarr(imaris_store, chunks=chunks)
+        selected_channel_labels = None
 
         if data_array.ndim == 5:
             if not 0 <= timepoint < data_array.shape[0]:
@@ -4616,21 +4633,61 @@ class ZarrNii:
                     f"Timepoint {timepoint} not available. Available timepoints: "
                     f"0-{data_array.shape[0] - 1}"
                 )
-            if not 0 <= channel < data_array.shape[1]:
+            n_channels = data_array.shape[1]
+            available_channels = list(range(n_channels))
+            selected_channels = available_channels if channels is None else channels
+
+            if set_channel_labels is not None and len(set_channel_labels) != n_channels:
                 raise ValueError(
-                    f"Channel {channel} not available. Available channels: "
-                    f"0-{data_array.shape[1] - 1}"
+                    f"set_channel_labels length ({len(set_channel_labels)}) must match "
+                    f"number of channels ({n_channels})."
                 )
-            data_array = data_array[timepoint, channel, ...]
+
+            if channel_labels is not None:
+                label_to_index = {label: idx for idx, label in enumerate(set_channel_labels)}
+                selected_channels = []
+                for label in channel_labels:
+                    if label not in label_to_index:
+                        raise KeyError(
+                            f"Channel label '{label}' not found. "
+                            f"Available labels: {list(label_to_index.keys())}"
+                        )
+                    selected_channels.append(label_to_index[label])
+
+            for channel_idx in selected_channels:
+                if not 0 <= channel_idx < n_channels:
+                    raise ValueError(
+                        f"Channel index {channel_idx} not available. "
+                        f"Available channels: 0-{n_channels - 1}"
+                    )
+
+            data_array = data_array[timepoint, selected_channels, ...]
+            if set_channel_labels is not None:
+                selected_channel_labels = [
+                    set_channel_labels[idx] for idx in selected_channels
+                ]
         elif data_array.ndim == 3:
             if timepoint != 0:
                 raise ValueError(
                     "Timepoint selection is not supported for 3D Imaris data"
                 )
-            if channel != 0:
+            if channels is not None and channels != [0]:
                 raise ValueError(
-                    "Channel selection is not supported for 3D Imaris data"
+                    "Channel selection for 3D Imaris data only supports [0]"
                 )
+            if set_channel_labels is not None and len(set_channel_labels) != 1:
+                raise ValueError(
+                    "set_channel_labels length ("
+                    f"{len(set_channel_labels)}) must match number of channels (1)."
+                )
+            if channel_labels is not None:
+                if channel_labels != [set_channel_labels[0]]:
+                    raise KeyError(
+                        f"Channel label '{channel_labels[0]}' not found. "
+                        f"Available labels: {set_channel_labels}"
+                    )
+            if set_channel_labels is not None:
+                selected_channel_labels = [set_channel_labels[0]]
         else:
             raise ValueError(
                 f"Unexpected Imaris data dimensions: {data_array.ndim}. "
@@ -4656,7 +4713,8 @@ class ZarrNii:
             axes_order=axes_order,
             orientation=orientation,
             spacing=spacing,
-            name=f"imaris_image_{os.path.basename(path)}_{level}_{timepoint}_{channel}",
+            name=f"imaris_image_{os.path.basename(path)}_{level}_{timepoint}",
+            channel_labels=selected_channel_labels,
             axes_units=axes_units,
         )
 
