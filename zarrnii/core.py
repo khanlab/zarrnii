@@ -2321,6 +2321,7 @@ class ZarrNii:
         level: int = 0,
         channels: Optional[List[int]] = None,
         channel_labels: Optional[List[str]] = None,
+        set_channel_labels: Optional[List[str]] = None,
         timepoints: Optional[List[int]] = None,
         storage_options: Optional[Dict[str, Any]] = None,
         axes_order: str = "ZYX",
@@ -2347,6 +2348,10 @@ class ZarrNii:
                 exclusive with channel_labels
             channel_labels: List of channel names to load by label. Requires
                 OMERO metadata. Mutually exclusive with channels
+            set_channel_labels: Channel labels that define the channels present
+                in the data, in channel index order. When provided, these labels
+                are used to build output OMERO metadata and to resolve
+                channel_labels selection.
             timepoints: List of timepoint indices to load (0-based). If None,
                 loads all available timepoints
             storage_options: Additional options for zarr storage backend
@@ -2515,6 +2520,19 @@ class ZarrNii:
 
         # Get the highest available level
         ngff_image = multiscales.images[actual_level]
+        dims = list(ngff_image.dims)
+
+        if set_channel_labels is not None:
+            if "c" in dims:
+                n_channels = ngff_image.data.shape[dims.index("c")]
+            else:
+                n_channels = 1
+            if len(set_channel_labels) != n_channels:
+                raise ValueError(
+                    f"set_channel_labels length ({len(set_channel_labels)}) must match "
+                    f"number of channels in source data ({n_channels})."
+                )
+            omero_metadata = make_omero(set_channel_labels)
 
         # Handle channel and timepoint selection and filter omero metadata accordingly
         filtered_omero = omero_metadata
@@ -4747,7 +4765,7 @@ class ZarrNii:
         origin: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         chunks: Union[str, Tuple[int, ...]] = "auto",
         name: str = "image",
-        channel_labels: Optional[List[str]] = None,
+        set_channel_labels: Optional[List[str]] = None,
         channel_colors: Optional[List[str]] = None,
         channel_windows: Optional[
             List[
@@ -4784,18 +4802,18 @@ class ZarrNii:
             origin: Spatial origin for the three spatial axes.
             chunks: Dask chunking strategy for final stacked array.
             name: Name for resulting image.
-            channel_labels: Optional channel names.  When provided, OMERO metadata
+            set_channel_labels: Optional channel names.  When provided, OMERO metadata
                 is built automatically via :func:`make_omero`.
             channel_colors: Optional per-channel colors as ``RRGGBB`` hex strings
                 (``#RRGGBB`` also accepted).  Must have the same length as
-                *channel_labels* when supplied.
+                *set_channel_labels* when supplied.
             channel_windows: Optional per-channel display windows.  Each entry may
                 be an ``nz.OmeroWindow``, a dict with keys ``min``/``max``/
                 ``start``/``end``, or a 4-item tuple/list ``(min, max, start,
-                end)``.  Must have the same length as *channel_labels* when
+                end)``.  Must have the same length as *set_channel_labels* when
                 supplied.
             omero: Optional full OMERO metadata object (escape hatch).  Mutually
-                exclusive with *channel_labels* / *channel_colors* /
+                exclusive with *set_channel_labels* / *channel_colors* /
                 *channel_windows*.
             axes_units: Optional mapping of axis name to unit string (e.g.
                 ``{"x": "micrometer", "y": "micrometer", "z": "micrometer"}``).
@@ -4810,7 +4828,7 @@ class ZarrNii:
             ValueError: If input layout and stack_mode are incompatible.
             ValueError: If both *omero* and any of the channel convenience
                 arguments are provided simultaneously.
-            ValueError: If *channel_labels* length does not match the number of
+            ValueError: If *set_channel_labels* length does not match the number of
                 channels in the stacked data.
             ValueError: If any value in *axes_units* is not a valid OME-Zarr
                 space unit.
@@ -4832,21 +4850,21 @@ class ZarrNii:
         if not paths:
             raise ValueError("paths must contain at least one TIFF path.")
         if omero is not None and (
-            channel_labels is not None
+            set_channel_labels is not None
             or channel_colors is not None
             or channel_windows is not None
         ):
             raise ValueError(
-                "Provide either 'omero' or channel_labels/channel_colors/"
+                "Provide either 'omero' or set_channel_labels/channel_colors/"
                 "channel_windows, not both."
             )
         if (
             (channel_colors is not None or channel_windows is not None)
-            and channel_labels is None
+            and set_channel_labels is None
             and omero is None
         ):
             raise ValueError(
-                "channel_labels is required when channel_colors or channel_windows are provided and omero is not set."
+                "set_channel_labels is required when channel_colors or channel_windows are provided and omero is not set."
             )
 
         def _read_tif(path_like: Union[str, bytes]) -> da.Array:
@@ -5008,13 +5026,13 @@ class ZarrNii:
         if axes_order == "XYZ":
             data = data.transpose((0, 3, 2, 1))
 
-        if omero is None and channel_labels is not None:
-            if len(channel_labels) != data.shape[0]:
+        if omero is None and set_channel_labels is not None:
+            if len(set_channel_labels) != data.shape[0]:
                 raise ValueError(
-                    f"channel_labels length ({len(channel_labels)}) must match number of channels ({data.shape[0]})."
+                    f"set_channel_labels length ({len(set_channel_labels)}) must match number of channels ({data.shape[0]})."
                 )
             omero = make_omero(
-                channel_labels=channel_labels,
+                channel_labels=set_channel_labels,
                 channel_colors=channel_colors,
                 channel_windows=channel_windows,
             )
@@ -5040,6 +5058,7 @@ class ZarrNii:
         series: int = 0,
         chunks: Union[str, Tuple] = "auto",
         name: Optional[str] = None,
+        set_channel_labels: Optional[List[str]] = None,
         axes_units: Optional[Dict[str, str]] = None,
     ) -> "ZarrNii":
         """Load ZarrNii from an OME-TIFF file (e.g. a z-stack).
@@ -5068,6 +5087,8 @@ class ZarrNii:
                 chunk sizes matching the array dimensions.
             name: Optional name for the resulting NgffImage.  Defaults to
                 the basename of *path*.
+            set_channel_labels: Optional channel names in channel index order.
+                When provided, OMERO metadata is built from these labels.
             axes_units: Optional mapping of axis name to unit string that
                 overrides the unit read from the file metadata (e.g.
                 ``{"x": "micrometer", "y": "micrometer", "z": "micrometer"}``).
@@ -5083,6 +5104,8 @@ class ZarrNii:
             ImportError: If *tifffile* is not installed.
             ValueError: If *series* or *level* is out of range.
             ValueError: If *axes_order* is not ``"ZYX"`` or ``"XYZ"``.
+            ValueError: If *set_channel_labels* length does not match the
+                number of channels in the loaded data.
             ValueError: If any value in *axes_units* is not a valid OME-Zarr
                 space unit.
 
@@ -5249,6 +5272,16 @@ class ZarrNii:
         final_dims = [ax.lower() for ax in target_axes]
 
         # --- Step 4: build scale / translation dicts --------------------------
+        n_channels = darr.shape[target_axes.index("C")]
+        omero_metadata = None
+        if set_channel_labels is not None:
+            if len(set_channel_labels) != n_channels:
+                raise ValueError(
+                    f"set_channel_labels length ({len(set_channel_labels)}) must match "
+                    f"number of channels in source data ({n_channels})."
+                )
+            omero_metadata = make_omero(set_channel_labels)
+
         if axes_order == "ZYX":
             scale = {"z": spacing_z, "y": spacing_y, "x": spacing_x}
             translation = {"z": 0.0, "y": 0.0, "x": 0.0}
@@ -5286,7 +5319,7 @@ class ZarrNii:
             ngff_image=ngff_image,
             axes_order=axes_order,
             xyz_orientation=orientation,
-            _omero=None,
+            _omero=omero_metadata,
         )
 
     def to_imaris(

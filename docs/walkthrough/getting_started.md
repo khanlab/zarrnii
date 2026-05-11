@@ -110,7 +110,7 @@ znimg = ZarrNii.from_tif_stack(
         ["gfp_z000.tif", "gfp_z001.tif"],
     ],
     stack_mode="channel_z",
-    channel_labels=["DAPI", "GFP"],
+    set_channel_labels=["DAPI", "GFP"],
     channel_colors=["0000FF", "00FF00"],
 )
 
