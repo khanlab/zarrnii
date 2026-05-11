@@ -4679,8 +4679,8 @@ class ZarrNii:
                 )
             if set_channel_labels is not None and len(set_channel_labels) != 1:
                 raise ValueError(
-                    "set_channel_labels length ("
-                    f"{len(set_channel_labels)}) must match number of channels in source data (1)."
+                    f"set_channel_labels length ({len(set_channel_labels)}) must match "
+                    "number of channels in source data (1)."
                 )
             if channel_labels is not None:
                 if len(channel_labels) != 1:
