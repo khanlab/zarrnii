@@ -1321,9 +1321,9 @@ wheels = [
 ]
 
 [[package]]
-name = "imaris-ims-file-reader"
-version = "0.1.dev79+gece6c3d34"
-source = { git = "https://github.com/khanlab/imaris_ims_file_reader?rev=ece6c3d345cfd0add3d057b9847a9492d1d278cd#ece6c3d345cfd0add3d057b9847a9492d1d278cd" }
+name = "imaris-ims-zarr"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "h5py" },
     { name = "hdf5plugin" },
@@ -1333,13 +1333,17 @@ dependencies = [
     { name = "zarr", version = "3.1.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "zarr", version = "3.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/1b/19/7875c43831324e9c9617682192284e6cbe97b069099b73703484ac1d767c/imaris_ims_zarr-0.1.0.tar.gz", hash = "sha256:6d4161ffc97b73350b6abff873f1c88a474f833afc783af87c959e342178a6ca", size = 102138553, upload-time = "2026-05-11T14:07:23.739Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d5/11/b6e6197d136810ba89e9ee5d55d5b99c36a1f85a332f82761db29ce1594b/imaris_ims_zarr-0.1.0-py3-none-any.whl", hash = "sha256:0ea0fad32997a06c217207089ac56c010b8c3d6244a5dd4fea8ee715887f3502", size = 3832, upload-time = "2026-05-11T14:07:19.68Z" },
+]
 
 [[package]]
 name = "importlib-metadata"
 version = "9.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "zipp" },
+    { name = "zipp", marker = "python_full_version < '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a9/01/15bb152d77b21318514a96f43af312635eb2500c96b55398d020c93d86ea/importlib_metadata-9.0.0.tar.gz", hash = "sha256:a4f57ab599e6a2e3016d7595cfd72eb4661a5106e787a95bcc90c7105b831efc", size = 56405, upload-time = "2026-03-20T06:42:56.999Z" }
 wheels = [
@@ -4423,7 +4427,7 @@ source = { editable = "." }
 dependencies = [
     { name = "dask" },
     { name = "h5py" },
-    { name = "imaris-ims-file-reader" },
+    { name = "imaris-ims-zarr" },
     { name = "ngff-zarr", extra = ["cli", "dask-image", "itk", "tensorstore", "validate"] },
     { name = "nibabel" },
     { name = "numpy" },
@@ -4504,7 +4508,7 @@ requires-dist = [
     { name = "flake8-import-order", marker = "extra == 'dev'", specifier = ">=0.18.2" },
     { name = "h5py", specifier = ">=3.14.0" },
     { name = "h5py", marker = "extra == 'imaris'", specifier = ">=3.8.0" },
-    { name = "imaris-ims-file-reader", git = "https://github.com/khanlab/imaris_ims_file_reader?rev=ece6c3d345cfd0add3d057b9847a9492d1d278cd" },
+    { name = "imaris-ims-zarr", specifier = ">=0.1.0" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.13.2" },
     { name = "jupyterlab", marker = "extra == 'dev'", specifier = ">=4.2.1" },
     { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.9.0" },

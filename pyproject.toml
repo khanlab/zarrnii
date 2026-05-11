@@ -33,7 +33,7 @@ dependencies = [
     "ome-zarr>=0.16.0",
     "pluggy>=1.0.0",
     "tifffile>=2024.1.30",
-    "imaris-ims-file-reader @ git+https://github.com/khanlab/imaris_ims_file_reader.git@ece6c3d345cfd0add3d057b9847a9492d1d278cd",
+    "imaris-ims-zarr>=0.1.0",
 ]
 
 [project.optional-dependencies]
