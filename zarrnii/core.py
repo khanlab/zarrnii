@@ -4557,6 +4557,7 @@ class ZarrNii:
         axes_order: str = "ZYX",
         orientation: str = "RAS",
         axes_units: Optional[Dict[str, str]] = None,
+        downsample_near_isotropic: bool = False,
     ) -> "ZarrNii":
         """
         Load from Imaris (.ims) file format.
@@ -4585,6 +4586,9 @@ class ZarrNii:
                 All values must be valid OME-Zarr space units (see
                 :data:`VALID_AXES_UNITS`).  When ``None``, no unit metadata is
                 stored.
+            downsample_near_isotropic: If True, automatically downsample
+                dimensions with smaller voxel sizes to achieve near-isotropic
+                resolution. Deprecated and will be removed in a future version.
 
         Returns:
             ZarrNii instance
@@ -4599,6 +4603,15 @@ class ZarrNii:
                 space unit.
         """
         _validate_axes_units(axes_units)
+        if downsample_near_isotropic:
+            import warnings
+
+            warnings.warn(
+                "downsample_near_isotropic is deprecated and will be removed in a "
+                "future version of ZarrNii.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         if channels is not None and channel_labels is not None:
             raise ValueError("Cannot specify both 'channels' and 'channel_labels'")
         if channel_labels is not None and set_channel_labels is None:
@@ -4759,6 +4772,10 @@ class ZarrNii:
             level_ds = level - max_level
             znimg = znimg.downsample(level=level_ds)
 
+        # Apply near-isotropic downsampling if requested (deprecated)
+        if downsample_near_isotropic:
+            znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
+
         return znimg
 
     @classmethod
@@ -4792,6 +4809,7 @@ class ZarrNii:
         ] = None,
         omero: Optional[object] = None,
         axes_units: Optional[Dict[str, str]] = None,
+        downsample_near_isotropic: bool = False,
     ) -> "ZarrNii":
         """Load TIFF files into a single multi-dimensional ZarrNii image.
 
@@ -4836,6 +4854,9 @@ class ZarrNii:
                 All values must be valid OME-Zarr space units (see
                 :data:`VALID_AXES_UNITS`).  When ``None``, no unit metadata is
                 stored.
+            downsample_near_isotropic: If True, automatically downsample
+                dimensions with smaller voxel sizes to achieve near-isotropic
+                resolution. Deprecated and will be removed in a future version.
 
         Returns:
             ZarrNii instance containing TIFF data as lazy dask array.
@@ -4853,6 +4874,15 @@ class ZarrNii:
 
         from dask.array.image import imread
 
+        if downsample_near_isotropic:
+            import warnings
+
+            warnings.warn(
+                "downsample_near_isotropic is deprecated and will be removed in a "
+                "future version of ZarrNii.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         if stack_mode not in {"auto", "z", "c", "channel_z"}:
             raise ValueError(
                 "stack_mode must be one of {'auto', 'z', 'c', 'channel_z'}."
@@ -5069,6 +5099,10 @@ class ZarrNii:
         if level > 0:
             znimg = znimg.downsample(level=level)
 
+        # Apply near-isotropic downsampling if requested (deprecated)
+        if downsample_near_isotropic:
+            znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
+
         return znimg
 
     @classmethod
@@ -5083,6 +5117,7 @@ class ZarrNii:
         name: Optional[str] = None,
         set_channel_labels: Optional[List[str]] = None,
         axes_units: Optional[Dict[str, str]] = None,
+        downsample_near_isotropic: bool = False,
     ) -> "ZarrNii":
         """Load ZarrNii from an OME-TIFF file (e.g. a z-stack).
 
@@ -5120,6 +5155,9 @@ class ZarrNii:
                 :data:`VALID_AXES_UNITS`).  When ``None``, the unit is inferred
                 from ``PhysicalSizeXUnit`` in the OME-XML (or ImageJ metadata),
                 defaulting to ``"micrometer"`` when no unit is present.
+            downsample_near_isotropic: If True, automatically downsample
+                dimensions with smaller voxel sizes to achieve near-isotropic
+                resolution. Deprecated and will be removed in a future version.
 
         Returns:
             ZarrNii instance with lazily-loaded data and spatial metadata.
@@ -5162,6 +5200,15 @@ class ZarrNii:
               they are not read into memory until explicitly computed.
         """
         _validate_axes_units(axes_units)
+        if downsample_near_isotropic:
+            import warnings
+
+            warnings.warn(
+                "downsample_near_isotropic is deprecated and will be removed in a "
+                "future version of ZarrNii.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         try:
             import tifffile
         except ImportError:
@@ -5353,6 +5400,10 @@ class ZarrNii:
         if do_downsample:
             level_ds = level - max_level
             znimg = znimg.downsample(level=level_ds)
+
+        # Apply near-isotropic downsampling if requested (deprecated)
+        if downsample_near_isotropic:
+            znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
 
         return znimg
 

@@ -273,3 +273,24 @@ class TestFromOmeTif:
             assert "c" in znii.dims
         finally:
             os.unlink(tmpf)
+
+    def test_downsample_near_isotropic_deprecated(self):
+        """downsample_near_isotropic emits a DeprecationWarning."""
+        import warnings
+
+        data = np.zeros((4, 16, 16), dtype=np.uint8)
+        with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
+            tmpf = f.name
+        try:
+            _write_ome_tif(tmpf, data, axes="ZYX")
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                ZarrNii.from_ome_tif(tmpf, downsample_near_isotropic=True)
+            assert any(
+                issubclass(warning.category, DeprecationWarning) for warning in w
+            )
+            assert any(
+                "downsample_near_isotropic" in str(warning.message) for warning in w
+            )
+        finally:
+            os.unlink(tmpf)

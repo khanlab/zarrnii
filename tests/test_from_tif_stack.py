@@ -210,3 +210,23 @@ def test_from_darr_channel_label_length_mismatch_raises():
     data = da.zeros((3, 4, 8, 8), dtype=np.uint16)
     with pytest.raises(ValueError, match="channel_labels length"):
         ZarrNii.from_darr(data, channel_labels=["A", "B"])  # 2 != 3
+
+
+def test_from_tif_stack_downsample_near_isotropic_deprecated():
+    """from_tif_stack downsample_near_isotropic emits a DeprecationWarning."""
+    import warnings
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        paths = []
+        for z in range(4):
+            path = os.path.join(tmpdir, f"z{z}.tif")
+            _write_tif(path, np.zeros((8, 8), dtype=np.uint8))
+            paths.append(path)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            ZarrNii.from_tif_stack(paths, downsample_near_isotropic=True)
+        assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
+        assert any(
+            "downsample_near_isotropic" in str(warning.message) for warning in w
+        )
