@@ -24,6 +24,7 @@ from __future__ import annotations
 import copy
 import os
 import typing
+import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dask.array as da
@@ -4557,6 +4558,7 @@ class ZarrNii:
         axes_order: str = "ZYX",
         orientation: str = "RAS",
         axes_units: Optional[Dict[str, str]] = None,
+        downsample_near_isotropic: bool = False,
     ) -> "ZarrNii":
         """
         Load from Imaris (.ims) file format.
@@ -4567,7 +4569,8 @@ class ZarrNii:
 
         Args:
             path: Path to Imaris (.ims) file
-            level: Resolution level to load (0 = full resolution)
+            level: Resolution level to load (0 = full resolution). If level
+                exceeds available levels, applies lazy downsampling
             timepoint: Time point to load (default: 0)
             channels: List of channel indices to load (0-based). Mutually
                 exclusive with channel_labels. If None, loads all channels.
@@ -4584,6 +4587,9 @@ class ZarrNii:
                 All values must be valid OME-Zarr space units (see
                 :data:`VALID_AXES_UNITS`).  When ``None``, no unit metadata is
                 stored.
+            downsample_near_isotropic: If True, automatically downsample
+                dimensions with smaller voxel sizes to achieve near-isotropic
+                resolution. Deprecated and will be removed in a future version.
 
         Returns:
             ZarrNii instance
@@ -4598,6 +4604,13 @@ class ZarrNii:
                 space unit.
         """
         _validate_axes_units(axes_units)
+        if downsample_near_isotropic:
+            warnings.warn(
+                "downsample_near_isotropic is deprecated and will be removed in a "
+                "future version of ZarrNii.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         if channels is not None and channel_labels is not None:
             raise ValueError("Cannot specify both 'channels' and 'channel_labels'")
         if channel_labels is not None and set_channel_labels is None:
@@ -4630,15 +4643,18 @@ class ZarrNii:
             level0_store.ims, "ResolutionLevels"
         ):
             available_levels = level0_store.ims.ResolutionLevels
-        if not 0 <= level < available_levels:
-            raise ValueError(
-                f"Level {level} not available. Available levels: 0-{available_levels - 1}"
-            )
+        if level < 0:
+            raise ValueError(f"Level {level} not available. Level must be >= 0.")
+        max_level = available_levels - 1
+        actual_level = min(level, max_level)
+        do_downsample = level > max_level
 
         imaris_store = level0_store
-        if level != 0:
+        if actual_level != 0:
             try:
-                imaris_store = ImsProcessSafeStore(path, ResolutionLevelLock=level)
+                imaris_store = ImsProcessSafeStore(
+                    path, ResolutionLevelLock=actual_level
+                )
             except imaris_read_errors as exc:
                 raise ValueError(f"Unable to read Imaris file '{path}': {exc}") from exc
 
@@ -4736,7 +4752,7 @@ class ZarrNii:
                     imaris_store.resolution[0],
                 )
 
-        return cls.from_darr(
+        znimg = cls.from_darr(
             data_array,
             axes_order=axes_order,
             orientation=orientation,
@@ -4748,6 +4764,18 @@ class ZarrNii:
             channel_labels=selected_channel_labels,
             axes_units=axes_units,
         )
+
+        # Apply lazy downsampling if the requested level exceeds available levels
+        # (factor = 2^(level - max_level))
+        if do_downsample:
+            level_ds = level - max_level
+            znimg = znimg.downsample(level=level_ds)
+
+        # Apply near-isotropic downsampling if requested (deprecated)
+        if downsample_near_isotropic:
+            znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
+
+        return znimg
 
     @classmethod
     def from_tif_stack(
@@ -4765,6 +4793,7 @@ class ZarrNii:
         origin: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         chunks: Union[str, Tuple[int, ...]] = "auto",
         name: str = "image",
+        level: int = 0,
         set_channel_labels: Optional[List[str]] = None,
         channel_colors: Optional[List[str]] = None,
         channel_windows: Optional[
@@ -4779,6 +4808,7 @@ class ZarrNii:
         ] = None,
         omero: Optional[object] = None,
         axes_units: Optional[Dict[str, str]] = None,
+        downsample_near_isotropic: bool = False,
     ) -> "ZarrNii":
         """Load TIFF files into a single multi-dimensional ZarrNii image.
 
@@ -4802,6 +4832,9 @@ class ZarrNii:
             origin: Spatial origin for the three spatial axes.
             chunks: Dask chunking strategy for final stacked array.
             name: Name for resulting image.
+            level: Downsampling level to apply after loading (0 = full resolution).
+                Since TIFF stacks have no pyramid, any level > 0 applies lazy
+                downsampling by a factor of 2^level.
             set_channel_labels: Optional channel names.  When provided, OMERO metadata
                 is built automatically via :func:`make_omero`.
             channel_colors: Optional per-channel colors as ``RRGGBB`` hex strings
@@ -4820,6 +4853,9 @@ class ZarrNii:
                 All values must be valid OME-Zarr space units (see
                 :data:`VALID_AXES_UNITS`).  When ``None``, no unit metadata is
                 stored.
+            downsample_near_isotropic: If True, automatically downsample
+                dimensions with smaller voxel sizes to achieve near-isotropic
+                resolution. Deprecated and will be removed in a future version.
 
         Returns:
             ZarrNii instance containing TIFF data as lazy dask array.
@@ -4837,6 +4873,13 @@ class ZarrNii:
 
         from dask.array.image import imread
 
+        if downsample_near_isotropic:
+            warnings.warn(
+                "downsample_near_isotropic is deprecated and will be removed in a "
+                "future version of ZarrNii.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         if stack_mode not in {"auto", "z", "c", "channel_z"}:
             raise ValueError(
                 "stack_mode must be one of {'auto', 'z', 'c', 'channel_z'}."
@@ -5037,7 +5080,7 @@ class ZarrNii:
                 channel_windows=channel_windows,
             )
 
-        return cls.from_darr(
+        znimg = cls.from_darr(
             data,
             axes_order=axes_order,
             orientation=orientation,
@@ -5047,6 +5090,17 @@ class ZarrNii:
             omero=omero,
             axes_units=axes_units,
         )
+
+        # Apply lazy downsampling if level > 0 (TIFF stacks have no pyramid;
+        # factor = 2^level)
+        if level > 0:
+            znimg = znimg.downsample(level=level)
+
+        # Apply near-isotropic downsampling if requested (deprecated)
+        if downsample_near_isotropic:
+            znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
+
+        return znimg
 
     @classmethod
     def from_ome_tif(
@@ -5060,6 +5114,7 @@ class ZarrNii:
         name: Optional[str] = None,
         set_channel_labels: Optional[List[str]] = None,
         axes_units: Optional[Dict[str, str]] = None,
+        downsample_near_isotropic: bool = False,
     ) -> "ZarrNii":
         """Load ZarrNii from an OME-TIFF file (e.g. a z-stack).
 
@@ -5077,7 +5132,8 @@ class ZarrNii:
             orientation: Anatomical orientation string in XYZ axes order
                 (e.g. ``"RAS"``, ``"LPI"``).  Passed through to the
                 ZarrNii instance unchanged.
-            level: Pyramid level to load (0 = full resolution).  Most
+            level: Pyramid level to load (0 = full resolution).  If level
+                exceeds available levels, applies lazy downsampling.  Most
                 OME-TIFF z-stacks are single-level, so this defaults to 0.
             series: OME-TIFF series index to load (default: 0).  Multi-
                 series files (e.g. from plate acquisitions) may contain
@@ -5096,6 +5152,9 @@ class ZarrNii:
                 :data:`VALID_AXES_UNITS`).  When ``None``, the unit is inferred
                 from ``PhysicalSizeXUnit`` in the OME-XML (or ImageJ metadata),
                 defaulting to ``"micrometer"`` when no unit is present.
+            downsample_near_isotropic: If True, automatically downsample
+                dimensions with smaller voxel sizes to achieve near-isotropic
+                resolution. Deprecated and will be removed in a future version.
 
         Returns:
             ZarrNii instance with lazily-loaded data and spatial metadata.
@@ -5138,6 +5197,13 @@ class ZarrNii:
               they are not read into memory until explicitly computed.
         """
         _validate_axes_units(axes_units)
+        if downsample_near_isotropic:
+            warnings.warn(
+                "downsample_near_isotropic is deprecated and will be removed in a "
+                "future version of ZarrNii.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         try:
             import tifffile
         except ImportError:
@@ -5168,11 +5234,11 @@ class ZarrNii:
 
             # Validate the requested level
             n_levels = len(tif_series.levels)
-            if level >= n_levels:
-                raise ValueError(
-                    f"Level {level} not available. "
-                    f"Series has {n_levels} level(s) (0-{n_levels-1})."
-                )
+            if level < 0:
+                raise ValueError(f"Level {level} not available. Level must be >= 0.")
+            max_level = n_levels - 1
+            actual_level = min(level, max_level)
+            do_downsample = level > max_level
 
             # --- Parse physical spacing -----------------------------------------
             spacing_x, spacing_y, spacing_z = 1.0, 1.0, 1.0
@@ -5209,7 +5275,9 @@ class ZarrNii:
 
         # --- Step 2: open the zarr store outside the context manager so that
         #     the dask array can be lazily evaluated later ---------------------
-        zarr_store = tifffile.imread(path, aszarr=True, series=series, level=level)
+        zarr_store = tifffile.imread(
+            path, aszarr=True, series=series, level=actual_level
+        )
         z_arr = zarr.open(zarr_store, mode="r")
 
         dask_chunks = None if chunks == "auto" else chunks
@@ -5315,12 +5383,24 @@ class ZarrNii:
             name=name,
         )
 
-        return cls(
+        znimg = cls(
             ngff_image=ngff_image,
             axes_order=axes_order,
             xyz_orientation=orientation,
             _omero=omero_metadata,
         )
+
+        # Apply lazy downsampling if the requested level exceeds available levels
+        # (factor = 2^(level - max_level))
+        if do_downsample:
+            level_ds = level - max_level
+            znimg = znimg.downsample(level=level_ds)
+
+        # Apply near-isotropic downsampling if requested (deprecated)
+        if downsample_near_isotropic:
+            znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
+
+        return znimg
 
     def to_imaris(
         self, path: str, compression: str = "gzip", compression_opts: int = 6

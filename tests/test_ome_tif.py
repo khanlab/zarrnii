@@ -180,15 +180,29 @@ class TestFromOmeTif:
         finally:
             os.unlink(tmpf)
 
-    def test_invalid_level_raises(self):
-        """Requesting a non-existent level raises ValueError."""
+    def test_invalid_level_applies_lazy_downsampling(self):
+        """Requesting a level beyond available levels applies lazy downsampling."""
         data = np.zeros((4, 16, 16), dtype=np.uint8)
         with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
             tmpf = f.name
         try:
             _write_ome_tif(tmpf, data, axes="ZYX")
-            with pytest.raises(ValueError, match="[Ll]evel"):
-                ZarrNii.from_ome_tif(tmpf, level=99)
+            # Single-level TIFF; level=2 should apply 4x lazy downsampling
+            znii = ZarrNii.from_ome_tif(tmpf, level=2)
+            # Original shape (C=1, Z=4, Y=16, X=16) downsampled by 4 -> (1, 1, 4, 4)
+            assert znii.data.shape == (1, 1, 4, 4)
+        finally:
+            os.unlink(tmpf)
+
+    def test_invalid_level_negative_raises(self):
+        """Requesting a negative level raises ValueError."""
+        data = np.zeros((4, 16, 16), dtype=np.uint8)
+        with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
+            tmpf = f.name
+        try:
+            _write_ome_tif(tmpf, data, axes="ZYX")
+            with pytest.raises(ValueError, match="Level must be >= 0"):
+                ZarrNii.from_ome_tif(tmpf, level=-1)
         finally:
             os.unlink(tmpf)
 
@@ -257,5 +271,26 @@ class TestFromOmeTif:
             assert "y" in znii.dims
             assert "x" in znii.dims
             assert "c" in znii.dims
+        finally:
+            os.unlink(tmpf)
+
+    def test_downsample_near_isotropic_deprecated(self):
+        """downsample_near_isotropic emits a DeprecationWarning."""
+        import warnings
+
+        data = np.zeros((4, 16, 16), dtype=np.uint8)
+        with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
+            tmpf = f.name
+        try:
+            _write_ome_tif(tmpf, data, axes="ZYX")
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                ZarrNii.from_ome_tif(tmpf, downsample_near_isotropic=True)
+            assert any(
+                issubclass(warning.category, DeprecationWarning) for warning in w
+            )
+            assert any(
+                "downsample_near_isotropic" in str(warning.message) for warning in w
+            )
         finally:
             os.unlink(tmpf)
