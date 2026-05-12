@@ -205,6 +205,29 @@ class TestChannelSelection:
             ):
                 ZarrNii.from_ome_zarr(store_path, channel_labels=["DAPI"])
 
+    def test_set_channel_labels_enables_label_selection_without_omero_metadata(self):
+        """set_channel_labels enables channel_labels selection when omero is absent."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store_path = os.path.join(tmpdir, "test_no_omero_set_labels.ome.zarr")
+            arr = da.zeros((16, 32, 32, 2), dtype=np.uint16)
+            ngff_image = nz.to_ngff_image(arr)
+            multiscales = nz.to_multiscales(ngff_image)
+            nz.to_ngff_zarr(store_path, multiscales)
+
+            znimg = ZarrNii.from_ome_zarr(
+                store_path,
+                channel_labels=["GFP"],
+                set_channel_labels=["DAPI", "GFP"],
+            )
+            assert znimg.darr.shape == (16, 32, 32, 1)
+            assert znimg.omero is not None
+            assert [ch.label for ch in znimg.omero.channels] == ["GFP"]
+
+    def test_set_channel_labels_length_mismatch_raises(self, test_dataset):
+        """set_channel_labels length must match source channel count."""
+        with pytest.raises(ValueError, match="set_channel_labels length"):
+            ZarrNii.from_ome_zarr(test_dataset, set_channel_labels=["DAPI"])
+
     def test_omero_metadata_preservation(self, test_dataset):
         """Test that omero metadata is properly filtered to only include selected channels."""
         znimg = ZarrNii.from_ome_zarr(test_dataset, channel_labels=["Abeta"])

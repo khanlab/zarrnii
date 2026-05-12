@@ -57,7 +57,7 @@ def test_from_tif_stack_nested_channel_stacks_with_omero_metadata():
         znii = ZarrNii.from_tif_stack(
             paths,
             stack_mode="channel_z",
-            channel_labels=["DAPI", "GFP"],
+            set_channel_labels=["DAPI", "GFP"],
             channel_colors=["0000FF", "00FF00"],
         )
 
@@ -118,7 +118,7 @@ def test_from_tif_stack_validation_errors():
 
         with pytest.raises(ValueError, match="Provide either 'omero'"):
             ZarrNii.from_tif_stack(
-                [p2d], stack_mode="z", omero=object(), channel_labels=["A"]
+                [p2d], stack_mode="z", omero=object(), set_channel_labels=["A"]
             )
 
         with pytest.raises(ValueError, match="Provide either 'omero'"):
@@ -142,7 +142,7 @@ def test_from_tif_stack_with_channel_windows():
         znii = ZarrNii.from_tif_stack(
             paths,
             stack_mode="channel_z",
-            channel_labels=["DAPI", "GFP"],
+            set_channel_labels=["DAPI", "GFP"],
             channel_colors=["0000FF", "00FF00"],
             channel_windows=[
                 {"min": 0, "max": 65535, "start": 100, "end": 2000},

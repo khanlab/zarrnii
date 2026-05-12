@@ -72,6 +72,31 @@ class TestFromOmeTif:
         finally:
             os.unlink(tmpf)
 
+    def test_set_channel_labels_builds_omero(self):
+        """set_channel_labels adds OMERO channel labels to loaded OME-TIFF."""
+        data = np.random.randint(0, 1000, size=(3, 10, 32, 32), dtype=np.uint16)
+        with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
+            tmpf = f.name
+        try:
+            _write_ome_tif(tmpf, data, axes="CZYX", spacing_xyz=(0.5, 0.5, 2.0))
+            znii = ZarrNii.from_ome_tif(tmpf, set_channel_labels=["DAPI", "GFP", "RFP"])
+            assert znii.omero is not None
+            assert [ch.label for ch in znii.omero.channels] == ["DAPI", "GFP", "RFP"]
+        finally:
+            os.unlink(tmpf)
+
+    def test_set_channel_labels_length_mismatch_raises(self):
+        """set_channel_labels length must match source channel count."""
+        data = np.random.randint(0, 1000, size=(3, 10, 32, 32), dtype=np.uint16)
+        with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
+            tmpf = f.name
+        try:
+            _write_ome_tif(tmpf, data, axes="CZYX", spacing_xyz=(0.5, 0.5, 2.0))
+            with pytest.raises(ValueError, match="set_channel_labels length"):
+                ZarrNii.from_ome_tif(tmpf, set_channel_labels=["DAPI"])
+        finally:
+            os.unlink(tmpf)
+
     def test_axes_order_xyz(self):
         """Loading with axes_order='XYZ' transposes data correctly."""
         data = np.random.randint(0, 1000, size=(10, 32, 32), dtype=np.uint16)

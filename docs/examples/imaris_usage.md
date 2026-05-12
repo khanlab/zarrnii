@@ -36,12 +36,19 @@ print(f"Spacing: {znimg.get_zooms()}")
 Imaris files can contain multiple resolution levels, timepoints, and channels. You can specify which to load:
 
 ```python
-# Load specific resolution level, timepoint, and channel
+# Load specific resolution level, timepoint, and channels
 znimg = ZarrNii.from_imaris(
     "microscopy_data.ims",
     level=1,        # Resolution level (0 = full resolution)
     timepoint=5,    # Time point
-    channel=0       # Channel index
+    channels=[0, 2] # Channel indices
+)
+
+# Select channels by label (requires source channel label mapping)
+znimg = ZarrNii.from_imaris(
+    "microscopy_data.ims",
+    channel_labels=["DAPI", "GFP"],
+    set_channel_labels=["DAPI", "GFP", "RFP"]
 )
 
 # Specify axes order and orientation

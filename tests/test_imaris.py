@@ -31,6 +31,17 @@ def sample_imaris_file(tmp_path, sample_3d_data):
     return str(imaris_path)
 
 
+@pytest.fixture
+def sample_multichannel_imaris_file(tmp_path):
+    """Create a multi-channel Imaris file for channel selection tests."""
+    imaris_path = tmp_path / "test_multichannel.ims"
+    # Shape: (channels=3, z=16, y=32, x=24)
+    sample_data = np.random.rand(3, 16, 32, 24).astype(np.float32)
+    darr = da.from_array(sample_data, chunks="auto")
+    ZarrNii.from_darr(darr, spacing=[1.0, 1.0, 1.0]).to_imaris(str(imaris_path))
+    return str(imaris_path), sample_data
+
+
 class TestImarisIO:
     """Test Imaris I/O functionality."""
 
@@ -98,8 +109,53 @@ class TestImarisIO:
 
     def test_from_imaris_invalid_channel(self, sample_imaris_file):
         """Test error handling for invalid channel."""
-        with pytest.raises(ValueError, match="Channel 5 not available"):
-            ZarrNii.from_imaris(sample_imaris_file, channel=5)
+        with pytest.raises(ValueError, match="Channel index 5 not available"):
+            ZarrNii.from_imaris(sample_imaris_file, channels=[5])
+
+    def test_from_imaris_select_channels(self, sample_multichannel_imaris_file):
+        """Test selecting multiple channels from Imaris data."""
+        imaris_path, sample_data = sample_multichannel_imaris_file
+        znimg = ZarrNii.from_imaris(imaris_path, channels=[1, 2])
+        loaded_data = znimg.darr.compute()
+        assert loaded_data.shape[0] == 2
+        assert_array_almost_equal(loaded_data[0], sample_data[1], decimal=5)
+        assert_array_almost_equal(loaded_data[1], sample_data[2], decimal=5)
+
+    def test_from_imaris_channel_labels_require_set_channel_labels(
+        self, sample_multichannel_imaris_file
+    ):
+        """Test that channel label selection requires set_channel_labels."""
+        imaris_path, _ = sample_multichannel_imaris_file
+        with pytest.raises(
+            ValueError,
+            match="'set_channel_labels' is required when 'channel_labels' is provided",
+        ):
+            ZarrNii.from_imaris(imaris_path, channel_labels=["GFP"])
+
+    def test_from_imaris_select_channel_labels(self, sample_multichannel_imaris_file):
+        """Test selecting channels by labels with explicit source labels."""
+        imaris_path, sample_data = sample_multichannel_imaris_file
+        znimg = ZarrNii.from_imaris(
+            imaris_path,
+            channel_labels=["GFP", "DAPI"],
+            set_channel_labels=["DAPI", "GFP", "RFP"],
+        )
+        loaded_data = znimg.darr.compute()
+        assert loaded_data.shape[0] == 2
+        assert_array_almost_equal(loaded_data[0], sample_data[1], decimal=5)
+        assert_array_almost_equal(loaded_data[1], sample_data[0], decimal=5)
+        assert znimg.list_channels() == ["GFP", "DAPI"]
+
+    def test_from_imaris_set_channel_labels_without_selection(
+        self, sample_multichannel_imaris_file
+    ):
+        """Test setting source labels without channel filtering."""
+        imaris_path, _ = sample_multichannel_imaris_file
+        znimg = ZarrNii.from_imaris(
+            imaris_path,
+            set_channel_labels=["DAPI", "GFP", "RFP"],
+        )
+        assert znimg.list_channels() == ["DAPI", "GFP", "RFP"]
 
     def test_from_imaris_custom_parameters(self, sample_imaris_file):
         """Test loading with custom parameters."""
@@ -327,7 +383,7 @@ class TestImarisIO:
             channel_group.create_dataset("Data", data=np.ones((10, 10, 10)))
 
         with pytest.raises(ValueError, match="Unable to read Imaris file"):
-            ZarrNii.from_imaris(str(imaris_path_7), channel=0)
+            ZarrNii.from_imaris(str(imaris_path_7), channels=[0])
 
     def test_imaris_without_metadata(self, tmp_path):
         """Test malformed Imaris file without required metadata."""
