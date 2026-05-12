@@ -180,15 +180,29 @@ class TestFromOmeTif:
         finally:
             os.unlink(tmpf)
 
-    def test_invalid_level_raises(self):
-        """Requesting a non-existent level raises ValueError."""
+    def test_invalid_level_applies_lazy_downsampling(self):
+        """Requesting a level beyond available levels applies lazy downsampling."""
         data = np.zeros((4, 16, 16), dtype=np.uint8)
         with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
             tmpf = f.name
         try:
             _write_ome_tif(tmpf, data, axes="ZYX")
-            with pytest.raises(ValueError, match="[Ll]evel"):
-                ZarrNii.from_ome_tif(tmpf, level=99)
+            # Single-level TIFF; level=2 should apply 4x lazy downsampling
+            znii = ZarrNii.from_ome_tif(tmpf, level=2)
+            # Original shape (C=1, Z=4, Y=16, X=16) downsampled by 4 -> (1, 1, 4, 4)
+            assert znii.data.shape == (1, 1, 4, 4)
+        finally:
+            os.unlink(tmpf)
+
+    def test_invalid_level_negative_raises(self):
+        """Requesting a negative level raises ValueError."""
+        data = np.zeros((4, 16, 16), dtype=np.uint8)
+        with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
+            tmpf = f.name
+        try:
+            _write_ome_tif(tmpf, data, axes="ZYX")
+            with pytest.raises(ValueError, match="Level must be >= 0"):
+                ZarrNii.from_ome_tif(tmpf, level=-1)
         finally:
             os.unlink(tmpf)
 

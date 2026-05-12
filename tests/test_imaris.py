@@ -97,10 +97,21 @@ class TestImarisIO:
         with pytest.raises(FileNotFoundError, match="file does not exist"):
             ZarrNii.from_imaris("nonexistent_file.ims")
 
-    def test_from_imaris_invalid_level(self, sample_imaris_file):
-        """Test error handling for invalid resolution level."""
-        with pytest.raises(ValueError, match="Level 5 not available"):
-            ZarrNii.from_imaris(sample_imaris_file, level=5)
+    def test_from_imaris_invalid_level(self, sample_imaris_file, sample_3d_data):
+        """Test that exceeding available levels applies lazy downsampling."""
+        # sample_imaris_file has only 1 level (level 0), so level=2 should
+        # apply 2^2=4x lazy downsampling instead of raising ValueError
+        znimg = ZarrNii.from_imaris(sample_imaris_file, level=2)
+        orig_shape = sample_3d_data.shape  # (64, 128, 96)
+        ds_shape = znimg.darr.shape[1:]  # spatial dims (z, y, x)
+        assert ds_shape[0] == orig_shape[0] // 4
+        assert ds_shape[1] == orig_shape[1] // 4
+        assert ds_shape[2] == orig_shape[2] // 4
+
+    def test_from_imaris_negative_level_raises(self, sample_imaris_file):
+        """Test that a negative level raises ValueError."""
+        with pytest.raises(ValueError, match="Level must be >= 0"):
+            ZarrNii.from_imaris(sample_imaris_file, level=-1)
 
     def test_from_imaris_invalid_timepoint(self, sample_imaris_file):
         """Test error handling for invalid timepoint."""
