@@ -177,9 +177,7 @@ class TestImarisIO:
         assert znimg.axes_order == "XYZ"
         assert znimg.orientation == "LPI"
 
-    def test_from_imaris_downsample_near_isotropic_deprecated(
-        self, sample_imaris_file
-    ):
+    def test_from_imaris_downsample_near_isotropic_deprecated(self, sample_imaris_file):
         """Test that downsample_near_isotropic emits a DeprecationWarning."""
         import warnings
 

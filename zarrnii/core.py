@@ -24,6 +24,7 @@ from __future__ import annotations
 import copy
 import os
 import typing
+import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dask.array as da
@@ -4604,8 +4605,6 @@ class ZarrNii:
         """
         _validate_axes_units(axes_units)
         if downsample_near_isotropic:
-            import warnings
-
             warnings.warn(
                 "downsample_near_isotropic is deprecated and will be removed in a "
                 "future version of ZarrNii.",
@@ -4875,8 +4874,6 @@ class ZarrNii:
         from dask.array.image import imread
 
         if downsample_near_isotropic:
-            import warnings
-
             warnings.warn(
                 "downsample_near_isotropic is deprecated and will be removed in a "
                 "future version of ZarrNii.",
@@ -5201,8 +5198,6 @@ class ZarrNii:
         """
         _validate_axes_units(axes_units)
         if downsample_near_isotropic:
-            import warnings
-
             warnings.warn(
                 "downsample_near_isotropic is deprecated and will be removed in a "
                 "future version of ZarrNii.",

@@ -227,6 +227,4 @@ def test_from_tif_stack_downsample_near_isotropic_deprecated():
             warnings.simplefilter("always")
             ZarrNii.from_tif_stack(paths, downsample_near_isotropic=True)
         assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
-        assert any(
-            "downsample_near_isotropic" in str(warning.message) for warning in w
-        )
+        assert any("downsample_near_isotropic" in str(warning.message) for warning in w)
