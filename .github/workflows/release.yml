@@ -99,7 +99,7 @@ jobs:
         fi
 
 
-    - name: Upload artifact signatures to GitHub Release
+    - name: Upload release artifacts to GitHub Release
       env:
         GITHUB_TOKEN: ${{ github.token }}
       run: gh release upload '${{ github.ref_name }}' dist/** --clobber --repo '${{ github.repository }}'
