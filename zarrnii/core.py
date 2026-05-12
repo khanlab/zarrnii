@@ -4754,6 +4754,7 @@ class ZarrNii:
         )
 
         # Apply lazy downsampling if the requested level exceeds available levels
+        # (factor = 2^(level - max_level))
         if do_downsample:
             level_ds = level - max_level
             znimg = znimg.downsample(level=level_ds)
@@ -5063,7 +5064,8 @@ class ZarrNii:
             axes_units=axes_units,
         )
 
-        # Apply lazy downsampling if level > 0 (TIFF stacks have no pyramid)
+        # Apply lazy downsampling if level > 0 (TIFF stacks have no pyramid;
+        # factor = 2^level)
         if level > 0:
             znimg = znimg.downsample(level=level)
 
@@ -5347,6 +5349,7 @@ class ZarrNii:
         )
 
         # Apply lazy downsampling if the requested level exceeds available levels
+        # (factor = 2^(level - max_level))
         if do_downsample:
             level_ds = level - max_level
             znimg = znimg.downsample(level=level_ds)
