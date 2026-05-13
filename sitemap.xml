@@ -73,6 +73,30 @@
          <lastmod>2026-05-13</lastmod>
     </url>
     <url>
+         <loc>http://www.khanlab.ca/zarrnii/reference/benchmark/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/reference/core/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/reference/dask_utils/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/reference/destripe/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/reference/enums/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>http://www.khanlab.ca/zarrnii/reference/plugins/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
          <loc>http://www.khanlab.ca/zarrnii/reference/transform/</loc>
          <lastmod>2026-05-13</lastmod>
     </url>

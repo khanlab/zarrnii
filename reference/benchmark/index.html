@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/walkthrough/benchmarking/">
+        <link rel="canonical" href="http://www.khanlab.ca/zarrnii/reference/benchmark/">
       
       
-        <link rel="prev" href="../advanced_use_cases/">
+        <link rel="prev" href="../atlas/">
       
       
-        <link rel="next" href="../../cli/">
+        <link rel="next" href="../dask_utils/">
       
       
         
@@ -25,7 +25,7 @@
     
     
       
-        <title>Benchmarking - ZarrNii Documentation</title>
+        <title>zarrnii.benchmark - ZarrNii Documentation</title>
       
     
     
@@ -68,7 +68,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#benchmarking-chunking-and-dask-configuration" class="md-skip">
+        <a href="#zarrniibenchmark" class="md-skip">
           Skip to content
         </a>
       
@@ -104,7 +104,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Benchmarking
+              zarrnii.benchmark
             
           </span>
         </div>
@@ -224,20 +224,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
@@ -258,7 +256,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -276,7 +274,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../overview/" class="md-nav__link">
+      <a href="../../walkthrough/overview/" class="md-nav__link">
         
   
   
@@ -304,7 +302,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../getting_started/" class="md-nav__link">
+      <a href="../../walkthrough/getting_started/" class="md-nav__link">
         
   
   
@@ -332,7 +330,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../basic_tasks/" class="md-nav__link">
+      <a href="../../walkthrough/basic_tasks/" class="md-nav__link">
         
   
   
@@ -360,7 +358,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced_use_cases/" class="md-nav__link">
+      <a href="../../walkthrough/advanced_use_cases/" class="md-nav__link">
         
   
   
@@ -368,6 +366,285 @@
     
   
     Advanced Use Cases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../walkthrough/benchmarking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command Line Interface
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zarrnii/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii.core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii.analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../transform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii.transform
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../atlas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    zarrnii.atlas
   
 
     
@@ -404,7 +681,7 @@
   <span class="md-ellipsis">
     
   
-    Benchmarking
+    zarrnii.benchmark
   
 
     
@@ -422,7 +699,7 @@
   <span class="md-ellipsis">
     
   
-    Benchmarking
+    zarrnii.benchmark
   
 
     
@@ -446,161 +723,6 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Start
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Quick Start">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#command-line-interface" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Command-line interface
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#customise-the-sweep" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Customise the sweep
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#dask-configuration-specs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dask configuration specs
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#python-api" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Python API
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#output-files" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Output files
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#interpreting-results" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Interpreting results
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Interpreting results">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#comparing-filesystems" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Comparing filesystems
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#chunk-size" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Chunk size
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#dask-scheduler" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dask scheduler
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#memory" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Memory
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#dask-distributed-dashboard" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dask Distributed dashboard
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#api-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        API reference
-      
-    </span>
-  </a>
-  
-</li>
       
         <li class="md-nav__item">
   <a href="#zarrnii.benchmark" class="md-nav__link">
@@ -964,87 +1086,6 @@
 
               
             
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../cli/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Command Line Interface
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-    
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    API Reference
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    API Reference
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
               
                 
   
@@ -1052,203 +1093,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/zarrnii/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    zarrnii
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/core/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    zarrnii.core
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/analysis/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    zarrnii.analysis
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/transform/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    zarrnii.transform
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/atlas/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    zarrnii.atlas
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/benchmark/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    zarrnii.benchmark
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/dask_utils/" class="md-nav__link">
+      <a href="../dask_utils/" class="md-nav__link">
         
   
   
@@ -1276,7 +1121,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/enums/" class="md-nav__link">
+      <a href="../enums/" class="md-nav__link">
         
   
   
@@ -1304,7 +1149,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/plugins/" class="md-nav__link">
+      <a href="../plugins/" class="md-nav__link">
         
   
   
@@ -1332,7 +1177,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/destripe/" class="md-nav__link">
+      <a href="../destripe/" class="md-nav__link">
         
   
   
@@ -1802,161 +1647,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Start
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Quick Start">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#command-line-interface" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Command-line interface
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#customise-the-sweep" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Customise the sweep
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#dask-configuration-specs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dask configuration specs
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#python-api" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Python API
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#output-files" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Output files
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#interpreting-results" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Interpreting results
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Interpreting results">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#comparing-filesystems" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Comparing filesystems
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#chunk-size" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Chunk size
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#dask-scheduler" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dask scheduler
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#memory" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Memory
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#dask-distributed-dashboard" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dask Distributed dashboard
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#api-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        API reference
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#zarrnii.benchmark" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2326,320 +2016,9 @@
 
 
 
-<h1 id="benchmarking-chunking-and-dask-configuration">Benchmarking Chunking and Dask Configuration</h1>
-<p>ZarrNii ships with a built-in benchmarking tool that helps you choose the
-optimal <strong>chunk size</strong>, <strong>shard size</strong>, and <strong>Dask scheduler setup</strong> for your
-specific dataset and hardware.  The tool measures:</p>
-<ul>
-<li><strong>Wall-clock time</strong> for writing an OME-Zarr store and reading it back.</li>
-<li><strong>Peak RSS memory</strong> consumed during the run.</li>
-<li><strong>CPU efficiency</strong> – how well your cores are utilised relative to wall time.</li>
-</ul>
-<p>Results are saved as a CSV file and an HTML report that is easy to open in
-any browser.</p>
-<hr />
-<h2 id="quick-start">Quick Start</h2>
-<h3 id="command-line-interface">Command-line interface</h3>
-<p>The simplest way to run a benchmark is via the <code>zarrnii-benchmark</code> command:</p>
-<pre><code class="language-bash">zarrnii-benchmark
-</code></pre>
-<p>This runs a small default sweep (shape <code>64×256×256</code>, a couple of chunk sizes,
-threaded scheduler with 4 threads, 3 repetitions) and writes the results to
-the current directory.</p>
-<h3 id="customise-the-sweep">Customise the sweep</h3>
-<pre><code class="language-bash">zarrnii-benchmark \
-    --shape 128 512 512 \
-    --dtype float32 \
-    --chunks 32,32,32 64,64,64 128,128,128 \
-    --shards none 128,128,128 \
-    --dask-configs threads:4 threads:8 distributed:8:2 \
-    --n-reps 5 \
-    --output-dir ./bench_results
-</code></pre>
-<table>
-<thead>
-<tr>
-<th>Flag</th>
-<th>Description</th>
-<th>Default</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>--shape Z Y X</code></td>
-<td>Spatial dimensions of the synthetic array</td>
-<td><code>64 256 256</code></td>
-</tr>
-<tr>
-<td><code>--dtype</code></td>
-<td>NumPy dtype (e.g. <code>float32</code>, <code>uint16</code>)</td>
-<td><code>float32</code></td>
-</tr>
-<tr>
-<td><code>--chunks</code></td>
-<td>One or more chunk specs as <code>Z,Y,X</code></td>
-<td>half the array shape</td>
-</tr>
-<tr>
-<td><code>--shards</code></td>
-<td>One or more shard specs as <code>Z,Y,X</code> or <code>none</code> to disable</td>
-<td><code>none</code></td>
-</tr>
-<tr>
-<td><code>--dask-configs</code></td>
-<td>One or more scheduler specs (see below)</td>
-<td><code>threads:4</code></td>
-</tr>
-<tr>
-<td><code>--n-reps</code></td>
-<td>Repetitions per configuration</td>
-<td><code>3</code></td>
-</tr>
-<tr>
-<td><code>--tmp-dir</code></td>
-<td>Root directory for temporary OME-Zarr stores (use to benchmark different filesystems)</td>
-<td>system temp dir</td>
-</tr>
-<tr>
-<td><code>--output-dir</code></td>
-<td>Directory for CSV/HTML output</td>
-<td><code>.</code> (current dir)</td>
-</tr>
-<tr>
-<td><code>-v</code> / <code>--verbose</code></td>
-<td>Enable debug logging</td>
-<td>off</td>
-</tr>
-</tbody>
-</table>
-<h3 id="dask-configuration-specs">Dask configuration specs</h3>
-<p>The <code>--dask-configs</code> flag accepts one or more space-separated spec strings:</p>
-<table>
-<thead>
-<tr>
-<th>Spec</th>
-<th>Scheduler</th>
-<th>Example</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>threads:N</code></td>
-<td>Threaded scheduler with <em>N</em> workers</td>
-<td><code>threads:8</code></td>
-</tr>
-<tr>
-<td><code>distributed:N:M</code></td>
-<td>Distributed (LocalCluster) with <em>N</em> total threads, <em>M</em> per worker</td>
-<td><code>distributed:8:2</code></td>
-</tr>
-</tbody>
-</table>
-<p>The number of distributed workers is derived as <code>⌊N / M⌋</code>.</p>
-<hr />
-<h2 id="python-api">Python API</h2>
-<p>You can also drive the benchmarks programmatically:</p>
-<pre><code class="language-python">from zarrnii.benchmark import BenchmarkSuite, DaskConfig
-
-suite = BenchmarkSuite(
-    shape=(64, 256, 256),
-    dtype=&quot;float32&quot;,
-    chunk_shapes=[(32, 32, 32), (64, 64, 64)],
-    shard_shapes=[None],                   # None = no sharding
-    dask_configs=[
-        DaskConfig(scheduler=&quot;threads&quot;, n_threads=4),
-        DaskConfig(scheduler=&quot;distributed&quot;, n_threads=8, threads_per_worker=2),
-    ],
-    n_reps=3,
-    output_dir=&quot;./bench_results&quot;,
-    tmp_dir=None,                          # None = system default temp dir
-)
-
-# Run all configurations – returns a pandas DataFrame
-df = suite.run()
-
-# Write CSV + HTML report
-suite.generate_report(df)
-</code></pre>
-<p>The returned <code>DataFrame</code> has one row per <em>(configuration, repetition)</em> and
-includes the columns below.</p>
-<table>
-<thead>
-<tr>
-<th>Column</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>shape</code></td>
-<td>Array shape</td>
-</tr>
-<tr>
-<td><code>dtype</code></td>
-<td>Data type</td>
-</tr>
-<tr>
-<td><code>chunk_shape</code></td>
-<td>Zarr chunk shape used</td>
-</tr>
-<tr>
-<td><code>shard_shape</code></td>
-<td>Zarr shard shape (empty = none)</td>
-</tr>
-<tr>
-<td><code>scheduler</code></td>
-<td><code>threads</code> or <code>distributed</code></td>
-</tr>
-<tr>
-<td><code>n_threads</code></td>
-<td>Total threads/cores</td>
-</tr>
-<tr>
-<td><code>threads_per_worker</code></td>
-<td>Threads per distributed worker</td>
-</tr>
-<tr>
-<td><code>dask_label</code></td>
-<td>Human-readable Dask config label</td>
-</tr>
-<tr>
-<td><code>repetition</code></td>
-<td>0-based repetition index</td>
-</tr>
-<tr>
-<td><code>write_wall_s</code></td>
-<td>Wall-clock seconds for OME-Zarr write</td>
-</tr>
-<tr>
-<td><code>read_wall_s</code></td>
-<td>Wall-clock seconds for OME-Zarr read</td>
-</tr>
-<tr>
-<td><code>total_wall_s</code></td>
-<td>Sum of write + read wall time</td>
-</tr>
-<tr>
-<td><code>write_cpu_s</code></td>
-<td>User+system CPU seconds during write</td>
-</tr>
-<tr>
-<td><code>read_cpu_s</code></td>
-<td>User+system CPU seconds during read</td>
-</tr>
-<tr>
-<td><code>write_cpu_efficiency</code></td>
-<td><code>cpu_s / (wall_s × n_threads)</code> during write</td>
-</tr>
-<tr>
-<td><code>read_cpu_efficiency</code></td>
-<td><code>cpu_s / (wall_s × n_threads)</code> during read</td>
-</tr>
-<tr>
-<td><code>peak_memory_mb</code></td>
-<td>Peak RSS memory (MB) during the run</td>
-</tr>
-<tr>
-<td><code>tmp_dir_root</code></td>
-<td>Root directory where temporary stores were written</td>
-</tr>
-<tr>
-<td><code>error</code></td>
-<td>Non-empty when the run raised an exception</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="output-files">Output files</h2>
-<p>After calling <code>generate_report()</code> (or finishing a CLI run) the following files
-are created in <code>output_dir</code>:</p>
-<table>
-<thead>
-<tr>
-<th>File</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>benchmark_results.csv</code></td>
-<td>Full raw results (one row per run)</td>
-</tr>
-<tr>
-<td><code>benchmark_summary.csv</code></td>
-<td>Per-configuration averages</td>
-</tr>
-<tr>
-<td><code>benchmark_report.html</code></td>
-<td>Self-contained HTML report with best-config callouts</td>
-</tr>
-</tbody>
-</table>
-<p>Open <code>benchmark_report.html</code> in your browser for a quick visual overview.</p>
-<hr />
-<h2 id="interpreting-results">Interpreting results</h2>
-<h3 id="comparing-filesystems">Comparing filesystems</h3>
-<p>Use <code>--tmp-dir</code> to write the benchmark stores to a specific filesystem.  This
-is particularly useful for comparing local NVMe storage against network
-filesystems (e.g. NFS, GPFS, Lustre):</p>
-<pre><code class="language-bash"># Benchmark on local scratch disk
-zarrnii-benchmark --tmp-dir /scratch/local --output-dir ./results_local
-
-# Benchmark on shared network storage
-zarrnii-benchmark --tmp-dir /mnt/network_fs --output-dir ./results_network
-</code></pre>
-<p>The resolved temp directory root is recorded in the <code>tmp_dir_root</code> column of
-every result row, so results from different runs can be merged and compared
-directly in a single DataFrame or CSV.</p>
-<h3 id="chunk-size">Chunk size</h3>
-<ul>
-<li>Smaller chunks improve random-access read performance and reduce peak
-  memory per task, but increase metadata overhead and scheduler overhead
-  for sequential access patterns.</li>
-<li>Larger chunks are better for sequential reads (e.g. whole-volume
-  processing) but require more memory per task.</li>
-<li>A common starting point for 3-D biomedical images is <strong>64×64×64</strong> voxels.</li>
-</ul>
-<h3 id="dask-scheduler">Dask scheduler</h3>
-<table>
-<thead>
-<tr>
-<th>Scheduler</th>
-<th>Best for</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>threads</code></td>
-<td>Single-machine workloads; low overhead; shared memory</td>
-</tr>
-<tr>
-<td><code>distributed</code></td>
-<td>Multi-core machines; enables the Dask dashboard and detailed task graphs</td>
-</tr>
-</tbody>
-</table>
-<ul>
-<li>For <strong>I/O-bound</strong> operations (reading/writing Zarr) more workers rarely
-  helps beyond saturating the storage bandwidth; start with <code>threads:N</code>
-  where <em>N</em> equals the number of physical cores.</li>
-<li><strong>CPU efficiency</strong> close to <code>1.0</code> means all cores are busy throughout the
-  operation.  Low values suggest I/O bottlenecks or excessive scheduler
-  overhead.</li>
-</ul>
-<h3 id="memory">Memory</h3>
-<p>Peak memory scales roughly with <code>chunk_size × dtype_bytes × n_tasks_in_flight</code>.
-If you are hitting memory limits, try smaller chunks or fewer workers.</p>
-<hr />
-<h2 id="dask-distributed-dashboard">Dask Distributed dashboard</h2>
-<p>When <code>scheduler="distributed"</code> is used, a local Dask dashboard is started on
-port <strong>8788</strong> (configurable via <code>dask_utils.get_dask_client</code>).  Open
-<code>http://localhost:8788</code> in your browser while the benchmark is running to
-observe task scheduling in real time.</p>
-<p>The HTML report captures summary statistics after the run so you do not need
-to monitor the dashboard live.</p>
-<hr />
-<h2 id="api-reference">API reference</h2>
+<h1 id="zarrniibenchmark">zarrnii.benchmark</h1>
+<p>Benchmarking API for evaluating OME-Zarr chunking/sharding choices and Dask
+scheduler setups.</p>
 
 
 <div class="doc doc-object doc-module">
@@ -2852,7 +2231,7 @@ when not provided.</p>
 
   
       dataclass
-   (zarrnii.benchmark.DaskConfig)" href="../../reference/benchmark/#zarrnii.benchmark.DaskConfig">DaskConfig</a></code>)
+   (zarrnii.benchmark.DaskConfig)" href="#zarrnii.benchmark.DaskConfig">DaskConfig</a></code>)
           –
           <div class="doc-md-description">
             <p>Dask scheduler configuration.</p>
@@ -2940,7 +2319,7 @@ when not provided.</p>
 
   
       dataclass
-   (zarrnii.benchmark.BenchmarkConfig)" href="../../reference/benchmark/#zarrnii.benchmark.BenchmarkConfig">BenchmarkConfig</a></code>)
+   (zarrnii.benchmark.BenchmarkConfig)" href="#zarrnii.benchmark.BenchmarkConfig">BenchmarkConfig</a></code>)
           –
           <div class="doc-md-description">
             <p>The configuration that produced this result.</p>
