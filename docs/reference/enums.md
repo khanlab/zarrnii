@@ -1,9 +1,8 @@
-# zarrnii
+# zarrnii.enums
 
-Top-level package exports intended for direct imports (for example,
-`from zarrnii import ZarrNii, AffineTransform`).
+Enumerations used to identify transform and image-format types.
 
-::: zarrnii
+::: zarrnii.enums
     handler: python
     options:
       show_root_heading: false

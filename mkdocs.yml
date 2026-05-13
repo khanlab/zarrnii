@@ -13,9 +13,15 @@ nav:
   - API Reference:
       - Overview: reference/index.md
       - zarrnii: reference/zarrnii.md
+      - zarrnii.core: reference/core.md
       - zarrnii.analysis: reference/analysis.md
       - zarrnii.transform: reference/transform.md
       - zarrnii.atlas: reference/atlas.md
+      - zarrnii.benchmark: reference/benchmark.md
+      - zarrnii.dask_utils: reference/dask_utils.md
+      - zarrnii.enums: reference/enums.md
+      - zarrnii.plugins: reference/plugins.md
+      - zarrnii.destripe: reference/destripe.md
   - Examples:
       - Working with Zarr and NIfTI: examples/zarr_nifti.md
       - Working with Imaris Files: examples/imaris_usage.md

@@ -1,9 +1,9 @@
-# zarrnii
+# zarrnii.benchmark
 
-Top-level package exports intended for direct imports (for example,
-`from zarrnii import ZarrNii, AffineTransform`).
+Benchmarking API for evaluating OME-Zarr chunking/sharding choices and Dask
+scheduler setups.
 
-::: zarrnii
+::: zarrnii.benchmark
     handler: python
     options:
       show_root_heading: false

@@ -1,9 +1,9 @@
-# zarrnii
+# zarrnii.core
 
-Top-level package exports intended for direct imports (for example,
-`from zarrnii import ZarrNii, AffineTransform`).
+Core implementation module containing the `ZarrNii` class and low-level helpers
+used by IO, metadata, and transformation workflows.
 
-::: zarrnii
+::: zarrnii.core
     handler: python
     options:
       show_root_heading: false

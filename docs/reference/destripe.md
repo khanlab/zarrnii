@@ -1,9 +1,8 @@
-# zarrnii
+# zarrnii.destripe
 
-Top-level package exports intended for direct imports (for example,
-`from zarrnii import ZarrNii, AffineTransform`).
+Functions for reducing stripe artifacts in microscopy/image volumes.
 
-::: zarrnii
+::: zarrnii.destripe
     handler: python
     options:
       show_root_heading: false
