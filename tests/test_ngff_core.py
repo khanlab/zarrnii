@@ -4,6 +4,7 @@ Tests for the NgffImage-based function API (now integrated in core).
 
 import os
 import tempfile
+from copy import deepcopy
 
 import dask.array as da
 import ngff_zarr as nz
@@ -15,8 +16,8 @@ from zarrnii.core import (
     apply_transform_to_ngff_image,
     crop_ngff_image,
     downsample_ngff_image,
-    get_ome_zarr_scale_factors,
     get_multiscales,
+    get_ome_zarr_scale_factors,
     load_ngff_image,
     save_ngff_image,
 )
@@ -550,7 +551,7 @@ class TestOmeZarrWriter:
                 simple_ngff_image,
                 source_path,
                 max_layer=3,
-                scale_factors=expected_factors,
+                scale_factors=deepcopy(expected_factors),
             )
 
             extracted = get_ome_zarr_scale_factors(source_path)
@@ -569,7 +570,7 @@ class TestOmeZarrWriter:
                 simple_ngff_image,
                 source_path,
                 max_layer=3,
-                scale_factors=expected_factors,
+                scale_factors=deepcopy(expected_factors),
             )
 
             znimg = ZarrNii.from_ome_zarr(source_path)
