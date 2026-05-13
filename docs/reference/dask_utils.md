@@ -1,9 +1,8 @@
-# zarrnii
+# zarrnii.dask_utils
 
-Top-level package exports intended for direct imports (for example,
-`from zarrnii import ZarrNii, AffineTransform`).
+Utilities for configuring local threaded or distributed Dask execution.
 
-::: zarrnii
+::: zarrnii.dask_utils
     handler: python
     options:
       show_root_heading: false
