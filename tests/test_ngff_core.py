@@ -15,6 +15,7 @@ from zarrnii.core import (
     apply_transform_to_ngff_image,
     crop_ngff_image,
     downsample_ngff_image,
+    get_ome_zarr_scale_factors,
     get_multiscales,
     load_ngff_image,
     save_ngff_image,
@@ -537,3 +538,58 @@ class TestOmeZarrWriter:
             # y and x double at level 1
             assert y_scales[1] == 2 * y_scales[0]
             assert x_scales[1] == 2 * x_scales[0]
+
+    def test_get_ome_zarr_scale_factors(self, simple_ngff_image):
+        """Test extracting cumulative scale factors from an input OME-Zarr store."""
+        from zarrnii.core import save_ngff_image_with_ome_zarr
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source_path = os.path.join(tmpdir, "source.zarr")
+            expected_factors = [{"z": 1, "y": 2, "x": 2}, {"z": 2, "y": 4, "x": 4}]
+            save_ngff_image_with_ome_zarr(
+                simple_ngff_image,
+                source_path,
+                max_layer=3,
+                scale_factors=expected_factors,
+            )
+
+            extracted = get_ome_zarr_scale_factors(source_path)
+            assert extracted == expected_factors
+
+    def test_to_ome_zarr_match_scale_factors_from(self, simple_ngff_image):
+        """Test writing with scale factors matched from an input OME-Zarr store."""
+        from zarrnii import ZarrNii
+        from zarrnii.core import save_ngff_image_with_ome_zarr
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source_path = os.path.join(tmpdir, "source.zarr")
+            output_path = os.path.join(tmpdir, "output.zarr")
+            expected_factors = [{"z": 1, "y": 2, "x": 2}, {"z": 2, "y": 4, "x": 4}]
+            save_ngff_image_with_ome_zarr(
+                simple_ngff_image,
+                source_path,
+                max_layer=3,
+                scale_factors=expected_factors,
+            )
+
+            znimg = ZarrNii.from_ome_zarr(source_path)
+            znimg.to_ome_zarr(output_path, match_scale_factors_from=source_path)
+
+            assert get_ome_zarr_scale_factors(output_path) == expected_factors
+
+    def test_to_ome_zarr_match_scale_factors_from_conflict(self, simple_ngff_image):
+        """Test conflicting scale_factors and match_scale_factors_from parameters."""
+        from zarrnii import ZarrNii
+        from zarrnii.core import save_ngff_image_with_ome_zarr
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source_path = os.path.join(tmpdir, "source.zarr")
+            save_ngff_image_with_ome_zarr(simple_ngff_image, source_path, max_layer=2)
+            znimg = ZarrNii.from_ome_zarr(source_path)
+
+            with pytest.raises(ValueError, match="Cannot specify both"):
+                znimg.to_ome_zarr(
+                    os.path.join(tmpdir, "output.zarr"),
+                    scale_factors=[2],
+                    match_scale_factors_from=source_path,
+                )

@@ -900,6 +900,62 @@ def get_multiscales(
     return nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
 
 
+def get_ome_zarr_scale_factors(
+    store_or_path,
+    storage_options: Optional[Dict] = None,
+) -> List[Dict[str, int]]:
+    """Extract cumulative spatial pyramid scale factors from an OME-Zarr store.
+
+    The returned factors are cumulative relative to level 0 and use ``z``, ``y``,
+    and ``x`` keys only, matching the scale-factor format accepted by
+    ``to_ome_zarr(..., scale_factors=[...])``.
+
+    Args:
+        store_or_path: Store or path to the OME-Zarr file.
+        storage_options: Optional storage options for Zarr/fsspec backends.
+
+    Returns:
+        List of cumulative scale-factor dictionaries, one per pyramid level above
+        level 0. Returns an empty list for single-resolution stores.
+
+    Raises:
+        ValueError: If spatial scale metadata are missing, invalid, or non-integral
+            relative to level 0.
+    """
+    multiscales = get_multiscales(store_or_path, storage_options=storage_options)
+    images = multiscales.images
+    if len(images) <= 1:
+        return []
+
+    base_scale = images[0].scale or {}
+    spatial_axes = [axis for axis in ("z", "y", "x") if axis in base_scale]
+
+    scale_factors: List[Dict[str, int]] = []
+    for level_idx, img in enumerate(images[1:], start=1):
+        current = img.scale or {}
+        factors: Dict[str, int] = {}
+        for axis in spatial_axes:
+            if axis not in current:
+                raise ValueError(
+                    f"Missing '{axis}' scale at pyramid level {level_idx}."
+                )
+            if base_scale[axis] == 0:
+                raise ValueError(f"Invalid base scale for axis '{axis}': 0.")
+
+            ratio = current[axis] / base_scale[axis]
+            rounded = int(round(ratio))
+            if rounded < 1 or not np.isclose(ratio, rounded):
+                raise ValueError(
+                    f"Non-integer cumulative factor for axis '{axis}' at level "
+                    f"{level_idx}: {ratio} (base={base_scale[axis]}, "
+                    f"current={current[axis]})."
+                )
+            factors[axis] = rounded
+        scale_factors.append(factors)
+
+    return scale_factors
+
+
 def _select_dimensions_from_image(
     image: nz.NgffImage,
     multiscales: nz.Multiscales,
@@ -3901,6 +3957,7 @@ class ZarrNii:
         store_or_path: Union[str, Any],
         max_layer: int = 4,
         scale_factors: Optional[Union[List[int], List[Dict[str, int]]]] = None,
+        match_scale_factors_from: Optional[Union[str, Any]] = None,
         backend: str = "ome-zarr-py",
         zarr_format: int = 3,
         storage_options: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None,
@@ -3933,6 +3990,10 @@ class ZarrNii:
                 Pass a list of integers to downsample in xy only, or a list of
                 dicts for explicit per-axis cumulative factors, e.g.
                 ``[{"z": 1, "y": 2, "x": 2}, {"z": 2, "y": 4, "x": 4}]``.
+            match_scale_factors_from: Optional source OME-Zarr store/path whose
+                pyramid scale factors should be reused exactly. When set,
+                ``scale_factors`` must be ``None`` and ``max_layer`` is set to
+                match the source pyramid depth.
             backend: Backend library to use for writing. Options:
                 - 'ngff-zarr': Use ngff-zarr library
                 - 'ome-zarr-py': Use ome-zarr-py library for better dask
@@ -4003,6 +4064,15 @@ class ZarrNii:
             raise ValueError(
                 f"Invalid backend '{backend}'. Must be 'ngff-zarr' or 'ome-zarr-py'"
             )
+
+        if match_scale_factors_from is not None:
+            if scale_factors is not None:
+                raise ValueError(
+                    "Cannot specify both 'scale_factors' and "
+                    "'match_scale_factors_from'."
+                )
+            scale_factors = get_ome_zarr_scale_factors(match_scale_factors_from)
+            max_layer = len(scale_factors) + 1
 
         # Determine the image to save
         if self.axes_order == "XYZ":
