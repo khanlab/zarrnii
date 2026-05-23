@@ -1038,7 +1038,7 @@ def _coerce_near_integer_scale_factor(
             f"{level_idx}: {ratio} ({details})."
         )
 
-    rounded = int(np.rint(ratio))
+    rounded = int(round(ratio))
     if rounded < 1 or not np.isclose(
         ratio, rounded, rtol=0.0, atol=_SCALE_FACTOR_INTEGER_ATOL
     ):

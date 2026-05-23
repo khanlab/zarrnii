@@ -702,23 +702,6 @@ class TestGetImarisScaleFactors:
             {"z": 4, "y": 4, "x": 4},
         ]
 
-    def test_get_ome_zarr_scale_factors_rounds_near_integer_ratios(self, monkeypatch):
-        """Near-integer OME-Zarr scale metadata are rounded to integers."""
-        import zarrnii.core as core_module
-
-        multiscales = types.SimpleNamespace(
-            images=[
-                types.SimpleNamespace(scale={"z": 1.0, "y": 2.0, "x": 4.0}),
-                types.SimpleNamespace(scale={"z": 1.999, "y": 4.001, "x": 8.002}),
-            ]
-        )
-
-        monkeypatch.setattr(
-            core_module, "get_multiscales", lambda *args, **kwargs: multiscales
-        )
-
-        assert get_ome_zarr_scale_factors("dummy.zarr") == [{"z": 2, "y": 2, "x": 2}]
-
     def test_nonexistent_file_raises(self):
         """Missing file raises FileNotFoundError."""
         with pytest.raises(FileNotFoundError, match="file does not exist"):
@@ -771,3 +754,24 @@ class TestGetImarisScaleFactors:
         from zarrnii import get_ome_zarr_scale_factors
 
         assert get_ome_zarr_scale_factors(output_path) == expected_factors
+
+
+class TestGetOmeZarrScaleFactors:
+    """Tests for near-integer OME-Zarr scale factor extraction."""
+
+    def test_rounds_near_integer_ratios(self, monkeypatch):
+        """Near-integer OME-Zarr scale metadata are rounded to integers."""
+        import zarrnii.core as core_module
+
+        multiscales = types.SimpleNamespace(
+            images=[
+                types.SimpleNamespace(scale={"z": 1.0, "y": 2.0, "x": 4.0}),
+                types.SimpleNamespace(scale={"z": 1.999, "y": 4.001, "x": 8.002}),
+            ]
+        )
+
+        monkeypatch.setattr(
+            core_module, "get_multiscales", lambda *args, **kwargs: multiscales
+        )
+
+        assert get_ome_zarr_scale_factors("dummy.zarr") == [{"z": 2, "y": 2, "x": 2}]
