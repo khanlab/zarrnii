@@ -713,7 +713,9 @@ class TestGetImarisScaleFactors:
             ]
         )
 
-        monkeypatch.setattr(core_module, "get_multiscales", lambda *args, **kwargs: multiscales)
+        monkeypatch.setattr(
+            core_module, "get_multiscales", lambda *args, **kwargs: multiscales
+        )
 
         assert get_ome_zarr_scale_factors("dummy.zarr") == [{"z": 2, "y": 2, "x": 2}]
 
