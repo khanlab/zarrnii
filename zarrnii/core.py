@@ -956,6 +956,99 @@ def get_ome_zarr_scale_factors(
     return scale_factors
 
 
+def get_imaris_scale_factors(path: str) -> List[Dict[str, int]]:
+    """Extract cumulative spatial pyramid scale factors from an Imaris (.ims) file.
+
+    The returned factors are cumulative relative to level 0 and use ``z``, ``y``,
+    and ``x`` keys only, matching the scale-factor format accepted by
+    ``to_ome_zarr(..., scale_factors=[...])``.
+
+    Args:
+        path: Path to the Imaris (.ims) file.
+
+    Returns:
+        List of cumulative scale-factor dictionaries, one per resolution level above
+        level 0. Returns an empty list for single-resolution files.
+
+    Raises:
+        ImportError: If ``imaris_ims_zarr`` is not available.
+        FileNotFoundError: If the file does not exist.
+        ValueError: If scale factors are non-integer or otherwise invalid.
+    """
+    try:
+        from imaris_ims_zarr import ImsProcessSafeStore
+    except ImportError:
+        raise ImportError(
+            "imaris_ims_zarr is required for Imaris support. "
+            "Install with: pip install imaris-ims-zarr or uv add imaris-ims-zarr"
+        )
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"Unable to read Imaris file '{path}': file does not exist"
+        )
+
+    store0 = ImsProcessSafeStore(path, ResolutionLevelLock=0)
+    n_levels = store0.ResolutionLevels
+    if n_levels <= 1:
+        return []
+
+    # shape is (T, C, Z, Y, X) — index 2/3/4 are the spatial axes
+    base_shape = store0.shape
+
+    scale_factors: List[Dict[str, int]] = []
+    for level in range(1, n_levels):
+        store_l = ImsProcessSafeStore(path, ResolutionLevelLock=level)
+        level_shape = store_l.shape
+        factors: Dict[str, int] = {}
+        for axis_idx, axis_name in zip([2, 3, 4], ["z", "y", "x"]):
+            base_size = base_shape[axis_idx]
+            curr_size = level_shape[axis_idx]
+            if curr_size == 0:
+                raise ValueError(
+                    f"Invalid shape 0 for axis '{axis_name}' at level {level}."
+                )
+            ratio = base_size / curr_size
+            rounded = int(round(ratio))
+            if rounded < 1 or not np.isclose(ratio, rounded):
+                raise ValueError(
+                    f"Non-integer cumulative factor for axis '{axis_name}' at "
+                    f"level {level}: {ratio} (base_size={base_size}, "
+                    f"curr_size={curr_size})."
+                )
+            factors[axis_name] = rounded
+        scale_factors.append(factors)
+
+    return scale_factors
+
+
+def get_scale_factors_from_file(
+    path: Union[str, Any],
+    storage_options: Optional[Dict] = None,
+) -> List[Dict[str, int]]:
+    """Extract cumulative spatial pyramid scale factors from any supported file.
+
+    Dispatches to the appropriate format-specific extractor based on the file
+    extension. Supports OME-Zarr (``.zarr``, ``.ozx``, ``.zarr.zip``) and
+    Imaris (``.ims``) formats.
+
+    Args:
+        path: Path or store to the source file.
+        storage_options: Optional storage options (only used for OME-Zarr paths).
+
+    Returns:
+        List of cumulative scale-factor dictionaries, one per pyramid level above
+        level 0. Returns an empty list for single-resolution datasets.
+
+    Raises:
+        ValueError: If spatial scale metadata are missing, invalid, or non-integral.
+        ImportError: If a required optional dependency is missing.
+        FileNotFoundError: If the file does not exist.
+    """
+    if isinstance(path, str) and path.endswith(".ims"):
+        return get_imaris_scale_factors(path)
+    return get_ome_zarr_scale_factors(path, storage_options=storage_options)
+
+
 def _select_dimensions_from_image(
     image: nz.NgffImage,
     multiscales: nz.Multiscales,
@@ -3990,10 +4083,10 @@ class ZarrNii:
                 Pass a list of integers to downsample in xy only, or a list of
                 dicts for explicit per-axis cumulative factors, e.g.
                 ``[{"z": 1, "y": 2, "x": 2}, {"z": 2, "y": 4, "x": 4}]``.
-            match_scale_factors_from: Optional source OME-Zarr store/path whose
-                pyramid scale factors should be reused exactly. When set,
-                ``scale_factors`` must be ``None`` and ``max_layer`` is set to
-                match the source pyramid depth.
+            match_scale_factors_from: Optional source file path (OME-Zarr or
+                Imaris ``.ims``) whose pyramid scale factors should be reused
+                exactly. When set, ``scale_factors`` must be ``None`` and
+                ``max_layer`` is set to match the source pyramid depth.
             backend: Backend library to use for writing. Options:
                 - 'ngff-zarr': Use ngff-zarr library
                 - 'ome-zarr-py': Use ome-zarr-py library for better dask
@@ -4071,7 +4164,7 @@ class ZarrNii:
                     "Cannot specify both 'scale_factors' and "
                     "'match_scale_factors_from'."
                 )
-            scale_factors = get_ome_zarr_scale_factors(match_scale_factors_from)
+            scale_factors = get_scale_factors_from_file(match_scale_factors_from)
             max_layer = len(scale_factors) + 1
 
         # Determine the image to save

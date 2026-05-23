@@ -9,7 +9,12 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-from zarrnii import ZarrNii, get_dask_client
+from zarrnii import (
+    ZarrNii,
+    get_dask_client,
+    get_imaris_scale_factors,
+    get_scale_factors_from_file,
+)
 
 # Skip all tests if h5py is not available
 h5py = pytest.importorskip("h5py", reason="h5py required for Imaris support")
@@ -539,3 +544,183 @@ class TestImarisIntegration:
         original_data = znimg_xyz.darr.compute()[0]
         # XYZ[x, y, z] should equal ZYX[z, y, x]
         assert_array_equal(original_data[5, 10, 15], loaded_data[15, 10, 5])
+
+
+def _string_to_byte_array(s: str) -> np.ndarray:
+    """Convert string to byte array as required by Imaris."""
+    return np.array([c.encode() for c in s])
+
+
+def _create_minimal_ims(path, data_levels, spacing=(1.0, 1.0, 1.0)):
+    """Create a minimal multi-resolution Imaris HDF5 file for testing.
+
+    Args:
+        path: Output .ims file path.
+        data_levels: List of numpy arrays (CZYX), one per resolution level.
+            Level 0 is the full-resolution base; subsequent levels are
+            progressively downsampled.
+        spacing: Voxel spacing in ZYX order for level 0.
+    """
+    sz, sy, sx = spacing
+    n_levels = len(data_levels)
+    base = data_levels[0]
+    n_channels = base.shape[0]
+    z0, y0, x0 = base.shape[1], base.shape[2], base.shape[3]
+
+    with h5py.File(path, "w") as f:
+        # Root attributes
+        f.attrs["DataSetDirectoryName"] = _string_to_byte_array("DataSet")
+        f.attrs["DataSetInfoDirectoryName"] = _string_to_byte_array("DataSetInfo")
+        f.attrs["ImarisDataSet"] = _string_to_byte_array("ImarisDataSet")
+        f.attrs["ImarisVersion"] = _string_to_byte_array("5.5.0")
+        f.attrs["NumberOfDataSets"] = np.array([1], dtype=np.uint32)
+        f.attrs["ThumbnailDirectoryName"] = _string_to_byte_array("Thumbnail")
+
+        dataset_group = f.create_group("DataSet")
+
+        for r, level_data in enumerate(data_levels):
+            res_group = dataset_group.create_group(f"ResolutionLevel {r}")
+            time_group = res_group.create_group("TimePoint 0")
+            zr, yr, xr = level_data.shape[1], level_data.shape[2], level_data.shape[3]
+
+            for c in range(n_channels):
+                channel_group = time_group.create_group(f"Channel {c}")
+                ch_data = level_data[c]
+                d_min = float(ch_data.min())
+                d_max = float(ch_data.max())
+                channel_group.attrs["ImageSizeX"] = _string_to_byte_array(str(xr))
+                channel_group.attrs["ImageSizeY"] = _string_to_byte_array(str(yr))
+                channel_group.attrs["ImageSizeZ"] = _string_to_byte_array(str(zr))
+                channel_group.attrs["ImageBlockSizeX"] = _string_to_byte_array(str(xr))
+                channel_group.attrs["ImageBlockSizeY"] = _string_to_byte_array(str(yr))
+                channel_group.attrs["ImageBlockSizeZ"] = _string_to_byte_array(
+                    str(min(zr, 16))
+                )
+                channel_group.attrs["HistogramMin"] = _string_to_byte_array(
+                    f"{d_min:.3f}"
+                )
+                channel_group.attrs["HistogramMax"] = _string_to_byte_array(
+                    f"{d_max:.3f}"
+                )
+                channel_group.create_dataset(
+                    "Data", data=ch_data.astype(np.float32), compression="gzip"
+                )
+                hist_data, _ = np.histogram(ch_data.flatten(), bins=256)
+                channel_group.create_dataset(
+                    "Histogram", data=hist_data.astype(np.uint64)
+                )
+
+        # DataSetInfo/Image — required for ims_reader initialization
+        info_group = f.create_group("DataSetInfo")
+        image_group = info_group.create_group("Image")
+        image_group.attrs["X"] = _string_to_byte_array(str(x0))
+        image_group.attrs["Y"] = _string_to_byte_array(str(y0))
+        image_group.attrs["Z"] = _string_to_byte_array(str(z0))
+        image_group.attrs["ExtMin0"] = _string_to_byte_array("0.000")
+        image_group.attrs["ExtMin1"] = _string_to_byte_array("0.000")
+        image_group.attrs["ExtMin2"] = _string_to_byte_array("0.000")
+        image_group.attrs["ExtMax0"] = _string_to_byte_array(f"{sx * x0:.3f}")
+        image_group.attrs["ExtMax1"] = _string_to_byte_array(f"{sy * y0:.3f}")
+        image_group.attrs["ExtMax2"] = _string_to_byte_array(f"{sz * z0:.3f}")
+
+        for c in range(n_channels):
+            ch_info = info_group.create_group(f"Channel {c}")
+            ch_info.attrs["Color"] = _string_to_byte_array("1.000 0.000 0.000")
+            ch_info.attrs["Name"] = _string_to_byte_array(f"Channel {c}")
+            ch_info.attrs["ColorMode"] = _string_to_byte_array("BaseColor")
+            ch_info.attrs["ColorOpacity"] = _string_to_byte_array("1.000")
+            ch_info.attrs["ColorRange"] = _string_to_byte_array("0 255")
+            ch_info.attrs["GammaCorrection"] = _string_to_byte_array("1.000")
+            ch_info.attrs["HistogramMin"] = _string_to_byte_array("0.000")
+            ch_info.attrs["HistogramMax"] = _string_to_byte_array("255.000")
+
+
+@pytest.fixture
+def multi_level_imaris_file(tmp_path):
+    """Create a multi-resolution Imaris file with 3 resolution levels."""
+    imaris_path = tmp_path / "multi_level.ims"
+
+    # Level 0: full resolution (C=1, Z=32, Y=64, X=48)
+    rng = np.random.default_rng(42)
+    data0 = rng.random((1, 32, 64, 48)).astype(np.float32)
+    # Level 1: 2x downsampled in all axes (C=1, Z=16, Y=32, X=24)
+    data1 = data0[:, ::2, ::2, ::2]
+    # Level 2: 4x downsampled in all axes (C=1, Z=8, Y=16, X=12)
+    data2 = data0[:, ::4, ::4, ::4]
+
+    _create_minimal_ims(str(imaris_path), [data0, data1, data2])
+
+    # Expected cumulative scale factors: level1 → 2×, level2 → 4×
+    expected_factors = [
+        {"z": 2, "y": 2, "x": 2},
+        {"z": 4, "y": 4, "x": 4},
+    ]
+    return str(imaris_path), expected_factors
+
+
+class TestGetImarisScaleFactors:
+    """Tests for get_imaris_scale_factors and get_scale_factors_from_file."""
+
+    def test_single_level_returns_empty(self, sample_imaris_file):
+        """Single-resolution IMS file returns an empty list."""
+        factors = get_imaris_scale_factors(sample_imaris_file)
+        assert factors == []
+
+    def test_multi_level_returns_correct_factors(self, multi_level_imaris_file):
+        """Multi-resolution IMS file returns correct cumulative scale factors."""
+        ims_path, expected_factors = multi_level_imaris_file
+        factors = get_imaris_scale_factors(ims_path)
+        assert factors == expected_factors
+
+    def test_nonexistent_file_raises(self):
+        """Missing file raises FileNotFoundError."""
+        with pytest.raises(FileNotFoundError, match="file does not exist"):
+            get_imaris_scale_factors("nonexistent.ims")
+
+    def test_get_scale_factors_from_file_dispatches_ims(self, multi_level_imaris_file):
+        """get_scale_factors_from_file dispatches .ims to get_imaris_scale_factors."""
+        ims_path, expected_factors = multi_level_imaris_file
+        factors = get_scale_factors_from_file(ims_path)
+        assert factors == expected_factors
+
+    def test_get_scale_factors_from_file_dispatches_zarr(self, tmp_path):
+        """get_scale_factors_from_file dispatches .zarr to get_ome_zarr_scale_factors."""
+        from zarrnii import get_ome_zarr_scale_factors
+        from zarrnii.core import save_ngff_image_with_ome_zarr
+
+        zarr_path = str(tmp_path / "source.zarr")
+        rng = np.random.default_rng(42)
+        data = rng.random((1, 32, 64, 48)).astype(np.float32)
+        darr = da.from_array(data, chunks="auto")
+        znii = ZarrNii.from_darr(darr, spacing=[1.0, 1.0, 1.0])
+        znii.to_ome_zarr(zarr_path, max_layer=3)
+
+        expected = get_ome_zarr_scale_factors(zarr_path)
+        assert get_scale_factors_from_file(zarr_path) == expected
+
+    def test_to_ome_zarr_match_scale_factors_from_single_level_ims(
+        self, sample_imaris_file, tmp_path
+    ):
+        """match_scale_factors_from with a single-level IMS writes a flat zarr."""
+        output_path = str(tmp_path / "output.zarr")
+        znii = ZarrNii.from_imaris(sample_imaris_file)
+        # Single-level IMS → scale_factors=[] → max_layer=1 (level 0 only)
+        znii.to_ome_zarr(output_path, match_scale_factors_from=sample_imaris_file)
+
+        from zarrnii import get_ome_zarr_scale_factors
+
+        assert get_ome_zarr_scale_factors(output_path) == []
+
+    def test_to_ome_zarr_match_scale_factors_from_multi_level_ims(
+        self, multi_level_imaris_file, tmp_path
+    ):
+        """match_scale_factors_from with a multi-level IMS replicates the pyramid."""
+        ims_path, expected_factors = multi_level_imaris_file
+        output_path = str(tmp_path / "output.zarr")
+
+        znii = ZarrNii.from_imaris(ims_path)
+        znii.to_ome_zarr(output_path, match_scale_factors_from=ims_path)
+
+        from zarrnii import get_ome_zarr_scale_factors
+
+        assert get_ome_zarr_scale_factors(output_path) == expected_factors
