@@ -3,6 +3,7 @@
 import os
 import sys
 import tempfile
+import types
 
 import dask.array as da
 import numpy as np
@@ -13,6 +14,7 @@ from zarrnii import (
     ZarrNii,
     get_dask_client,
     get_imaris_scale_factors,
+    get_ome_zarr_scale_factors,
     get_scale_factors_from_file,
 )
 
@@ -671,6 +673,49 @@ class TestGetImarisScaleFactors:
         ims_path, expected_factors = multi_level_imaris_file
         factors = get_imaris_scale_factors(ims_path)
         assert factors == expected_factors
+
+    def test_multi_level_rounds_near_integer_factors(self, monkeypatch, tmp_path):
+        """Near-integer IMS scale factors are rounded to the nearest integer."""
+        ims_path = tmp_path / "near_integer.ims"
+        ims_path.write_bytes(b"fake")
+        level_shapes = {
+            0: (1, 1, 64.0, 128.0, 256.0),
+            1: (1, 1, 32.01, 64.01, 128.01),
+            2: (1, 1, 16.02, 32.02, 64.02),
+        }
+
+        class FakeImsProcessSafeStore:
+            ResolutionLevels = len(level_shapes)
+
+            def __init__(self, path, ResolutionLevelLock):
+                self.path = path
+                self.shape = level_shapes[ResolutionLevelLock]
+
+        monkeypatch.setitem(
+            sys.modules,
+            "imaris_ims_zarr",
+            types.SimpleNamespace(ImsProcessSafeStore=FakeImsProcessSafeStore),
+        )
+
+        assert get_imaris_scale_factors(str(ims_path)) == [
+            {"z": 2, "y": 2, "x": 2},
+            {"z": 4, "y": 4, "x": 4},
+        ]
+
+    def test_get_ome_zarr_scale_factors_rounds_near_integer_ratios(self, monkeypatch):
+        """Near-integer OME-Zarr scale metadata are rounded to integers."""
+        import zarrnii.core as core_module
+
+        multiscales = types.SimpleNamespace(
+            images=[
+                types.SimpleNamespace(scale={"z": 1.0, "y": 2.0, "x": 4.0}),
+                types.SimpleNamespace(scale={"z": 1.999, "y": 4.001, "x": 8.002}),
+            ]
+        )
+
+        monkeypatch.setattr(core_module, "get_multiscales", lambda *args, **kwargs: multiscales)
+
+        assert get_ome_zarr_scale_factors("dummy.zarr") == [{"z": 2, "y": 2, "x": 2}]
 
     def test_nonexistent_file_raises(self):
         """Missing file raises FileNotFoundError."""
