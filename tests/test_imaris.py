@@ -641,7 +641,8 @@ def multi_level_imaris_file(tmp_path):
     imaris_path = tmp_path / "multi_level.ims"
 
     # Level 0: full resolution (C=1, Z=32, Y=64, X=48)
-    data0 = np.random.rand(1, 32, 64, 48).astype(np.float32)
+    rng = np.random.default_rng(42)
+    data0 = rng.random((1, 32, 64, 48)).astype(np.float32)
     # Level 1: 2x downsampled in all axes (C=1, Z=16, Y=32, X=24)
     data1 = data0[:, ::2, ::2, ::2]
     # Level 2: 4x downsampled in all axes (C=1, Z=8, Y=16, X=12)
@@ -688,7 +689,8 @@ class TestGetImarisScaleFactors:
         from zarrnii.core import save_ngff_image_with_ome_zarr
 
         zarr_path = str(tmp_path / "source.zarr")
-        data = np.random.rand(1, 32, 64, 48).astype(np.float32)
+        rng = np.random.default_rng(42)
+        data = rng.random((1, 32, 64, 48)).astype(np.float32)
         darr = da.from_array(data, chunks="auto")
         znii = ZarrNii.from_darr(darr, spacing=[1.0, 1.0, 1.0])
         znii.to_ome_zarr(zarr_path, max_layer=3)

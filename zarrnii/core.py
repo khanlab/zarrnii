@@ -1022,7 +1022,7 @@ def get_imaris_scale_factors(path: str) -> List[Dict[str, int]]:
 
 
 def get_scale_factors_from_file(
-    path,
+    path: Union[str, Any],
     storage_options: Optional[Dict] = None,
 ) -> List[Dict[str, int]]:
     """Extract cumulative spatial pyramid scale factors from any supported file.
