@@ -766,7 +766,7 @@ class TestGetOmeZarrScaleFactors:
         multiscales = types.SimpleNamespace(
             images=[
                 types.SimpleNamespace(scale={"z": 1.0, "y": 2.0, "x": 4.0}),
-                types.SimpleNamespace(scale={"z": 1.99, "y": 4.001, "x": 8.04}),
+                types.SimpleNamespace(scale={"z": 1.999, "y": 4.001, "x": 8.04}),
             ]
         )
 
