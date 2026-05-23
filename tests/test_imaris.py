@@ -680,8 +680,8 @@ class TestGetImarisScaleFactors:
         ims_path.write_bytes(b"fake")
         level_shapes = {
             0: (1, 1, 64.0, 128.0, 256.0),
-            1: (1, 1, 32.01, 64.01, 128.01),
-            2: (1, 1, 16.02, 32.02, 64.02),
+            1: (1, 1, 32.01, 63.99, 128.01),
+            2: (1, 1, 16.02, 31.99, 63.99),
         }
 
         class FakeImsProcessSafeStore:
@@ -766,7 +766,7 @@ class TestGetOmeZarrScaleFactors:
         multiscales = types.SimpleNamespace(
             images=[
                 types.SimpleNamespace(scale={"z": 1.0, "y": 2.0, "x": 4.0}),
-                types.SimpleNamespace(scale={"z": 1.999, "y": 4.001, "x": 8.002}),
+                types.SimpleNamespace(scale={"z": 1.99, "y": 4.001, "x": 8.04}),
             ]
         )
 
