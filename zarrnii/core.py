@@ -103,6 +103,7 @@ class MetadataInvalidError(Exception):
 # OME-Zarr version for ZIP archive comment
 _OME_ZARR_VERSION = "0.5"
 _DEFAULT_OMERO_COLORS = ("0000FF", "00FF00", "FF0000", "FFFF00", "FF00FF", "00FFFF")
+_SCALE_FACTOR_INTEGER_ATOL = 1e-2
 
 # Valid OME-Zarr space unit strings (derived from ngff_zarr.SpaceUnits).
 # ``nz.SpaceUnits`` is a ``Union[Literal['angstrom'], Literal['attometer'], ...]``
@@ -943,14 +944,15 @@ def get_ome_zarr_scale_factors(
                 raise ValueError(f"Invalid base scale for axis '{axis}': 0.")
 
             ratio = current[axis] / base_scale[axis]
-            rounded = int(round(ratio))
-            if rounded < 1 or not np.isclose(ratio, rounded):
-                raise ValueError(
-                    f"Non-integer cumulative factor for axis '{axis}' at level "
-                    f"{level_idx}: {ratio} (base={base_scale[axis]}, "
-                    f"current={current[axis]})."
-                )
-            factors[axis] = rounded
+            factors[axis] = _coerce_near_integer_scale_factor(
+                ratio,
+                axis_name=axis,
+                level_idx=level_idx,
+                details=(
+                    f"base={base_scale[axis]}, current={current[axis]}, "
+                    f"tolerance={_SCALE_FACTOR_INTEGER_ATOL}"
+                ),
+            )
         scale_factors.append(factors)
 
     return scale_factors
@@ -1008,17 +1010,44 @@ def get_imaris_scale_factors(path: str) -> List[Dict[str, int]]:
                     f"Invalid shape 0 for axis '{axis_name}' at level {level}."
                 )
             ratio = base_size / curr_size
-            rounded = int(round(ratio))
-            if rounded < 1 or not np.isclose(ratio, rounded):
-                raise ValueError(
-                    f"Non-integer cumulative factor for axis '{axis_name}' at "
-                    f"level {level}: {ratio} (base_size={base_size}, "
-                    f"curr_size={curr_size})."
-                )
-            factors[axis_name] = rounded
+            factors[axis_name] = _coerce_near_integer_scale_factor(
+                ratio,
+                axis_name=axis_name,
+                level_idx=level,
+                details=(
+                    f"base_size={base_size}, curr_size={curr_size}, "
+                    f"tolerance={_SCALE_FACTOR_INTEGER_ATOL}"
+                ),
+            )
         scale_factors.append(factors)
 
     return scale_factors
+
+
+def _coerce_near_integer_scale_factor(
+    ratio: float,
+    *,
+    axis_name: str,
+    level_idx: int,
+    details: str,
+) -> int:
+    """Convert near-integer cumulative scale factors to the nearest integer."""
+    if not np.isfinite(ratio):
+        raise ValueError(
+            f"Invalid cumulative factor for axis '{axis_name}' at level "
+            f"{level_idx}: {ratio} ({details})."
+        )
+
+    rounded = int(round(ratio))
+    if rounded < 1 or not np.isclose(
+        ratio, rounded, rtol=0.0, atol=_SCALE_FACTOR_INTEGER_ATOL
+    ):
+        raise ValueError(
+            f"Non-integer cumulative factor for axis '{axis_name}' at level "
+            f"{level_idx}: {ratio} ({details})."
+        )
+
+    return rounded
 
 
 def get_scale_factors_from_file(
