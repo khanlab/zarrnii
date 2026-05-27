@@ -4746,7 +4746,7 @@ class ZarrNii:
         channels: Optional[List[int]] = None,
         channel_labels: Optional[List[str]] = None,
         set_channel_labels: Optional[List[str]] = None,
-        chunks: str = "auto",
+        chunks: Optional[tuple[int, Ellipsis]] = None,
         axes_order: str = "ZYX",
         orientation: str = "RAS",
         axes_units: Optional[Dict[str, str]] = None,
@@ -4771,7 +4771,7 @@ class ZarrNii:
             set_channel_labels: Channel labels that define the channels present
                 in the Imaris data, in channel index order. Required when
                 channel_labels is used.
-            chunks: Chunking strategy for dask array
+            chunks: Chunking strategy for dask array (default: use imaris chunking)
             axes_order: Spatial axes order for compatibility (default: "ZYX")
             orientation: Default orientation (default: "RAS")
             axes_units: Optional mapping of axis name to unit string (e.g.
@@ -4831,10 +4831,8 @@ class ZarrNii:
             raise ValueError(f"Unable to read Imaris file '{path}': {exc}") from exc
 
         available_levels = 1
-        if hasattr(level0_store, "ims") and hasattr(
-            level0_store.ims, "ResolutionLevels"
-        ):
-            available_levels = level0_store.ims.ResolutionLevels
+        if hasattr(level0_store, "ResolutionLevels"):
+            available_levels = level0_store.ResolutionLevels
         if level < 0:
             raise ValueError(f"Level {level} not available. Level must be >= 0.")
         max_level = available_levels - 1
