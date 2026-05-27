@@ -4746,7 +4746,7 @@ class ZarrNii:
         channels: Optional[List[int]] = None,
         channel_labels: Optional[List[str]] = None,
         set_channel_labels: Optional[List[str]] = None,
-        chunks: Optional[tuple[int, Ellipsis]] = None,
+        chunks: Any = None,
         axes_order: str = "ZYX",
         orientation: str = "RAS",
         axes_units: Optional[Dict[str, str]] = None,
