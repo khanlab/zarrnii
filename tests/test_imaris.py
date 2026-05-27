@@ -115,6 +115,29 @@ class TestImarisIO:
         assert ds_shape[1] == orig_shape[1] // 4
         assert ds_shape[2] == orig_shape[2] // 4
 
+    def test_from_imaris_loads_native_downsampled_levels(self, multi_level_imaris_file):
+        """Test loading native multi-resolution levels from Imaris."""
+        ims_path, _ = multi_level_imaris_file
+
+        with h5py.File(ims_path, "r") as f:
+            expected_level1 = f["DataSet/ResolutionLevel 1/TimePoint 0/Channel 0/Data"][
+                ()
+            ]
+            expected_level2 = f["DataSet/ResolutionLevel 2/TimePoint 0/Channel 0/Data"][
+                ()
+            ]
+
+        znimg_level1 = ZarrNii.from_imaris(ims_path, level=1)
+        znimg_level2 = ZarrNii.from_imaris(ims_path, level=2)
+
+        loaded_level1 = znimg_level1.darr.compute()
+        loaded_level2 = znimg_level2.darr.compute()
+
+        assert loaded_level1.shape == (1,) + expected_level1.shape
+        assert loaded_level2.shape == (1,) + expected_level2.shape
+        assert_array_equal(loaded_level1[0], expected_level1)
+        assert_array_equal(loaded_level2[0], expected_level2)
+
     def test_from_imaris_negative_level_raises(self, sample_imaris_file):
         """Test that a negative level raises ValueError."""
         with pytest.raises(ValueError, match="Level must be >= 0"):
