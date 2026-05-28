@@ -560,23 +560,31 @@ class TestOmeZarrWriter:
     def test_to_ome_zarr_match_scale_factors_from(self, simple_ngff_image):
         """Test writing with scale factors matched from an input OME-Zarr store."""
         from zarrnii import ZarrNii
-        from zarrnii.core import save_ngff_image_with_ome_zarr
+        from zarrnii.core import (
+            _get_ome_zarr_level_zyx_shapes,
+            save_ngff_image_with_ome_zarr,
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             source_path = os.path.join(tmpdir, "source.zarr")
             output_path = os.path.join(tmpdir, "output.zarr")
-            expected_factors = [{"z": 1, "y": 2, "x": 2}, {"z": 2, "y": 4, "x": 4}]
+            source_factors = [{"z": 1, "y": 2, "x": 2}, {"z": 2, "y": 4, "x": 4}]
             save_ngff_image_with_ome_zarr(
                 simple_ngff_image,
                 source_path,
                 max_layer=3,
-                scale_factors=deepcopy(expected_factors),
+                scale_factors=deepcopy(source_factors),
             )
 
             znimg = ZarrNii.from_ome_zarr(source_path)
             znimg.to_ome_zarr(output_path, match_scale_factors_from=source_path)
 
-            assert get_ome_zarr_scale_factors(output_path) == expected_factors
+            source_shapes = _get_ome_zarr_level_zyx_shapes(source_path)
+            output_shapes = _get_ome_zarr_level_zyx_shapes(output_path)
+            assert output_shapes == source_shapes, (
+                f"Output pyramid shapes {output_shapes} do not match "
+                f"source shapes {source_shapes}"
+            )
 
     def test_to_ome_zarr_match_scale_factors_from_conflict(self, simple_ngff_image):
         """Test conflicting scale_factors and match_scale_factors_from parameters."""
