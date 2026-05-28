@@ -995,7 +995,8 @@ def get_imaris_scale_factors(path: str) -> List[Dict[str, int]]:
         return []
 
     # shape is (T, C, Z, Y, X) — index 2/3/4 are the spatial axes
-    base_shape = store0.shape
+    prev_shape = store0.shape
+    cumulative_factors = {"z": 1, "y": 1, "x": 1}
 
     scale_factors: List[Dict[str, int]] = []
     for level in range(1, n_levels):
@@ -1003,23 +1004,26 @@ def get_imaris_scale_factors(path: str) -> List[Dict[str, int]]:
         level_shape = store_l.shape
         factors: Dict[str, int] = {}
         for axis_idx, axis_name in zip([2, 3, 4], ["z", "y", "x"]):
-            base_size = base_shape[axis_idx]
+            prev_size = prev_shape[axis_idx]
             curr_size = level_shape[axis_idx]
             if curr_size == 0:
                 raise ValueError(
                     f"Invalid shape 0 for axis '{axis_name}' at level {level}."
                 )
-            ratio = base_size / curr_size
-            factors[axis_name] = _coerce_near_integer_scale_factor(
+            ratio = prev_size / curr_size
+            incremental_factor = _coerce_near_integer_scale_factor(
                 ratio,
                 axis_name=axis_name,
                 level_idx=level,
                 details=(
-                    f"base_size={base_size}, curr_size={curr_size}, "
+                    f"prev_size={prev_size}, curr_size={curr_size}, "
                     f"tolerance={_SCALE_FACTOR_INTEGER_ATOL}"
                 ),
             )
+            cumulative_factors[axis_name] *= incremental_factor
+            factors[axis_name] = cumulative_factors[axis_name]
         scale_factors.append(factors)
+        prev_shape = level_shape
 
     return scale_factors
 

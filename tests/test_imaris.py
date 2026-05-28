@@ -725,6 +725,45 @@ class TestGetImarisScaleFactors:
             {"z": 4, "y": 4, "x": 4},
         ]
 
+    def test_multi_level_uses_incremental_rounding(self, monkeypatch, tmp_path):
+        """Cumulative factors are built from rounded incremental level ratios."""
+        ims_path = tmp_path / "incremental_rounding.ims"
+        ims_path.write_bytes(b"fake")
+        incremental_ratio = 2.009
+
+        def _axis_levels(base):
+            return [base / (incremental_ratio**level) for level in range(7)]
+
+        z_levels = _axis_levels(2412.0)
+        y_levels = _axis_levels(10016.0)
+        x_levels = _axis_levels(6834.0)
+        level_shapes = {
+            level: (1, 1, z_levels[level], y_levels[level], x_levels[level])
+            for level in range(7)
+        }
+
+        class FakeImsProcessSafeStore:
+            ResolutionLevels = len(level_shapes)
+
+            def __init__(self, path, ResolutionLevelLock):
+                self.path = path
+                self.shape = level_shapes[ResolutionLevelLock]
+
+        monkeypatch.setitem(
+            sys.modules,
+            "imaris_ims_zarr",
+            types.SimpleNamespace(ImsProcessSafeStore=FakeImsProcessSafeStore),
+        )
+
+        assert get_imaris_scale_factors(str(ims_path)) == [
+            {"z": 2, "y": 2, "x": 2},
+            {"z": 4, "y": 4, "x": 4},
+            {"z": 8, "y": 8, "x": 8},
+            {"z": 16, "y": 16, "x": 16},
+            {"z": 32, "y": 32, "x": 32},
+            {"z": 64, "y": 64, "x": 64},
+        ]
+
     def test_nonexistent_file_raises(self):
         """Missing file raises FileNotFoundError."""
         with pytest.raises(FileNotFoundError, match="file does not exist"):
