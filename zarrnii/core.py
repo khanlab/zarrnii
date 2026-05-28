@@ -25,7 +25,7 @@ import copy
 import os
 import typing
 import warnings
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import dask.array as da
 import fsspec
@@ -2531,7 +2531,7 @@ class ZarrNii:
         axes_order: str = "ZYX",
         orientation: Optional[str] = None,
         downsample_near_isotropic: bool = False,
-        chunks: Any = None,
+        chunks: Optional[Union[Tuple[int, ...], Literal["auto"]]] = None,
         rechunk: bool = False,
     ) -> "ZarrNii":
         """Load ZarrNii from OME-Zarr store with flexible options.
@@ -2790,7 +2790,11 @@ class ZarrNii:
             normalized_chunks = _normalize_chunks_with_leading_singletons(
                 chunks, znimg.data.chunksize
             )
-            if normalized_chunks != znimg.data.chunksize:
+            if isinstance(normalized_chunks, tuple):
+                should_rechunk = normalized_chunks != znimg.data.chunksize
+            else:
+                should_rechunk = True
+            if should_rechunk:
                 znimg.data = znimg.data.rechunk(normalized_chunks)
 
         return znimg
@@ -4895,10 +4899,10 @@ class ZarrNii:
         normalized_chunks = _normalize_chunks_with_leading_singletons(
             chunks, native_data_array.chunksize
         )
-        if chunks is None:
+        if chunks is None or normalized_chunks == native_data_array.chunksize:
             data_array = native_data_array
         else:
-            data_array = da.from_zarr(imaris_store, chunks=normalized_chunks)
+            data_array = native_data_array.rechunk(normalized_chunks)
         selected_channel_labels = None
 
         if data_array.ndim == 5:

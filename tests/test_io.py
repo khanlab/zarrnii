@@ -791,7 +791,7 @@ def test_from_ome_zarr_chunks_spatial_tuple_and_rechunk_behavior(tmp_path, monke
     original_rechunk = da.Array.rechunk
     rechunk_calls = []
 
-    def _tracking_rechunk(
+    def tracking_rechunk(
         self,
         chunks="auto",
         threshold=None,
@@ -809,18 +809,18 @@ def test_from_ome_zarr_chunks_spatial_tuple_and_rechunk_behavior(tmp_path, monke
             method=method,
         )
 
-    monkeypatch.setattr(da.Array, "rechunk", _tracking_rechunk)
+    monkeypatch.setattr(da.Array, "rechunk", tracking_rechunk)
 
     loaded_same = ZarrNii.from_ome_zarr(str(source), chunks=spatial_chunks)
     assert loaded_same.darr.chunksize == native.darr.chunksize
     assert rechunk_calls == []
 
     updated_spatial_chunks = list(spatial_chunks)
-    first_chunk_gt_one = next(
+    first_non_singleton_chunk_index = next(
         (i for i, c in enumerate(updated_spatial_chunks) if c > 1), None
     )
-    assert first_chunk_gt_one is not None
-    updated_spatial_chunks[first_chunk_gt_one] //= 2
+    assert first_non_singleton_chunk_index is not None
+    updated_spatial_chunks[first_non_singleton_chunk_index] //= 2
     updated_spatial_chunks = tuple(updated_spatial_chunks)
 
     loaded_rechunked = ZarrNii.from_ome_zarr(str(source), chunks=updated_spatial_chunks)
