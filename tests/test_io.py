@@ -777,6 +777,60 @@ def test_orientation_round_trip_with_new_format(tmp_path):
         assert cropped.xyz_orientation == orient
 
 
+def test_from_ome_zarr_chunks_spatial_tuple_and_rechunk_behavior(tmp_path, monkeypatch):
+    """from_ome_zarr accepts spatial-only chunks and rechunks only when needed."""
+    data = np.random.rand(1, 32, 40, 48).astype(np.float32)
+    source = tmp_path / "chunk_source.ome.zarr"
+    ZarrNii.from_darr(da.from_array(data, chunks=(1, 16, 20, 24))).to_ome_zarr(
+        str(source), max_layer=0
+    )
+
+    native = ZarrNii.from_file(str(source))
+    spatial_chunks = native.darr.chunksize[-3:]
+
+    original_rechunk = da.Array.rechunk
+    rechunk_calls = []
+
+    def tracking_rechunk(
+        self,
+        chunks="auto",
+        threshold=None,
+        block_size_limit=None,
+        balance=False,
+        method=None,
+    ):
+        rechunk_calls.append(chunks)
+        return original_rechunk(
+            self,
+            chunks=chunks,
+            threshold=threshold,
+            block_size_limit=block_size_limit,
+            balance=balance,
+            method=method,
+        )
+
+    monkeypatch.setattr(da.Array, "rechunk", tracking_rechunk)
+
+    loaded_same = ZarrNii.from_ome_zarr(str(source), chunks=spatial_chunks)
+    assert loaded_same.darr.chunksize == native.darr.chunksize
+    assert rechunk_calls == []
+
+    updated_spatial_chunks = list(spatial_chunks)
+    first_non_singleton_chunk_index = next(
+        (i for i, c in enumerate(updated_spatial_chunks) if c > 1), None
+    )
+    assert first_non_singleton_chunk_index is not None
+    updated_spatial_chunks[first_non_singleton_chunk_index] //= 2
+    updated_spatial_chunks = tuple(updated_spatial_chunks)
+
+    loaded_rechunked = ZarrNii.from_ome_zarr(str(source), chunks=updated_spatial_chunks)
+    assert loaded_rechunked.darr.chunksize == (1,) + updated_spatial_chunks
+    assert len(rechunk_calls) == 1
+
+    with pytest.warns(DeprecationWarning, match="rechunk.*deprecated"):
+        ZarrNii.from_ome_zarr(str(source), rechunk=True)
+
+
 @pytest.mark.usefixtures("cleandir")
 def test_chunk_preservation_to_ome_zarr():
     """Test that chunk sizes are preserved when saving to OME-Zarr.
