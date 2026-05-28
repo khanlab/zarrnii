@@ -1039,9 +1039,10 @@ class TestMatchScaleFactorsExactSizes:
         for a real (non-mock) multi-level Imaris file."""
         from zarrnii.core import _get_imaris_level_zyx_shapes
 
-        # Build a multi-level IMS where level 1 has an odd size (ceiling-style)
-        # to reproduce the original bug: level0=(33, 65, 49), level1=(17, 33, 25)
-        # ceiling(33/2)=17, ceiling(65/2)=33, ceiling(49/2)=25
+        # Build a multi-level IMS using ceiling-based downsampling with odd base
+        # dimensions to reproduce the original bug.
+        # level0=(33, 65, 49), level1=(17, 33, 25) where
+        # ceil(33/2)=17, ceil(65/2)=33, ceil(49/2)=25 — floor would give 16, 32, 24.
         rng = np.random.default_rng(7)
         data0 = rng.random((1, 33, 65, 49)).astype(np.float32)
         # level 1 sizes derived with ceiling

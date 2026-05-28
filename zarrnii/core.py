@@ -1221,13 +1221,17 @@ def _compute_float_scale_factors_from_shapes(
     if len(level_shapes) <= 1:
         return []
     base_z, base_y, base_x = level_shapes[0]
+    if base_z <= 0 or base_y <= 0 or base_x <= 0:
+        raise ValueError(
+            f"Level 0 shape must have all positive dimensions; got {level_shapes[0]}"
+        )
     result: List[Dict[str, float]] = []
     for z, y, x in level_shapes[1:]:
         result.append(
             {
-                "z": float(base_z) / (z + 0.5) if z > 0 else 1.0,
-                "y": float(base_y) / (y + 0.5) if y > 0 else 1.0,
-                "x": float(base_x) / (x + 0.5) if x > 0 else 1.0,
+                "z": float(base_z) / (z + 0.5),
+                "y": float(base_y) / (y + 0.5),
+                "x": float(base_x) / (x + 0.5),
             }
         )
     return result
