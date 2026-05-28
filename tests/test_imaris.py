@@ -207,6 +207,19 @@ class TestImarisIO:
         assert znimg.axes_order == "XYZ"
         assert znimg.orientation == "LPI"
 
+    def test_from_imaris_chunks_accept_spatial_tuple(self, sample_imaris_file):
+        """Imaris loading accepts chunk tuples without leading singleton dimensions."""
+        native = ZarrNii.from_imaris(sample_imaris_file)
+        spatial_chunks = native.darr.chunksize[-3:]
+
+        loaded_from_imaris = ZarrNii.from_imaris(
+            sample_imaris_file, chunks=spatial_chunks
+        )
+        loaded_from_file = ZarrNii.from_file(sample_imaris_file, chunks=spatial_chunks)
+
+        assert loaded_from_imaris.darr.chunksize == native.darr.chunksize
+        assert loaded_from_file.darr.chunksize == native.darr.chunksize
+
     def test_from_imaris_downsample_near_isotropic_deprecated(self, sample_imaris_file):
         """Test that downsample_near_isotropic emits a DeprecationWarning."""
         import warnings

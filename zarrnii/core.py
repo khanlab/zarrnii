@@ -135,6 +135,31 @@ def _validate_axes_units(axes_units: Optional[Dict[str, str]]) -> None:
             )
 
 
+def _normalize_chunks_with_leading_singletons(
+    chunks: Any, existing_chunksize: Optional[Tuple[int, ...]]
+) -> Any:
+    """Normalize tuple chunks by prepending omitted leading singleton dimensions.
+
+    If ``chunks`` is a tuple shorter than ``existing_chunksize`` and the missing
+    leading dimensions in ``existing_chunksize`` are singleton chunks (value 1),
+    prepend matching singleton chunks to ``chunks``.
+    """
+    if chunks is None or existing_chunksize is None:
+        return chunks
+
+    if not isinstance(chunks, tuple):
+        return chunks
+
+    if len(chunks) >= len(existing_chunksize):
+        return chunks
+
+    n_missing_leading = len(existing_chunksize) - len(chunks)
+    if all(chunk == 1 for chunk in existing_chunksize[:n_missing_leading]):
+        return (1,) * n_missing_leading + chunks
+
+    return chunks
+
+
 def _is_ome_zarr_zip_path(path: str) -> bool:
     """Check if a path should be treated as an OME-Zarr zip file.
 
@@ -2506,7 +2531,7 @@ class ZarrNii:
         axes_order: str = "ZYX",
         orientation: Optional[str] = None,
         downsample_near_isotropic: bool = False,
-        chunks: tuple[int, Ellipsis] | Literal["auto"] = "auto",
+        chunks: Any = None,
         rechunk: bool = False,
     ) -> "ZarrNii":
         """Load ZarrNii from OME-Zarr store with flexible options.
@@ -2544,9 +2569,12 @@ class ZarrNii:
             downsample_near_isotropic: If True, automatically downsample
                 dimensions with smaller voxel sizes to achieve near-isotropic
                 resolution
-            chunks: chunking strategy, or explicit chunk sizes to use if not automatic
-            rechunk: If True, rechunks the dataset after lazy loading, based
-                on the chunks parameter
+            chunks: Optional chunking strategy to apply after lazy loading.
+                If provided as a tuple that omits leading singleton dimensions,
+                singleton chunk sizes are prepended automatically when possible
+                based on existing chunking.
+            rechunk: Deprecated. Rechunking behavior is now controlled by
+                ``chunks`` directly.
 
         Returns:
             ZarrNii instance with loaded data and metadata
@@ -2751,7 +2779,19 @@ class ZarrNii:
             znimg = _apply_near_isotropic_downsampling(znimg, axes_order)
 
         if rechunk:
-            znimg.data = znimg.data.rechunk(chunks)
+            warnings.warn(
+                "The 'rechunk' argument is deprecated and no longer needed. "
+                "Set 'chunks' to trigger rechunking when chunk sizes differ.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+        if chunks is not None:
+            normalized_chunks = _normalize_chunks_with_leading_singletons(
+                chunks, znimg.data.chunksize
+            )
+            if normalized_chunks != znimg.data.chunksize:
+                znimg.data = znimg.data.rechunk(normalized_chunks)
 
         return znimg
 
@@ -4771,7 +4811,10 @@ class ZarrNii:
             set_channel_labels: Channel labels that define the channels present
                 in the Imaris data, in channel index order. Required when
                 channel_labels is used.
-            chunks: Chunking strategy for dask array (default: use imaris chunking)
+            chunks: Chunking strategy for dask array (default: use Imaris
+                chunking). If provided as a tuple that omits leading singleton
+                dimensions, singleton chunk sizes are prepended automatically
+                when possible based on existing chunking.
             axes_order: Spatial axes order for compatibility (default: "ZYX")
             orientation: Default orientation (default: "RAS")
             axes_units: Optional mapping of axis name to unit string (e.g.
@@ -4848,7 +4891,14 @@ class ZarrNii:
             except imaris_read_errors as exc:
                 raise ValueError(f"Unable to read Imaris file '{path}': {exc}") from exc
 
-        data_array = da.from_zarr(imaris_store, chunks=chunks)
+        native_data_array = da.from_zarr(imaris_store)
+        normalized_chunks = _normalize_chunks_with_leading_singletons(
+            chunks, native_data_array.chunksize
+        )
+        if chunks is None:
+            data_array = native_data_array
+        else:
+            data_array = da.from_zarr(imaris_store, chunks=normalized_chunks)
         selected_channel_labels = None
 
         if data_array.ndim == 5:
