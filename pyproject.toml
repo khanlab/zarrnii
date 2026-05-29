@@ -30,7 +30,6 @@ dependencies = [
     "scikit-image>=0.22.0",
     "h5py>=3.14.0",
     "pyyaml>=6.0",
-    "ome-zarr>=0.16.0",
     "pluggy>=1.0.0",
     "tifffile>=2024.1.30",
     "imaris-ims-zarr>=0.2.0",
