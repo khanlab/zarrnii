@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.11, <3.14"
 resolution-markers = [
     "python_full_version >= '3.13' and sys_platform == 'win32'",
@@ -1329,6 +1329,7 @@ dependencies = [
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/99/e461ccb522390cc05f8f0d33a10d66ca3febce2ebc2e06b5212263465000/imagecodecs-2026.5.10.tar.gz", hash = "sha256:1c0c46860f35e4637c2df70ebe8aa15141f6c4202a698e63757a4d7917a85acc", size = 9707764, upload-time = "2026-05-10T23:45:45.116Z" }
 wheels = [
+    { url = "https://files.pythonhosted.org/packages/82/e4/7ad831028df07311002d58a937891492e1b2a73a8d14b6f3b6232ce8275b/imagecodecs-2026.5.10-cp312-abi3-macosx_10_15_x86_64.whl", hash = "sha256:80fab8afdc466cd5c1d74a788ccabc310084b0e6d9debc70881b7711b612ce83", size = 14843524, upload-time = "2026-05-14T00:22:11.939Z" },
     { url = "https://files.pythonhosted.org/packages/9d/46/31b84c3b671319dac1259e8714b9a728a9e427f92c242c2fa0cf657e8c5f/imagecodecs-2026.5.10-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:bc8e1e7267bd0dbb1b7ea8dd4cb7ecaf1415b75709649e08729c526c6aa45e66", size = 12431290, upload-time = "2026-05-10T23:44:59.751Z" },
     { url = "https://files.pythonhosted.org/packages/c7/a5/ce27388cae7ea48cbfc39b542b877a415d0122be4c6183be41406bb18d9e/imagecodecs-2026.5.10-cp312-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:8278d966b55b4d97a2278136c1ef44b81db52ee59f32c4698cdc8282741c0072", size = 26771645, upload-time = "2026-05-10T23:45:04.443Z" },
     { url = "https://files.pythonhosted.org/packages/e5/0d/3caa568e37e36532cfe767ccfa6da085150497e9023fe380989790be755f/imagecodecs-2026.5.10-cp312-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:5a0a81f3fa95ce2503ab08afcc794d9fb976cc8e9465eb30db603182796d6cec", size = 27830401, upload-time = "2026-05-10T23:45:08.742Z" },
@@ -2738,8 +2739,8 @@ wheels = [
 
 [[package]]
 name = "ome-zarr"
-version = "0.16.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.1.dev1748+g054549a2d"
+source = { git = "https://github.com/khanlab/ome-zarr-py?branch=copilot%2Fadd-resize-local-mean-method#054549a2d887b03d5d54cbcab5271eed0324bf3e" }
 dependencies = [
     { name = "aiohttp" },
     { name = "dask" },
@@ -2752,10 +2753,6 @@ dependencies = [
     { name = "toolz" },
     { name = "zarr", version = "3.1.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "zarr", version = "3.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/0e/45/b5b9933ec62028453dc841d25ea66d65405d77d2eb5bb34043621b0c294c/ome_zarr-0.16.0.tar.gz", hash = "sha256:0d31f3409c0f4ad67f04b9a4e9e8855e6e6b040e84d5c9be1095638f90d6eeb9", size = 86252, upload-time = "2026-04-14T09:43:32.354Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/99/81/4c41331f59e64b2a5eaec1c03819d5791e4dde321694fbda661f873184da/ome_zarr-0.16.0-py3-none-any.whl", hash = "sha256:a34a5558905af526afd343105804b6d291e97f949cb71f6b3d269a6a7112b599", size = 46410, upload-time = "2026-04-14T09:43:31.092Z" },
 ]
 
 [[package]]
@@ -4558,7 +4555,7 @@ requires-dist = [
     { name = "ngff-zarr", extras = ["cli", "dask-image", "itk", "tensorstore", "validate"], specifier = ">=0.34.0" },
     { name = "nibabel", specifier = ">=5.2.0" },
     { name = "numpy", specifier = ">=1.26.4" },
-    { name = "ome-zarr", specifier = ">=0.16.0" },
+    { name = "ome-zarr", git = "https://github.com/khanlab/ome-zarr-py?branch=copilot%2Fadd-resize-local-mean-method" },
     { name = "pandas", specifier = ">=2.2.0" },
     { name = "pluggy", specifier = ">=1.0.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },

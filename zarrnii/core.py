@@ -4397,11 +4397,11 @@ class ZarrNii:
             # The ome-zarr-py ``local_mean`` scaler requires integer block
             # reduction factors.  Float scale factors (e.g. ~1.9 for a
             # ceiling-based source) get truncated to 1, producing no actual
-            # downsampling and a chunk-shape mismatch.  Switch to 'nearest'
-            # (skimage resize) which handles arbitrary float factors correctly,
-            # unless the caller has already requested a specific method.
+            # downsampling and a chunk-shape mismatch.  Switch to new 
+            # 'resize_local_mean' (skimage resize_local_mean) which handles
+            # arbitrary float factors correctly, unless the caller has already requested a specific method.
             if "scaling_method" not in kwargs:
-                kwargs["scaling_method"] = "nearest"
+                kwargs["scaling_method"] = "resize_local_mean"
 
         # Determine the image to save
         if self.axes_order == "XYZ":

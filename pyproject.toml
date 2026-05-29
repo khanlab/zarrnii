@@ -141,6 +141,9 @@ precision = 2
 [tool.coverage.html]
 directory = "htmlcov"
 
+[tool.uv.sources]
+ome-zarr = { git = "https://github.com/khanlab/ome-zarr-py", branch = "copilot/add-resize-local-mean-method" }
+
 [dependency-groups]
 dev = [
     "pytest>=8.2.0",
