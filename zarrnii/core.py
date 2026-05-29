@@ -518,7 +518,9 @@ def save_ngff_image_with_ome_zarr(
     ngff_image: nz.NgffImage,
     store_or_path: Union[str, Any],
     max_layer: int = 4,
-    scale_factors: Optional[Union[List[int], List[Dict[str, int]]]] = None,
+    scale_factors: Optional[
+        Union[List[int], List[Dict[str, int]], List[Dict[str, float]]]
+    ] = None,
     scaling_method: str = "local_mean",
     xyz_orientation: Optional[str] = None,
     omero: nz.Omero = None,
@@ -802,7 +804,7 @@ def _ngff_image_to_ome_zarr_axes(ngff_image: nz.NgffImage) -> list:
 
 def _ngff_image_to_ome_zarr_transforms(
     ngff_image: nz.NgffImage,
-    scale_factors: Union[List[int], List[Dict[str, int]]],
+    scale_factors: Union[List[int], List[Dict[str, Union[int, float]]]],
 ) -> list:
     """Convert NgffImage scale/translation to ome-zarr coordinate_transformations.
 
@@ -810,7 +812,8 @@ def _ngff_image_to_ome_zarr_transforms(
         ngff_image: NgffImage object
         scale_factors: List of scale factors for each pyramid level. Either a list
             of integers (xy-only downsampling) or a list of dicts with per-axis
-            factors (e.g. ``[{"z": 2, "y": 2, "x": 2}, ...]``).
+            factors (e.g. ``[{"z": 2, "y": 2, "x": 2}, ...]``).  Values may be
+            floats when derived from exact source level shapes.
 
     Returns:
         List of coordinate transformations for each pyramid level
@@ -1105,6 +1108,133 @@ def get_scale_factors_from_file(
     if isinstance(path, str) and path.endswith(".ims"):
         return get_imaris_scale_factors(path)
     return get_ome_zarr_scale_factors(path, storage_options=storage_options)
+
+
+def _get_imaris_level_zyx_shapes(path: str) -> List[Tuple[int, int, int]]:
+    """Return the (z, y, x) shape at every resolution level of an Imaris file.
+
+    Args:
+        path: Path to the Imaris (.ims) file.
+
+    Returns:
+        List of (z, y, x) integer tuples, one per resolution level starting
+        at level 0.
+    """
+    try:
+        from imaris_ims_zarr import ImsProcessSafeStore
+    except ImportError:
+        raise ImportError(
+            "imaris_ims_zarr is required for Imaris support. "
+            "Install with: pip install imaris-ims-zarr or uv add imaris-ims-zarr"
+        )
+    store0 = ImsProcessSafeStore(path, ResolutionLevelLock=0)
+    shapes = []
+    for level in range(store0.ResolutionLevels):
+        store_l = ImsProcessSafeStore(path, ResolutionLevelLock=level)
+        shapes.append(
+            (int(store_l.shape[2]), int(store_l.shape[3]), int(store_l.shape[4]))
+        )
+    return shapes
+
+
+def _get_ome_zarr_level_zyx_shapes(
+    store_or_path: Any,
+    storage_options: Optional[Dict] = None,
+) -> List[Tuple[int, int, int]]:
+    """Return the (z, y, x) shape at every resolution level of an OME-Zarr store.
+
+    Args:
+        store_or_path: Store or path to the OME-Zarr file.
+        storage_options: Optional storage options for Zarr/fsspec backends.
+
+    Returns:
+        List of (z, y, x) integer tuples, one per resolution level starting
+        at level 0.
+    """
+    multiscales = get_multiscales(store_or_path, storage_options=storage_options)
+    shapes = []
+    for img in multiscales.images:
+        dim_to_size = {d: img.data.shape[i] for i, d in enumerate(img.dims)}
+        shapes.append(
+            (
+                int(dim_to_size.get("z", 1)),
+                int(dim_to_size.get("y", 1)),
+                int(dim_to_size.get("x", 1)),
+            )
+        )
+    return shapes
+
+
+def _get_level_zyx_shapes_from_file(
+    path: Any,
+    storage_options: Optional[Dict] = None,
+) -> List[Tuple[int, int, int]]:
+    """Return per-level (z, y, x) shapes from any supported file format.
+
+    Dispatches to the appropriate format-specific helper based on the file
+    extension. Supports OME-Zarr (``.zarr``, ``.ozx``, ``.zarr.zip``) and
+    Imaris (``.ims``) formats.
+
+    Args:
+        path: Path or store to the source file.
+        storage_options: Optional storage options (only used for OME-Zarr paths).
+
+    Returns:
+        List of (z, y, x) integer tuples, one per resolution level starting
+        at level 0.
+    """
+    if isinstance(path, str) and path.endswith(".ims"):
+        return _get_imaris_level_zyx_shapes(path)
+    return _get_ome_zarr_level_zyx_shapes(path, storage_options=storage_options)
+
+
+def _compute_float_scale_factors_from_shapes(
+    level_shapes: List[Tuple[int, int, int]],
+) -> List[Dict[str, float]]:
+    """Compute cumulative float scale factors from per-level (z, y, x) shapes.
+
+    Derives cumulative scale factors relative to level 0 as
+    ``base / (target + 0.5)`` rather than the exact ratio ``base / target``.
+    This guarantees that pyramid builders using ``int(size // factor)`` reproduce
+    the exact target shapes from the source file regardless of whether those
+    shapes were computed with floor, ceiling, or round, and regardless of
+    floating-point rounding in the division.
+
+    The ``+ 0.5`` offset ensures that for any positive integers ``base`` and
+    ``target`` (with ``target <= base``):
+
+    * Level 0: ``floor(base / (base / (target + 0.5))) = floor(target + 0.5) = target``
+    * Level k > 0: the relative factor between consecutive cumulative factors
+      simplifies to ``(prev + 0.5) / (target + 0.5)``, and
+      ``floor(prev / relative) = target`` holds by a simple algebraic argument
+      (since the true quotient lies in ``[target, target + 0.5)``).
+
+    Args:
+        level_shapes: List of (z, y, x) integer tuples, one per level starting
+            at level 0.  Must contain at least one element.
+
+    Returns:
+        List of cumulative scale-factor dicts (``{"z": ..., "y": ..., "x": ...}``)
+        with float values, one per pyramid level above level 0.  Returns an
+        empty list when *level_shapes* has only one entry.
+    """
+    if len(level_shapes) <= 1:
+        return []
+    base_z, base_y, base_x = level_shapes[0]
+    if base_z <= 0 or base_y <= 0 or base_x <= 0:
+        raise ValueError(
+            f"Level 0 shape must have all positive dimensions; got {level_shapes[0]}"
+        )
+    result: List[Dict[str, float]] = []
+    for z, y, x in level_shapes[1:]:
+        result.append(
+            {
+                "z": float(base_z) / (z + 0.5),
+                "y": float(base_y) / (y + 0.5),
+                "x": float(base_x) / (x + 0.5),
+            }
+        )
+    return result
 
 
 def _select_dimensions_from_image(
@@ -4235,14 +4365,43 @@ class ZarrNii:
                 f"Invalid backend '{backend}'. Must be 'ngff-zarr' or 'ome-zarr-py'"
             )
 
+        # Scale factors to use for actual pyramid construction in the ome-zarr-py
+        # backend.  When match_scale_factors_from is set, we derive exact float
+        # ratios from the source level shapes so that the output pyramid levels
+        # have the same sizes as the source file, regardless of whether the
+        # source used floor, ceiling, or round when computing its level sizes.
+        _ome_zarr_py_scale_factors = scale_factors
+
         if match_scale_factors_from is not None:
             if scale_factors is not None:
                 raise ValueError(
                     "Cannot specify both 'scale_factors' and "
                     "'match_scale_factors_from'."
                 )
-            scale_factors = get_scale_factors_from_file(match_scale_factors_from)
-            max_layer = len(scale_factors) + 1
+            # Derive exact float scale factors from source level shapes.
+            # We do not call get_scale_factors_from_file here because that
+            # function coerces ratios to integers and raises an error when
+            # a source file (e.g. Imaris) has used ceiling instead of floor
+            # when computing its downsampled level sizes.
+            level_shapes = _get_level_zyx_shapes_from_file(match_scale_factors_from)
+            _ome_zarr_py_scale_factors = _compute_float_scale_factors_from_shapes(
+                level_shapes
+            )
+            max_layer = len(_ome_zarr_py_scale_factors) + 1
+            # For the ngff-zarr backend, which expects integer scale factors,
+            # round the float factors to the nearest integer (best effort).
+            scale_factors = [
+                {k: max(1, round(v)) for k, v in sf.items()}
+                for sf in _ome_zarr_py_scale_factors
+            ]
+            # The ome-zarr-py ``local_mean`` scaler requires integer block
+            # reduction factors.  Float scale factors (e.g. ~1.9 for a
+            # ceiling-based source) get truncated to 1, producing no actual
+            # downsampling and a chunk-shape mismatch.  Switch to 'nearest'
+            # (skimage resize) which handles arbitrary float factors correctly,
+            # unless the caller has already requested a specific method.
+            if "scaling_method" not in kwargs:
+                kwargs["scaling_method"] = "nearest"
 
         # Determine the image to save
         if self.axes_order == "XYZ":
@@ -4269,7 +4428,7 @@ class ZarrNii:
                 ngff_image_to_save,
                 store_or_path,
                 max_layer,
-                scale_factors,
+                _ome_zarr_py_scale_factors,
                 omero=self._omero,
                 xyz_orientation=(
                     self.xyz_orientation if hasattr(self, "xyz_orientation") else None
