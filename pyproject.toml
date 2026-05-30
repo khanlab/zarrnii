@@ -21,6 +21,7 @@ classifiers = [
 
 dependencies = [
     "zarr>=3.1.6",
+    "ome_zarr>=0.16.0",
     "nibabel>=5.2.0",
     "dask>=2026.3.0",
     "numpy>=1.26.4",
@@ -140,8 +141,6 @@ precision = 2
 [tool.coverage.html]
 directory = "htmlcov"
 
-[tool.uv.sources]
-ome-zarr = { git = "https://github.com/khanlab/ome-zarr-py", branch = "copilot/add-resize-local-mean-method" }
 
 [dependency-groups]
 dev = [

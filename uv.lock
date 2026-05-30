@@ -2739,8 +2739,8 @@ wheels = [
 
 [[package]]
 name = "ome-zarr"
-version = "0.1.dev1748+g054549a2d"
-source = { git = "https://github.com/khanlab/ome-zarr-py?branch=copilot%2Fadd-resize-local-mean-method#054549a2d887b03d5d54cbcab5271eed0324bf3e" }
+version = "0.16.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "dask" },
@@ -2753,6 +2753,10 @@ dependencies = [
     { name = "toolz" },
     { name = "zarr", version = "3.1.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "zarr", version = "3.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0e/45/b5b9933ec62028453dc841d25ea66d65405d77d2eb5bb34043621b0c294c/ome_zarr-0.16.0.tar.gz", hash = "sha256:0d31f3409c0f4ad67f04b9a4e9e8855e6e6b040e84d5c9be1095638f90d6eeb9", size = 86252, upload-time = "2026-04-14T09:43:32.354Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/81/4c41331f59e64b2a5eaec1c03819d5791e4dde321694fbda661f873184da/ome_zarr-0.16.0-py3-none-any.whl", hash = "sha256:a34a5558905af526afd343105804b6d291e97f949cb71f6b3d269a6a7112b599", size = 46410, upload-time = "2026-04-14T09:43:31.092Z" },
 ]
 
 [[package]]
@@ -4555,7 +4559,7 @@ requires-dist = [
     { name = "ngff-zarr", extras = ["cli", "dask-image", "itk", "tensorstore", "validate"], specifier = ">=0.34.0" },
     { name = "nibabel", specifier = ">=5.2.0" },
     { name = "numpy", specifier = ">=1.26.4" },
-    { name = "ome-zarr", git = "https://github.com/khanlab/ome-zarr-py?branch=copilot%2Fadd-resize-local-mean-method" },
+    { name = "ome-zarr", specifier = ">=0.16.0" },
     { name = "pandas", specifier = ">=2.2.0" },
     { name = "pluggy", specifier = ">=1.0.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
