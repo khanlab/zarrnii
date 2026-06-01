@@ -16328,8 +16328,7 @@ when possible based on existing chunking.</p>
             <p>Optional mapping of axis name to unit string (e.g.
 <code>{"x": "micrometer", "y": "micrometer", "z": "micrometer"}</code>).
 All values must be valid OME-Zarr space units (see
-:data:<code>VALID_AXES_UNITS</code>).  When <code>None</code>, no unit metadata is
-stored.</p>
+:data:<code>VALID_AXES_UNITS</code>).  When <code>None</code>, micrometer is assumed.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -16635,7 +16634,9 @@ space unit.</p>
 <span class="normal">5156</span>
 <span class="normal">5157</span>
 <span class="normal">5158</span>
-<span class="normal">5159</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="normal">5159</span>
+<span class="normal">5160</span>
+<span class="normal">5161</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">from_imaris</span><span class="p">(</span>
     <span class="bp">cls</span><span class="p">,</span>
     <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -16678,8 +16679,7 @@ space unit.</p>
 <span class="sd">        axes_units: Optional mapping of axis name to unit string (e.g.</span>
 <span class="sd">            ``{&quot;x&quot;: &quot;micrometer&quot;, &quot;y&quot;: &quot;micrometer&quot;, &quot;z&quot;: &quot;micrometer&quot;}``).</span>
 <span class="sd">            All values must be valid OME-Zarr space units (see</span>
-<span class="sd">            :data:`VALID_AXES_UNITS`).  When ``None``, no unit metadata is</span>
-<span class="sd">            stored.</span>
+<span class="sd">            :data:`VALID_AXES_UNITS`).  When ``None``, micrometer is assumed.</span>
 <span class="sd">        downsample_near_isotropic: If True, automatically downsample</span>
 <span class="sd">            dimensions with smaller voxel sizes to achieve near-isotropic</span>
 <span class="sd">            resolution. Deprecated and will be removed in a future version.</span>
@@ -16696,6 +16696,9 @@ space unit.</p>
 <span class="sd">        ValueError: If any value in *axes_units* is not a valid OME-Zarr</span>
 <span class="sd">            space unit.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">axes_units</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">axes_units</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;x&quot;</span><span class="p">:</span> <span class="s2">&quot;micrometer&quot;</span><span class="p">,</span> <span class="s2">&quot;y&quot;</span><span class="p">:</span> <span class="s2">&quot;micrometer&quot;</span><span class="p">,</span> <span class="s2">&quot;z&quot;</span><span class="p">:</span> <span class="s2">&quot;micrometer&quot;</span><span class="p">}</span>
     <span class="n">_validate_axes_units</span><span class="p">(</span><span class="n">axes_units</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">downsample_near_isotropic</span><span class="p">:</span>
         <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
@@ -17128,9 +17131,7 @@ space unit.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5161</span>
-<span class="normal">5162</span>
-<span class="normal">5163</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5163</span>
 <span class="normal">5164</span>
 <span class="normal">5165</span>
 <span class="normal">5166</span>
@@ -17451,7 +17452,9 @@ space unit.</p>
 <span class="normal">5481</span>
 <span class="normal">5482</span>
 <span class="normal">5483</span>
-<span class="normal">5484</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="normal">5484</span>
+<span class="normal">5485</span>
+<span class="normal">5486</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">from_tif_stack</span><span class="p">(</span>
     <span class="bp">cls</span><span class="p">,</span>
     <span class="n">paths</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span>
@@ -18017,9 +18020,7 @@ space unit.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5486</span>
-<span class="normal">5487</span>
-<span class="normal">5488</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5488</span>
 <span class="normal">5489</span>
 <span class="normal">5490</span>
 <span class="normal">5491</span>
@@ -18315,7 +18316,9 @@ space unit.</p>
 <span class="normal">5781</span>
 <span class="normal">5782</span>
 <span class="normal">5783</span>
-<span class="normal">5784</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="normal">5784</span>
+<span class="normal">5785</span>
+<span class="normal">5786</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">from_ome_tif</span><span class="p">(</span>
     <span class="bp">cls</span><span class="p">,</span>
     <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -18705,9 +18708,7 @@ All attributes use byte-array encoding as required by Imaris.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5786</span>
-<span class="normal">5787</span>
-<span class="normal">5788</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">5788</span>
 <span class="normal">5789</span>
 <span class="normal">5790</span>
 <span class="normal">5791</span>
@@ -19014,7 +19015,9 @@ All attributes use byte-array encoding as required by Imaris.</p>
 <span class="normal">6092</span>
 <span class="normal">6093</span>
 <span class="normal">6094</span>
-<span class="normal">6095</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_imaris</span><span class="p">(</span>
+<span class="normal">6095</span>
+<span class="normal">6096</span>
+<span class="normal">6097</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_imaris</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">compression</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;gzip&quot;</span><span class="p">,</span> <span class="n">compression_opts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -19358,9 +19361,7 @@ All attributes use byte-array encoding as required by Imaris.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6178</span>
-<span class="normal">6179</span>
-<span class="normal">6180</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6180</span>
 <span class="normal">6181</span>
 <span class="normal">6182</span>
 <span class="normal">6183</span>
@@ -19384,7 +19385,9 @@ All attributes use byte-array encoding as required by Imaris.</p>
 <span class="normal">6201</span>
 <span class="normal">6202</span>
 <span class="normal">6203</span>
-<span class="normal">6204</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
+<span class="normal">6204</span>
+<span class="normal">6205</span>
+<span class="normal">6206</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Create a copy of this ZarrNii.</span>
 
@@ -19447,9 +19450,7 @@ the NgffImage with computed data.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6206</span>
-<span class="normal">6207</span>
-<span class="normal">6208</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6208</span>
 <span class="normal">6209</span>
 <span class="normal">6210</span>
 <span class="normal">6211</span>
@@ -19461,7 +19462,9 @@ the NgffImage with computed data.</p>
 <span class="normal">6217</span>
 <span class="normal">6218</span>
 <span class="normal">6219</span>
-<span class="normal">6220</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nz</span><span class="o">.</span><span class="n">NgffImage</span><span class="p">:</span>
+<span class="normal">6220</span>
+<span class="normal">6221</span>
+<span class="normal">6222</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nz</span><span class="o">.</span><span class="n">NgffImage</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Compute the dask array and return the underlying NgffImage.</span>
 
@@ -19511,16 +19514,16 @@ the NgffImage with computed data.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6222</span>
-<span class="normal">6223</span>
-<span class="normal">6224</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6224</span>
 <span class="normal">6225</span>
 <span class="normal">6226</span>
 <span class="normal">6227</span>
 <span class="normal">6228</span>
 <span class="normal">6229</span>
 <span class="normal">6230</span>
-<span class="normal">6231</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_orientation</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="normal">6231</span>
+<span class="normal">6232</span>
+<span class="normal">6233</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_orientation</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Get the anatomical orientation of the dataset.</span>
 
@@ -19579,9 +19582,7 @@ the NgffImage with computed data.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6233</span>
-<span class="normal">6234</span>
-<span class="normal">6235</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6235</span>
 <span class="normal">6236</span>
 <span class="normal">6237</span>
 <span class="normal">6238</span>
@@ -19601,7 +19602,9 @@ the NgffImage with computed data.</p>
 <span class="normal">6252</span>
 <span class="normal">6253</span>
 <span class="normal">6254</span>
-<span class="normal">6255</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_zooms</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">6255</span>
+<span class="normal">6256</span>
+<span class="normal">6257</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_zooms</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Get voxel spacing (zooms) from NgffImage scale.</span>
 
@@ -19673,9 +19676,7 @@ the NgffImage with computed data.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6257</span>
-<span class="normal">6258</span>
-<span class="normal">6259</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6259</span>
 <span class="normal">6260</span>
 <span class="normal">6261</span>
 <span class="normal">6262</span>
@@ -19695,7 +19696,9 @@ the NgffImage with computed data.</p>
 <span class="normal">6276</span>
 <span class="normal">6277</span>
 <span class="normal">6278</span>
-<span class="normal">6279</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_origin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">6279</span>
+<span class="normal">6280</span>
+<span class="normal">6281</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_origin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Get origin (translation) from NgffImage.</span>
 
@@ -19768,9 +19771,7 @@ and align it to self.orientation (if provided) using nibabel.orientations.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6281</span>
-<span class="normal">6282</span>
-<span class="normal">6283</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6283</span>
 <span class="normal">6284</span>
 <span class="normal">6285</span>
 <span class="normal">6286</span>
@@ -19810,7 +19811,9 @@ and align it to self.orientation (if provided) using nibabel.orientations.</p>
 <span class="normal">6320</span>
 <span class="normal">6321</span>
 <span class="normal">6322</span>
-<span class="normal">6323</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_affine_matrix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">6323</span>
+<span class="normal">6324</span>
+<span class="normal">6325</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_affine_matrix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Construct a 4x4 affine matrix from NGFF metadata (scale/translation),</span>
 <span class="sd">    and align it to self.orientation (if provided) using nibabel.orientations.</span>
@@ -19875,10 +19878,10 @@ and align it to self.orientation (if provided) using nibabel.orientations.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6325</span>
-<span class="normal">6326</span>
-<span class="normal">6327</span>
-<span class="normal">6328</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform_ref_to_flo_indices</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">transforms</span><span class="p">,</span> <span class="n">ref_znimg</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6327</span>
+<span class="normal">6328</span>
+<span class="normal">6329</span>
+<span class="normal">6330</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform_ref_to_flo_indices</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">transforms</span><span class="p">,</span> <span class="n">ref_znimg</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Transform indices from reference to floating space.&quot;&quot;&quot;</span>
     <span class="c1"># Placeholder implementation - would need full transform logic</span>
     <span class="k">return</span> <span class="n">indices</span>
@@ -19904,10 +19907,10 @@ and align it to self.orientation (if provided) using nibabel.orientations.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6330</span>
-<span class="normal">6331</span>
-<span class="normal">6332</span>
-<span class="normal">6333</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform_flo_to_ref_indices</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">transforms</span><span class="p">,</span> <span class="n">ref_znimg</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6332</span>
+<span class="normal">6333</span>
+<span class="normal">6334</span>
+<span class="normal">6335</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform_flo_to_ref_indices</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">transforms</span><span class="p">,</span> <span class="n">ref_znimg</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Transform indices from floating to reference space.&quot;&quot;&quot;</span>
     <span class="c1"># Placeholder implementation - would need full transform logic</span>
     <span class="k">return</span> <span class="n">indices</span>
@@ -19974,9 +19977,7 @@ human-readable names for multi-channel datasets.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6335</span>
-<span class="normal">6336</span>
-<span class="normal">6337</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6337</span>
 <span class="normal">6338</span>
 <span class="normal">6339</span>
 <span class="normal">6340</span>
@@ -20004,7 +20005,9 @@ human-readable names for multi-channel datasets.</p>
 <span class="normal">6362</span>
 <span class="normal">6363</span>
 <span class="normal">6364</span>
-<span class="normal">6365</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">list_channels</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="normal">6365</span>
+<span class="normal">6366</span>
+<span class="normal">6367</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">list_channels</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get list of available channel labels from OMERO metadata.</span>
 
 <span class="sd">    Extracts channel labels from OMERO metadata if available, providing</span>
@@ -20143,9 +20146,7 @@ channel_labels used without OMERO metadata, or if labels not found</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6367</span>
-<span class="normal">6368</span>
-<span class="normal">6369</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6369</span>
 <span class="normal">6370</span>
 <span class="normal">6371</span>
 <span class="normal">6372</span>
@@ -20238,7 +20239,9 @@ channel_labels used without OMERO metadata, or if labels not found</p>
 <span class="normal">6459</span>
 <span class="normal">6460</span>
 <span class="normal">6461</span>
-<span class="normal">6462</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">select_channels</span><span class="p">(</span>
+<span class="normal">6462</span>
+<span class="normal">6463</span>
+<span class="normal">6464</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">select_channels</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">channels</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">channel_labels</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -20383,9 +20386,7 @@ channel_labels used without OMERO metadata, or if labels not found</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6464</span>
-<span class="normal">6465</span>
-<span class="normal">6466</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6466</span>
 <span class="normal">6467</span>
 <span class="normal">6468</span>
 <span class="normal">6469</span>
@@ -20419,7 +20420,9 @@ channel_labels used without OMERO metadata, or if labels not found</p>
 <span class="normal">6497</span>
 <span class="normal">6498</span>
 <span class="normal">6499</span>
-<span class="normal">6500</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">select_timepoints</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timepoints</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
+<span class="normal">6500</span>
+<span class="normal">6501</span>
+<span class="normal">6502</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">select_timepoints</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timepoints</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Select timepoints from the image data and return a new ZarrNii instance.</span>
 
@@ -20505,9 +20508,7 @@ channel_labels used without OMERO metadata, or if labels not found</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6502</span>
-<span class="normal">6503</span>
-<span class="normal">6504</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6504</span>
 <span class="normal">6505</span>
 <span class="normal">6506</span>
 <span class="normal">6507</span>
@@ -20518,7 +20519,9 @@ channel_labels used without OMERO metadata, or if labels not found</p>
 <span class="normal">6512</span>
 <span class="normal">6513</span>
 <span class="normal">6514</span>
-<span class="normal">6515</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_ngff_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nz</span><span class="o">.</span><span class="n">NgffImage</span><span class="p">:</span>
+<span class="normal">6515</span>
+<span class="normal">6516</span>
+<span class="normal">6517</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_ngff_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nz</span><span class="o">.</span><span class="n">NgffImage</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Convert to NgffImage object.</span>
 
@@ -20599,9 +20602,7 @@ with <code>@hookimpl</code> from :mod:<code>zarrnii.plugins</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6517</span>
-<span class="normal">6518</span>
-<span class="normal">6519</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6519</span>
 <span class="normal">6520</span>
 <span class="normal">6521</span>
 <span class="normal">6522</span>
@@ -20671,7 +20672,9 @@ with <code>@hookimpl</code> from :mod:<code>zarrnii.plugins</code>.</p>
 <span class="normal">6586</span>
 <span class="normal">6587</span>
 <span class="normal">6588</span>
-<span class="normal">6589</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment</span><span class="p">(</span>
+<span class="normal">6589</span>
+<span class="normal">6590</span>
+<span class="normal">6591</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="n">plugin</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -20805,9 +20808,7 @@ This computes the threshold locally for each processing block.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6591</span>
-<span class="normal">6592</span>
-<span class="normal">6593</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6593</span>
 <span class="normal">6594</span>
 <span class="normal">6595</span>
 <span class="normal">6596</span>
@@ -20824,7 +20825,9 @@ This computes the threshold locally for each processing block.</p>
 <span class="normal">6607</span>
 <span class="normal">6608</span>
 <span class="normal">6609</span>
-<span class="normal">6610</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment_otsu</span><span class="p">(</span>
+<span class="normal">6610</span>
+<span class="normal">6611</span>
+<span class="normal">6612</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment_otsu</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="n">nbins</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -20927,9 +20930,7 @@ If False, pixels &gt; threshold are labeled as foreground.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6612</span>
-<span class="normal">6613</span>
-<span class="normal">6614</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6614</span>
 <span class="normal">6615</span>
 <span class="normal">6616</span>
 <span class="normal">6617</span>
@@ -20962,7 +20963,9 @@ If False, pixels &gt; threshold are labeled as foreground.</p>
 <span class="normal">6644</span>
 <span class="normal">6645</span>
 <span class="normal">6646</span>
-<span class="normal">6647</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment_threshold</span><span class="p">(</span>
+<span class="normal">6647</span>
+<span class="normal">6648</span>
+<span class="normal">6649</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">segment_threshold</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">thresholds</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
     <span class="n">inclusive</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
@@ -21110,9 +21113,7 @@ where mask &gt; 0 are included in histogram computation</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6649</span>
-<span class="normal">6650</span>
-<span class="normal">6651</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6651</span>
 <span class="normal">6652</span>
 <span class="normal">6653</span>
 <span class="normal">6654</span>
@@ -21150,7 +21151,9 @@ where mask &gt; 0 are included in histogram computation</p>
 <span class="normal">6686</span>
 <span class="normal">6687</span>
 <span class="normal">6688</span>
-<span class="normal">6689</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_histogram</span><span class="p">(</span>
+<span class="normal">6689</span>
+<span class="normal">6690</span>
+<span class="normal">6691</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_histogram</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">bins</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="nb">range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -21322,9 +21325,7 @@ object showing the histogram with annotated threshold lines.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6691</span>
-<span class="normal">6692</span>
-<span class="normal">6693</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6693</span>
 <span class="normal">6694</span>
 <span class="normal">6695</span>
 <span class="normal">6696</span>
@@ -21393,7 +21394,9 @@ object showing the histogram with annotated threshold lines.</p>
 <span class="normal">6759</span>
 <span class="normal">6760</span>
 <span class="normal">6761</span>
-<span class="normal">6762</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_otsu_thresholds</span><span class="p">(</span>
+<span class="normal">6762</span>
+<span class="normal">6763</span>
+<span class="normal">6764</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_otsu_thresholds</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
     <span class="n">bins</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -21646,9 +21649,7 @@ Tuple of (mip_list, slab_info_list) where:
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6764</span>
-<span class="normal">6765</span>
-<span class="normal">6766</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6766</span>
 <span class="normal">6767</span>
 <span class="normal">6768</span>
 <span class="normal">6769</span>
@@ -21750,7 +21751,9 @@ Tuple of (mip_list, slab_info_list) where:
 <span class="normal">6865</span>
 <span class="normal">6866</span>
 <span class="normal">6867</span>
-<span class="normal">6868</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_mip</span><span class="p">(</span>
+<span class="normal">6868</span>
+<span class="normal">6869</span>
+<span class="normal">6870</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_mip</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">plane</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;axial&quot;</span><span class="p">,</span>
     <span class="n">slab_thickness_um</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">100.0</span><span class="p">,</span>
@@ -22050,9 +22053,7 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6870</span>
-<span class="normal">6871</span>
-<span class="normal">6872</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6872</span>
 <span class="normal">6873</span>
 <span class="normal">6874</span>
 <span class="normal">6875</span>
@@ -22177,7 +22178,9 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 <span class="normal">6994</span>
 <span class="normal">6995</span>
 <span class="normal">6996</span>
-<span class="normal">6997</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_region_properties</span><span class="p">(</span>
+<span class="normal">6997</span>
+<span class="normal">6998</span>
+<span class="normal">6999</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_region_properties</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">output_properties</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">depth</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
@@ -22398,9 +22401,7 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">6999</span>
-<span class="normal">7000</span>
-<span class="normal">7001</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">7001</span>
 <span class="normal">7002</span>
 <span class="normal">7003</span>
 <span class="normal">7004</span>
@@ -22501,7 +22502,9 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
 <span class="normal">7099</span>
 <span class="normal">7100</span>
 <span class="normal">7101</span>
-<span class="normal">7102</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
+<span class="normal">7102</span>
+<span class="normal">7103</span>
+<span class="normal">7104</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">plugin</span><span class="p">,</span>
     <span class="n">downsample_factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
@@ -22651,9 +22654,7 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">7115</span>
-<span class="normal">7116</span>
-<span class="normal">7117</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">7117</span>
 <span class="normal">7118</span>
 <span class="normal">7119</span>
 <span class="normal">7120</span>
@@ -22693,7 +22694,9 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
 <span class="normal">7154</span>
 <span class="normal">7155</span>
 <span class="normal">7156</span>
-<span class="normal">7157</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">destripe</span><span class="p">(</span>
+<span class="normal">7157</span>
+<span class="normal">7158</span>
+<span class="normal">7159</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">destripe</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">channel</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
