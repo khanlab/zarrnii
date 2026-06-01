@@ -4748,11 +4748,7 @@ class ZarrNii:
         chunks: Any = None,
         axes_order: str = "ZYX",
         orientation: str = "RAS",
-        axes_units: Optional[Dict[str, str]] = {
-            "z": "micrometer",
-            "y": "micrometer",
-            "x": "micrometer",
-        },
+        axes_units: Optional[Dict[str, str]] = None,
         downsample_near_isotropic: bool = False,
     ) -> "ZarrNii":
         """
