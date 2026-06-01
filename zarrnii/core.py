@@ -4178,7 +4178,9 @@ class ZarrNii:
         # ---------------------------------------------------------------
         # 1b. Convert points from points_units to image native units
         # ---------------------------------------------------------------
-        xyz = _convert_physical_coords_units(xyz, points_units, self.ngff_image.axes_units)
+        xyz = _convert_physical_coords_units(
+            xyz, points_units, self.ngff_image.axes_units
+        )
 
         # ---------------------------------------------------------------
         # 2. Convert physical (x, y, z) → voxel coordinates in data order
