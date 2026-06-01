@@ -1009,7 +1009,7 @@ def _get_level_zyx_shapes_from_file(
 
 def _compute_scale_factors_from_shapes(
     level_shapes: List[Tuple[int, int, int]],
-) -> List[Dict[str, float]]:
+) -> List[Dict[str, int]]:
     """Compute scale factors from shapes, based on accummulating per-level integer scaling.
 
     Args:
