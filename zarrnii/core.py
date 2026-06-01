@@ -1007,6 +1007,31 @@ def _get_level_zyx_shapes_from_file(
     return _get_ome_zarr_level_zyx_shapes(path, storage_options=storage_options)
 
 
+def get_scale_factors_from_file(
+    path: Any,
+    storage_options: Optional[Dict] = None,
+) -> List[Dict[str, int]]:
+    """Return per-level scale factors.
+
+    Dispatches to the appropriate format-specific helper based on the file
+    extension. Supports OME-Zarr (``.zarr``, ``.ozx``, ``.zarr.zip``) and
+    Imaris (``.ims``) formats.
+
+    Args:
+        path: Path or store to the source file.
+        storage_options: Optional storage options (only used for OME-Zarr paths).
+
+    Returns:
+        List of cumulative scale-factor dicts (``{"z": ..., "y": ..., "x": ...}``)
+         one per pyramid level above level 0.  Returns an
+        empty list when *level_shapes* has only one entry.
+    """
+
+    level_shapes = _get_level_zyx_shapes_from_file(path)
+    scale_factors = _compute_scale_factors_from_shapes(level_shapes)
+    return scale_factors
+
+
 def _compute_scale_factors_from_shapes(
     level_shapes: List[Tuple[int, int, int]],
 ) -> List[Dict[str, int]]:
