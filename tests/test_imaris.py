@@ -836,7 +836,6 @@ class TestGetImarisScaleFactors:
 
         from zarrnii.core import (
             _get_level_zyx_shapes_from_file,
-            _get_level_zyx_shapes_from_file,
         )
 
         source_shapes = _get_level_zyx_shapes_from_file(ims_path)
@@ -903,5 +902,3 @@ class TestLevelZyxShapeHelpers:
         # Levels 1 and 2 sizes computed by ome-zarr floor division
         assert shapes[1] == (16, 32, 24)
         assert shapes[2] == (8, 16, 12)
-
-
