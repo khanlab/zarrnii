@@ -387,9 +387,7 @@ class TestSampleAtPointsUnitsConversion:
     def test_invalid_points_units_raises(self):
         znii = self._make_image(spacing=(1.0, 1.0, 1.0), axes_units=_MM_UNITS)
         with pytest.raises(ValueError, match="Invalid axes_units value"):
-            znii.sample_at_points(
-                np.array([[0.0, 0.0, 1.0]]), points_units={"x": "mm"}
-            )
+            znii.sample_at_points(np.array([[0.0, 0.0, 1.0]]), points_units={"x": "mm"})
 
     def test_image_no_axes_units_no_conversion(self):
         """When image has no axes_units (None), coordinates are assumed in mm."""
