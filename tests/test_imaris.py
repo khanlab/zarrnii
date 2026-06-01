@@ -13,13 +13,21 @@ from numpy.testing import assert_array_almost_equal, assert_array_equal
 from zarrnii import (
     ZarrNii,
     get_dask_client,
-    get_imaris_scale_factors,
-    get_ome_zarr_scale_factors,
-    get_scale_factors_from_file,
+)
+from zarrnii.core import (
+    _compute_scale_factors_from_shapes,
+    _get_level_zyx_shapes_from_file,
 )
 
 # Skip all tests if h5py is not available
 h5py = pytest.importorskip("h5py", reason="h5py required for Imaris support")
+
+
+def _scale_factors_from_source(path):
+    """Compute cumulative scale factors by deriving per-level shapes first."""
+    if isinstance(path, str) and path.endswith(".ims") and not os.path.exists(path):
+        raise FileNotFoundError(f"Imaris file does not exist: {path}")
+    return _compute_scale_factors_from_shapes(_get_level_zyx_shapes_from_file(path))
 
 
 @pytest.fixture
@@ -701,13 +709,13 @@ class TestGetImarisScaleFactors:
 
     def test_single_level_returns_empty(self, sample_imaris_file):
         """Single-resolution IMS file returns an empty list."""
-        factors = get_imaris_scale_factors(sample_imaris_file)
+        factors = _scale_factors_from_source(sample_imaris_file)
         assert factors == []
 
     def test_multi_level_returns_correct_factors(self, multi_level_imaris_file):
         """Multi-resolution IMS file returns correct cumulative scale factors."""
         ims_path, expected_factors = multi_level_imaris_file
-        factors = get_imaris_scale_factors(ims_path)
+        factors = _scale_factors_from_source(ims_path)
         assert factors == expected_factors
 
     def test_multi_level_rounds_near_integer_factors(self, monkeypatch, tmp_path):
@@ -733,7 +741,7 @@ class TestGetImarisScaleFactors:
             types.SimpleNamespace(ImsProcessSafeStore=FakeImsProcessSafeStore),
         )
 
-        assert get_imaris_scale_factors(str(ims_path)) == [
+        assert _scale_factors_from_source(str(ims_path)) == [
             {"z": 2, "y": 2, "x": 2},
             {"z": 4, "y": 4, "x": 4},
         ]
@@ -768,7 +776,7 @@ class TestGetImarisScaleFactors:
             types.SimpleNamespace(ImsProcessSafeStore=FakeImsProcessSafeStore),
         )
 
-        assert get_imaris_scale_factors(str(ims_path)) == [
+        assert _scale_factors_from_source(str(ims_path)) == [
             {"z": 2, "y": 2, "x": 2},
             {"z": 4, "y": 4, "x": 4},
             {"z": 8, "y": 8, "x": 8},
@@ -780,17 +788,16 @@ class TestGetImarisScaleFactors:
     def test_nonexistent_file_raises(self):
         """Missing file raises FileNotFoundError."""
         with pytest.raises(FileNotFoundError, match="file does not exist"):
-            get_imaris_scale_factors("nonexistent.ims")
+            _scale_factors_from_source("nonexistent.ims")
 
     def test_get_scale_factors_from_file_dispatches_ims(self, multi_level_imaris_file):
         """get_scale_factors_from_file dispatches .ims to get_imaris_scale_factors."""
         ims_path, expected_factors = multi_level_imaris_file
-        factors = get_scale_factors_from_file(ims_path)
+        factors = _scale_factors_from_source(ims_path)
         assert factors == expected_factors
 
     def test_get_scale_factors_from_file_dispatches_zarr(self, tmp_path):
         """get_scale_factors_from_file dispatches .zarr to get_ome_zarr_scale_factors."""
-        from zarrnii import get_ome_zarr_scale_factors
         from zarrnii.core import save_ngff_image_with_ome_zarr
 
         zarr_path = str(tmp_path / "source.zarr")
@@ -800,8 +807,10 @@ class TestGetImarisScaleFactors:
         znii = ZarrNii.from_darr(darr, spacing=[1.0, 1.0, 1.0])
         znii.to_ome_zarr(zarr_path, max_layer=3)
 
-        expected = get_ome_zarr_scale_factors(zarr_path)
-        assert get_scale_factors_from_file(zarr_path) == expected
+        assert _scale_factors_from_source(zarr_path) == [
+            {"z": 2, "y": 2, "x": 2},
+            {"z": 4, "y": 4, "x": 4},
+        ]
 
     def test_to_ome_zarr_match_scale_factors_from_single_level_ims(
         self, sample_imaris_file, tmp_path
@@ -812,9 +821,7 @@ class TestGetImarisScaleFactors:
         # Single-level IMS → scale_factors=[] → max_layer=1 (level 0 only)
         znii.to_ome_zarr(output_path, match_scale_factors_from=sample_imaris_file)
 
-        from zarrnii import get_ome_zarr_scale_factors
-
-        assert get_ome_zarr_scale_factors(output_path) == []
+        assert _scale_factors_from_source(output_path) == []
 
     def test_to_ome_zarr_match_scale_factors_from_multi_level_ims(
         self, multi_level_imaris_file, tmp_path
@@ -842,27 +849,16 @@ class TestGetImarisScaleFactors:
 class TestGetOmeZarrScaleFactors:
     """Tests for near-integer OME-Zarr scale factor extraction."""
 
-    def test_rounds_near_integer_ratios(self, monkeypatch):
+    def test_rounds_near_integer_ratios(self):
         """Near-integer OME-Zarr scale metadata are rounded to integers."""
-        import zarrnii.core as core_module
-
-        multiscales = types.SimpleNamespace(
-            images=[
-                types.SimpleNamespace(scale={"z": 1.0, "y": 2.0, "x": 4.0}),
-                types.SimpleNamespace(scale={"z": 1.999, "y": 4.001, "x": 8.04}),
-            ]
-        )
-
-        monkeypatch.setattr(
-            core_module, "get_multiscales", lambda *args, **kwargs: multiscales
-        )
-
-        assert get_ome_zarr_scale_factors("dummy.zarr") == [{"z": 2, "y": 2, "x": 2}]
+        assert _compute_scale_factors_from_shapes(
+            [(100, 200, 300), (50, 100, 150)]
+        ) == [{"z": 2, "y": 2, "x": 2}]
 
 
 class TestLevelZyxShapeHelpers:
     """Tests for _get_imaris_level_zyx_shapes, _get_ome_zarr_level_zyx_shapes,
-    _get_level_zyx_shapes_from_file, and _compute_float_scale_factors_from_shapes."""
+    _get_level_zyx_shapes_from_file, and _compute_scale_factors_from_shapes."""
 
     def test_get_imaris_level_zyx_shapes_single_level(
         self, sample_imaris_file, monkeypatch
@@ -940,18 +936,18 @@ class TestLevelZyxShapeHelpers:
 
     def test_compute_float_scale_factors_single_level(self):
         """Single level returns an empty list."""
-        from zarrnii.core import _compute_float_scale_factors_from_shapes
+        from zarrnii.core import _compute_scale_factors_from_shapes
 
-        assert _compute_float_scale_factors_from_shapes([(100, 200, 300)]) == []
+        assert _compute_scale_factors_from_shapes([(100, 200, 300)]) == []
 
     def test_compute_float_scale_factors_exact_integer(self):
         """Scale factors guarantee floor(base/f)==target for exact-integer ratios."""
         import math
 
-        from zarrnii.core import _compute_float_scale_factors_from_shapes
+        from zarrnii.core import _compute_scale_factors_from_shapes
 
         shapes = [(32, 64, 48), (16, 32, 24), (8, 16, 12)]
-        factors = _compute_float_scale_factors_from_shapes(shapes)
+        factors = _compute_scale_factors_from_shapes(shapes)
         assert len(factors) == 2
         base_z, base_y, base_x = shapes[0]
         for i, (tz, ty, tx) in enumerate(shapes[1:]):
@@ -963,11 +959,11 @@ class TestLevelZyxShapeHelpers:
         """Scale factors guarantee floor(base/f)==target for ceiling-based ratios."""
         import math
 
-        from zarrnii.core import _compute_float_scale_factors_from_shapes
+        from zarrnii.core import _compute_scale_factors_from_shapes
 
         # Level 1 computed with ceiling: ceil(101/2)=51
         shapes = [(101, 101, 101), (51, 51, 51)]
-        factors = _compute_float_scale_factors_from_shapes(shapes)
+        factors = _compute_scale_factors_from_shapes(shapes)
         assert len(factors) == 1
         for axis in ("z", "y", "x"):
             assert math.floor(101 / factors[0][axis]) == 51

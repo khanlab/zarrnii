@@ -13,11 +13,12 @@ import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 from zarrnii.core import (
+    _compute_scale_factors_from_shapes,
+    _get_level_zyx_shapes_from_file,
     apply_transform_to_ngff_image,
     crop_ngff_image,
     downsample_ngff_image,
     get_multiscales,
-    get_ome_zarr_scale_factors,
     load_ngff_image,
     save_ngff_image,
 )
@@ -554,7 +555,9 @@ class TestOmeZarrWriter:
                 scale_factors=deepcopy(expected_factors),
             )
 
-            extracted = get_ome_zarr_scale_factors(source_path)
+            extracted = _compute_scale_factors_from_shapes(
+                _get_level_zyx_shapes_from_file(source_path)
+            )
             assert extracted == expected_factors
 
     def test_to_ome_zarr_match_scale_factors_from(self, simple_ngff_image):
