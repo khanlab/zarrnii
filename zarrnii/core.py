@@ -929,7 +929,6 @@ def get_multiscales(
     return nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
 
 
-
 def _get_imaris_level_zyx_shapes(path: str) -> List[Tuple[int, int, int]]:
     """Return the (z, y, x) shape at every resolution level of an Imaris file.
 
@@ -1007,6 +1006,7 @@ def _get_level_zyx_shapes_from_file(
         return _get_imaris_level_zyx_shapes(path)
     return _get_ome_zarr_level_zyx_shapes(path, storage_options=storage_options)
 
+
 def _compute_scale_factors_from_shapes(
     level_shapes: List[Tuple[int, int, int]],
 ) -> List[Dict[str, float]]:
@@ -1030,17 +1030,17 @@ def _compute_scale_factors_from_shapes(
         )
     result: List[Dict[str, float]] = []
 
-    incremental_scale_factors=[]
-    cumul_scale_factors=[]
+    incremental_scale_factors = []
+    cumul_scale_factors = []
 
     current_cumul = {"z": 1, "y": 1, "x": 1}
-    for i in range(1,len(level_shapes)):
+    for i in range(1, len(level_shapes)):
         z, y, x = [float(s) for s in level_shapes[i]]
-        prev_z, prev_y, prev_x = [float(s) for s in level_shapes[i-1]]
+        prev_z, prev_y, prev_x = [float(s) for s in level_shapes[i - 1]]
         inc_factor = {
-                "z": int(prev_z/z),
-                "y": int(prev_y/y),
-                "x": int(prev_x/x),
+            "z": int(prev_z / z),
+            "y": int(prev_y / y),
+            "x": int(prev_x / x),
         }
         incremental_scale_factors.append(inc_factor)
 
@@ -1048,19 +1048,17 @@ def _compute_scale_factors_from_shapes(
         current_cumul = {
             "z": current_cumul["z"] * inc_factor["z"],
             "y": current_cumul["y"] * inc_factor["y"],
-            "x": current_cumul["x"] * inc_factor["x"]
+            "x": current_cumul["x"] * inc_factor["x"],
         }
         cumul_scale_factors.append(current_cumul)
 
-    print('inc scale factors')
+    print("inc scale factors")
     print(incremental_scale_factors)
 
-    print('cumul scale factors')
+    print("cumul scale factors")
     print(cumul_scale_factors)
 
     return cumul_scale_factors
-
-
 
 
 def _select_dimensions_from_image(
@@ -3263,7 +3261,7 @@ class ZarrNii:
         # Centers are always in (x, y, z) order
         center_phys = np.array(list(centers) + [1.0])
 
-        print(f'center_phys {center_phys}')
+        print(f"center_phys {center_phys}")
         # Get inverse affine to convert from physical to voxel
         affine_inv = np.linalg.inv(self.get_affine_matrix(axes_order="XYZ"))
 
@@ -3271,12 +3269,12 @@ class ZarrNii:
         center_voxel = affine_inv @ center_phys
         center_voxel_xyz = center_voxel[:3]
 
-        print(f'center_voxel {center_voxel}')
+        print(f"center_voxel {center_voxel}")
         # patch_size is in voxels, in (x, y, z) order
         patch_size_np = np.array(patch_size)
         half_patch = patch_size_np / 2.0
 
-        print(f'half_patch {half_patch}')
+        print(f"half_patch {half_patch}")
         # Calculate desired bounding box in voxel coordinates (may extend beyond image)
         voxel_min_xyz = center_voxel_xyz - half_patch
         voxel_max_xyz = center_voxel_xyz + half_patch
@@ -3288,8 +3286,8 @@ class ZarrNii:
         # Ensure we get exactly the requested patch size
         # Adjust max to ensure patch_size is respected
         voxel_max_xyz = voxel_min_xyz + patch_size_np
-        print(f'voxel_min_xyz {voxel_min_xyz}')
-        print(f'voxel_max_xyz {voxel_max_xyz}')
+        print(f"voxel_min_xyz {voxel_min_xyz}")
+        print(f"voxel_max_xyz {voxel_max_xyz}")
 
         # Get image dimensions in voxel space
         # Map spatial dims to their indices
@@ -3310,19 +3308,18 @@ class ZarrNii:
         crop_min_xyz = np.maximum(voxel_min_xyz, 0)
         crop_max_xyz = np.minimum(voxel_max_xyz, image_shape_xyz)
 
-        print(f'crop_min_xyz {crop_min_xyz}')
-        print(f'crop_max_xyz {crop_max_xyz}')
+        print(f"crop_min_xyz {crop_min_xyz}")
+        print(f"crop_max_xyz {crop_max_xyz}")
         # Ensure crop_max >= crop_min to avoid empty arrays
         crop_max_xyz = np.maximum(crop_min_xyz, crop_max_xyz)
-        print(f'crop_min_xyz {crop_min_xyz}')
-        print(f'crop_max_xyz {crop_max_xyz}')
+        print(f"crop_min_xyz {crop_min_xyz}")
+        print(f"crop_max_xyz {crop_max_xyz}")
 
         # Calculate padding needed on each side
         pad_before_xyz = crop_min_xyz - voxel_min_xyz  # How much we're clipped at start
         pad_after_xyz = voxel_max_xyz - crop_max_xyz  # How much we're clipped at end
-        print(f'pad_before_xyz {pad_before_xyz}')
-        print(f'pad_after_xyz {pad_after_xyz}')
-
+        print(f"pad_before_xyz {pad_before_xyz}")
+        print(f"pad_after_xyz {pad_after_xyz}")
 
         # Check if the entire patch is outside the image bounds
         # This happens when crop_min >= crop_max in any dimension after clipping
@@ -4209,12 +4206,10 @@ class ZarrNii:
                     "Cannot specify both 'scale_factors' and "
                     "'match_scale_factors_from'."
                 )
-            
+
             # Derive scale factors from source level shapes
             level_shapes = _get_level_zyx_shapes_from_file(match_scale_factors_from)
-            scale_factors = _compute_scale_factors_from_shapes(
-                level_shapes
-            )
+            scale_factors = _compute_scale_factors_from_shapes(level_shapes)
             max_layer = len(scale_factors) + 1
 
         # Determine the image to save
@@ -4770,7 +4765,11 @@ class ZarrNii:
         chunks: Any = None,
         axes_order: str = "ZYX",
         orientation: str = "RAS",
-        axes_units: Optional[Dict[str, str]] = {'z':'micrometer','y':'micrometer','x':'micrometer'},
+        axes_units: Optional[Dict[str, str]] = {
+            "z": "micrometer",
+            "y": "micrometer",
+            "x": "micrometer",
+        },
         downsample_near_isotropic: bool = False,
     ) -> "ZarrNii":
         """
