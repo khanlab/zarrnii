@@ -929,186 +929,6 @@ def get_multiscales(
     return nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
 
 
-def get_ome_zarr_scale_factors(
-    store_or_path,
-    storage_options: Optional[Dict] = None,
-) -> List[Dict[str, int]]:
-    """Extract cumulative spatial pyramid scale factors from an OME-Zarr store.
-
-    The returned factors are cumulative relative to level 0 and use ``z``, ``y``,
-    and ``x`` keys only, matching the scale-factor format accepted by
-    ``to_ome_zarr(..., scale_factors=[...])``.
-
-    Args:
-        store_or_path: Store or path to the OME-Zarr file.
-        storage_options: Optional storage options for Zarr/fsspec backends.
-
-    Returns:
-        List of cumulative scale-factor dictionaries, one per pyramid level above
-        level 0. Returns an empty list for single-resolution stores.
-
-    Raises:
-        ValueError: If spatial scale metadata are missing, invalid, or non-integral
-            relative to level 0.
-    """
-    multiscales = get_multiscales(store_or_path, storage_options=storage_options)
-    images = multiscales.images
-    if len(images) <= 1:
-        return []
-
-    base_scale = images[0].scale or {}
-    spatial_axes = [axis for axis in ("z", "y", "x") if axis in base_scale]
-
-    scale_factors: List[Dict[str, int]] = []
-    for level_idx, img in enumerate(images[1:], start=1):
-        current = img.scale or {}
-        factors: Dict[str, int] = {}
-        for axis in spatial_axes:
-            if axis not in current:
-                raise ValueError(
-                    f"Missing '{axis}' scale at pyramid level {level_idx}."
-                )
-            if base_scale[axis] == 0:
-                raise ValueError(f"Invalid base scale for axis '{axis}': 0.")
-
-            ratio = current[axis] / base_scale[axis]
-            factors[axis] = _coerce_near_integer_scale_factor(
-                ratio,
-                axis_name=axis,
-                level_idx=level_idx,
-                details=(
-                    f"base={base_scale[axis]}, current={current[axis]}, "
-                    f"tolerance={_SCALE_FACTOR_INTEGER_ATOL}"
-                ),
-            )
-        scale_factors.append(factors)
-
-    return scale_factors
-
-
-def get_imaris_scale_factors(path: str) -> List[Dict[str, int]]:
-    """Extract cumulative spatial pyramid scale factors from an Imaris (.ims) file.
-
-    The returned factors are cumulative relative to level 0 and use ``z``, ``y``,
-    and ``x`` keys only, matching the scale-factor format accepted by
-    ``to_ome_zarr(..., scale_factors=[...])``.
-
-    Args:
-        path: Path to the Imaris (.ims) file.
-
-    Returns:
-        List of cumulative scale-factor dictionaries, one per resolution level above
-        level 0. Returns an empty list for single-resolution files.
-
-    Raises:
-        ImportError: If ``imaris_ims_zarr`` is not available.
-        FileNotFoundError: If the file does not exist.
-        ValueError: If scale factors are non-integer or otherwise invalid.
-    """
-    try:
-        from imaris_ims_zarr import ImsProcessSafeStore
-    except ImportError:
-        raise ImportError(
-            "imaris_ims_zarr is required for Imaris support. "
-            "Install with: pip install imaris-ims-zarr or uv add imaris-ims-zarr"
-        )
-    if not os.path.exists(path):
-        raise FileNotFoundError(
-            f"Unable to read Imaris file '{path}': file does not exist"
-        )
-
-    store0 = ImsProcessSafeStore(path, ResolutionLevelLock=0)
-    n_levels = store0.ResolutionLevels
-    if n_levels <= 1:
-        return []
-
-    # shape is (T, C, Z, Y, X) — index 2/3/4 are the spatial axes
-    prev_shape = store0.shape
-    cumulative_factors = {"z": 1, "y": 1, "x": 1}
-
-    scale_factors: List[Dict[str, int]] = []
-    for level in range(1, n_levels):
-        store_l = ImsProcessSafeStore(path, ResolutionLevelLock=level)
-        level_shape = store_l.shape
-        factors: Dict[str, int] = {}
-        for axis_idx, axis_name in zip([2, 3, 4], ["z", "y", "x"]):
-            prev_size = prev_shape[axis_idx]
-            curr_size = level_shape[axis_idx]
-            if curr_size == 0:
-                raise ValueError(
-                    f"Invalid shape 0 for axis '{axis_name}' at level {level}."
-                )
-            ratio = prev_size / curr_size
-            incremental_factor = _coerce_near_integer_scale_factor(
-                ratio,
-                axis_name=axis_name,
-                level_idx=level,
-                details=(
-                    f"prev_size={prev_size}, curr_size={curr_size}, "
-                    f"tolerance={_SCALE_FACTOR_INTEGER_ATOL}"
-                ),
-            )
-            cumulative_factors[axis_name] *= incremental_factor
-            factors[axis_name] = cumulative_factors[axis_name]
-        scale_factors.append(factors)
-        prev_shape = level_shape
-
-    return scale_factors
-
-
-def _coerce_near_integer_scale_factor(
-    ratio: float,
-    *,
-    axis_name: str,
-    level_idx: int,
-    details: str,
-) -> int:
-    """Convert near-integer cumulative scale factors to the nearest integer."""
-    if not np.isfinite(ratio):
-        raise ValueError(
-            f"Invalid cumulative factor for axis '{axis_name}' at level "
-            f"{level_idx}: {ratio} ({details})."
-        )
-
-    rounded = int(round(ratio))
-    if rounded < 1 or not np.isclose(
-        ratio, rounded, rtol=0.0, atol=_SCALE_FACTOR_INTEGER_ATOL
-    ):
-        raise ValueError(
-            f"Non-integer cumulative factor for axis '{axis_name}' at level "
-            f"{level_idx}: {ratio} ({details})."
-        )
-
-    return rounded
-
-
-def get_scale_factors_from_file(
-    path: Union[str, Any],
-    storage_options: Optional[Dict] = None,
-) -> List[Dict[str, int]]:
-    """Extract cumulative spatial pyramid scale factors from any supported file.
-
-    Dispatches to the appropriate format-specific extractor based on the file
-    extension. Supports OME-Zarr (``.zarr``, ``.ozx``, ``.zarr.zip``) and
-    Imaris (``.ims``) formats.
-
-    Args:
-        path: Path or store to the source file.
-        storage_options: Optional storage options (only used for OME-Zarr paths).
-
-    Returns:
-        List of cumulative scale-factor dictionaries, one per pyramid level above
-        level 0. Returns an empty list for single-resolution datasets.
-
-    Raises:
-        ValueError: If spatial scale metadata are missing, invalid, or non-integral.
-        ImportError: If a required optional dependency is missing.
-        FileNotFoundError: If the file does not exist.
-    """
-    if isinstance(path, str) and path.endswith(".ims"):
-        return get_imaris_scale_factors(path)
-    return get_ome_zarr_scale_factors(path, storage_options=storage_options)
-
 
 def _get_imaris_level_zyx_shapes(path: str) -> List[Tuple[int, int, int]]:
     """Return the (z, y, x) shape at every resolution level of an Imaris file.
@@ -3443,6 +3263,7 @@ class ZarrNii:
         # Centers are always in (x, y, z) order
         center_phys = np.array(list(centers) + [1.0])
 
+        print(f'center_phys {center_phys}')
         # Get inverse affine to convert from physical to voxel
         affine_inv = np.linalg.inv(self.get_affine_matrix(axes_order="XYZ"))
 
@@ -3450,10 +3271,12 @@ class ZarrNii:
         center_voxel = affine_inv @ center_phys
         center_voxel_xyz = center_voxel[:3]
 
+        print(f'center_voxel {center_voxel}')
         # patch_size is in voxels, in (x, y, z) order
         patch_size_np = np.array(patch_size)
         half_patch = patch_size_np / 2.0
 
+        print(f'half_patch {half_patch}')
         # Calculate desired bounding box in voxel coordinates (may extend beyond image)
         voxel_min_xyz = center_voxel_xyz - half_patch
         voxel_max_xyz = center_voxel_xyz + half_patch
@@ -3465,6 +3288,8 @@ class ZarrNii:
         # Ensure we get exactly the requested patch size
         # Adjust max to ensure patch_size is respected
         voxel_max_xyz = voxel_min_xyz + patch_size_np
+        print(f'voxel_min_xyz {voxel_min_xyz}')
+        print(f'voxel_max_xyz {voxel_max_xyz}')
 
         # Get image dimensions in voxel space
         # Map spatial dims to their indices
@@ -3485,12 +3310,19 @@ class ZarrNii:
         crop_min_xyz = np.maximum(voxel_min_xyz, 0)
         crop_max_xyz = np.minimum(voxel_max_xyz, image_shape_xyz)
 
+        print(f'crop_min_xyz {crop_min_xyz}')
+        print(f'crop_max_xyz {crop_max_xyz}')
         # Ensure crop_max >= crop_min to avoid empty arrays
         crop_max_xyz = np.maximum(crop_min_xyz, crop_max_xyz)
+        print(f'crop_min_xyz {crop_min_xyz}')
+        print(f'crop_max_xyz {crop_max_xyz}')
 
         # Calculate padding needed on each side
         pad_before_xyz = crop_min_xyz - voxel_min_xyz  # How much we're clipped at start
         pad_after_xyz = voxel_max_xyz - crop_max_xyz  # How much we're clipped at end
+        print(f'pad_before_xyz {pad_before_xyz}')
+        print(f'pad_after_xyz {pad_after_xyz}')
+
 
         # Check if the entire patch is outside the image bounds
         # This happens when crop_min >= crop_max in any dimension after clipping
@@ -4938,7 +4770,7 @@ class ZarrNii:
         chunks: Any = None,
         axes_order: str = "ZYX",
         orientation: str = "RAS",
-        axes_units: Optional[Dict[str, str]] = None,
+        axes_units: Optional[Dict[str, str]] = {'z':'micrometer','y':'micrometer','x':'micrometer'},
         downsample_near_isotropic: bool = False,
     ) -> "ZarrNii":
         """
