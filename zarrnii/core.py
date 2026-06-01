@@ -1052,12 +1052,6 @@ def _compute_scale_factors_from_shapes(
         }
         cumul_scale_factors.append(current_cumul)
 
-    print("inc scale factors")
-    print(incremental_scale_factors)
-
-    print("cumul scale factors")
-    print(cumul_scale_factors)
-
     return cumul_scale_factors
 
 
