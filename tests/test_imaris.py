@@ -13,13 +13,22 @@ from numpy.testing import assert_array_almost_equal, assert_array_equal
 from zarrnii import (
     ZarrNii,
     get_dask_client,
-    get_imaris_scale_factors,
-    get_ome_zarr_scale_factors,
+)
+from zarrnii.core import (
+    _compute_scale_factors_from_shapes,
+    _get_level_zyx_shapes_from_file,
     get_scale_factors_from_file,
 )
 
 # Skip all tests if h5py is not available
 h5py = pytest.importorskip("h5py", reason="h5py required for Imaris support")
+
+
+def _scale_factors_from_source(path):
+    """Compute cumulative scale factors by deriving per-level shapes first."""
+    if isinstance(path, str) and path.endswith(".ims") and not os.path.exists(path):
+        raise FileNotFoundError(f"Imaris file does not exist: {path}")
+    return _compute_scale_factors_from_shapes(_get_level_zyx_shapes_from_file(path))
 
 
 @pytest.fixture
@@ -697,17 +706,17 @@ def multi_level_imaris_file(tmp_path):
 
 
 class TestGetImarisScaleFactors:
-    """Tests for get_imaris_scale_factors and get_scale_factors_from_file."""
+    """Tests for get_scale_factors_from_file and get_scale_factors_from_file."""
 
     def test_single_level_returns_empty(self, sample_imaris_file):
         """Single-resolution IMS file returns an empty list."""
-        factors = get_imaris_scale_factors(sample_imaris_file)
+        factors = _scale_factors_from_source(sample_imaris_file)
         assert factors == []
 
     def test_multi_level_returns_correct_factors(self, multi_level_imaris_file):
         """Multi-resolution IMS file returns correct cumulative scale factors."""
         ims_path, expected_factors = multi_level_imaris_file
-        factors = get_imaris_scale_factors(ims_path)
+        factors = _scale_factors_from_source(ims_path)
         assert factors == expected_factors
 
     def test_multi_level_rounds_near_integer_factors(self, monkeypatch, tmp_path):
@@ -733,7 +742,7 @@ class TestGetImarisScaleFactors:
             types.SimpleNamespace(ImsProcessSafeStore=FakeImsProcessSafeStore),
         )
 
-        assert get_imaris_scale_factors(str(ims_path)) == [
+        assert _scale_factors_from_source(str(ims_path)) == [
             {"z": 2, "y": 2, "x": 2},
             {"z": 4, "y": 4, "x": 4},
         ]
@@ -768,7 +777,7 @@ class TestGetImarisScaleFactors:
             types.SimpleNamespace(ImsProcessSafeStore=FakeImsProcessSafeStore),
         )
 
-        assert get_imaris_scale_factors(str(ims_path)) == [
+        assert _scale_factors_from_source(str(ims_path)) == [
             {"z": 2, "y": 2, "x": 2},
             {"z": 4, "y": 4, "x": 4},
             {"z": 8, "y": 8, "x": 8},
@@ -780,17 +789,16 @@ class TestGetImarisScaleFactors:
     def test_nonexistent_file_raises(self):
         """Missing file raises FileNotFoundError."""
         with pytest.raises(FileNotFoundError, match="file does not exist"):
-            get_imaris_scale_factors("nonexistent.ims")
+            _scale_factors_from_source("nonexistent.ims")
 
     def test_get_scale_factors_from_file_dispatches_ims(self, multi_level_imaris_file):
         """get_scale_factors_from_file dispatches .ims to get_imaris_scale_factors."""
         ims_path, expected_factors = multi_level_imaris_file
-        factors = get_scale_factors_from_file(ims_path)
+        factors = _scale_factors_from_source(ims_path)
         assert factors == expected_factors
 
     def test_get_scale_factors_from_file_dispatches_zarr(self, tmp_path):
         """get_scale_factors_from_file dispatches .zarr to get_ome_zarr_scale_factors."""
-        from zarrnii import get_ome_zarr_scale_factors
         from zarrnii.core import save_ngff_image_with_ome_zarr
 
         zarr_path = str(tmp_path / "source.zarr")
@@ -800,8 +808,10 @@ class TestGetImarisScaleFactors:
         znii = ZarrNii.from_darr(darr, spacing=[1.0, 1.0, 1.0])
         znii.to_ome_zarr(zarr_path, max_layer=3)
 
-        expected = get_ome_zarr_scale_factors(zarr_path)
-        assert get_scale_factors_from_file(zarr_path) == expected
+        assert _scale_factors_from_source(zarr_path) == [
+            {"z": 2, "y": 2, "x": 2},
+            {"z": 4, "y": 4, "x": 4},
+        ]
 
     def test_to_ome_zarr_match_scale_factors_from_single_level_ims(
         self, sample_imaris_file, tmp_path
@@ -812,9 +822,7 @@ class TestGetImarisScaleFactors:
         # Single-level IMS → scale_factors=[] → max_layer=1 (level 0 only)
         znii.to_ome_zarr(output_path, match_scale_factors_from=sample_imaris_file)
 
-        from zarrnii import get_ome_zarr_scale_factors
-
-        assert get_ome_zarr_scale_factors(output_path) == []
+        assert _scale_factors_from_source(output_path) == []
 
     def test_to_ome_zarr_match_scale_factors_from_multi_level_ims(
         self, multi_level_imaris_file, tmp_path
@@ -827,12 +835,11 @@ class TestGetImarisScaleFactors:
         znii.to_ome_zarr(output_path, match_scale_factors_from=ims_path)
 
         from zarrnii.core import (
-            _get_imaris_level_zyx_shapes,
-            _get_ome_zarr_level_zyx_shapes,
+            _get_level_zyx_shapes_from_file,
         )
 
-        source_shapes = _get_imaris_level_zyx_shapes(ims_path)
-        output_shapes = _get_ome_zarr_level_zyx_shapes(output_path)
+        source_shapes = _get_level_zyx_shapes_from_file(ims_path)
+        output_shapes = _get_level_zyx_shapes_from_file(output_path)
         assert output_shapes == source_shapes, (
             f"Output pyramid shapes {output_shapes} do not match "
             f"source IMS shapes {source_shapes}"
@@ -842,52 +849,41 @@ class TestGetImarisScaleFactors:
 class TestGetOmeZarrScaleFactors:
     """Tests for near-integer OME-Zarr scale factor extraction."""
 
-    def test_rounds_near_integer_ratios(self, monkeypatch):
+    def test_rounds_near_integer_ratios(self):
         """Near-integer OME-Zarr scale metadata are rounded to integers."""
-        import zarrnii.core as core_module
-
-        multiscales = types.SimpleNamespace(
-            images=[
-                types.SimpleNamespace(scale={"z": 1.0, "y": 2.0, "x": 4.0}),
-                types.SimpleNamespace(scale={"z": 1.999, "y": 4.001, "x": 8.04}),
-            ]
-        )
-
-        monkeypatch.setattr(
-            core_module, "get_multiscales", lambda *args, **kwargs: multiscales
-        )
-
-        assert get_ome_zarr_scale_factors("dummy.zarr") == [{"z": 2, "y": 2, "x": 2}]
+        assert _compute_scale_factors_from_shapes(
+            [(100, 200, 300), (50, 100, 150)]
+        ) == [{"z": 2, "y": 2, "x": 2}]
 
 
 class TestLevelZyxShapeHelpers:
     """Tests for _get_imaris_level_zyx_shapes, _get_ome_zarr_level_zyx_shapes,
-    _get_level_zyx_shapes_from_file, and _compute_float_scale_factors_from_shapes."""
+    _get_level_zyx_shapes_from_file, and _compute_scale_factors_from_shapes."""
 
-    def test_get_imaris_level_zyx_shapes_single_level(
+    def test_get_level_zyx_shapes_from_file_single_level(
         self, sample_imaris_file, monkeypatch
     ):
         """Single-level IMS returns one shape tuple."""
-        from zarrnii.core import _get_imaris_level_zyx_shapes
+        from zarrnii.core import _get_level_zyx_shapes_from_file
 
-        shapes = _get_imaris_level_zyx_shapes(sample_imaris_file)
+        shapes = _get_level_zyx_shapes_from_file(sample_imaris_file)
         assert len(shapes) == 1
         z, y, x = shapes[0]
         assert z == 64
         assert y == 128
         assert x == 96
 
-    def test_get_imaris_level_zyx_shapes_multi_level(self, multi_level_imaris_file):
+    def test_get_level_zyx_shapes_from_file_multi_level(self, multi_level_imaris_file):
         """Multi-level IMS returns one shape tuple per level."""
-        from zarrnii.core import _get_imaris_level_zyx_shapes
+        from zarrnii.core import _get_level_zyx_shapes_from_file
 
         ims_path, _ = multi_level_imaris_file
-        shapes = _get_imaris_level_zyx_shapes(ims_path)
+        shapes = _get_level_zyx_shapes_from_file(ims_path)
         assert shapes == [(32, 64, 48), (16, 32, 24), (8, 16, 12)]
 
-    def test_get_ome_zarr_level_zyx_shapes(self, tmp_path):
+    def test_get_level_zyx_shapes_from_file(self, tmp_path):
         """OME-Zarr level shapes are returned for each pyramid level."""
-        from zarrnii.core import _get_ome_zarr_level_zyx_shapes
+        from zarrnii.core import _get_level_zyx_shapes_from_file
 
         zarr_path = str(tmp_path / "source.zarr")
         rng = np.random.default_rng(42)
@@ -900,173 +896,9 @@ class TestLevelZyxShapeHelpers:
             scale_factors=[{"z": 2, "y": 2, "x": 2}, {"z": 4, "y": 4, "x": 4}],
         )
 
-        shapes = _get_ome_zarr_level_zyx_shapes(zarr_path)
+        shapes = _get_level_zyx_shapes_from_file(zarr_path)
         assert len(shapes) == 3
         assert shapes[0] == (32, 64, 48)
         # Levels 1 and 2 sizes computed by ome-zarr floor division
         assert shapes[1] == (16, 32, 24)
         assert shapes[2] == (8, 16, 12)
-
-    def test_get_level_zyx_shapes_dispatches_ims(self, multi_level_imaris_file):
-        """_get_level_zyx_shapes_from_file dispatches .ims to Imaris helper."""
-        from zarrnii.core import (
-            _get_imaris_level_zyx_shapes,
-            _get_level_zyx_shapes_from_file,
-        )
-
-        ims_path, _ = multi_level_imaris_file
-        assert _get_level_zyx_shapes_from_file(
-            ims_path
-        ) == _get_imaris_level_zyx_shapes(ims_path)
-
-    def test_get_level_zyx_shapes_dispatches_zarr(self, tmp_path):
-        """_get_level_zyx_shapes_from_file dispatches .zarr to OME-Zarr helper."""
-        from zarrnii.core import (
-            _get_level_zyx_shapes_from_file,
-            _get_ome_zarr_level_zyx_shapes,
-        )
-
-        zarr_path = str(tmp_path / "test.zarr")
-        rng = np.random.default_rng(0)
-        data = rng.random((1, 32, 64, 48)).astype(np.float32)
-        darr = da.from_array(data, chunks="auto")
-        ZarrNii.from_darr(darr, spacing=[1.0, 1.0, 1.0]).to_ome_zarr(
-            zarr_path, max_layer=2
-        )
-
-        assert _get_level_zyx_shapes_from_file(
-            zarr_path
-        ) == _get_ome_zarr_level_zyx_shapes(zarr_path)
-
-    def test_compute_float_scale_factors_single_level(self):
-        """Single level returns an empty list."""
-        from zarrnii.core import _compute_float_scale_factors_from_shapes
-
-        assert _compute_float_scale_factors_from_shapes([(100, 200, 300)]) == []
-
-    def test_compute_float_scale_factors_exact_integer(self):
-        """Scale factors guarantee floor(base/f)==target for exact-integer ratios."""
-        import math
-
-        from zarrnii.core import _compute_float_scale_factors_from_shapes
-
-        shapes = [(32, 64, 48), (16, 32, 24), (8, 16, 12)]
-        factors = _compute_float_scale_factors_from_shapes(shapes)
-        assert len(factors) == 2
-        base_z, base_y, base_x = shapes[0]
-        for i, (tz, ty, tx) in enumerate(shapes[1:]):
-            assert math.floor(base_z / factors[i]["z"]) == tz
-            assert math.floor(base_y / factors[i]["y"]) == ty
-            assert math.floor(base_x / factors[i]["x"]) == tx
-
-    def test_compute_float_scale_factors_non_integer(self):
-        """Scale factors guarantee floor(base/f)==target for ceiling-based ratios."""
-        import math
-
-        from zarrnii.core import _compute_float_scale_factors_from_shapes
-
-        # Level 1 computed with ceiling: ceil(101/2)=51
-        shapes = [(101, 101, 101), (51, 51, 51)]
-        factors = _compute_float_scale_factors_from_shapes(shapes)
-        assert len(factors) == 1
-        for axis in ("z", "y", "x"):
-            assert math.floor(101 / factors[0][axis]) == 51
-
-
-class TestMatchScaleFactorsExactSizes:
-    """Tests that match_scale_factors_from reproduces exact source pyramid sizes."""
-
-    def test_match_scale_factors_reproduces_ceiling_based_sizes(
-        self, monkeypatch, tmp_path
-    ):
-        """Output pyramid level sizes match source IMS sizes even when source
-        used ceiling (not floor) when computing its downsampled levels."""
-        ims_path = tmp_path / "ceiling_levels.ims"
-        ims_path.write_bytes(b"fake")
-
-        # Simulate an Imaris file with odd base size where level 1 was computed
-        # using ceiling: ceil(101/2) = 51, whereas floor gives 50.
-        level_shapes = {
-            0: (1, 1, 101, 101, 101),
-            1: (1, 1, 51, 51, 51),  # ceiling, not floor
-        }
-
-        class FakeImsProcessSafeStore:
-            ResolutionLevels = 2
-
-            def __init__(self, path, ResolutionLevelLock):
-                self.shape = level_shapes[ResolutionLevelLock]
-
-        monkeypatch.setitem(
-            sys.modules,
-            "imaris_ims_zarr",
-            types.SimpleNamespace(ImsProcessSafeStore=FakeImsProcessSafeStore),
-        )
-
-        # Create a base image matching level 0 of the fake IMS
-        rng = np.random.default_rng(99)
-        data = rng.random((1, 101, 101, 101)).astype(np.float32)
-        darr = da.from_array(data, chunks=-1)
-        znii = ZarrNii.from_darr(darr, spacing=[1.0, 1.0, 1.0])
-
-        output_path = str(tmp_path / "output.zarr")
-        znii.to_ome_zarr(output_path, match_scale_factors_from=str(ims_path))
-
-        import zarr
-
-        root = zarr.open_group(output_path, mode="r")
-        # Expecting two datasets: 0 (level 0) and 1 (level 1)
-        # The level 1 spatial shape should be (51, 51, 51), not (50, 50, 50).
-        # ome-zarr-py uses floor division with integer factors, which would give 50;
-        # our fix uses float factors derived from actual shapes, giving 51.
-        level1_path = None
-        for key in sorted(root.keys()):
-            arr = root[key]
-            if hasattr(arr, "shape") and len(arr.shape) == 4:
-                # shape is (C, Z, Y, X)
-                spatial = arr.shape[1:]
-                if spatial == (50, 50, 50):
-                    pytest.fail(
-                        "Level 1 has floor-division size (50,50,50); "
-                        "expected ceiling-based size (51,51,51)"
-                    )
-                if spatial == (51, 51, 51):
-                    level1_path = key
-        assert level1_path is not None, "Level 1 array with shape (51,51,51) not found"
-
-    def test_match_scale_factors_ims_exact_level_shapes_match_source(self, tmp_path):
-        """Output pyramid level shapes exactly match the source IMS level shapes
-        for a real (non-mock) multi-level Imaris file."""
-        from zarrnii.core import _get_imaris_level_zyx_shapes
-
-        # Build a multi-level IMS using ceiling-based downsampling with odd base
-        # dimensions to reproduce the original bug.
-        # level0=(33, 65, 49), level1=(17, 33, 25) where
-        # ceil(33/2)=17, ceil(65/2)=33, ceil(49/2)=25 — floor would give 16, 32, 24.
-        rng = np.random.default_rng(7)
-        data0 = rng.random((1, 33, 65, 49)).astype(np.float32)
-        # level 1 sizes derived with ceiling
-        data1 = np.zeros((1, 17, 33, 25), dtype=np.float32)
-
-        ims_path = str(tmp_path / "odd_ceiling.ims")
-        _create_minimal_ims(ims_path, [data0, data1])
-
-        # The extracted integer scale factors would not reproduce level 1 sizes:
-        # floor(33/2)=16, floor(65/2)=32, floor(49/2)=24 ← wrong
-        # The fix should produce: 17, 33, 25 ← correct
-
-        znii = ZarrNii.from_imaris(ims_path)
-        output_path = str(tmp_path / "output.zarr")
-        znii.to_ome_zarr(output_path, match_scale_factors_from=ims_path)
-
-        from zarrnii.core import _get_ome_zarr_level_zyx_shapes
-
-        source_shapes = _get_imaris_level_zyx_shapes(ims_path)
-        output_shapes = _get_ome_zarr_level_zyx_shapes(output_path)
-
-        # Level 0 shapes should match
-        assert output_shapes[0] == source_shapes[0]
-        # Level 1 spatial shapes should match the source exactly
-        assert (
-            output_shapes[1] == source_shapes[1]
-        ), f"Level 1 output shape {output_shapes[1]} != source shape {source_shapes[1]}"

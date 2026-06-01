@@ -13,11 +13,13 @@ import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 from zarrnii.core import (
+    _compute_scale_factors_from_shapes,
+    _get_level_zyx_shapes_from_file,
     apply_transform_to_ngff_image,
     crop_ngff_image,
     downsample_ngff_image,
     get_multiscales,
-    get_ome_zarr_scale_factors,
+    get_scale_factors_from_file,
     load_ngff_image,
     save_ngff_image,
 )
@@ -540,7 +542,7 @@ class TestOmeZarrWriter:
             assert y_scales[1] == 2 * y_scales[0]
             assert x_scales[1] == 2 * x_scales[0]
 
-    def test_get_ome_zarr_scale_factors(self, simple_ngff_image):
+    def test_get_scale_factors_from_file(self, simple_ngff_image):
         """Test extracting cumulative scale factors from an input OME-Zarr store."""
         from zarrnii.core import save_ngff_image_with_ome_zarr
 
@@ -554,7 +556,7 @@ class TestOmeZarrWriter:
                 scale_factors=deepcopy(expected_factors),
             )
 
-            extracted = get_ome_zarr_scale_factors(source_path)
+            extracted = get_scale_factors_from_file(source_path)
             assert extracted == expected_factors
 
     def test_to_ome_zarr_match_scale_factors_from(self, simple_ngff_image):
