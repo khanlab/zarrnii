@@ -4961,8 +4961,7 @@ class ZarrNii:
             axes_units: Optional mapping of axis name to unit string (e.g.
                 ``{"x": "micrometer", "y": "micrometer", "z": "micrometer"}``).
                 All values must be valid OME-Zarr space units (see
-                :data:`VALID_AXES_UNITS`).  When ``None``, no unit metadata is
-                stored.
+                :data:`VALID_AXES_UNITS`).  When ``None``, micrometer is assumed.
             downsample_near_isotropic: If True, automatically downsample
                 dimensions with smaller voxel sizes to achieve near-isotropic
                 resolution. Deprecated and will be removed in a future version.
@@ -4979,6 +4978,9 @@ class ZarrNii:
             ValueError: If any value in *axes_units* is not a valid OME-Zarr
                 space unit.
         """
+
+        if axes_units is None:
+            axes_units = {"x": "micrometer", "y": "micrometer", "z": "micrometer"}
         _validate_axes_units(axes_units)
         if downsample_near_isotropic:
             warnings.warn(
