@@ -3255,7 +3255,6 @@ class ZarrNii:
         # Centers are always in (x, y, z) order
         center_phys = np.array(list(centers) + [1.0])
 
-        print(f"center_phys {center_phys}")
         # Get inverse affine to convert from physical to voxel
         affine_inv = np.linalg.inv(self.get_affine_matrix(axes_order="XYZ"))
 
@@ -3263,12 +3262,10 @@ class ZarrNii:
         center_voxel = affine_inv @ center_phys
         center_voxel_xyz = center_voxel[:3]
 
-        print(f"center_voxel {center_voxel}")
         # patch_size is in voxels, in (x, y, z) order
         patch_size_np = np.array(patch_size)
         half_patch = patch_size_np / 2.0
 
-        print(f"half_patch {half_patch}")
         # Calculate desired bounding box in voxel coordinates (may extend beyond image)
         voxel_min_xyz = center_voxel_xyz - half_patch
         voxel_max_xyz = center_voxel_xyz + half_patch
@@ -3280,8 +3277,6 @@ class ZarrNii:
         # Ensure we get exactly the requested patch size
         # Adjust max to ensure patch_size is respected
         voxel_max_xyz = voxel_min_xyz + patch_size_np
-        print(f"voxel_min_xyz {voxel_min_xyz}")
-        print(f"voxel_max_xyz {voxel_max_xyz}")
 
         # Get image dimensions in voxel space
         # Map spatial dims to their indices
@@ -3302,18 +3297,12 @@ class ZarrNii:
         crop_min_xyz = np.maximum(voxel_min_xyz, 0)
         crop_max_xyz = np.minimum(voxel_max_xyz, image_shape_xyz)
 
-        print(f"crop_min_xyz {crop_min_xyz}")
-        print(f"crop_max_xyz {crop_max_xyz}")
         # Ensure crop_max >= crop_min to avoid empty arrays
         crop_max_xyz = np.maximum(crop_min_xyz, crop_max_xyz)
-        print(f"crop_min_xyz {crop_min_xyz}")
-        print(f"crop_max_xyz {crop_max_xyz}")
 
         # Calculate padding needed on each side
         pad_before_xyz = crop_min_xyz - voxel_min_xyz  # How much we're clipped at start
         pad_after_xyz = voxel_max_xyz - crop_max_xyz  # How much we're clipped at end
-        print(f"pad_before_xyz {pad_before_xyz}")
-        print(f"pad_after_xyz {pad_after_xyz}")
 
         # Check if the entire patch is outside the image bounds
         # This happens when crop_min >= crop_max in any dimension after clipping
