@@ -734,6 +734,76 @@ def _convert_spatial_unit_to_mm(value: float, from_unit: str) -> float:
     return value * conversion_factors[unit_lower]
 
 
+def _convert_physical_coords_units(
+    xyz: Union[Tuple[float, float, float], np.ndarray],
+    from_units: Optional[Dict[str, str]],
+    to_units: Optional[Dict[str, str]],
+) -> Union[Tuple[float, float, float], np.ndarray]:
+    """Convert physical (x, y, z) coordinates between two spatial unit systems.
+
+    Each axis can carry a different unit.  Missing entries in *from_units* or
+    *to_units* default to ``'millimeter'``.
+
+    Args:
+        xyz: Coordinates in (x, y, z) order.  May be a length-3 tuple/list, a
+            ``numpy`` array of shape ``(3,)``, or an array of shape ``(N, 3)``.
+        from_units: Mapping of axis name to unit string for the *input*
+            coordinates (e.g. ``{'x': 'millimeter', 'y': 'millimeter',
+            'z': 'millimeter'}``).  Absent axes or ``None`` default to
+            ``'millimeter'``.
+        to_units: Mapping of axis name to unit string for the *output*
+            coordinates.  Same defaulting rules as *from_units*.
+
+    Returns:
+        Converted coordinates with the same type and shape as *xyz*.
+
+    Raises:
+        ValueError: If any unit string in *from_units* or *to_units* is not
+            recognised by :func:`_convert_spatial_unit_to_mm`.
+
+    Examples:
+        >>> _convert_physical_coords_units(
+        ...     (1.0, 2.0, 3.0),
+        ...     {'x': 'millimeter', 'y': 'millimeter', 'z': 'millimeter'},
+        ...     {'x': 'micrometer', 'y': 'micrometer', 'z': 'micrometer'},
+        ... )
+        (1000.0, 2000.0, 3000.0)
+    """
+    eff_from = from_units or {}
+    eff_to = to_units or {}
+
+    axes = ["x", "y", "z"]
+    # Build per-axis scale factor (from_unit → to_unit via mm)
+    factors = []
+    all_unity = True
+    for axis in axes:
+        from_unit = eff_from.get(axis, "millimeter")
+        to_unit = eff_to.get(axis, "millimeter")
+        if from_unit == to_unit:
+            factors.append(1.0)
+        else:
+            factor = _convert_spatial_unit_to_mm(
+                1.0, from_unit
+            ) / _convert_spatial_unit_to_mm(1.0, to_unit)
+            factors.append(factor)
+            all_unity = False
+
+    if all_unity:
+        return xyz
+
+    if isinstance(xyz, np.ndarray):
+        result = xyz.astype(np.float64, copy=True)
+        for i, f in enumerate(factors):
+            if f != 1.0:
+                if result.ndim == 1:
+                    result[i] *= f
+                else:  # (N, 3)
+                    result[:, i] *= f
+        return result
+    else:
+        return tuple(v * f for v, f in zip(xyz, factors))
+
+
 def _get_nifti_spatial_unit_code(unit: str) -> str:
     """Get the NIfTI spatial unit code for a given unit string.
 
@@ -3022,6 +3092,7 @@ class ZarrNii:
         bbox_max: Optional[Tuple[float, ...]] = None,
         spatial_dims: Optional[List[str]] = None,
         physical_coords: bool = False,
+        coords_units: Optional[Dict[str, str]] = None,
     ) -> Union["ZarrNii", List["ZarrNii"]]:
         """Extract a spatial region or multiple regions from the image.
 
@@ -3044,8 +3115,17 @@ class ZarrNii:
                 automatically derived from axes_order ("z","y","x" for ZYX
                 or "x","y","z" for XYZ)
             physical_coords: If True, bbox_min and bbox_max are in physical/world
-                coordinates (mm). If False, they are in voxel coordinates.
+                coordinates. If False, they are in voxel coordinates.
                 Default is False.
+            coords_units: Spatial units of *bbox_min* / *bbox_max* when
+                *physical_coords* is ``True``.  Expressed as a mapping of axis
+                name to OME-Zarr unit string, e.g.
+                ``{'x': 'millimeter', 'y': 'millimeter', 'z': 'millimeter'}``.
+                Absent axes default to ``'millimeter'``.  If ``None``, all axes
+                default to ``'millimeter'``.  When the supplied units differ from
+                the units stored in the image, the coordinates are automatically
+                converted before the crop.  Ignored when *physical_coords* is
+                ``False``.
 
         Returns:
             New ZarrNii instance with cropped data (single crop) or list of
@@ -3053,16 +3133,24 @@ class ZarrNii:
 
         Raises:
             ValueError: If bbox coordinates are invalid or out of bounds, or
-                if both list and bbox_max are provided
+                if both list and bbox_max are provided, or if *coords_units*
+                contains an unrecognised unit string
             IndexError: If bbox dimensions don't match spatial dimensions
 
         Examples:
             >>> # Crop 3D region (voxel coordinates)
             >>> cropped = znii.crop((10, 20, 30), (110, 120, 130))
 
-            >>> # Crop with physical coordinates
+            >>> # Crop with physical coordinates (default millimeter units)
             >>> cropped = znii.crop((10.5, 20.5, 30.5), (110.5, 120.5, 130.5),
             ...                      physical_coords=True)
+
+            >>> # Crop with physical coordinates supplied in micrometers
+            >>> cropped = znii.crop(
+            ...     (10500.0, 20500.0, 30500.0), (110500.0, 120500.0, 130500.0),
+            ...     physical_coords=True,
+            ...     coords_units={'x': 'micrometer', 'y': 'micrometer', 'z': 'micrometer'},
+            ... )
 
             >>> # Crop with explicit spatial dimensions
             >>> cropped = znii.crop(
@@ -3083,9 +3171,11 @@ class ZarrNii:
             - The cropped region includes bbox_min but excludes bbox_max
             - All non-spatial dimensions (channels, time) are preserved
             - Spatial transformations are automatically updated
-            - When batch cropping, all patches share the same spatial_dims and
-              physical_coords settings
+            - When batch cropping, all patches share the same spatial_dims,
+              physical_coords, and coords_units settings
         """
+        _validate_axes_units(coords_units)
+
         # Check if this is batch cropping (list of bounding boxes)
         # A batch crop is a list of (bbox_min, bbox_max) tuples
         # Each element should be a tuple/list of two elements
@@ -3103,7 +3193,7 @@ class ZarrNii:
                 )
             # Batch crop: recursively call crop for each bounding box
             return [
-                self.crop(bmin, bmax, spatial_dims, physical_coords)
+                self.crop(bmin, bmax, spatial_dims, physical_coords, coords_units)
                 for bmin, bmax in bbox_min
             ]
 
@@ -3118,6 +3208,15 @@ class ZarrNii:
 
         # Convert physical coordinates to voxel coordinates if needed
         if physical_coords:
+            # Convert bbox coords from coords_units to image native units
+            image_axes_units = self.ngff_image.axes_units
+            bbox_min = _convert_physical_coords_units(
+                bbox_min, coords_units, image_axes_units
+            )
+            bbox_max = _convert_physical_coords_units(
+                bbox_max, coords_units, image_axes_units
+            )
+
             # Physical coords are always in (x, y, z) order
             # Convert to homogeneous coordinates
             phys_min = np.array(list(bbox_min) + [1.0])
@@ -3191,6 +3290,7 @@ class ZarrNii:
         patch_size: Tuple[int, int, int],
         spatial_dims: Optional[List[str]] = None,
         fill_value: float = 0.0,
+        centers_units: Optional[Dict[str, str]] = None,
     ) -> Union["ZarrNii", List["ZarrNii"]]:
         """Extract fixed-size patches centered at specified coordinates.
 
@@ -3204,7 +3304,7 @@ class ZarrNii:
 
         Args:
             centers: Either:
-                - Single center coordinate as (x, y, z) tuple in physical space (mm)
+                - Single center coordinate as (x, y, z) tuple in physical space
                 - List of center coordinates for batch processing
             patch_size: Size of the patch in voxels as (x, y, z) tuple.
                 This defines the dimensions of each cropped region in voxel space.
@@ -3214,6 +3314,13 @@ class ZarrNii:
                 or "x","y","z" for XYZ). Default is None.
             fill_value: Value to use for padding when patches extend beyond
                 image boundaries. Default is 0.0.
+            centers_units: Spatial units of the center coordinates, expressed as
+                a mapping of axis name to OME-Zarr unit string, e.g.
+                ``{'x': 'millimeter', 'y': 'millimeter', 'z': 'millimeter'}``.
+                Absent axes default to ``'millimeter'``.  If ``None``, all axes
+                default to ``'millimeter'``.  When the supplied units differ from
+                the units stored in the image, the coordinates are automatically
+                converted before locating the patch center.
 
         Returns:
             Single ZarrNii instance (when centers is a single tuple) or list of
@@ -3222,13 +3329,22 @@ class ZarrNii:
             specified by patch_size (plus any non-spatial dimensions).
 
         Raises:
-            ValueError: If coordinates/dimensions are invalid
+            ValueError: If coordinates/dimensions are invalid, or if
+                *centers_units* contains an unrecognised unit string
             IndexError: If patch_size dimensions don't match spatial dimensions
 
         Examples:
-            >>> # Extract single 256x256x256 voxel patch at a coordinate
+            >>> # Extract single 256x256x256 voxel patch at a coordinate (mm)
             >>> center = (50.0, 60.0, 70.0)  # physical coordinates in mm
             >>> patch = znii.crop_centered(center, patch_size=(256, 256, 256))
+            >>>
+            >>> # Extract patch with centers supplied in micrometers
+            >>> center_um = (50000.0, 60000.0, 70000.0)
+            >>> patch = znii.crop_centered(
+            ...     center_um,
+            ...     patch_size=(256, 256, 256),
+            ...     centers_units={'x': 'micrometer', 'y': 'micrometer', 'z': 'micrometer'},
+            ... )
             >>>
             >>> # Extract multiple patches for ML training
             >>> centers = [
@@ -3251,7 +3367,9 @@ class ZarrNii:
             >>> patch = znii.crop_centered(center, patch_size=(256, 256, 256), fill_value=-1.0)
 
         Notes:
-            - Centers are in physical/world coordinates (mm), always in (x, y, z) order
+            - Centers are in physical/world coordinates, always in (x, y, z) order
+            - By default centers are assumed to be in millimeters; use
+              *centers_units* to supply coordinates in a different unit
             - patch_size is in voxels, in (x, y, z) order
             - The patch is centered at the given coordinate, extending ±patch_size/2
             - If patch_size is odd, the center voxel is included
@@ -3260,13 +3378,17 @@ class ZarrNii:
             - Useful for ML training where fixed patch sizes are required
             - Coordinates from atlas.sample_region_patches() can be used directly
         """
+        _validate_axes_units(centers_units)
+
         # Check if this is batch processing (list of centers)
         is_batch = isinstance(centers, list)
 
         if is_batch:
             # Batch processing: recursively call crop_centered for each center
             return [
-                self.crop_centered(center, patch_size, spatial_dims, fill_value)
+                self.crop_centered(
+                    center, patch_size, spatial_dims, fill_value, centers_units
+                )
                 for center in centers
             ]
 
@@ -3278,7 +3400,11 @@ class ZarrNii:
 
         # Convert center from physical to voxel coordinates
         # Centers are always in (x, y, z) order
-        center_phys = np.array(list(centers) + [1.0])
+        # First convert from centers_units to the image's native units
+        centers_converted = _convert_physical_coords_units(
+            centers, centers_units, self.ngff_image.axes_units
+        )
+        center_phys = np.array(list(centers_converted) + [1.0])
 
         # Get inverse affine to convert from physical to voxel
         affine_inv = np.linalg.inv(self.get_affine_matrix(axes_order="XYZ"))
@@ -3794,6 +3920,7 @@ class ZarrNii:
         xyz_points: np.ndarray,
         method: str = "linear",
         fill_value: float = 0.0,
+        points_units: Optional[Dict[str, str]] = None,
     ) -> np.ndarray:
         """Block-aware interpolation of image values at physical-space query points.
 
@@ -3810,14 +3937,28 @@ class ZarrNii:
                 Supported values: ``'linear'`` (default) and ``'nearest'``.
             fill_value: Value returned for query points that fall outside the
                 image domain.  Default ``0.0``.
+            points_units: Spatial units of the query points, expressed as a
+                mapping of axis name to OME-Zarr unit string, e.g.
+                ``{'x': 'millimeter', 'y': 'millimeter', 'z': 'millimeter'}``.
+                Absent axes default to ``'millimeter'``.  If ``None``, all axes
+                default to ``'millimeter'``.  When the supplied units differ from
+                the units stored in the image, the query points are automatically
+                converted before interpolation.
 
         Returns:
             np.ndarray: Interpolated values with shape ``(C, N)`` where *C* is
             the number of image channels and *N* is the number of query points.
 
+        Raises:
+            ValueError: If *points_units* contains an unrecognised unit string,
+                or if the input array has an incompatible shape.
+
         Notes:
-            - Coordinates must be in the same physical space as the image (the
-              units are whatever the image metadata specifies, typically mm or µm).
+            - By default query coordinates are assumed to be in millimeters; use
+              *points_units* to supply coordinates in a different unit.
+            - When the image has no unit metadata (``axes_units`` is ``None``),
+              its units are assumed to be millimeters for the purpose of
+              conversion.
             - For zarr-backed images only the minimal set of data blocks that
               cover the query points is loaded; the full array is never read into
               memory.
@@ -3830,12 +3971,21 @@ class ZarrNii:
             >>> import numpy as np
             >>> from zarrnii import ZarrNii
             >>> znii = ZarrNii.from_ome_zarr("image.zarr")
-            >>> # Sample at three physical locations
+            >>> # Sample at three physical locations (mm, the default)
             >>> pts = np.array([[0.0, 0.0, 0.0],
             ...                 [1.0, 1.0, 1.0],
             ...                 [2.0, 2.0, 2.0]])   # shape (3, 3)
             >>> values = znii.sample_at_points(pts)   # shape (C, 3)
+            >>>
+            >>> # Same points supplied in micrometers
+            >>> pts_um = pts * 1000.0
+            >>> values = znii.sample_at_points(
+            ...     pts_um,
+            ...     points_units={'x': 'micrometer', 'y': 'micrometer', 'z': 'micrometer'},
+            ... )
         """
+        _validate_axes_units(points_units)
+
         # ---------------------------------------------------------------
         # 1. Normalize input to shape (N, 3), xyz order
         # ---------------------------------------------------------------
@@ -3867,6 +4017,13 @@ class ZarrNii:
 
         if n_points == 0:
             return results
+
+        # ---------------------------------------------------------------
+        # 1b. Convert points from points_units to image native units
+        # ---------------------------------------------------------------
+        xyz = _convert_physical_coords_units(
+            xyz, points_units, self.ngff_image.axes_units
+        )
 
         # ---------------------------------------------------------------
         # 2. Convert physical (x, y, z) → voxel coordinates in data order

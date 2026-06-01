@@ -215,6 +215,7 @@ def test_sample_at_points_zarr_backed():
             da.from_array(arr, chunks=(1, 10, 10, 10)),
             spacing=(1.0, 1.0, 1.0),
             origin=(0.0, 0.0, 0.0),
+            axes_units={"x": "millimeter", "y": "millimeter", "z": "millimeter"},
         )
 
         # Save and reload so the zarr store path is available
@@ -243,6 +244,7 @@ def test_sample_at_points_zarr_backed_nearest():
             da.from_array(arr, chunks=(1, 8, 8, 8)),
             spacing=(1.0, 1.0, 1.0),
             origin=(0.0, 0.0, 0.0),
+            axes_units={"x": "millimeter", "y": "millimeter", "z": "millimeter"},
         )
 
         znii_zarr = _save_and_reload(znii_mem, tmpdir)
@@ -268,6 +270,7 @@ def test_sample_at_points_zarr_backed_points_across_chunks():
             axes_order="ZYX",
             spacing=(1.0, 1.0, 1.0),
             origin=(0.0, 0.0, 0.0),
+            axes_units={"x": "millimeter", "y": "millimeter", "z": "millimeter"},
         )
         znii_zarr = _save_and_reload(znii_mem, tmpdir)
 
