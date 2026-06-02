@@ -22318,7 +22318,7 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 
 
 <h5 id="zarrnii.ZarrNii.apply_scaled_processing" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">apply_scaled_processing</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="n">downsample_factor</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">chunk_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">upsampled_ome_zarr_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">ZarrNii</span><span class="o">.</span><span class="n">apply_scaled_processing</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="n">downsample_factor</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">chunk_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">upsampled_ome_zarr_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;default&#39;</span><span class="p">,</span> <span class="n">lowres_znimg</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
 
 </h5>
 
@@ -22327,10 +22327,33 @@ If output_path is provided, writes to Parquet file and returns None.</p>
 
         <p>Apply scaled processing plugin using multi-resolution approach.</p>
 <p>This method implements a multi-resolution processing pipeline where:
-1. The image is downsampled for efficient computation
-2. The plugin's lowres_func is applied to the downsampled data
-3. The result is upsampled using dask-based upsampling
-4. The plugin's highres_func applies the result to full-resolution data</p>
+1. The image is downsampled for efficient computation (or a pre-computed
+   downsampled image is provided via <em>lowres_znimg</em>)
+2. The plugin's <code>lowres_func</code> is applied to the downsampled data
+3. The result is upsampled and <code>highres_func</code> is applied to full-resolution
+   data, using one of two back-end strategies selected by <em>method</em>.</p>
+<p>Two back-end methods are available:</p>
+<p><code>"default"</code> (rechunk/OME-Zarr upsample)
+    The low-resolution result is upsampled by rechunking, materialised to a
+    temporary OME-Zarr file, and then <code>highres_func</code> is called with two
+    full-resolution <strong>dask arrays</strong> (the original data and the upsampled
+    correction field).  This is the original approach.</p>
+<p><code>"map_blocks"</code> (fused map_blocks upsample)
+    The low-resolution result is kept in memory (small, already computed).
+    Upsampling and <code>highres_func</code> are fused into a single
+    :func:<code>dask.array.map_blocks</code> pass over the full-resolution data.
+    Inside each block, <code>scipy.ndimage.map_coordinates</code> interpolates the
+    correction field at the block's coordinates, and <code>highres_func</code> is
+    called with two <strong>NumPy arrays</strong> (the block and the interpolated
+    correction).  This avoids writing intermediate zarr files and is robust
+    to datasets (e.g., Imaris) where chunk boundaries do not align nicely
+    with the upsampling grid.</p>
+<p>Plugin interface
+    Both methods share the same plugin API.  <code>highres_func</code> is called
+    with arrays that support NumPy arithmetic (either dask arrays for
+    <code>"default"</code> or plain NumPy arrays for <code>"map_blocks"</code>), so
+    implementations that use <code>np.maximum</code>, <code>np.where</code>, and standard
+    arithmetic operators work correctly with both methods.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -22340,9 +22363,9 @@ If output_path is provided, writes to Parquet file and returns None.</p>
           –
           <div class="doc-md-description">
             <p>Plugin instance or class to apply.  The plugin must have
-<code>lowres_func(lowres_array)</code> and <code>highres_func(fullres_array,
-upsampled_output)</code> methods decorated with <code>@hookimpl</code> from
-:mod:<code>zarrnii.plugins</code>.</p>
+<code>lowres_func(lowres_array: np.ndarray) -&gt; np.ndarray</code> and
+<code>highres_func(fullres_array, upsampled_output)</code> methods
+decorated with <code>@hookimpl</code> from :mod:<code>zarrnii.plugins</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -22352,7 +22375,8 @@ upsampled_output)</code> methods decorated with <code>@hookimpl</code> from
 )
           –
           <div class="doc-md-description">
-            <p>Factor for downsampling (default: 4)</p>
+            <p>Factor for downsampling (default: 4).  Ignored
+when <em>lowres_znimg</em> is provided.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -22362,9 +22386,11 @@ upsampled_output)</code> methods decorated with <code>@hookimpl</code> from
 )
           –
           <div class="doc-md-description">
-            <p>Optional chunk size for spatial dimensions in order [Z, Y, X] (or [X, Y, Z] if axes_order is 'XYZ').
-If None, defaults to (10, 10, 10). Non-spatial dimensions (time, channel) are automatically
-assigned singleton chunks (1). The order of spatial dimensions follows the axes_order of the data.</p>
+            <p>Optional chunk size for spatial dimensions in order
+[Z, Y, X] (or [X, Y, Z] if axes_order is 'XYZ').  If <code>None</code>,
+defaults to <code>(10, 10, 10)</code>.  Non-spatial dimensions (time,
+channel) are automatically assigned singleton chunks.  Only
+used by the <code>"default"</code> method.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -22374,14 +22400,44 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
 )
           –
           <div class="doc-md-description">
-            <p>Path to save intermediate OME-Zarr, default saved in system temp directory.</p>
+            <p>Path to save the intermediate upsampled
+OME-Zarr.  If <code>None</code>, a system temp directory is used.  Only
+used by the <code>"default"</code> method.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>method</code></b>
+              (<code><span title="typing.Literal">Literal</span>[&#39;default&#39;, &#39;map_blocks&#39;]</code>, default:
+                  <code>&#39;default&#39;</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Back-end strategy to use.  One of <code>"default"</code> (rechunk
++ OME-Zarr upsample) or <code>"map_blocks"</code> (fused
+map_blocks interpolation).  Default is <code>"default"</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>lowres_znimg</code></b>
+              (<code><span title="typing.Optional">Optional</span>[&#39;ZarrNii&#39;]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Pre-computed downsampled :class:<code>ZarrNii</code> image.
+When provided, the downsampling step is skipped and this image
+is used as the low-resolution input instead.  Useful for
+reusing a previously computed pyramid level or for applying the
+same correction to multiple channels.  Only used by the
+<code>"map_blocks"</code> method (ignored for <code>"default"</code>).</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
             <b><code>**kwargs</code></b>
           –
           <div class="doc-md-description">
-            <p>Additional arguments passed to the plugin when <em>plugin</em> is a class.</p>
+            <p>Additional arguments passed to the plugin constructor when
+<em>plugin</em> is a class.</p>
           </div>
         </li>
     </ul>
@@ -22394,6 +22450,26 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
           –
           <div class="doc-md-description">
             <p>New ZarrNii instance with processed data</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="TypeError">TypeError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If <em>plugin</em> is an instance but keyword arguments are
+also supplied, or if the plugin is missing the required hooks.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><span title="ValueError">ValueError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If an unsupported <em>method</em> value is given.</p>
           </div>
         </li>
     </ul>
@@ -22504,41 +22580,169 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
 <span class="normal">7101</span>
 <span class="normal">7102</span>
 <span class="normal">7103</span>
-<span class="normal">7104</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
+<span class="normal">7104</span>
+<span class="normal">7105</span>
+<span class="normal">7106</span>
+<span class="normal">7107</span>
+<span class="normal">7108</span>
+<span class="normal">7109</span>
+<span class="normal">7110</span>
+<span class="normal">7111</span>
+<span class="normal">7112</span>
+<span class="normal">7113</span>
+<span class="normal">7114</span>
+<span class="normal">7115</span>
+<span class="normal">7116</span>
+<span class="normal">7117</span>
+<span class="normal">7118</span>
+<span class="normal">7119</span>
+<span class="normal">7120</span>
+<span class="normal">7121</span>
+<span class="normal">7122</span>
+<span class="normal">7123</span>
+<span class="normal">7124</span>
+<span class="normal">7125</span>
+<span class="normal">7126</span>
+<span class="normal">7127</span>
+<span class="normal">7128</span>
+<span class="normal">7129</span>
+<span class="normal">7130</span>
+<span class="normal">7131</span>
+<span class="normal">7132</span>
+<span class="normal">7133</span>
+<span class="normal">7134</span>
+<span class="normal">7135</span>
+<span class="normal">7136</span>
+<span class="normal">7137</span>
+<span class="normal">7138</span>
+<span class="normal">7139</span>
+<span class="normal">7140</span>
+<span class="normal">7141</span>
+<span class="normal">7142</span>
+<span class="normal">7143</span>
+<span class="normal">7144</span>
+<span class="normal">7145</span>
+<span class="normal">7146</span>
+<span class="normal">7147</span>
+<span class="normal">7148</span>
+<span class="normal">7149</span>
+<span class="normal">7150</span>
+<span class="normal">7151</span>
+<span class="normal">7152</span>
+<span class="normal">7153</span>
+<span class="normal">7154</span>
+<span class="normal">7155</span>
+<span class="normal">7156</span>
+<span class="normal">7157</span>
+<span class="normal">7158</span>
+<span class="normal">7159</span>
+<span class="normal">7160</span>
+<span class="normal">7161</span>
+<span class="normal">7162</span>
+<span class="normal">7163</span>
+<span class="normal">7164</span>
+<span class="normal">7165</span>
+<span class="normal">7166</span>
+<span class="normal">7167</span>
+<span class="normal">7168</span>
+<span class="normal">7169</span>
+<span class="normal">7170</span>
+<span class="normal">7171</span>
+<span class="normal">7172</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_scaled_processing</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">plugin</span><span class="p">,</span>
     <span class="n">downsample_factor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span>
     <span class="n">chunk_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">upsampled_ome_zarr_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">method</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;default&quot;</span><span class="p">,</span> <span class="s2">&quot;map_blocks&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;default&quot;</span><span class="p">,</span>
+    <span class="n">lowres_znimg</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;ZarrNii&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrNii&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Apply scaled processing plugin using multi-resolution approach.</span>
 
 <span class="sd">    This method implements a multi-resolution processing pipeline where:</span>
-<span class="sd">    1. The image is downsampled for efficient computation</span>
-<span class="sd">    2. The plugin&#39;s lowres_func is applied to the downsampled data</span>
-<span class="sd">    3. The result is upsampled using dask-based upsampling</span>
-<span class="sd">    4. The plugin&#39;s highres_func applies the result to full-resolution data</span>
+<span class="sd">    1. The image is downsampled for efficient computation (or a pre-computed</span>
+<span class="sd">       downsampled image is provided via *lowres_znimg*)</span>
+<span class="sd">    2. The plugin&#39;s ``lowres_func`` is applied to the downsampled data</span>
+<span class="sd">    3. The result is upsampled and ``highres_func`` is applied to full-resolution</span>
+<span class="sd">       data, using one of two back-end strategies selected by *method*.</span>
+
+<span class="sd">    Two back-end methods are available:</span>
+
+<span class="sd">    ``&quot;default&quot;`` (rechunk/OME-Zarr upsample)</span>
+<span class="sd">        The low-resolution result is upsampled by rechunking, materialised to a</span>
+<span class="sd">        temporary OME-Zarr file, and then ``highres_func`` is called with two</span>
+<span class="sd">        full-resolution **dask arrays** (the original data and the upsampled</span>
+<span class="sd">        correction field).  This is the original approach.</span>
+
+<span class="sd">    ``&quot;map_blocks&quot;`` (fused map_blocks upsample)</span>
+<span class="sd">        The low-resolution result is kept in memory (small, already computed).</span>
+<span class="sd">        Upsampling and ``highres_func`` are fused into a single</span>
+<span class="sd">        :func:`dask.array.map_blocks` pass over the full-resolution data.</span>
+<span class="sd">        Inside each block, ``scipy.ndimage.map_coordinates`` interpolates the</span>
+<span class="sd">        correction field at the block&#39;s coordinates, and ``highres_func`` is</span>
+<span class="sd">        called with two **NumPy arrays** (the block and the interpolated</span>
+<span class="sd">        correction).  This avoids writing intermediate zarr files and is robust</span>
+<span class="sd">        to datasets (e.g., Imaris) where chunk boundaries do not align nicely</span>
+<span class="sd">        with the upsampling grid.</span>
+
+<span class="sd">    Plugin interface</span>
+<span class="sd">        Both methods share the same plugin API.  ``highres_func`` is called</span>
+<span class="sd">        with arrays that support NumPy arithmetic (either dask arrays for</span>
+<span class="sd">        ``&quot;default&quot;`` or plain NumPy arrays for ``&quot;map_blocks&quot;``), so</span>
+<span class="sd">        implementations that use ``np.maximum``, ``np.where``, and standard</span>
+<span class="sd">        arithmetic operators work correctly with both methods.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        plugin: Plugin instance or class to apply.  The plugin must have</span>
-<span class="sd">            ``lowres_func(lowres_array)`` and ``highres_func(fullres_array,</span>
-<span class="sd">            upsampled_output)`` methods decorated with ``@hookimpl`` from</span>
-<span class="sd">            :mod:`zarrnii.plugins`.</span>
-<span class="sd">        downsample_factor: Factor for downsampling (default: 4)</span>
-<span class="sd">        chunk_size: Optional chunk size for spatial dimensions in order [Z, Y, X] (or [X, Y, Z] if axes_order is &#39;XYZ&#39;).</span>
-<span class="sd">            If None, defaults to (10, 10, 10). Non-spatial dimensions (time, channel) are automatically</span>
-<span class="sd">            assigned singleton chunks (1). The order of spatial dimensions follows the axes_order of the data.</span>
-<span class="sd">        upsampled_ome_zarr_path: Path to save intermediate OME-Zarr, default saved in system temp directory.</span>
-<span class="sd">        **kwargs: Additional arguments passed to the plugin when *plugin* is a class.</span>
+<span class="sd">            ``lowres_func(lowres_array: np.ndarray) -&gt; np.ndarray`` and</span>
+<span class="sd">            ``highres_func(fullres_array, upsampled_output)`` methods</span>
+<span class="sd">            decorated with ``@hookimpl`` from :mod:`zarrnii.plugins`.</span>
+<span class="sd">        downsample_factor: Factor for downsampling (default: 4).  Ignored</span>
+<span class="sd">            when *lowres_znimg* is provided.</span>
+<span class="sd">        chunk_size: Optional chunk size for spatial dimensions in order</span>
+<span class="sd">            [Z, Y, X] (or [X, Y, Z] if axes_order is &#39;XYZ&#39;).  If ``None``,</span>
+<span class="sd">            defaults to ``(10, 10, 10)``.  Non-spatial dimensions (time,</span>
+<span class="sd">            channel) are automatically assigned singleton chunks.  Only</span>
+<span class="sd">            used by the ``&quot;default&quot;`` method.</span>
+<span class="sd">        upsampled_ome_zarr_path: Path to save the intermediate upsampled</span>
+<span class="sd">            OME-Zarr.  If ``None``, a system temp directory is used.  Only</span>
+<span class="sd">            used by the ``&quot;default&quot;`` method.</span>
+<span class="sd">        method: Back-end strategy to use.  One of ``&quot;default&quot;`` (rechunk</span>
+<span class="sd">            + OME-Zarr upsample) or ``&quot;map_blocks&quot;`` (fused</span>
+<span class="sd">            map_blocks interpolation).  Default is ``&quot;default&quot;``.</span>
+<span class="sd">        lowres_znimg: Pre-computed downsampled :class:`ZarrNii` image.</span>
+<span class="sd">            When provided, the downsampling step is skipped and this image</span>
+<span class="sd">            is used as the low-resolution input instead.  Useful for</span>
+<span class="sd">            reusing a previously computed pyramid level or for applying the</span>
+<span class="sd">            same correction to multiple channels.  Only used by the</span>
+<span class="sd">            ``&quot;map_blocks&quot;`` method (ignored for ``&quot;default&quot;``).</span>
+<span class="sd">        **kwargs: Additional arguments passed to the plugin constructor when</span>
+<span class="sd">            *plugin* is a class.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        New ZarrNii instance with processed data</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        TypeError: If *plugin* is an instance but keyword arguments are</span>
+<span class="sd">            also supplied, or if the plugin is missing the required hooks.</span>
+<span class="sd">        ValueError: If an unsupported *method* value is given.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">method</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;default&quot;</span><span class="p">,</span> <span class="s2">&quot;map_blocks&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Unsupported method </span><span class="si">{</span><span class="n">method</span><span class="si">!r}</span><span class="s2">. &quot;</span> <span class="s2">&quot;Choose &#39;default&#39; or &#39;map_blocks&#39;.&quot;</span>
+        <span class="p">)</span>
+
     <span class="c1"># Handle plugin instance or class</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
         <span class="n">plugin</span> <span class="o">=</span> <span class="n">plugin</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">kwargs</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;apply_scaled_processing() received unexpected keyword arguments &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;for a plugin instance: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">. &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Keyword arguments are only accepted when &#39;plugin&#39; is a class.&quot;</span>
+        <span class="p">)</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="s2">&quot;lowres_func&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span>
         <span class="nb">getattr</span><span class="p">(</span><span class="n">plugin</span><span class="p">,</span> <span class="s2">&quot;highres_func&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
@@ -22548,18 +22752,27 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
             <span class="s2">&quot;decorated with @hookimpl&quot;</span>
         <span class="p">)</span>
 
+    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;map_blocks&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_scaled_processing_map_blocks</span><span class="p">(</span>
+            <span class="n">plugin</span><span class="p">,</span> <span class="n">downsample_factor</span><span class="o">=</span><span class="n">downsample_factor</span><span class="p">,</span> <span class="n">lowres_znimg</span><span class="o">=</span><span class="n">lowres_znimg</span>
+        <span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># &quot;default&quot; method: rechunk + OME-Zarr upsample</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
     <span class="c1"># Step 1: Downsample the data for low-resolution processing</span>
-    <span class="n">lowres_znimg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">downsample</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log2</span><span class="p">(</span><span class="n">downsample_factor</span><span class="p">)))</span>
+    <span class="n">_lowres_znimg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">downsample</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log2</span><span class="p">(</span><span class="n">downsample_factor</span><span class="p">)))</span>
 
     <span class="c1"># Convert to numpy array for lowres processing</span>
-    <span class="n">lowres_array</span> <span class="o">=</span> <span class="n">lowres_znimg</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+    <span class="n">lowres_array</span> <span class="o">=</span> <span class="n">_lowres_znimg</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
 
     <span class="c1"># Step 2: Apply low-resolution function and prepare for upsampling</span>
     <span class="c1"># Construct chunk size: map spatial dimensions to their positions</span>
     <span class="n">spatial_chunk_size</span> <span class="o">=</span> <span class="n">chunk_size</span> <span class="k">if</span> <span class="n">chunk_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
 
     <span class="c1"># Determine spatial dimension order based on axes_order</span>
-    <span class="k">if</span> <span class="n">lowres_znimg</span><span class="o">.</span><span class="n">axes_order</span> <span class="o">==</span> <span class="s2">&quot;XYZ&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">_lowres_znimg</span><span class="o">.</span><span class="n">axes_order</span> <span class="o">==</span> <span class="s2">&quot;XYZ&quot;</span><span class="p">:</span>
         <span class="n">spatial_dim_order</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="s2">&quot;y&quot;</span><span class="p">,</span> <span class="s2">&quot;z&quot;</span><span class="p">]</span>
     <span class="k">else</span><span class="p">:</span>  <span class="c1"># ZYX</span>
         <span class="n">spatial_dim_order</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;z&quot;</span><span class="p">,</span> <span class="s2">&quot;y&quot;</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">]</span>
@@ -22569,20 +22782,19 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
         <span class="n">dim</span><span class="p">:</span> <span class="n">size</span> <span class="k">for</span> <span class="n">dim</span><span class="p">,</span> <span class="n">size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">spatial_dim_order</span><span class="p">,</span> <span class="n">spatial_chunk_size</span><span class="p">)</span>
     <span class="p">}</span>
 
-    <span class="c1"># Build lowres_chunks by iterating through dims and assigning appropriate chunk sizes</span>
+    <span class="c1"># Build lowres_chunks by iterating through dims and assigning chunk sizes</span>
     <span class="n">lowres_chunks</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">dim</span> <span class="ow">in</span> <span class="n">lowres_znimg</span><span class="o">.</span><span class="n">dims</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">dim</span> <span class="ow">in</span> <span class="n">_lowres_znimg</span><span class="o">.</span><span class="n">dims</span><span class="p">:</span>
         <span class="n">dim_lower</span> <span class="o">=</span> <span class="n">dim</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">dim_lower</span> <span class="ow">in</span> <span class="n">spatial_chunk_map</span><span class="p">:</span>
-            <span class="c1"># This is a spatial dimension, use the mapped chunk size</span>
             <span class="n">lowres_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">spatial_chunk_map</span><span class="p">[</span><span class="n">dim_lower</span><span class="p">])</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="c1"># Non-spatial dimension (time, channel), use singleton chunk</span>
+            <span class="c1"># Non-spatial dimension (time, channel): singleton chunk</span>
             <span class="n">lowres_chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 
     <span class="n">lowres_chunks</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">lowres_chunks</span><span class="p">)</span>
 
-    <span class="n">lowres_znimg</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span>
+    <span class="n">_lowres_znimg</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span>
         <span class="n">plugin</span><span class="o">.</span><span class="n">lowres_func</span><span class="p">(</span><span class="n">lowres_array</span><span class="p">),</span> <span class="n">chunks</span><span class="o">=</span><span class="n">lowres_chunks</span>
     <span class="p">)</span>
 
@@ -22593,7 +22805,7 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
         <span class="n">upsampled_ome_zarr_path</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">(</span><span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;_SPIM.ome.zarr&quot;</span><span class="p">)</span>
 
     <span class="c1"># Step 3: Upsample using dask-based upsampling, save to ome zarr</span>
-    <span class="n">lowres_znimg</span><span class="o">.</span><span class="n">upsample</span><span class="p">(</span><span class="n">to_shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="o">.</span><span class="n">to_ome_zarr</span><span class="p">(</span>
+    <span class="n">_lowres_znimg</span><span class="o">.</span><span class="n">upsample</span><span class="p">(</span><span class="n">to_shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="o">.</span><span class="n">to_ome_zarr</span><span class="p">(</span>
         <span class="n">upsampled_ome_zarr_path</span><span class="p">,</span> <span class="n">max_layer</span><span class="o">=</span><span class="mi">1</span>
     <span class="p">)</span>
 
@@ -22654,49 +22866,49 @@ assigned singleton chunks (1). The order of spatial dimensions follows the axes_
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/core.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">7117</span>
-<span class="normal">7118</span>
-<span class="normal">7119</span>
-<span class="normal">7120</span>
-<span class="normal">7121</span>
-<span class="normal">7122</span>
-<span class="normal">7123</span>
-<span class="normal">7124</span>
-<span class="normal">7125</span>
-<span class="normal">7126</span>
-<span class="normal">7127</span>
-<span class="normal">7128</span>
-<span class="normal">7129</span>
-<span class="normal">7130</span>
-<span class="normal">7131</span>
-<span class="normal">7132</span>
-<span class="normal">7133</span>
-<span class="normal">7134</span>
-<span class="normal">7135</span>
-<span class="normal">7136</span>
-<span class="normal">7137</span>
-<span class="normal">7138</span>
-<span class="normal">7139</span>
-<span class="normal">7140</span>
-<span class="normal">7141</span>
-<span class="normal">7142</span>
-<span class="normal">7143</span>
-<span class="normal">7144</span>
-<span class="normal">7145</span>
-<span class="normal">7146</span>
-<span class="normal">7147</span>
-<span class="normal">7148</span>
-<span class="normal">7149</span>
-<span class="normal">7150</span>
-<span class="normal">7151</span>
-<span class="normal">7152</span>
-<span class="normal">7153</span>
-<span class="normal">7154</span>
-<span class="normal">7155</span>
-<span class="normal">7156</span>
-<span class="normal">7157</span>
-<span class="normal">7158</span>
-<span class="normal">7159</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">destripe</span><span class="p">(</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">7332</span>
+<span class="normal">7333</span>
+<span class="normal">7334</span>
+<span class="normal">7335</span>
+<span class="normal">7336</span>
+<span class="normal">7337</span>
+<span class="normal">7338</span>
+<span class="normal">7339</span>
+<span class="normal">7340</span>
+<span class="normal">7341</span>
+<span class="normal">7342</span>
+<span class="normal">7343</span>
+<span class="normal">7344</span>
+<span class="normal">7345</span>
+<span class="normal">7346</span>
+<span class="normal">7347</span>
+<span class="normal">7348</span>
+<span class="normal">7349</span>
+<span class="normal">7350</span>
+<span class="normal">7351</span>
+<span class="normal">7352</span>
+<span class="normal">7353</span>
+<span class="normal">7354</span>
+<span class="normal">7355</span>
+<span class="normal">7356</span>
+<span class="normal">7357</span>
+<span class="normal">7358</span>
+<span class="normal">7359</span>
+<span class="normal">7360</span>
+<span class="normal">7361</span>
+<span class="normal">7362</span>
+<span class="normal">7363</span>
+<span class="normal">7364</span>
+<span class="normal">7365</span>
+<span class="normal">7366</span>
+<span class="normal">7367</span>
+<span class="normal">7368</span>
+<span class="normal">7369</span>
+<span class="normal">7370</span>
+<span class="normal">7371</span>
+<span class="normal">7372</span>
+<span class="normal">7373</span>
+<span class="normal">7374</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">destripe</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">channel</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>

@@ -3912,16 +3912,16 @@ and applies the correction to full resolution data by division.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>zarrnii/plugins/scaled_processing/gaussian_biasfield.py</code></summary>
-                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">32</span>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">29</span>
+<span class="normal">30</span>
+<span class="normal">31</span>
+<span class="normal">32</span>
 <span class="normal">33</span>
 <span class="normal">34</span>
 <span class="normal">35</span>
 <span class="normal">36</span>
 <span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sigma</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;reflect&quot;</span><span class="p">):</span>
+<span class="normal">38</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sigma</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;reflect&quot;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Initialize bias field correction plugin.</span>
 
@@ -3991,7 +3991,10 @@ like N4 bias field correction.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/gaussian_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 43</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 40</span>
+<span class="normal"> 41</span>
+<span class="normal"> 42</span>
+<span class="normal"> 43</span>
 <span class="normal"> 44</span>
 <span class="normal"> 45</span>
 <span class="normal"> 46</span>
@@ -4050,10 +4053,7 @@ like N4 bias field correction.</p>
 <span class="normal"> 99</span>
 <span class="normal">100</span>
 <span class="normal">101</span>
-<span class="normal">102</span>
-<span class="normal">103</span>
-<span class="normal">104</span>
-<span class="normal">105</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">102</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">lowres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lowres_array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Estimate bias field from low-resolution data.</span>
@@ -4136,24 +4136,25 @@ like N4 bias field correction.</p>
         <p>Apply bias field correction to full-resolution data.</p>
 <p>This function takes the upsampled bias field (same size as fullres_array)
 and applies it to the full-resolution data by division.</p>
+<p>Works with both dask arrays (<code>"default"</code> method) and plain NumPy arrays
+(<code>"map_blocks"</code> method) because only NumPy-compatible operations are used.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
     <ul>
         <li class="doc-section-item field-body">
             <b><code>fullres_array</code></b>
-              (<code><span title="dask.array.Array">Array</span></code>)
           –
           <div class="doc-md-description">
-            <p>Full-resolution dask array</p>
+            <p>Full-resolution array (dask or NumPy)</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
             <b><code>upsampled_output</code></b>
-              (<code><span title="dask.array.Array">Array</span></code>)
           –
           <div class="doc-md-description">
-            <p>Upsampled bias field (same shape as fullres_array)</p>
+            <p>Upsampled bias field (same shape as fullres_array;
+dask or NumPy)</p>
           </div>
         </li>
     </ul>
@@ -4162,10 +4163,9 @@ and applies it to the full-resolution data by division.</p>
 <p><span class="doc-section-title">Returns:</span></p>
     <ul>
         <li class="doc-section-item field-body">
-              <code><span title="dask.array.Array">Array</span></code>
           –
           <div class="doc-md-description">
-            <p>Bias-corrected full-resolution array</p>
+            <p>Bias-corrected full-resolution array (same type as inputs)</p>
           </div>
         </li>
     </ul>
@@ -4173,7 +4173,10 @@ and applies it to the full-resolution data by division.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/gaussian_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">107</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
 <span class="normal">108</span>
 <span class="normal">109</span>
 <span class="normal">110</span>
@@ -4194,28 +4197,29 @@ and applies it to the full-resolution data by division.</p>
 <span class="normal">125</span>
 <span class="normal">126</span>
 <span class="normal">127</span>
-<span class="normal">128</span>
-<span class="normal">129</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span>
-    <span class="bp">self</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">:</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">:</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
+<span class="normal">128</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Apply bias field correction to full-resolution data.</span>
 
 <span class="sd">    This function takes the upsampled bias field (same size as fullres_array)</span>
 <span class="sd">    and applies it to the full-resolution data by division.</span>
 
+<span class="sd">    Works with both dask arrays (``&quot;default&quot;`` method) and plain NumPy arrays</span>
+<span class="sd">    (``&quot;map_blocks&quot;`` method) because only NumPy-compatible operations are used.</span>
+
 <span class="sd">    Args:</span>
-<span class="sd">        fullres_array: Full-resolution dask array</span>
-<span class="sd">        upsampled_output: Upsampled bias field (same shape as fullres_array)</span>
+<span class="sd">        fullres_array: Full-resolution array (dask or NumPy)</span>
+<span class="sd">        upsampled_output: Upsampled bias field (same shape as fullres_array;</span>
+<span class="sd">            dask or NumPy)</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        Bias-corrected full-resolution array</span>
+<span class="sd">        Bias-corrected full-resolution array (same type as inputs)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># Apply bias field correction by division using dask operations</span>
-    <span class="c1"># Avoid division by zero by adding small epsilon</span>
+    <span class="c1"># Avoid division by zero by clamping the bias field to a small epsilon.</span>
+    <span class="c1"># np.maximum works for both dask arrays (via __array_ufunc__) and NumPy.</span>
     <span class="n">epsilon</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">finfo</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">eps</span>
-    <span class="n">corrected_array</span> <span class="o">=</span> <span class="n">fullres_array</span> <span class="o">/</span> <span class="n">da</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">upsampled_output</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
+    <span class="n">corrected_array</span> <span class="o">=</span> <span class="n">fullres_array</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">upsampled_output</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">corrected_array</span>
 </code></pre></div></td></tr></table></div>
@@ -4240,10 +4244,10 @@ and applies it to the full-resolution data by division.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/gaussian_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">131</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">130</span>
+<span class="normal">131</span>
 <span class="normal">132</span>
-<span class="normal">133</span>
-<span class="normal">134</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">133</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the name of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="s2">&quot;Gaussian Bias Field Correction&quot;</span>
@@ -4269,14 +4273,14 @@ and applies it to the full-resolution data by division.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/gaussian_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">136</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">135</span>
+<span class="normal">136</span>
 <span class="normal">137</span>
 <span class="normal">138</span>
 <span class="normal">139</span>
 <span class="normal">140</span>
 <span class="normal">141</span>
-<span class="normal">142</span>
-<span class="normal">143</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">142</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_description</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a description of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">(</span>
@@ -4410,7 +4414,8 @@ correction to full resolution data by division.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield.py</code></summary>
-                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">40</span>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">39</span>
+<span class="normal">40</span>
 <span class="normal">41</span>
 <span class="normal">42</span>
 <span class="normal">43</span>
@@ -4438,8 +4443,7 @@ correction to full resolution data by division.</p>
 <span class="normal">65</span>
 <span class="normal">66</span>
 <span class="normal">67</span>
-<span class="normal">68</span>
-<span class="normal">69</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<span class="normal">68</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">spline_param</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
     <span class="n">convergence</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
@@ -4528,7 +4532,8 @@ the bias field at low resolution.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 71</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 70</span>
+<span class="normal"> 71</span>
 <span class="normal"> 72</span>
 <span class="normal"> 73</span>
 <span class="normal"> 74</span>
@@ -4609,8 +4614,7 @@ the bias field at low resolution.</p>
 <span class="normal">149</span>
 <span class="normal">150</span>
 <span class="normal">151</span>
-<span class="normal">152</span>
-<span class="normal">153</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">152</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">lowres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lowres_array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Estimate bias field from low-resolution data using N4 algorithm.</span>
@@ -4713,24 +4717,25 @@ the bias field at low resolution.</p>
         <p>Apply bias field correction to full-resolution data.</p>
 <p>This function takes the upsampled bias field (same size as
 fullres_array) and applies it to the full-resolution data by division.</p>
+<p>Works with both dask arrays (<code>"default"</code> method) and plain NumPy arrays
+(<code>"map_blocks"</code> method) because only NumPy-compatible operations are used.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
     <ul>
         <li class="doc-section-item field-body">
             <b><code>fullres_array</code></b>
-              (<code><span title="dask.array.Array">Array</span></code>)
           –
           <div class="doc-md-description">
-            <p>Full-resolution dask array</p>
+            <p>Full-resolution array (dask or NumPy)</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
             <b><code>upsampled_output</code></b>
-              (<code><span title="dask.array.Array">Array</span></code>)
           –
           <div class="doc-md-description">
-            <p>Upsampled bias field (same shape as fullres)</p>
+            <p>Upsampled bias field (same shape as fullres;
+dask or NumPy)</p>
           </div>
         </li>
     </ul>
@@ -4739,10 +4744,9 @@ fullres_array) and applies it to the full-resolution data by division.</p>
 <p><span class="doc-section-title">Returns:</span></p>
     <ul>
         <li class="doc-section-item field-body">
-              <code><span title="dask.array.Array">Array</span></code>
           –
           <div class="doc-md-description">
-            <p>Bias-corrected full-resolution array</p>
+            <p>Bias-corrected full-resolution array (same type as inputs)</p>
           </div>
         </li>
     </ul>
@@ -4750,7 +4754,8 @@ fullres_array) and applies it to the full-resolution data by division.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">155</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">154</span>
+<span class="normal">155</span>
 <span class="normal">156</span>
 <span class="normal">157</span>
 <span class="normal">158</span>
@@ -4772,27 +4777,30 @@ fullres_array) and applies it to the full-resolution data by division.</p>
 <span class="normal">174</span>
 <span class="normal">175</span>
 <span class="normal">176</span>
-<span class="normal">177</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span>
-    <span class="bp">self</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">:</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">:</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
+<span class="normal">177</span>
+<span class="normal">178</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Apply bias field correction to full-resolution data.</span>
 
 <span class="sd">    This function takes the upsampled bias field (same size as</span>
 <span class="sd">    fullres_array) and applies it to the full-resolution data by division.</span>
 
+<span class="sd">    Works with both dask arrays (``&quot;default&quot;`` method) and plain NumPy arrays</span>
+<span class="sd">    (``&quot;map_blocks&quot;`` method) because only NumPy-compatible operations are used.</span>
+
 <span class="sd">    Args:</span>
-<span class="sd">        fullres_array: Full-resolution dask array</span>
-<span class="sd">        upsampled_output: Upsampled bias field (same shape as fullres)</span>
+<span class="sd">        fullres_array: Full-resolution array (dask or NumPy)</span>
+<span class="sd">        upsampled_output: Upsampled bias field (same shape as fullres;</span>
+<span class="sd">            dask or NumPy)</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        Bias-corrected full-resolution array</span>
+<span class="sd">        Bias-corrected full-resolution array (same type as inputs)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># Apply bias field correction by division using dask operations</span>
-    <span class="c1"># Avoid division by zero by adding small epsilon</span>
+    <span class="c1"># Avoid division by zero by clamping the bias field to a small epsilon.</span>
+    <span class="c1"># np.maximum works for both dask arrays (via __array_ufunc__) and NumPy.</span>
     <span class="n">epsilon</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">finfo</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">eps</span>
-    <span class="n">corrected_array</span> <span class="o">=</span> <span class="n">fullres_array</span> <span class="o">/</span> <span class="n">da</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">upsampled_output</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
+    <span class="n">corrected_array</span> <span class="o">=</span> <span class="n">fullres_array</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">upsampled_output</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">corrected_array</span>
 </code></pre></div></td></tr></table></div>
@@ -4817,10 +4825,10 @@ fullres_array) and applies it to the full-resolution data by division.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">179</span>
-<span class="normal">180</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">180</span>
 <span class="normal">181</span>
-<span class="normal">182</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">182</span>
+<span class="normal">183</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the name of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="s2">&quot;N4 Bias Field Correction&quot;</span>
@@ -4846,14 +4854,14 @@ fullres_array) and applies it to the full-resolution data by division.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">184</span>
-<span class="normal">185</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">185</span>
 <span class="normal">186</span>
 <span class="normal">187</span>
 <span class="normal">188</span>
 <span class="normal">189</span>
 <span class="normal">190</span>
-<span class="normal">191</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">191</span>
+<span class="normal">192</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_description</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a description of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">(</span>
@@ -4981,7 +4989,8 @@ are typically large artifactual objects with sparse coverage.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>zarrnii/plugins/scaled_processing/segmentation_cleaner.py</code></summary>
-                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">39</span>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">38</span>
+<span class="normal">39</span>
 <span class="normal">40</span>
 <span class="normal">41</span>
 <span class="normal">42</span>
@@ -4997,8 +5006,7 @@ are typically large artifactual objects with sparse coverage.</p>
 <span class="normal">52</span>
 <span class="normal">53</span>
 <span class="normal">54</span>
-<span class="normal">55</span>
-<span class="normal">56</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<span class="normal">55</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">mask_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">50</span><span class="p">,</span>
     <span class="n">max_extent</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.15</span><span class="p">,</span>
@@ -5076,7 +5084,8 @@ with extent below the threshold.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/segmentation_cleaner.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 58</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 57</span>
+<span class="normal"> 58</span>
 <span class="normal"> 59</span>
 <span class="normal"> 60</span>
 <span class="normal"> 61</span>
@@ -5140,8 +5149,7 @@ with extent below the threshold.</p>
 <span class="normal">119</span>
 <span class="normal">120</span>
 <span class="normal">121</span>
-<span class="normal">122</span>
-<span class="normal">123</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">122</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">lowres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lowres_array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Create exclusion mask from low-resolution segmentation data.</span>
@@ -5227,24 +5235,25 @@ with extent below the threshold.</p>
         <p>Apply exclusion mask to full-resolution segmentation data.</p>
 <p>This function takes the upsampled exclusion mask and applies it to
 the full-resolution segmentation by zeroing out the excluded regions.</p>
+<p>Works with both dask arrays (<code>"default"</code> method) and plain NumPy arrays
+(<code>"map_blocks"</code> method) because only NumPy-compatible operations are used.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
     <ul>
         <li class="doc-section-item field-body">
             <b><code>fullres_array</code></b>
-              (<code><span title="dask.array.Array">Array</span></code>)
           –
           <div class="doc-md-description">
-            <p>Full-resolution segmentation dask array</p>
+            <p>Full-resolution segmentation array (dask or NumPy)</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
             <b><code>upsampled_output</code></b>
-              (<code><span title="dask.array.Array">Array</span></code>)
           –
           <div class="doc-md-description">
-            <p>Upsampled exclusion mask (same shape as fullres)</p>
+            <p>Upsampled exclusion mask (same shape as fullres;
+dask or NumPy)</p>
           </div>
         </li>
     </ul>
@@ -5253,10 +5262,9 @@ the full-resolution segmentation by zeroing out the excluded regions.</p>
 <p><span class="doc-section-title">Returns:</span></p>
     <ul>
         <li class="doc-section-item field-body">
-              <code><span title="dask.array.Array">Array</span></code>
           –
           <div class="doc-md-description">
-            <p>Cleaned full-resolution segmentation array</p>
+            <p>Cleaned full-resolution segmentation array (same type as inputs)</p>
           </div>
         </li>
     </ul>
@@ -5264,7 +5272,8 @@ the full-resolution segmentation by zeroing out the excluded regions.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/segmentation_cleaner.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">125</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">124</span>
+<span class="normal">125</span>
 <span class="normal">126</span>
 <span class="normal">127</span>
 <span class="normal">128</span>
@@ -5288,29 +5297,34 @@ the full-resolution segmentation by zeroing out the excluded regions.</p>
 <span class="normal">146</span>
 <span class="normal">147</span>
 <span class="normal">148</span>
-<span class="normal">149</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span>
-    <span class="bp">self</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">:</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">:</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Apply exclusion mask to full-resolution segmentation data.</span>
 
 <span class="sd">    This function takes the upsampled exclusion mask and applies it to</span>
 <span class="sd">    the full-resolution segmentation by zeroing out the excluded regions.</span>
 
+<span class="sd">    Works with both dask arrays (``&quot;default&quot;`` method) and plain NumPy arrays</span>
+<span class="sd">    (``&quot;map_blocks&quot;`` method) because only NumPy-compatible operations are used.</span>
+
 <span class="sd">    Args:</span>
-<span class="sd">        fullres_array: Full-resolution segmentation dask array</span>
-<span class="sd">        upsampled_output: Upsampled exclusion mask (same shape as fullres)</span>
+<span class="sd">        fullres_array: Full-resolution segmentation array (dask or NumPy)</span>
+<span class="sd">        upsampled_output: Upsampled exclusion mask (same shape as fullres;</span>
+<span class="sd">            dask or NumPy)</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        Cleaned full-resolution segmentation array</span>
+<span class="sd">        Cleaned full-resolution segmentation array (same type as inputs)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># Threshold the upsampled exclusion mask</span>
-    <span class="c1"># Values &gt;= exclusion_threshold (e.g., 50) indicate regions to exclude</span>
+    <span class="c1"># Threshold the upsampled exclusion mask.</span>
+    <span class="c1"># Values &gt;= exclusion_threshold (e.g., 50) indicate regions to exclude.</span>
     <span class="n">exclusion_mask</span> <span class="o">=</span> <span class="n">upsampled_output</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">exclusion_threshold</span>
 
-    <span class="c1"># Apply mask: set excluded regions to zero</span>
-    <span class="n">cleaned_array</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">exclusion_mask</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">)</span>
+    <span class="c1"># Apply mask: set excluded regions to zero.</span>
+    <span class="c1"># np.where works for both dask arrays (via __array_ufunc__) and NumPy.</span>
+    <span class="n">cleaned_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">exclusion_mask</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">cleaned_array</span>
 </code></pre></div></td></tr></table></div>
@@ -5335,10 +5349,10 @@ the full-resolution segmentation by zeroing out the excluded regions.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/segmentation_cleaner.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">151</span>
-<span class="normal">152</span>
-<span class="normal">153</span>
-<span class="normal">154</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the name of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="s2">&quot;Segmentation Cleaner&quot;</span>
@@ -5364,15 +5378,15 @@ the full-resolution segmentation by zeroing out the excluded regions.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/segmentation_cleaner.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">156</span>
-<span class="normal">157</span>
-<span class="normal">158</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">158</span>
 <span class="normal">159</span>
 <span class="normal">160</span>
 <span class="normal">161</span>
 <span class="normal">162</span>
 <span class="normal">163</span>
-<span class="normal">164</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_description</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a description of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">(</span>
@@ -8142,16 +8156,16 @@ and applies the correction to full resolution data by division.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>zarrnii/plugins/scaled_processing/gaussian_biasfield.py</code></summary>
-                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">32</span>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">29</span>
+<span class="normal">30</span>
+<span class="normal">31</span>
+<span class="normal">32</span>
 <span class="normal">33</span>
 <span class="normal">34</span>
 <span class="normal">35</span>
 <span class="normal">36</span>
 <span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sigma</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;reflect&quot;</span><span class="p">):</span>
+<span class="normal">38</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sigma</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;reflect&quot;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Initialize bias field correction plugin.</span>
 
@@ -8221,7 +8235,10 @@ like N4 bias field correction.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/gaussian_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 43</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 40</span>
+<span class="normal"> 41</span>
+<span class="normal"> 42</span>
+<span class="normal"> 43</span>
 <span class="normal"> 44</span>
 <span class="normal"> 45</span>
 <span class="normal"> 46</span>
@@ -8280,10 +8297,7 @@ like N4 bias field correction.</p>
 <span class="normal"> 99</span>
 <span class="normal">100</span>
 <span class="normal">101</span>
-<span class="normal">102</span>
-<span class="normal">103</span>
-<span class="normal">104</span>
-<span class="normal">105</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">102</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">lowres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lowres_array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Estimate bias field from low-resolution data.</span>
@@ -8366,24 +8380,25 @@ like N4 bias field correction.</p>
         <p>Apply bias field correction to full-resolution data.</p>
 <p>This function takes the upsampled bias field (same size as fullres_array)
 and applies it to the full-resolution data by division.</p>
+<p>Works with both dask arrays (<code>"default"</code> method) and plain NumPy arrays
+(<code>"map_blocks"</code> method) because only NumPy-compatible operations are used.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
     <ul>
         <li class="doc-section-item field-body">
             <b><code>fullres_array</code></b>
-              (<code><span title="dask.array.Array">Array</span></code>)
           –
           <div class="doc-md-description">
-            <p>Full-resolution dask array</p>
+            <p>Full-resolution array (dask or NumPy)</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
             <b><code>upsampled_output</code></b>
-              (<code><span title="dask.array.Array">Array</span></code>)
           –
           <div class="doc-md-description">
-            <p>Upsampled bias field (same shape as fullres_array)</p>
+            <p>Upsampled bias field (same shape as fullres_array;
+dask or NumPy)</p>
           </div>
         </li>
     </ul>
@@ -8392,10 +8407,9 @@ and applies it to the full-resolution data by division.</p>
 <p><span class="doc-section-title">Returns:</span></p>
     <ul>
         <li class="doc-section-item field-body">
-              <code><span title="dask.array.Array">Array</span></code>
           –
           <div class="doc-md-description">
-            <p>Bias-corrected full-resolution array</p>
+            <p>Bias-corrected full-resolution array (same type as inputs)</p>
           </div>
         </li>
     </ul>
@@ -8403,7 +8417,10 @@ and applies it to the full-resolution data by division.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/gaussian_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">107</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
 <span class="normal">108</span>
 <span class="normal">109</span>
 <span class="normal">110</span>
@@ -8424,28 +8441,29 @@ and applies it to the full-resolution data by division.</p>
 <span class="normal">125</span>
 <span class="normal">126</span>
 <span class="normal">127</span>
-<span class="normal">128</span>
-<span class="normal">129</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span>
-    <span class="bp">self</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">:</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">:</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
+<span class="normal">128</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Apply bias field correction to full-resolution data.</span>
 
 <span class="sd">    This function takes the upsampled bias field (same size as fullres_array)</span>
 <span class="sd">    and applies it to the full-resolution data by division.</span>
 
+<span class="sd">    Works with both dask arrays (``&quot;default&quot;`` method) and plain NumPy arrays</span>
+<span class="sd">    (``&quot;map_blocks&quot;`` method) because only NumPy-compatible operations are used.</span>
+
 <span class="sd">    Args:</span>
-<span class="sd">        fullres_array: Full-resolution dask array</span>
-<span class="sd">        upsampled_output: Upsampled bias field (same shape as fullres_array)</span>
+<span class="sd">        fullres_array: Full-resolution array (dask or NumPy)</span>
+<span class="sd">        upsampled_output: Upsampled bias field (same shape as fullres_array;</span>
+<span class="sd">            dask or NumPy)</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        Bias-corrected full-resolution array</span>
+<span class="sd">        Bias-corrected full-resolution array (same type as inputs)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># Apply bias field correction by division using dask operations</span>
-    <span class="c1"># Avoid division by zero by adding small epsilon</span>
+    <span class="c1"># Avoid division by zero by clamping the bias field to a small epsilon.</span>
+    <span class="c1"># np.maximum works for both dask arrays (via __array_ufunc__) and NumPy.</span>
     <span class="n">epsilon</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">finfo</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">eps</span>
-    <span class="n">corrected_array</span> <span class="o">=</span> <span class="n">fullres_array</span> <span class="o">/</span> <span class="n">da</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">upsampled_output</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
+    <span class="n">corrected_array</span> <span class="o">=</span> <span class="n">fullres_array</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">upsampled_output</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">corrected_array</span>
 </code></pre></div></td></tr></table></div>
@@ -8470,10 +8488,10 @@ and applies it to the full-resolution data by division.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/gaussian_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">131</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">130</span>
+<span class="normal">131</span>
 <span class="normal">132</span>
-<span class="normal">133</span>
-<span class="normal">134</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">133</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the name of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="s2">&quot;Gaussian Bias Field Correction&quot;</span>
@@ -8499,14 +8517,14 @@ and applies it to the full-resolution data by division.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/gaussian_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">136</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">135</span>
+<span class="normal">136</span>
 <span class="normal">137</span>
 <span class="normal">138</span>
 <span class="normal">139</span>
 <span class="normal">140</span>
 <span class="normal">141</span>
-<span class="normal">142</span>
-<span class="normal">143</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">142</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_description</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a description of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">(</span>
@@ -8680,7 +8698,8 @@ correction to full resolution data by division.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield.py</code></summary>
-                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">40</span>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">39</span>
+<span class="normal">40</span>
 <span class="normal">41</span>
 <span class="normal">42</span>
 <span class="normal">43</span>
@@ -8708,8 +8727,7 @@ correction to full resolution data by division.</p>
 <span class="normal">65</span>
 <span class="normal">66</span>
 <span class="normal">67</span>
-<span class="normal">68</span>
-<span class="normal">69</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<span class="normal">68</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">spline_param</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
     <span class="n">convergence</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
@@ -8798,7 +8816,8 @@ the bias field at low resolution.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 71</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 70</span>
+<span class="normal"> 71</span>
 <span class="normal"> 72</span>
 <span class="normal"> 73</span>
 <span class="normal"> 74</span>
@@ -8879,8 +8898,7 @@ the bias field at low resolution.</p>
 <span class="normal">149</span>
 <span class="normal">150</span>
 <span class="normal">151</span>
-<span class="normal">152</span>
-<span class="normal">153</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">152</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">lowres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lowres_array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Estimate bias field from low-resolution data using N4 algorithm.</span>
@@ -8983,24 +9001,25 @@ the bias field at low resolution.</p>
         <p>Apply bias field correction to full-resolution data.</p>
 <p>This function takes the upsampled bias field (same size as
 fullres_array) and applies it to the full-resolution data by division.</p>
+<p>Works with both dask arrays (<code>"default"</code> method) and plain NumPy arrays
+(<code>"map_blocks"</code> method) because only NumPy-compatible operations are used.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
     <ul>
         <li class="doc-section-item field-body">
             <b><code>fullres_array</code></b>
-              (<code><span title="dask.array.Array">Array</span></code>)
           –
           <div class="doc-md-description">
-            <p>Full-resolution dask array</p>
+            <p>Full-resolution array (dask or NumPy)</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
             <b><code>upsampled_output</code></b>
-              (<code><span title="dask.array.Array">Array</span></code>)
           –
           <div class="doc-md-description">
-            <p>Upsampled bias field (same shape as fullres)</p>
+            <p>Upsampled bias field (same shape as fullres;
+dask or NumPy)</p>
           </div>
         </li>
     </ul>
@@ -9009,10 +9028,9 @@ fullres_array) and applies it to the full-resolution data by division.</p>
 <p><span class="doc-section-title">Returns:</span></p>
     <ul>
         <li class="doc-section-item field-body">
-              <code><span title="dask.array.Array">Array</span></code>
           –
           <div class="doc-md-description">
-            <p>Bias-corrected full-resolution array</p>
+            <p>Bias-corrected full-resolution array (same type as inputs)</p>
           </div>
         </li>
     </ul>
@@ -9020,7 +9038,8 @@ fullres_array) and applies it to the full-resolution data by division.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">155</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">154</span>
+<span class="normal">155</span>
 <span class="normal">156</span>
 <span class="normal">157</span>
 <span class="normal">158</span>
@@ -9042,27 +9061,30 @@ fullres_array) and applies it to the full-resolution data by division.</p>
 <span class="normal">174</span>
 <span class="normal">175</span>
 <span class="normal">176</span>
-<span class="normal">177</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span>
-    <span class="bp">self</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">:</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">:</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
+<span class="normal">177</span>
+<span class="normal">178</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Apply bias field correction to full-resolution data.</span>
 
 <span class="sd">    This function takes the upsampled bias field (same size as</span>
 <span class="sd">    fullres_array) and applies it to the full-resolution data by division.</span>
 
+<span class="sd">    Works with both dask arrays (``&quot;default&quot;`` method) and plain NumPy arrays</span>
+<span class="sd">    (``&quot;map_blocks&quot;`` method) because only NumPy-compatible operations are used.</span>
+
 <span class="sd">    Args:</span>
-<span class="sd">        fullres_array: Full-resolution dask array</span>
-<span class="sd">        upsampled_output: Upsampled bias field (same shape as fullres)</span>
+<span class="sd">        fullres_array: Full-resolution array (dask or NumPy)</span>
+<span class="sd">        upsampled_output: Upsampled bias field (same shape as fullres;</span>
+<span class="sd">            dask or NumPy)</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        Bias-corrected full-resolution array</span>
+<span class="sd">        Bias-corrected full-resolution array (same type as inputs)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># Apply bias field correction by division using dask operations</span>
-    <span class="c1"># Avoid division by zero by adding small epsilon</span>
+    <span class="c1"># Avoid division by zero by clamping the bias field to a small epsilon.</span>
+    <span class="c1"># np.maximum works for both dask arrays (via __array_ufunc__) and NumPy.</span>
     <span class="n">epsilon</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">finfo</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">eps</span>
-    <span class="n">corrected_array</span> <span class="o">=</span> <span class="n">fullres_array</span> <span class="o">/</span> <span class="n">da</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">upsampled_output</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
+    <span class="n">corrected_array</span> <span class="o">=</span> <span class="n">fullres_array</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">upsampled_output</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">corrected_array</span>
 </code></pre></div></td></tr></table></div>
@@ -9087,10 +9109,10 @@ fullres_array) and applies it to the full-resolution data by division.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">179</span>
-<span class="normal">180</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">180</span>
 <span class="normal">181</span>
-<span class="normal">182</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">182</span>
+<span class="normal">183</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the name of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="s2">&quot;N4 Bias Field Correction&quot;</span>
@@ -9116,14 +9138,14 @@ fullres_array) and applies it to the full-resolution data by division.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">184</span>
-<span class="normal">185</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">185</span>
 <span class="normal">186</span>
 <span class="normal">187</span>
 <span class="normal">188</span>
 <span class="normal">189</span>
 <span class="normal">190</span>
-<span class="normal">191</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">191</span>
+<span class="normal">192</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_description</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a description of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">(</span>
@@ -9292,7 +9314,8 @@ are typically large artifactual objects with sparse coverage.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>zarrnii/plugins/scaled_processing/segmentation_cleaner.py</code></summary>
-                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">39</span>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">38</span>
+<span class="normal">39</span>
 <span class="normal">40</span>
 <span class="normal">41</span>
 <span class="normal">42</span>
@@ -9308,8 +9331,7 @@ are typically large artifactual objects with sparse coverage.</p>
 <span class="normal">52</span>
 <span class="normal">53</span>
 <span class="normal">54</span>
-<span class="normal">55</span>
-<span class="normal">56</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<span class="normal">55</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">mask_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">50</span><span class="p">,</span>
     <span class="n">max_extent</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.15</span><span class="p">,</span>
@@ -9387,7 +9409,8 @@ with extent below the threshold.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/segmentation_cleaner.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 58</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 57</span>
+<span class="normal"> 58</span>
 <span class="normal"> 59</span>
 <span class="normal"> 60</span>
 <span class="normal"> 61</span>
@@ -9451,8 +9474,7 @@ with extent below the threshold.</p>
 <span class="normal">119</span>
 <span class="normal">120</span>
 <span class="normal">121</span>
-<span class="normal">122</span>
-<span class="normal">123</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">122</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">lowres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lowres_array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Create exclusion mask from low-resolution segmentation data.</span>
@@ -9538,24 +9560,25 @@ with extent below the threshold.</p>
         <p>Apply exclusion mask to full-resolution segmentation data.</p>
 <p>This function takes the upsampled exclusion mask and applies it to
 the full-resolution segmentation by zeroing out the excluded regions.</p>
+<p>Works with both dask arrays (<code>"default"</code> method) and plain NumPy arrays
+(<code>"map_blocks"</code> method) because only NumPy-compatible operations are used.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
     <ul>
         <li class="doc-section-item field-body">
             <b><code>fullres_array</code></b>
-              (<code><span title="dask.array.Array">Array</span></code>)
           –
           <div class="doc-md-description">
-            <p>Full-resolution segmentation dask array</p>
+            <p>Full-resolution segmentation array (dask or NumPy)</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
             <b><code>upsampled_output</code></b>
-              (<code><span title="dask.array.Array">Array</span></code>)
           –
           <div class="doc-md-description">
-            <p>Upsampled exclusion mask (same shape as fullres)</p>
+            <p>Upsampled exclusion mask (same shape as fullres;
+dask or NumPy)</p>
           </div>
         </li>
     </ul>
@@ -9564,10 +9587,9 @@ the full-resolution segmentation by zeroing out the excluded regions.</p>
 <p><span class="doc-section-title">Returns:</span></p>
     <ul>
         <li class="doc-section-item field-body">
-              <code><span title="dask.array.Array">Array</span></code>
           –
           <div class="doc-md-description">
-            <p>Cleaned full-resolution segmentation array</p>
+            <p>Cleaned full-resolution segmentation array (same type as inputs)</p>
           </div>
         </li>
     </ul>
@@ -9575,7 +9597,8 @@ the full-resolution segmentation by zeroing out the excluded regions.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/segmentation_cleaner.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">125</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">124</span>
+<span class="normal">125</span>
 <span class="normal">126</span>
 <span class="normal">127</span>
 <span class="normal">128</span>
@@ -9599,29 +9622,34 @@ the full-resolution segmentation by zeroing out the excluded regions.</p>
 <span class="normal">146</span>
 <span class="normal">147</span>
 <span class="normal">148</span>
-<span class="normal">149</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span>
-    <span class="bp">self</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">:</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">:</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Apply exclusion mask to full-resolution segmentation data.</span>
 
 <span class="sd">    This function takes the upsampled exclusion mask and applies it to</span>
 <span class="sd">    the full-resolution segmentation by zeroing out the excluded regions.</span>
 
+<span class="sd">    Works with both dask arrays (``&quot;default&quot;`` method) and plain NumPy arrays</span>
+<span class="sd">    (``&quot;map_blocks&quot;`` method) because only NumPy-compatible operations are used.</span>
+
 <span class="sd">    Args:</span>
-<span class="sd">        fullres_array: Full-resolution segmentation dask array</span>
-<span class="sd">        upsampled_output: Upsampled exclusion mask (same shape as fullres)</span>
+<span class="sd">        fullres_array: Full-resolution segmentation array (dask or NumPy)</span>
+<span class="sd">        upsampled_output: Upsampled exclusion mask (same shape as fullres;</span>
+<span class="sd">            dask or NumPy)</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        Cleaned full-resolution segmentation array</span>
+<span class="sd">        Cleaned full-resolution segmentation array (same type as inputs)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># Threshold the upsampled exclusion mask</span>
-    <span class="c1"># Values &gt;= exclusion_threshold (e.g., 50) indicate regions to exclude</span>
+    <span class="c1"># Threshold the upsampled exclusion mask.</span>
+    <span class="c1"># Values &gt;= exclusion_threshold (e.g., 50) indicate regions to exclude.</span>
     <span class="n">exclusion_mask</span> <span class="o">=</span> <span class="n">upsampled_output</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">exclusion_threshold</span>
 
-    <span class="c1"># Apply mask: set excluded regions to zero</span>
-    <span class="n">cleaned_array</span> <span class="o">=</span> <span class="n">da</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">exclusion_mask</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">)</span>
+    <span class="c1"># Apply mask: set excluded regions to zero.</span>
+    <span class="c1"># np.where works for both dask arrays (via __array_ufunc__) and NumPy.</span>
+    <span class="n">cleaned_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">exclusion_mask</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">fullres_array</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">cleaned_array</span>
 </code></pre></div></td></tr></table></div>
@@ -9646,10 +9674,10 @@ the full-resolution segmentation by zeroing out the excluded regions.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/segmentation_cleaner.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">151</span>
-<span class="normal">152</span>
-<span class="normal">153</span>
-<span class="normal">154</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the name of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="s2">&quot;Segmentation Cleaner&quot;</span>
@@ -9675,15 +9703,15 @@ the full-resolution segmentation by zeroing out the excluded regions.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/segmentation_cleaner.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">156</span>
-<span class="normal">157</span>
-<span class="normal">158</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">158</span>
 <span class="normal">159</span>
 <span class="normal">160</span>
 <span class="normal">161</span>
 <span class="normal">162</span>
 <span class="normal">163</span>
-<span class="normal">164</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_description</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a description of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="p">(</span>
