@@ -7219,7 +7219,11 @@ class ZarrNii:
                     _effective_factor = self.shape[i] / lowres_znimg.shape[i]
                     break
             else:
-                _effective_factor = downsample_factor
+                raise ValueError(
+                    "No spatial dimensions (x, y, z) found in image dims "
+                    f"{self.dims!r}. Cannot compute coordinate scaling for "
+                    "'map_blocks' method."
+                )
 
         lowres_array = lowres_znimg.data.compute()
         lowres_result = plugin.lowres_func(lowres_array)
@@ -7242,7 +7246,19 @@ class ZarrNii:
         _lowres_result = lowres_result  # numpy array, small
 
         def _fused_block(block, block_info=None):
-            """Interpolate lowres correction at block coords, apply highres_func."""
+            """Interpolate lowres correction at block coords, apply highres_func.
+
+            Args:
+                block: NumPy array for this dask block (full-resolution data).
+                block_info: Dask block_info dict; ``block_info[0]["array-location"]``
+                    gives the absolute index ranges ``[(start, stop), ...]`` for
+                    each dimension in this block.
+
+            Returns:
+                NumPy array of the same shape as *block*, with ``highres_func``
+                applied after interpolating the lowres correction field at the
+                block's full-resolution coordinate grid.
+            """
             arr_loc = block_info[0]["array-location"]
 
             # Coordinate arrays in lowres space for each spatial axis
@@ -7264,6 +7280,8 @@ class ZarrNii:
             upsampled_block = np.empty(block.shape, dtype=np.float32)
 
             for ns_abs in itertools.product(*nonspatial_ranges) or [()]:
+                # ``itertools.product(*[])`` yields one empty tuple, so the loop
+                # body runs exactly once when there are no non-spatial dims.
                 # Relative index within this block for non-spatial dims
                 ns_rel = tuple(
                     abs_idx - arr_loc[_nonspatial_idxs[j]][0]

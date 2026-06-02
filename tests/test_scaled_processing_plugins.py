@@ -378,13 +378,16 @@ class TestZarrNiiScaledProcessingIntegration:
             plugin, downsample_factor=2, method="map_blocks"
         )
 
-        # Both methods should produce the same shape and broadly similar values
+        # Both methods should produce the same shape and numerically close values.
         assert result_default.shape == result_map_blocks.shape
-        # Values should be in the same ballpark (both apply the same correction)
         default_arr = result_default.data.compute()
         map_blocks_arr = result_map_blocks.data.compute()
         assert default_arr.shape == map_blocks_arr.shape
         assert np.all(np.isfinite(map_blocks_arr))
+        # The two interpolation approaches use different strategies (dask upsample
+        # vs per-block map_coordinates), so results won't be bit-identical, but
+        # should agree within a reasonable relative tolerance.
+        assert np.allclose(default_arr, map_blocks_arr, rtol=0.1, atol=1e-3)
 
     @pytest.mark.usefixtures("cleandir")
     def test_apply_scaled_processing_5d_data(self):
