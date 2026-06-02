@@ -265,33 +265,129 @@ class TestZarrNiiScaledProcessingIntegration:
         assert result.shape == znimg.shape
 
     @pytest.mark.usefixtures("cleandir")
-    def test_apply_scaled_processing_temp_zarr_options(self, nifti_nib):
-        """Test apply_scaled_processing with temp zarr options."""
+    def test_apply_scaled_processing_custom_zarr_path(self, nifti_nib):
+        """Test apply_scaled_processing with a custom upsampled_ome_zarr_path."""
+        import os
+        import tempfile
+
         nifti_nib.to_filename("test.nii")
         znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
 
         plugin = GaussianBiasFieldCorrection(sigma=1.0)
 
-        # Test with temp zarr disabled
-        result1 = znimg.apply_scaled_processing(
-            plugin, downsample_factor=2, use_temp_zarr=False
-        )
-        assert isinstance(result1, ZarrNii)
-        assert result1.shape == znimg.shape
-
-        # Test with custom temp zarr path
-        import os
-        import tempfile
-
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = os.path.join(temp_dir, "custom_temp.ome.zarr")
-            result2 = znimg.apply_scaled_processing(
-                plugin, downsample_factor=2, temp_zarr_path=temp_path
+            custom_path = os.path.join(temp_dir, "custom_upsampled.ome.zarr")
+            result = znimg.apply_scaled_processing(
+                plugin,
+                downsample_factor=2,
+                upsampled_ome_zarr_path=custom_path,
             )
-            assert isinstance(result2, ZarrNii)
-            assert result2.shape == znimg.shape
-            # Temp file should be cleaned up
-            assert not os.path.exists(temp_path)
+            assert isinstance(result, ZarrNii)
+            assert result.shape == znimg.shape
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_apply_scaled_processing_method_invalid(self, nifti_nib):
+        """Test that an invalid method raises ValueError."""
+        nifti_nib.to_filename("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
+
+        plugin = GaussianBiasFieldCorrection(sigma=1.0)
+        with pytest.raises(ValueError, match="Unsupported method"):
+            znimg.apply_scaled_processing(plugin, method="unknown")
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_apply_scaled_processing_map_blocks_plugin_instance(self, nifti_nib):
+        """Test apply_scaled_processing with method='map_blocks' and a plugin instance."""
+        nifti_nib.to_filename("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
+
+        plugin = GaussianBiasFieldCorrection(sigma=2.0)
+        result = znimg.apply_scaled_processing(
+            plugin, downsample_factor=2, method="map_blocks"
+        )
+
+        assert isinstance(result, ZarrNii)
+        assert result.shape == znimg.shape
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_apply_scaled_processing_map_blocks_plugin_class(self, nifti_nib):
+        """Test apply_scaled_processing with method='map_blocks' and a plugin class."""
+        nifti_nib.to_filename("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
+
+        result = znimg.apply_scaled_processing(
+            GaussianBiasFieldCorrection,
+            sigma=1.0,
+            downsample_factor=2,
+            method="map_blocks",
+        )
+
+        assert isinstance(result, ZarrNii)
+        assert result.shape == znimg.shape
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_apply_scaled_processing_map_blocks_precomputed_lowres(self, nifti_nib):
+        """Test apply_scaled_processing map_blocks with a pre-computed lowres ZarrNii."""
+        nifti_nib.to_filename("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
+
+        # Pre-compute downsampled image
+        precomputed_lowres = znimg.downsample(level=1)
+
+        plugin = GaussianBiasFieldCorrection(sigma=2.0)
+        result = znimg.apply_scaled_processing(
+            plugin,
+            method="map_blocks",
+            lowres_znimg=precomputed_lowres,
+        )
+
+        assert isinstance(result, ZarrNii)
+        assert result.shape == znimg.shape
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_apply_scaled_processing_map_blocks_5d_data(self):
+        """Test apply_scaled_processing map_blocks with 5D data (T, C, Z, Y, X)."""
+        data_5d = np.random.rand(1, 1, 20, 20, 20).astype(np.float32) * 100
+        dask_data = da.from_array(data_5d, chunks=(1, 1, 10, 10, 10))
+
+        znimg_5d = ZarrNii.from_darr(
+            dask_data, spacing=(1.0, 1.0, 1.0), dims=["t", "c", "z", "y", "x"]
+        )
+
+        plugin = GaussianBiasFieldCorrection(sigma=1.0)
+        result = znimg_5d.apply_scaled_processing(
+            plugin, downsample_factor=2, method="map_blocks"
+        )
+
+        assert isinstance(result, ZarrNii)
+        assert result.shape == znimg_5d.shape
+        assert len(result.dims) == 5
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_apply_scaled_processing_map_blocks_matches_default(self, nifti_nib):
+        """Test that map_blocks and default methods produce consistent results."""
+        nifti_nib.to_filename("test.nii")
+        znimg = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
+
+        plugin = GaussianBiasFieldCorrection(sigma=2.0)
+
+        result_default = znimg.apply_scaled_processing(
+            plugin, downsample_factor=2, method="default"
+        )
+        result_map_blocks = znimg.apply_scaled_processing(
+            plugin, downsample_factor=2, method="map_blocks"
+        )
+
+        # Both methods should produce the same shape and numerically close values.
+        assert result_default.shape == result_map_blocks.shape
+        default_arr = result_default.data.compute()
+        map_blocks_arr = result_map_blocks.data.compute()
+        assert default_arr.shape == map_blocks_arr.shape
+        assert np.all(np.isfinite(map_blocks_arr))
+        # The two interpolation approaches use different strategies (dask upsample
+        # vs per-block map_coordinates), so results won't be bit-identical, but
+        # should agree within a reasonable relative tolerance.
+        assert np.allclose(default_arr, map_blocks_arr, rtol=0.1, atol=1e-3)
 
     @pytest.mark.usefixtures("cleandir")
     def test_apply_scaled_processing_5d_data(self):
