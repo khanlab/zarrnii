@@ -2548,7 +2548,7 @@ class ZarrNii:
             # Fallback for other cases
             dims = ["c"] + list(axes_order.lower())
 
-        # Create NgffImage and normalise spatial metadata to mm.
+        # Create NgffImage and normalize spatial metadata to mm.
         ngff_image = nz.NgffImage(
             data=darr,
             dims=dims,
@@ -2869,7 +2869,7 @@ class ZarrNii:
                 omero_metadata,
             )
 
-        # Normalise spatial metadata to mm before building the ZarrNii instance.
+        # Normalize spatial metadata to mm before building the ZarrNii instance.
         ngff_image = _normalize_ngff_image_to_mm(ngff_image)
 
         # Create ZarrNii instance with xyz_orientation
@@ -3103,7 +3103,7 @@ class ZarrNii:
             translation[dim] = affine_matrix[i, 3]
             axes_units[dim] = omezarr_unit
 
-        # Create NgffImage and normalise spatial metadata to mm.
+        # Create NgffImage and normalize spatial metadata to mm.
         if name is None:
             name = f"nifti_image_{path}"
 
@@ -5751,7 +5751,7 @@ class ZarrNii:
         dask_chunks = None if chunks == "auto" else chunks
         darr = da.from_zarr(z_arr, chunks=dask_chunks)
 
-        # --- Step 3: normalise axes to (C, Z, Y, X) or (C, X, Y, Z) ----------
+        # --- Step 3: normalize axes to (C, Z, Y, X) or (C, X, Y, Z) ----------
         current_axes = list(tif_axes)
 
         # Map any unrecognised axes labels to known ones.  tifffile uses 'Q'
@@ -5850,7 +5850,7 @@ class ZarrNii:
             axes_units=final_axes_units,
             name=name,
         )
-        # Normalise spatial metadata to mm.
+        # Normalize spatial metadata to mm.
         ngff_image = _normalize_ngff_image_to_mm(ngff_image)
 
         znimg = cls(

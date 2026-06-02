@@ -1032,7 +1032,7 @@ def test_to_nifti_unit_conversion_already_millimeters():
 def test_to_nifti_preserve_original_units():
     """Test NIfTI output when the source OME-Zarr had non-mm units.
 
-    Since ZarrNii normalises all spatial coordinates to mm on import, the
+    Since ZarrNii normalizes all spatial coordinates to mm on import, the
     internally stored scale for a 3.6 µm image is 0.0036 mm.  Both
     ``convert_units_to_mm=True`` (default) and ``convert_units_to_mm=False``
     produce the same mm values in the NIfTI affine; the ``convert_units_to_mm``
@@ -1054,10 +1054,10 @@ def test_to_nifti_preserve_original_units():
 
     znimg = ZarrNii.from_ome_zarr("test_preserve_um.ome.zarr")
 
-    # After import normalisation, scale is in mm: 3.6 µm → 0.0036 mm.
+    # After import normalization, scale is in mm: 3.6 µm → 0.0036 mm.
     nifti_img = znimg.to_nifti(convert_units_to_mm=False)
 
-    # Affine should reflect the mm-normalised value (0.0036 mm).
+    # Affine should reflect the mm-normalized value (0.0036 mm).
     expected_scale = 3.6 * 1e-3
     actual_scale = _get_spatial_scale_from_affine(nifti_img.affine)
 

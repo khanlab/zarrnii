@@ -352,7 +352,7 @@ class TestImarisIO:
     def test_imaris_metadata_extraction(self, tmp_path, sample_3d_data):
         """Test extraction of spatial metadata from Imaris file.
 
-        from_imaris defaults to micrometer units.  After import-time normalisation
+        from_imaris defaults to micrometer units.  After import-time normalization
         those values are converted to mm (×1e-3).
         """
         imaris_path = tmp_path / "test_metadata.ims"
@@ -364,7 +364,7 @@ class TestImarisIO:
         # Load and check spacing calculation
         znimg = ZarrNii.from_imaris(str(imaris_path))
 
-        # The spacing should be normalised from Imaris (µm) to mm on import.
+        # The spacing should be normalized from Imaris (µm) to mm on import.
         zooms = znimg.get_zooms(axes_order="ZYX")
         assert_array_almost_equal(zooms, expected_zooms_mm, decimal=6)
 
