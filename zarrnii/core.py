@@ -3246,6 +3246,21 @@ class ZarrNii:
                 np.round(affine_inv @ phys_max).astype(int)[:3],
             )
 
+            # Warn if any voxel coordinates are negative — this may indicate an
+            # orientation mismatch between the supplied physical coordinates and
+            # the affine stored in the image.
+            if np.any(voxel_min_xyz < 0) or np.any(voxel_max_xyz < 0):
+                warnings.warn(
+                    "Negative voxel coordinates detected after converting physical "
+                    f"coordinates to voxel space (voxel_min={voxel_min_xyz.tolist()}, "
+                    f"voxel_max={voxel_max_xyz.tolist()}). "
+                    "This may indicate an orientation mismatch between the supplied "
+                    "physical coordinates and the affine transform of the image. "
+                    "Check that both are defined in the same orientation (e.g. RAS).",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
             # Create mapping from x,y,z to voxel coordinates
             bbox_min = voxel_min_xyz
             bbox_max = voxel_max_xyz
@@ -3412,6 +3427,20 @@ class ZarrNii:
         # Transform to voxel coordinates
         center_voxel = affine_inv @ center_phys
         center_voxel_xyz = center_voxel[:3]
+
+        # Warn if any voxel coordinates are negative — this may indicate an
+        # orientation mismatch between the supplied physical coordinates and
+        # the affine stored in the image.
+        if np.any(center_voxel_xyz < 0):
+            warnings.warn(
+                "Negative voxel coordinates detected after converting physical "
+                f"center coordinates to voxel space (center_voxel={center_voxel_xyz.tolist()}). "
+                "This may indicate an orientation mismatch between the supplied "
+                "physical coordinates and the affine transform of the image. "
+                "Check that both are defined in the same orientation (e.g. RAS).",
+                UserWarning,
+                stacklevel=2,
+            )
 
         # patch_size is in voxels, in (x, y, z) order
         patch_size_np = np.array(patch_size)
@@ -4035,6 +4064,22 @@ class ZarrNii:
 
         xyz_homog = np.column_stack([xyz, np.ones(n_points)])  # (N, 4)
         vox_xyz = (xyz_homog @ affine_xyz_inv.T)[:, :3]  # (N, 3) XYZ
+
+        # Warn if any voxel coordinates are negative — this may indicate an
+        # orientation mismatch between the supplied physical coordinates and
+        # the affine stored in the image.
+        if np.any(vox_xyz < 0):
+            n_neg = int(np.any(vox_xyz < 0, axis=1).sum())
+            warnings.warn(
+                f"Negative voxel coordinates detected for {n_neg} of {n_points} "
+                "point(s) after converting physical coordinates to voxel space. "
+                "This may indicate an orientation mismatch between the supplied "
+                "physical coordinates and the affine transform of the image. "
+                "Check that both are defined in the same orientation (e.g. RAS). "
+                "Points outside the image domain will receive fill_value.",
+                UserWarning,
+                stacklevel=2,
+            )
 
         # Convert to the data storage order (ZYX or XYZ)
         if self.axes_order == "ZYX":
