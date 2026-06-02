@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-import dask.array as da
 import numpy as np
 
 from zarrnii.plugins.markers import hookimpl
@@ -153,26 +152,28 @@ class N4BiasFieldCorrection:
         return bias_field
 
     @hookimpl
-    def highres_func(
-        self, fullres_array: da.Array, upsampled_output: da.Array
-    ) -> da.Array:
+    def highres_func(self, fullres_array, upsampled_output):
         """
         Apply bias field correction to full-resolution data.
 
         This function takes the upsampled bias field (same size as
         fullres_array) and applies it to the full-resolution data by division.
 
+        Works with both dask arrays (``"default"`` method) and plain NumPy arrays
+        (``"map_blocks"`` method) because only NumPy-compatible operations are used.
+
         Args:
-            fullres_array: Full-resolution dask array
-            upsampled_output: Upsampled bias field (same shape as fullres)
+            fullres_array: Full-resolution array (dask or NumPy)
+            upsampled_output: Upsampled bias field (same shape as fullres;
+                dask or NumPy)
 
         Returns:
-            Bias-corrected full-resolution array
+            Bias-corrected full-resolution array (same type as inputs)
         """
-        # Apply bias field correction by division using dask operations
-        # Avoid division by zero by adding small epsilon
+        # Avoid division by zero by clamping the bias field to a small epsilon.
+        # np.maximum works for both dask arrays (via __array_ufunc__) and NumPy.
         epsilon = np.finfo(np.float32).eps
-        corrected_array = fullres_array / da.maximum(upsampled_output, epsilon)
+        corrected_array = fullres_array / np.maximum(upsampled_output, epsilon)
 
         return corrected_array
 

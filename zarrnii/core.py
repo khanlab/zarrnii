@@ -7004,35 +7004,95 @@ class ZarrNii:
         downsample_factor: int = 4,
         chunk_size: Optional[Tuple[int, ...]] = None,
         upsampled_ome_zarr_path: Optional[str] = None,
+        method: Literal["default", "map_blocks"] = "default",
+        lowres_znimg: Optional["ZarrNii"] = None,
         **kwargs,
     ) -> "ZarrNii":
         """
         Apply scaled processing plugin using multi-resolution approach.
 
         This method implements a multi-resolution processing pipeline where:
-        1. The image is downsampled for efficient computation
-        2. The plugin's lowres_func is applied to the downsampled data
-        3. The result is upsampled using dask-based upsampling
-        4. The plugin's highres_func applies the result to full-resolution data
+        1. The image is downsampled for efficient computation (or a pre-computed
+           downsampled image is provided via *lowres_znimg*)
+        2. The plugin's ``lowres_func`` is applied to the downsampled data
+        3. The result is upsampled and ``highres_func`` is applied to full-resolution
+           data, using one of two back-end strategies selected by *method*.
+
+        Two back-end methods are available:
+
+        ``"default"`` (rechunk/OME-Zarr upsample)
+            The low-resolution result is upsampled by rechunking, materialised to a
+            temporary OME-Zarr file, and then ``highres_func`` is called with two
+            full-resolution **dask arrays** (the original data and the upsampled
+            correction field).  This is the original approach.
+
+        ``"map_blocks"`` (fused map_blocks upsample)
+            The low-resolution result is kept in memory (small, already computed).
+            Upsampling and ``highres_func`` are fused into a single
+            :func:`dask.array.map_blocks` pass over the full-resolution data.
+            Inside each block, ``scipy.ndimage.map_coordinates`` interpolates the
+            correction field at the block's coordinates, and ``highres_func`` is
+            called with two **NumPy arrays** (the block and the interpolated
+            correction).  This avoids writing intermediate zarr files and is robust
+            to datasets (e.g., Imaris) where chunk boundaries do not align nicely
+            with the upsampling grid.
+
+        Plugin interface
+            Both methods share the same plugin API.  ``highres_func`` is called
+            with arrays that support NumPy arithmetic (either dask arrays for
+            ``"default"`` or plain NumPy arrays for ``"map_blocks"``), so
+            implementations that use ``np.maximum``, ``np.where``, and standard
+            arithmetic operators work correctly with both methods.
 
         Args:
             plugin: Plugin instance or class to apply.  The plugin must have
-                ``lowres_func(lowres_array)`` and ``highres_func(fullres_array,
-                upsampled_output)`` methods decorated with ``@hookimpl`` from
-                :mod:`zarrnii.plugins`.
-            downsample_factor: Factor for downsampling (default: 4)
-            chunk_size: Optional chunk size for spatial dimensions in order [Z, Y, X] (or [X, Y, Z] if axes_order is 'XYZ').
-                If None, defaults to (10, 10, 10). Non-spatial dimensions (time, channel) are automatically
-                assigned singleton chunks (1). The order of spatial dimensions follows the axes_order of the data.
-            upsampled_ome_zarr_path: Path to save intermediate OME-Zarr, default saved in system temp directory.
-            **kwargs: Additional arguments passed to the plugin when *plugin* is a class.
+                ``lowres_func(lowres_array: np.ndarray) -> np.ndarray`` and
+                ``highres_func(fullres_array, upsampled_output)`` methods
+                decorated with ``@hookimpl`` from :mod:`zarrnii.plugins`.
+            downsample_factor: Factor for downsampling (default: 4).  Ignored
+                when *lowres_znimg* is provided.
+            chunk_size: Optional chunk size for spatial dimensions in order
+                [Z, Y, X] (or [X, Y, Z] if axes_order is 'XYZ').  If ``None``,
+                defaults to ``(10, 10, 10)``.  Non-spatial dimensions (time,
+                channel) are automatically assigned singleton chunks.  Only
+                used by the ``"default"`` method.
+            upsampled_ome_zarr_path: Path to save the intermediate upsampled
+                OME-Zarr.  If ``None``, a system temp directory is used.  Only
+                used by the ``"default"`` method.
+            method: Back-end strategy to use.  One of ``"default"`` (rechunk
+                + OME-Zarr upsample) or ``"map_blocks"`` (fused
+                map_blocks interpolation).  Default is ``"default"``.
+            lowres_znimg: Pre-computed downsampled :class:`ZarrNii` image.
+                When provided, the downsampling step is skipped and this image
+                is used as the low-resolution input instead.  Useful for
+                reusing a previously computed pyramid level or for applying the
+                same correction to multiple channels.  Only used by the
+                ``"map_blocks"`` method (ignored for ``"default"``).
+            **kwargs: Additional arguments passed to the plugin constructor when
+                *plugin* is a class.
 
         Returns:
             New ZarrNii instance with processed data
+
+        Raises:
+            TypeError: If *plugin* is an instance but keyword arguments are
+                also supplied, or if the plugin is missing the required hooks.
+            ValueError: If an unsupported *method* value is given.
         """
+        if method not in ("default", "map_blocks"):
+            raise ValueError(
+                f"Unsupported method {method!r}. " "Choose 'default' or 'map_blocks'."
+            )
+
         # Handle plugin instance or class
         if isinstance(plugin, type):
             plugin = plugin(**kwargs)
+        elif kwargs:
+            raise TypeError(
+                f"apply_scaled_processing() received unexpected keyword arguments "
+                f"for a plugin instance: {list(kwargs.keys())}. "
+                f"Keyword arguments are only accepted when 'plugin' is a class."
+            )
 
         if not callable(getattr(plugin, "lowres_func", None)) or not callable(
             getattr(plugin, "highres_func", None)
@@ -7042,18 +7102,27 @@ class ZarrNii:
                 "decorated with @hookimpl"
             )
 
+        if method == "map_blocks":
+            return self._apply_scaled_processing_map_blocks(
+                plugin, downsample_factor=downsample_factor, lowres_znimg=lowres_znimg
+            )
+
+        # ------------------------------------------------------------------
+        # "default" method: rechunk + OME-Zarr upsample
+        # ------------------------------------------------------------------
+
         # Step 1: Downsample the data for low-resolution processing
-        lowres_znimg = self.downsample(level=int(np.log2(downsample_factor)))
+        _lowres_znimg = self.downsample(level=int(np.log2(downsample_factor)))
 
         # Convert to numpy array for lowres processing
-        lowres_array = lowres_znimg.data.compute()
+        lowres_array = _lowres_znimg.data.compute()
 
         # Step 2: Apply low-resolution function and prepare for upsampling
         # Construct chunk size: map spatial dimensions to their positions
         spatial_chunk_size = chunk_size if chunk_size is not None else (10, 10, 10)
 
         # Determine spatial dimension order based on axes_order
-        if lowres_znimg.axes_order == "XYZ":
+        if _lowres_znimg.axes_order == "XYZ":
             spatial_dim_order = ["x", "y", "z"]
         else:  # ZYX
             spatial_dim_order = ["z", "y", "x"]
@@ -7063,20 +7132,19 @@ class ZarrNii:
             dim: size for dim, size in zip(spatial_dim_order, spatial_chunk_size)
         }
 
-        # Build lowres_chunks by iterating through dims and assigning appropriate chunk sizes
+        # Build lowres_chunks by iterating through dims and assigning chunk sizes
         lowres_chunks = []
-        for dim in lowres_znimg.dims:
+        for dim in _lowres_znimg.dims:
             dim_lower = dim.lower()
             if dim_lower in spatial_chunk_map:
-                # This is a spatial dimension, use the mapped chunk size
                 lowres_chunks.append(spatial_chunk_map[dim_lower])
             else:
-                # Non-spatial dimension (time, channel), use singleton chunk
+                # Non-spatial dimension (time, channel): singleton chunk
                 lowres_chunks.append(1)
 
         lowres_chunks = tuple(lowres_chunks)
 
-        lowres_znimg.data = da.from_array(
+        _lowres_znimg.data = da.from_array(
             plugin.lowres_func(lowres_array), chunks=lowres_chunks
         )
 
@@ -7087,7 +7155,7 @@ class ZarrNii:
             upsampled_ome_zarr_path = tempfile.mkdtemp(suffix="_SPIM.ome.zarr")
 
         # Step 3: Upsample using dask-based upsampling, save to ome zarr
-        lowres_znimg.upsample(to_shape=self.shape).to_ome_zarr(
+        _lowres_znimg.upsample(to_shape=self.shape).to_ome_zarr(
             upsampled_ome_zarr_path, max_layer=1
         )
 
@@ -7099,6 +7167,135 @@ class ZarrNii:
         # rechunk original data to use same chunksize as upsampled_data, before multiplying
         corrected_znimg.data = plugin.highres_func(
             self.data.rechunk(upsampled_znimg.data.chunks), upsampled_znimg.data
+        )
+
+        return corrected_znimg
+
+    def _apply_scaled_processing_map_blocks(
+        self,
+        plugin,
+        downsample_factor: int = 4,
+        lowres_znimg: Optional["ZarrNii"] = None,
+    ) -> "ZarrNii":
+        """
+        Back-end for :meth:`apply_scaled_processing` using fused map_blocks.
+
+        The low-resolution correction field is kept as a plain NumPy array.
+        Upsampling and ``highres_func`` are fused into a single
+        :func:`dask.array.map_blocks` pass: for every full-resolution block,
+        ``scipy.ndimage.map_coordinates`` linearly interpolates the correction
+        field at that block's voxel coordinates (scaled to lowres space), and
+        then ``highres_func(block, interpolated_block)`` is called.
+
+        This avoids writing an intermediate OME-Zarr and is robust to datasets
+        where chunk boundaries do not align with the upsampling grid (e.g.
+        Imaris files).
+
+        Args:
+            plugin: Validated plugin instance with ``lowres_func`` and
+                ``highres_func`` hooks.
+            downsample_factor: Downsampling factor used to derive
+                *lowres_znimg* when it is not supplied.
+            lowres_znimg: Pre-computed downsampled image.  If ``None``, the
+                image is downsampled by *downsample_factor*.
+
+        Returns:
+            New :class:`ZarrNii` instance with the processed data.
+        """
+        import itertools
+
+        from scipy.ndimage import map_coordinates
+
+        # Step 1: Obtain low-resolution data (compute once — small array)
+        if lowres_znimg is None:
+            lowres_znimg = self.downsample(level=int(np.log2(downsample_factor)))
+            _effective_factor = downsample_factor
+        else:
+            # Infer the effective downsampling factor from the shape ratio along
+            # the first spatial axis so that coordinate scaling is correct.
+            spatial_dim_names = {"x", "y", "z"}
+            for i, d in enumerate(self.dims):
+                if d.lower() in spatial_dim_names:
+                    _effective_factor = self.shape[i] / lowres_znimg.shape[i]
+                    break
+            else:
+                _effective_factor = downsample_factor
+
+        lowres_array = lowres_znimg.data.compute()
+        lowres_result = plugin.lowres_func(lowres_array)
+
+        # Step 2: Determine spatial vs non-spatial axis indices
+        _spatial_dim_names = {"x", "y", "z"}
+        _dims = self.dims
+        _is_spatial = [d.lower() in _spatial_dim_names for d in _dims]
+        _nonspatial_idxs = [i for i, s in enumerate(_is_spatial) if not s]
+        _spatial_idxs = [i for i, s in enumerate(_is_spatial) if s]
+
+        # Step 3: Probe output dtype via a tiny test call to highres_func
+        _probe_full = np.ones((1,) * len(_dims), dtype=self.data.dtype)
+        _probe_up = np.ones((1,) * len(_dims), dtype=np.float32)
+        _output_dtype = np.asarray(plugin.highres_func(_probe_full, _probe_up)).dtype
+
+        # Step 4: Build a fused map_blocks callback
+        # Capture variables needed inside the closure by value
+        _eff_factor = float(_effective_factor)
+        _lowres_result = lowres_result  # numpy array, small
+
+        def _fused_block(block, block_info=None):
+            """Interpolate lowres correction at block coords, apply highres_func."""
+            arr_loc = block_info[0]["array-location"]
+
+            # Coordinate arrays in lowres space for each spatial axis
+            spatial_slices = [
+                np.arange(arr_loc[i][0], arr_loc[i][1]).astype(np.float64) / _eff_factor
+                for i in _spatial_idxs
+            ]
+            spatial_block_shape = tuple(block.shape[i] for i in _spatial_idxs)
+
+            # Pre-build flat coordinate grid (same for all non-spatial combos)
+            grids = np.meshgrid(*spatial_slices, indexing="ij")
+            coords = np.array([g.ravel() for g in grids])
+
+            # Non-spatial absolute ranges for iterating over channels/time
+            nonspatial_ranges = [
+                list(range(arr_loc[i][0], arr_loc[i][1])) for i in _nonspatial_idxs
+            ]
+
+            upsampled_block = np.empty(block.shape, dtype=np.float32)
+
+            for ns_abs in itertools.product(*nonspatial_ranges) or [()]:
+                # Relative index within this block for non-spatial dims
+                ns_rel = tuple(
+                    abs_idx - arr_loc[_nonspatial_idxs[j]][0]
+                    for j, abs_idx in enumerate(ns_abs)
+                )
+
+                # Build index selectors: fix non-spatial dims, leave spatial free
+                block_selector = [slice(None)] * len(_dims)
+                for j, rel_idx in zip(_nonspatial_idxs, ns_rel):
+                    block_selector[j] = rel_idx
+
+                # Select the matching non-spatial slice of lowres_result
+                lowres_slice = (
+                    _lowres_result[ns_abs] if _nonspatial_idxs else _lowres_result
+                )
+
+                interpolated = map_coordinates(
+                    lowres_slice,
+                    coords,
+                    order=1,
+                    mode="nearest",
+                ).reshape(spatial_block_shape)
+
+                upsampled_block[tuple(block_selector)] = interpolated
+
+            return plugin.highres_func(block, upsampled_block)
+
+        corrected_znimg = self.copy()
+        corrected_znimg.data = da.map_blocks(
+            _fused_block,
+            self.data,
+            dtype=_output_dtype,
         )
 
         return corrected_znimg
