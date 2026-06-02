@@ -9,7 +9,6 @@ resolution data.
 
 from __future__ import annotations
 
-import dask.array as da
 import numpy as np
 from skimage.measure import label, regionprops
 
@@ -123,28 +122,31 @@ class SegmentationCleaner:
         return exclude_mask
 
     @hookimpl
-    def highres_func(
-        self, fullres_array: da.Array, upsampled_output: da.Array
-    ) -> da.Array:
+    def highres_func(self, fullres_array, upsampled_output):
         """
         Apply exclusion mask to full-resolution segmentation data.
 
         This function takes the upsampled exclusion mask and applies it to
         the full-resolution segmentation by zeroing out the excluded regions.
 
+        Works with both dask arrays (``"default"`` method) and plain NumPy arrays
+        (``"map_blocks"`` method) because only NumPy-compatible operations are used.
+
         Args:
-            fullres_array: Full-resolution segmentation dask array
-            upsampled_output: Upsampled exclusion mask (same shape as fullres)
+            fullres_array: Full-resolution segmentation array (dask or NumPy)
+            upsampled_output: Upsampled exclusion mask (same shape as fullres;
+                dask or NumPy)
 
         Returns:
-            Cleaned full-resolution segmentation array
+            Cleaned full-resolution segmentation array (same type as inputs)
         """
-        # Threshold the upsampled exclusion mask
-        # Values >= exclusion_threshold (e.g., 50) indicate regions to exclude
+        # Threshold the upsampled exclusion mask.
+        # Values >= exclusion_threshold (e.g., 50) indicate regions to exclude.
         exclusion_mask = upsampled_output >= self.exclusion_threshold
 
-        # Apply mask: set excluded regions to zero
-        cleaned_array = da.where(exclusion_mask, 0, fullres_array)
+        # Apply mask: set excluded regions to zero.
+        # np.where works for both dask arrays (via __array_ufunc__) and NumPy.
+        cleaned_array = np.where(exclusion_mask, 0, fullres_array)
 
         return cleaned_array
 
