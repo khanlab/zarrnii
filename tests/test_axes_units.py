@@ -114,9 +114,13 @@ class TestFromImarisAxesUnits:
         znii = ZarrNii.from_imaris(imaris_path, axes_units=units)
         assert znii.ngff_image.axes_units == units
 
-    def test_axes_units_default_none(self, imaris_path):
+    def test_axes_units_default_micrometer(self, imaris_path):
         znii = ZarrNii.from_imaris(imaris_path)
-        assert znii.ngff_image.axes_units is None
+        assert znii.ngff_image.axes_units == {
+            "x": "micrometer",
+            "y": "micrometer",
+            "z": "micrometer",
+        }
 
     def test_axes_units_invalid_raises(self, imaris_path):
         with pytest.raises(ValueError, match="Invalid axes_units value"):
