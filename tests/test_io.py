@@ -1030,10 +1030,17 @@ def test_to_nifti_unit_conversion_already_millimeters():
 
 @pytest.mark.usefixtures("cleandir")
 def test_to_nifti_preserve_original_units():
-    """Test that convert_units_to_mm=False preserves original units."""
+    """Test NIfTI output when the source OME-Zarr had non-mm units.
+
+    Since ZarrNii normalises all spatial coordinates to mm on import, the
+    internally stored scale for a 3.6 µm image is 0.0036 mm.  Both
+    ``convert_units_to_mm=True`` (default) and ``convert_units_to_mm=False``
+    produce the same mm values in the NIfTI affine; the ``convert_units_to_mm``
+    flag is effectively a no-op when data are already in mm.
+    """
     import ngff_zarr as nz
 
-    # Create a test image with micrometer spacing
+    # Create a test image — ngff_zarr stores a default 'micrometer' unit.
     data = np.random.rand(10, 10, 10)
     ngff_image = nz.to_ngff_image(
         data,
@@ -1047,22 +1054,20 @@ def test_to_nifti_preserve_original_units():
 
     znimg = ZarrNii.from_ome_zarr("test_preserve_um.ome.zarr")
 
-    # Convert to NIfTI while preserving original units
+    # After import normalisation, scale is in mm: 3.6 µm → 0.0036 mm.
     nifti_img = znimg.to_nifti(convert_units_to_mm=False)
 
-    # The affine should still have the original 3.6 value (in micrometers)
-    expected_scale = 3.6
+    # Affine should reflect the mm-normalised value (0.0036 mm).
+    expected_scale = 3.6 * 1e-3
     actual_scale = _get_spatial_scale_from_affine(nifti_img.affine)
 
     assert_array_almost_equal(
         actual_scale, [expected_scale, expected_scale, expected_scale], decimal=6
     )
 
-    # Check that the NIfTI header units are set to 'micron'
+    # The NIfTI header spatial unit should be 'mm'.
     spatial_unit, time_unit = nifti_img.header.get_xyzt_units()
-    assert (
-        spatial_unit == "micron"
-    ), f"Expected spatial unit 'micron', got '{spatial_unit}'"
+    assert spatial_unit == "mm", f"Expected spatial unit 'mm', got '{spatial_unit}'"
 
 
 @pytest.mark.usefixtures("cleandir")

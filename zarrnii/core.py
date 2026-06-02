@@ -804,6 +804,64 @@ def _convert_physical_coords_units(
         return tuple(v * f for v, f in zip(xyz, factors))
 
 
+def _normalize_ngff_image_to_mm(ngff_image: "nz.NgffImage") -> "nz.NgffImage":
+    """Normalize NgffImage spatial scale and translation to millimeters.
+
+    Converts all spatial axes (x, y, z) from their source units to millimeters
+    and updates ``axes_units`` accordingly.  If ``axes_units`` is ``None`` or
+    all spatial axes already use ``'millimeter'``, the original image is returned
+    unchanged.
+
+    This function is called at every import path (:meth:`ZarrNii.from_darr`,
+    :meth:`ZarrNii.from_ome_zarr`, :meth:`ZarrNii.from_nifti`,
+    :meth:`ZarrNii.from_ome_tif`) to enforce the invariant that **all internal
+    spatial coordinates are stored in mm**.
+
+    Args:
+        ngff_image: Source NgffImage whose spatial metadata may be in any unit.
+
+    Returns:
+        NgffImage with scale and translation values in mm and ``axes_units`` set
+        to ``'millimeter'`` for all spatial axes, or the original image if no
+        conversion was needed.
+    """
+    axes_units = ngff_image.axes_units
+    if axes_units is None:
+        return ngff_image
+
+    spatial_axes = [ax for ax in ("x", "y", "z") if ax in axes_units]
+    if not spatial_axes:
+        return ngff_image
+
+    # Nothing to do if every spatial axis is already millimeter.
+    if all(axes_units.get(ax) == "millimeter" for ax in spatial_axes):
+        return ngff_image
+
+    # Convert scale and translation for each non-mm spatial axis.
+    new_scale = dict(ngff_image.scale) if ngff_image.scale else {}
+    new_translation = dict(ngff_image.translation) if ngff_image.translation else {}
+    new_units = dict(axes_units)
+
+    for ax in spatial_axes:
+        unit = axes_units.get(ax, "millimeter")
+        if unit != "millimeter":
+            factor = _convert_spatial_unit_to_mm(1.0, unit)
+            if ax in new_scale:
+                new_scale[ax] = new_scale[ax] * factor
+            if ax in new_translation:
+                new_translation[ax] = new_translation[ax] * factor
+            new_units[ax] = "millimeter"
+
+    return nz.NgffImage(
+        data=ngff_image.data,
+        dims=ngff_image.dims,
+        scale=new_scale,
+        translation=new_translation,
+        name=ngff_image.name,
+        axes_units=new_units,
+    )
+
+
 def _get_nifti_spatial_unit_code(unit: str) -> str:
     """Get the NIfTI spatial unit code for a given unit string.
 
@@ -2409,7 +2467,10 @@ class ZarrNii:
                 ``{"x": "micrometer", "y": "micrometer", "z": "micrometer"}``).
                 All values must be valid OME-Zarr space units (see
                 :data:`VALID_AXES_UNITS`).  When ``None``, no unit metadata is
-                stored and viewers fall back to their defaults.
+                stored and viewers fall back to their defaults.  **Non-mm units
+                are automatically converted to millimeters on import**; spacing
+                and origin are scaled accordingly and axes_units is updated to
+                ``'millimeter'``.  Pipelines that already use mm are unaffected.
             affine: Deprecated parameter - no longer supported
 
         Returns:
@@ -2487,7 +2548,7 @@ class ZarrNii:
             # Fallback for other cases
             dims = ["c"] + list(axes_order.lower())
 
-        # Create NgffImage
+        # Create NgffImage and normalise spatial metadata to mm.
         ngff_image = nz.NgffImage(
             data=darr,
             dims=dims,
@@ -2496,6 +2557,7 @@ class ZarrNii:
             name=name,
             axes_units=axes_units,
         )
+        ngff_image = _normalize_ngff_image_to_mm(ngff_image)
 
         return cls(
             ngff_image=ngff_image,
@@ -2675,6 +2737,13 @@ class ZarrNii:
 
             This ensures consistent orientation handling while maintaining backwards
             compatibility with existing OME-Zarr files that use the legacy format.
+
+            **Internal units invariant:**
+            Spatial scale and translation values are always stored in millimeters
+            internally.  If the OME-Zarr file contains non-mm unit metadata (e.g.
+            ``micrometer``), the scale and translation values are automatically
+            converted to mm on load and ``axes_units`` is updated to
+            ``'millimeter'``.
         """
         # Validate channel and timepoint selection arguments
         if channels is not None and channel_labels is not None:
@@ -2800,6 +2869,9 @@ class ZarrNii:
                 omero_metadata,
             )
 
+        # Normalise spatial metadata to mm before building the ZarrNii instance.
+        ngff_image = _normalize_ngff_image_to_mm(ngff_image)
+
         # Create ZarrNii instance with xyz_orientation
         znimg = cls(
             ngff_image=ngff_image,
@@ -2918,6 +2990,10 @@ class ZarrNii:
               them to the specified axes_order for consistency with OME-Zarr workflows
             - For 4D NIfTI files, the 4th dimension is interpreted as channels (XYZC)
             - Channel labels stored in NIfTI header extensions are automatically loaded
+            - **Internal units invariant**: spatial scale and translation values are
+              always stored in millimeters.  NIfTI files that declare mm units are
+              stored as-is; files with other spatial units (e.g. micron, meter) are
+              automatically converted to mm on import.
         """
         if not as_ref and zooms is not None:
             raise ValueError("`zooms` can only be used when `as_ref=True`.")
@@ -3027,7 +3103,7 @@ class ZarrNii:
             translation[dim] = affine_matrix[i, 3]
             axes_units[dim] = omezarr_unit
 
-        # Create NgffImage
+        # Create NgffImage and normalise spatial metadata to mm.
         if name is None:
             name = f"nifti_image_{path}"
 
@@ -3039,6 +3115,7 @@ class ZarrNii:
             axes_units=axes_units,
             name=name,
         )
+        ngff_image = _normalize_ngff_image_to_mm(ngff_image)
 
         # Extract channel labels from NIfTI header extensions if present
         channel_labels = None
@@ -4962,6 +5039,9 @@ class ZarrNii:
                 ``{"x": "micrometer", "y": "micrometer", "z": "micrometer"}``).
                 All values must be valid OME-Zarr space units (see
                 :data:`VALID_AXES_UNITS`).  When ``None``, micrometer is assumed.
+                **Non-mm units are automatically converted to millimeters on
+                import**; spacing is scaled accordingly and axes_units is updated
+                to ``'millimeter'``.
             downsample_near_isotropic: If True, automatically downsample
                 dimensions with smaller voxel sizes to achieve near-isotropic
                 resolution. Deprecated and will be removed in a future version.
@@ -5578,6 +5658,11 @@ class ZarrNii:
               ``"micrometer"``).
             - Data are kept as a lazy Dask array backed by the TIFF file;
               they are not read into memory until explicitly computed.
+            - **Internal units invariant**: spatial scale and translation values
+              are always stored in millimeters.  Non-mm units read from the
+              OME-TIFF metadata (e.g. ``"micrometer"``) are automatically
+              converted to mm on import and ``axes_units`` is set to
+              ``'millimeter'``.
         """
         _validate_axes_units(axes_units)
         if downsample_near_isotropic:
@@ -5765,6 +5850,8 @@ class ZarrNii:
             axes_units=final_axes_units,
             name=name,
         )
+        # Normalise spatial metadata to mm.
+        ngff_image = _normalize_ngff_image_to_mm(ngff_image)
 
         znimg = cls(
             ngff_image=ngff_image,

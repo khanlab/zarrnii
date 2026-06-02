@@ -34,7 +34,7 @@ class TestFromOmeTif:
     """Tests for ZarrNii.from_ome_tif class method."""
 
     def test_basic_zyx_zstack(self):
-        """Load a single-channel ZYX z-stack."""
+        """Load a single-channel ZYX z-stack; spacing is normalised to mm."""
         data = np.random.randint(0, 1000, size=(10, 32, 32), dtype=np.uint16)
         with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
             tmpf = f.name
@@ -48,15 +48,16 @@ class TestFromOmeTif:
             assert znii.data.shape == (1, 10, 32, 32)
             # Dims: c, z, y, x
             assert list(znii.dims) == ["c", "z", "y", "x"]
-            # Spacing
-            assert znii.scale["z"] == pytest.approx(1.0)
-            assert znii.scale["y"] == pytest.approx(0.325)
-            assert znii.scale["x"] == pytest.approx(0.325)
+            # Spacing is normalised from micrometer to mm (×1e-3).
+            # Default _write_ome_tif spacing: (x=0.325, y=0.325, z=1.0) µm.
+            assert znii.scale["z"] == pytest.approx(0.001)
+            assert znii.scale["y"] == pytest.approx(0.000325)
+            assert znii.scale["x"] == pytest.approx(0.000325)
         finally:
             os.unlink(tmpf)
 
     def test_multichannel_czyx_zstack(self):
-        """Load a multi-channel CZYX z-stack."""
+        """Load a multi-channel CZYX z-stack; spacing is normalised to mm."""
         data = np.random.randint(0, 1000, size=(3, 10, 32, 32), dtype=np.uint16)
         with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
             tmpf = f.name
@@ -66,9 +67,10 @@ class TestFromOmeTif:
 
             assert znii.data.shape == (3, 10, 32, 32)
             assert list(znii.dims) == ["c", "z", "y", "x"]
-            assert znii.scale["z"] == pytest.approx(2.0)
-            assert znii.scale["y"] == pytest.approx(0.5)
-            assert znii.scale["x"] == pytest.approx(0.5)
+            # spacing_xyz=(0.5, 0.5, 2.0) µm → mm
+            assert znii.scale["z"] == pytest.approx(0.002)
+            assert znii.scale["y"] == pytest.approx(0.0005)
+            assert znii.scale["x"] == pytest.approx(0.0005)
         finally:
             os.unlink(tmpf)
 
@@ -98,7 +100,7 @@ class TestFromOmeTif:
             os.unlink(tmpf)
 
     def test_axes_order_xyz(self):
-        """Loading with axes_order='XYZ' transposes data correctly."""
+        """Loading with axes_order='XYZ' transposes data correctly; spacing in mm."""
         data = np.random.randint(0, 1000, size=(10, 32, 32), dtype=np.uint16)
         with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
             tmpf = f.name
@@ -108,14 +110,15 @@ class TestFromOmeTif:
 
             # With XYZ order the spatial dims should be x, y, z
             assert list(znii.dims) == ["c", "x", "y", "z"]
-            assert znii.scale["z"] == pytest.approx(1.0)
-            assert znii.scale["x"] == pytest.approx(0.325)
-            assert znii.scale["y"] == pytest.approx(0.325)
+            # Spacing normalised from micrometer to mm.
+            assert znii.scale["z"] == pytest.approx(0.001)
+            assert znii.scale["x"] == pytest.approx(0.000325)
+            assert znii.scale["y"] == pytest.approx(0.000325)
         finally:
             os.unlink(tmpf)
 
     def test_spacing_units_micrometer(self):
-        """Physical spacing with 'um' unit maps to 'micrometer'."""
+        """Physical spacing with 'um' unit is normalised to 'millimeter' on import."""
         data = np.zeros((5, 16, 16), dtype=np.float32)
         with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
             tmpf = f.name
@@ -123,9 +126,10 @@ class TestFromOmeTif:
             _write_ome_tif(tmpf, data, axes="ZYX", unit="um")
             znii = ZarrNii.from_ome_tif(tmpf)
             axes_units = znii.ngff_image.axes_units
-            assert axes_units["z"] == "micrometer"
-            assert axes_units["y"] == "micrometer"
-            assert axes_units["x"] == "micrometer"
+            # After import-time normalisation, all spatial axes must be 'millimeter'.
+            assert axes_units["z"] == "millimeter"
+            assert axes_units["y"] == "millimeter"
+            assert axes_units["x"] == "millimeter"
         finally:
             os.unlink(tmpf)
 
@@ -255,7 +259,11 @@ class TestFromOmeTif:
             os.unlink(tmpf)
 
     def test_fallback_spacing_no_metadata(self):
-        """Falls back to 1.0 spacing when no physical size metadata present."""
+        """Falls back to 1.0 µm spacing when no physical size metadata present.
+
+        The fallback value (1.0 micrometer) is normalised to mm on import,
+        giving 0.001 mm per voxel.
+        """
         data = np.zeros((4, 16, 16), dtype=np.uint8)
         with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
             tmpf = f.name
@@ -263,9 +271,10 @@ class TestFromOmeTif:
             # Write minimal TIFF without physical size
             tifffile.imwrite(tmpf, data, photometric="minisblack")
             znii = ZarrNii.from_ome_tif(tmpf)
-            assert znii.scale["z"] == pytest.approx(1.0)
-            assert znii.scale["y"] == pytest.approx(1.0)
-            assert znii.scale["x"] == pytest.approx(1.0)
+            # Default 1 µm → 0.001 mm after normalisation.
+            assert znii.scale["z"] == pytest.approx(0.001)
+            assert znii.scale["y"] == pytest.approx(0.001)
+            assert znii.scale["x"] == pytest.approx(0.001)
             # Dims should include c, z, y, x
             assert "z" in znii.dims
             assert "y" in znii.dims

@@ -350,18 +350,23 @@ class TestImarisIO:
         assert_array_almost_equal(original_data, loaded_data, decimal=5)
 
     def test_imaris_metadata_extraction(self, tmp_path, sample_3d_data):
-        """Test extraction of spatial metadata from Imaris file."""
+        """Test extraction of spatial metadata from Imaris file.
+
+        from_imaris defaults to micrometer units.  After import-time normalisation
+        those values are converted to mm (×1e-3).
+        """
         imaris_path = tmp_path / "test_metadata.ims"
-        expected_zooms = [2.0, 1.5, 1.0]  # [Z, Y, X]
+        source_zooms_um = [2.0, 1.5, 1.0]  # [Z, Y, X] in micrometers
+        expected_zooms_mm = [z * 1e-3 for z in source_zooms_um]
         darr = da.from_array(sample_3d_data[np.newaxis, ...], chunks="auto")
-        ZarrNii.from_darr(darr, spacing=expected_zooms).to_imaris(str(imaris_path))
+        ZarrNii.from_darr(darr, spacing=source_zooms_um).to_imaris(str(imaris_path))
 
         # Load and check spacing calculation
         znimg = ZarrNii.from_imaris(str(imaris_path))
 
-        # The spacing should be loaded from Imaris extent metadata
+        # The spacing should be normalised from Imaris (µm) to mm on import.
         zooms = znimg.get_zooms(axes_order="ZYX")
-        assert_array_almost_equal(zooms, expected_zooms, decimal=3)
+        assert_array_almost_equal(zooms, expected_zooms_mm, decimal=6)
 
     def test_malformed_imaris_files(self, tmp_path):
         """Test error handling for various malformed Imaris files."""
