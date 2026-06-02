@@ -6,6 +6,8 @@ be emitted.  Negative voxel coordinates can indicate an orientation mismatch
 between the supplied coordinates and the image's affine transform.
 """
 
+import warnings
+
 import dask.array as da
 import numpy as np
 import pytest
@@ -45,7 +47,6 @@ def test_crop_physical_coords_no_warning_for_valid_coords():
     """crop() must NOT warn when all voxel coordinates are non-negative."""
     znii = _make_znii(origin=(0.0, 0.0, 0.0))
     # Physical coords inside the image – voxel coords will be positive
-    import warnings
 
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
@@ -81,7 +82,6 @@ def test_crop_voxel_coords_no_warning():
     """crop() must NOT warn when voxel coordinates are supplied directly."""
     znii = _make_znii()
     # Pass voxel coords directly – no affine inversion happens
-    import warnings
 
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
@@ -102,7 +102,6 @@ def test_crop_centered_no_warning_for_valid_center():
     """crop_centered() must NOT warn for a center inside the image domain."""
     znii = _make_znii(origin=(0.0, 0.0, 0.0), spacing=(1.0, 1.0, 1.0))
     # Center well inside the image
-    import warnings
 
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
@@ -134,7 +133,6 @@ def test_sample_at_points_no_warning_for_valid_coords():
     """sample_at_points() must NOT warn when all points map to positive voxels."""
     znii = _make_znii(origin=(0.0, 0.0, 0.0), spacing=(1.0, 1.0, 1.0))
     pts = np.array([[1.0, 1.0, 1.0], [5.0, 5.0, 5.0]])
-    import warnings
 
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
