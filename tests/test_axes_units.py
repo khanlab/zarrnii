@@ -33,9 +33,15 @@ class TestFromDarrAxesUnits:
     """Tests for axes_units parameter in from_darr."""
 
     def test_axes_units_stored(self, data_4d):
+        """Non-mm units are normalized to mm on import; spacing is converted."""
         units = {"x": "micrometer", "y": "micrometer", "z": "micrometer"}
-        znii = ZarrNii.from_darr(data_4d, axes_units=units)
-        assert znii.ngff_image.axes_units == units
+        znii = ZarrNii.from_darr(
+            data_4d, axes_units=units, spacing=(1000.0, 1000.0, 1000.0)
+        )
+        # After normalization, axes_units must be millimeter and spacing must be 1.0 mm.
+        stored = znii.ngff_image.axes_units
+        assert stored == {"x": "millimeter", "y": "millimeter", "z": "millimeter"}
+        assert znii.ngff_image.scale["x"] == pytest.approx(1.0)
 
     def test_axes_units_default_none(self, data_4d):
         znii = ZarrNii.from_darr(data_4d)
@@ -47,10 +53,14 @@ class TestFromDarrAxesUnits:
         assert znii.ngff_image.axes_units.get("x") == "millimeter"
 
     def test_axes_units_partial(self, data_4d):
-        """Partial axes_units mapping (only some axes) is accepted."""
+        """Non-mm units are normalized to mm; only specified axes are affected."""
         units = {"z": "nanometer"}
-        znii = ZarrNii.from_darr(data_4d, axes_units=units)
-        assert znii.ngff_image.axes_units == units
+        znii = ZarrNii.from_darr(
+            data_4d, axes_units=units, spacing=(1_000_000.0, 1.0, 1.0)
+        )
+        # z axis (nanometer) is converted; x/y have no unit metadata.
+        assert znii.ngff_image.axes_units.get("z") == "millimeter"
+        assert znii.ngff_image.scale["z"] == pytest.approx(1.0)
 
     def test_axes_units_invalid_raises(self, data_4d):
         with pytest.raises(ValueError, match="Invalid axes_units value"):
@@ -85,9 +95,11 @@ class TestFromTifStackAxesUnits:
         return paths
 
     def test_axes_units_stored(self, tif_paths):
+        """Non-mm units passed via axes_units override are normalized to mm on import."""
         units = {"x": "micrometer", "y": "micrometer", "z": "micrometer"}
         znii = ZarrNii.from_tif_stack(tif_paths, axes_units=units)
-        assert znii.ngff_image.axes_units == units
+        stored = znii.ngff_image.axes_units
+        assert stored == {"x": "millimeter", "y": "millimeter", "z": "millimeter"}
 
     def test_axes_units_default_none(self, tif_paths):
         znii = ZarrNii.from_tif_stack(tif_paths)
@@ -110,16 +122,19 @@ class TestFromImarisAxesUnits:
         return path
 
     def test_axes_units_stored(self, imaris_path):
+        """Non-mm units are normalized to mm on import."""
         units = {"x": "micrometer", "y": "micrometer", "z": "micrometer"}
         znii = ZarrNii.from_imaris(imaris_path, axes_units=units)
-        assert znii.ngff_image.axes_units == units
+        stored = znii.ngff_image.axes_units
+        assert stored == {"x": "millimeter", "y": "millimeter", "z": "millimeter"}
 
     def test_axes_units_default_micrometer(self, imaris_path):
+        """Default (micrometer) Imaris units are normalized to mm on import."""
         znii = ZarrNii.from_imaris(imaris_path)
         assert znii.ngff_image.axes_units == {
-            "x": "micrometer",
-            "y": "micrometer",
-            "z": "micrometer",
+            "x": "millimeter",
+            "y": "millimeter",
+            "z": "millimeter",
         }
 
     def test_axes_units_invalid_raises(self, imaris_path):
@@ -143,16 +158,19 @@ class TestFromOmeTifAxesUnitsOverride:
         return path
 
     def test_axes_units_override_stored(self, ome_tif_path):
+        """Non-mm axes_units override is normalized to mm on import."""
         units = {"x": "nanometer", "y": "nanometer", "z": "nanometer"}
         znii = ZarrNii.from_ome_tif(ome_tif_path, axes_units=units)
-        assert znii.ngff_image.axes_units == units
+        stored = znii.ngff_image.axes_units
+        assert stored == {"x": "millimeter", "y": "millimeter", "z": "millimeter"}
 
     def test_axes_units_no_override_uses_metadata(self, ome_tif_path):
-        """Without override the unit from file metadata is used (default micrometer)."""
+        """Without override the unit from file metadata is used, then normalized to mm."""
         znii = ZarrNii.from_ome_tif(ome_tif_path)
-        # The fixture has no OME-XML, so it falls back to micrometer default
+        # The fixture has no OME-XML, so it falls back to micrometer default.
+        # After normalization the stored unit must be millimeter.
         assert znii.ngff_image.axes_units is not None
-        assert znii.ngff_image.axes_units.get("x") == "micrometer"
+        assert znii.ngff_image.axes_units.get("x") == "millimeter"
 
     def test_axes_units_invalid_raises(self, ome_tif_path):
         with pytest.raises(ValueError, match="Invalid axes_units value"):

@@ -47,6 +47,51 @@ uv sync --dev
 
 ---
 
+## Physical Units Invariant
+
+ZarrNii **always stores all spatial coordinates, spacing, and translations
+internally in millimeters (mm)**.  This invariant is enforced automatically at
+every import path:
+
+| Import method | Source unit if not specified | Action on import |
+|---|---|---|
+| `from_darr` | (caller-provided `axes_units`) | converts non-mm → mm |
+| `from_ome_zarr` | from OME-Zarr metadata | converts non-mm → mm |
+| `from_nifti` | from NIfTI header | converts non-mm → mm |
+| `from_ome_tif` | `"micrometer"` default | converts non-mm → mm |
+| `from_imaris` | `"micrometer"` default | converts non-mm → mm |
+| `from_tif_stack` | (caller-provided `axes_units`) | converts non-mm → mm |
+
+### What this means in practice
+
+- **Existing mm pipelines** are completely unaffected — images already in mm
+  are stored as-is.
+- **Non-mm images** (e.g. lightsheet data typically stored in µm) are
+  automatically scaled and `axes_units` is updated to `"millimeter"` on load.
+  Downstream code always receives mm values without any silent surprises.
+- **Outputs** (`to_nifti`, `to_ome_zarr`, etc.) produce mm values by default
+  because the internal representation is already mm.
+- There is **no global configuration** for the internal unit — mm is the
+  unconditional invariant.
+
+```python
+import dask.array as da
+from zarrnii import ZarrNii
+
+# Loading a µm OME-TIFF: spacing is automatically converted to mm on import.
+znii = ZarrNii.from_ome_tif("lightsheet.ome.tif")
+print(znii.scale)         # e.g. {'z': 0.001, 'y': 0.000325, 'x': 0.000325}  [all mm]
+print(znii.ngff_image.axes_units)  # {'z': 'millimeter', 'y': 'millimeter', 'x': 'millimeter'}
+
+# Crop using mm coordinates — no unit conversion needed.
+cropped = znii.crop(x_min=0.0, x_max=1.0, y_min=0.0, y_max=1.0)
+
+# NIfTI output is in mm by default.
+znii.to_nifti("output.nii.gz")
+```
+
+---
+
 ## Advanced Topics
 
 ### Orientation Metadata Backwards Compatibility
