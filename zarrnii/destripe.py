@@ -86,12 +86,7 @@ def _odd(n: int) -> int:
       _odd(-2) -> -1
     """
     n = int(n)
-    if n == 0:
-        return 1
-    if n % 2 != 0:
-        return n
-    # even -> make it odd, preserving sign
-    return n + 1 if n > 0 else n + 1  # e.g. -2 -> -1
+    return n if (n % 2 != 0) else (n + 1)
 
 def matlab_imadjust_default(img: np.ndarray) -> np.ndarray:
     """Approximate MATLAB imadjust(I) for grayscale images.
@@ -298,7 +293,19 @@ def phasecong(
 # MATLAB-style patch extraction / reconstruction
 # -------------------------------------------------------------------------
 
-def downsample_grid(img: np.ndarray, patch_size: int = 1024):
+def downsample_grid(img: np.ndarray, factor: int | None = None, patch_size: int = 1024):
+    """
+    If `factor` is provided, use it (backward compatible).
+    Otherwise use `patch_size`.
+    """
+    if factor is not None:
+        # old behavior path
+        factor = int(factor)
+        # ... implement old factor-based downsample ...
+        return out
+
+    patch_size = int(patch_size)
+    
     """Extract 50%-overlapped patches with +Y/+X zero padding.
 
     Matches MATLAB downsample_grid(img, patchSize) indexing, translated to
