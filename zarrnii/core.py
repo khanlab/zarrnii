@@ -25,13 +25,14 @@ import copy
 import os
 import typing
 import warnings
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
 import dask.array as da
 import fsspec
 import ngff_zarr as nz
 import nibabel as nib
 import numpy as np
+import pandas as pd
 from attrs import define
 from scipy.interpolate import interpn
 from scipy.ndimage import zoom
@@ -3161,6 +3162,89 @@ class ZarrNii:
         return zarrnii_instance
 
     # Chainable operations - each returns a new ZarrNii instance
+    @staticmethod
+    def _validate_xyz_column_names(
+        column_names: Sequence[str], argument_name: str
+    ) -> Tuple[str, str, str]:
+        """Validate and normalize x/y/z column names."""
+        if len(column_names) != 3:
+            raise ValueError(
+                f"{argument_name} must contain exactly 3 column names for x, y, z. "
+                f"Got {len(column_names)} names: {list(column_names)}"
+            )
+
+        normalized = tuple(column_names)
+        if len(set(normalized)) != 3:
+            raise ValueError(
+                f"{argument_name} must contain unique column names. "
+                f"Got: {list(normalized)}"
+            )
+        return typing.cast(Tuple[str, str, str], normalized)
+
+    def _crop_dataframe_to_bbox(
+        self,
+        df: pd.DataFrame,
+        bbox_vox_min_xyz: np.ndarray,
+        bbox_vox_max_xyz: np.ndarray,
+        input_coord_columns: Tuple[str, str, str],
+        output_phys_coord_columns: Tuple[str, str, str],
+        output_voxel_coord_columns: Tuple[str, str, str],
+        cropped_znimg: "ZarrNii",
+    ) -> pd.DataFrame:
+        """Filter dataframe points to a crop and add cropped-image voxel coordinates."""
+        if not isinstance(df, pd.DataFrame):
+            raise TypeError("df must be a pandas DataFrame")
+
+        missing_cols = [col for col in input_coord_columns if col not in df.columns]
+        if missing_cols:
+            raise ValueError(
+                f"df is missing required coordinate columns: {missing_cols}. "
+                f"Expected columns: {list(input_coord_columns)}"
+            )
+
+        if df.empty:
+            cropped_df = df.copy()
+            for col in output_phys_coord_columns:
+                if col not in cropped_df.columns:
+                    cropped_df[col] = pd.Series(dtype=float)
+            for col in output_voxel_coord_columns:
+                cropped_df[col] = pd.Series(dtype=float)
+            return cropped_df
+
+        coords_phys = df.loc[:, list(input_coord_columns)].to_numpy(dtype=float)
+        coords_phys_h = np.column_stack(
+            [coords_phys, np.ones(coords_phys.shape[0], dtype=float)]
+        )
+
+        affine_inv = np.linalg.inv(self.get_affine_matrix(axes_order="XYZ"))
+        coords_vox_full = (affine_inv @ coords_phys_h.T).T[:, :3]
+        in_bounds = np.logical_and(
+            np.all(coords_vox_full >= bbox_vox_min_xyz, axis=1),
+            np.all(coords_vox_full < bbox_vox_max_xyz, axis=1),
+        )
+
+        cropped_df = df.loc[in_bounds].copy()
+        if cropped_df.empty:
+            for col in output_phys_coord_columns:
+                if col not in cropped_df.columns:
+                    cropped_df[col] = pd.Series(dtype=float)
+            for col in output_voxel_coord_columns:
+                cropped_df[col] = pd.Series(dtype=float)
+            return cropped_df
+
+        kept_phys = coords_phys[in_bounds]
+        for i, col in enumerate(output_phys_coord_columns):
+            cropped_df[col] = kept_phys[:, i]
+
+        kept_phys_h = np.column_stack([kept_phys, np.ones(kept_phys.shape[0], dtype=float)])
+        cropped_affine_inv = np.linalg.inv(cropped_znimg.get_affine_matrix(axes_order="XYZ"))
+        coords_vox_crop = (cropped_affine_inv @ kept_phys_h.T).T[:, :3]
+
+        for i, col in enumerate(output_voxel_coord_columns):
+            cropped_df[col] = coords_vox_crop[:, i]
+
+        return cropped_df
+
     def crop(
         self,
         bbox_min: Union[
@@ -3170,7 +3254,16 @@ class ZarrNii:
         spatial_dims: Optional[List[str]] = None,
         physical_coords: bool = False,
         coords_units: Optional[Dict[str, str]] = None,
-    ) -> Union["ZarrNii", List["ZarrNii"]]:
+        df: Optional[pd.DataFrame] = None,
+        df_coord_columns: Sequence[str] = ("pos_x", "pos_y", "pos_z"),
+        out_phys_coord_columns: Optional[Sequence[str]] = None,
+        out_voxel_coord_columns: Sequence[str] = ("vox_x", "vox_y", "vox_z"),
+    ) -> Union[
+        "ZarrNii",
+        List["ZarrNii"],
+        Tuple["ZarrNii", pd.DataFrame],
+        List[Tuple["ZarrNii", pd.DataFrame]],
+    ]:
         """Extract a spatial region or multiple regions from the image.
 
         Crops the image to the specified bounding box coordinates, preserving
@@ -3203,10 +3296,21 @@ class ZarrNii:
                 the units stored in the image, the coordinates are automatically
                 converted before the crop.  Ignored when *physical_coords* is
                 ``False``.
+            df: Optional dataframe of point properties with physical coordinates.
+                Rows outside the crop are dropped, and output voxel coordinate
+                columns are added relative to the cropped image.
+            df_coord_columns: Input dataframe coordinate column names for
+                x, y, z (physical coordinates).
+            out_phys_coord_columns: Output physical coordinate column names for
+                x, y, z. Defaults to *df_coord_columns* when None.
+            out_voxel_coord_columns: Output voxel coordinate column names for
+                x, y, z in the cropped image.
 
         Returns:
             New ZarrNii instance with cropped data (single crop) or list of
-            ZarrNii instances (batch crop) with updated spatial metadata
+            ZarrNii instances (batch crop) with updated spatial metadata.
+            When *df* is provided, returns a tuple of (cropped_znimg, cropped_df)
+            for single crop or a list of tuples for batch crop.
 
         Raises:
             ValueError: If bbox coordinates are invalid or out of bounds, or
@@ -3252,6 +3356,16 @@ class ZarrNii:
               physical_coords, and coords_units settings
         """
         _validate_axes_units(coords_units)
+        input_coord_columns = self._validate_xyz_column_names(
+            df_coord_columns, "df_coord_columns"
+        )
+        output_phys_coord_columns = self._validate_xyz_column_names(
+            out_phys_coord_columns if out_phys_coord_columns is not None else df_coord_columns,
+            "out_phys_coord_columns",
+        )
+        output_voxel_coord_columns = self._validate_xyz_column_names(
+            out_voxel_coord_columns, "out_voxel_coord_columns"
+        )
 
         # Check if this is batch cropping (list of bounding boxes)
         # A batch crop is a list of (bbox_min, bbox_max) tuples
@@ -3270,7 +3384,17 @@ class ZarrNii:
                 )
             # Batch crop: recursively call crop for each bounding box
             return [
-                self.crop(bmin, bmax, spatial_dims, physical_coords, coords_units)
+                self.crop(
+                    bmin,
+                    bmax,
+                    spatial_dims,
+                    physical_coords,
+                    coords_units,
+                    df,
+                    input_coord_columns,
+                    output_phys_coord_columns,
+                    output_voxel_coord_columns,
+                )
                 for bmin, bmax in bbox_min
             ]
 
@@ -3343,12 +3467,25 @@ class ZarrNii:
         cropped_image = crop_ngff_image(
             self.ngff_image, bbox_vox_min, bbox_vox_max, dim_flips
         )
-        return ZarrNii(
+        cropped_znimg = ZarrNii(
             ngff_image=cropped_image,
             axes_order=self.axes_order,
             xyz_orientation=self.xyz_orientation,
             _omero=self._omero,
         )
+        if df is None:
+            return cropped_znimg
+
+        cropped_df = self._crop_dataframe_to_bbox(
+            df=df,
+            bbox_vox_min_xyz=np.array([bbox_vox_min["x"], bbox_vox_min["y"], bbox_vox_min["z"]]),
+            bbox_vox_max_xyz=np.array([bbox_vox_max["x"], bbox_vox_max["y"], bbox_vox_max["z"]]),
+            input_coord_columns=input_coord_columns,
+            output_phys_coord_columns=output_phys_coord_columns,
+            output_voxel_coord_columns=output_voxel_coord_columns,
+            cropped_znimg=cropped_znimg,
+        )
+        return cropped_znimg, cropped_df
 
     def crop_with_bounding_box(self, bbox_min, bbox_max, ras_coords=False):
         """Legacy method name for crop.
@@ -3368,7 +3505,16 @@ class ZarrNii:
         spatial_dims: Optional[List[str]] = None,
         fill_value: float = 0.0,
         centers_units: Optional[Dict[str, str]] = None,
-    ) -> Union["ZarrNii", List["ZarrNii"]]:
+        df: Optional[pd.DataFrame] = None,
+        df_coord_columns: Sequence[str] = ("pos_x", "pos_y", "pos_z"),
+        out_phys_coord_columns: Optional[Sequence[str]] = None,
+        out_voxel_coord_columns: Sequence[str] = ("vox_x", "vox_y", "vox_z"),
+    ) -> Union[
+        "ZarrNii",
+        List["ZarrNii"],
+        Tuple["ZarrNii", pd.DataFrame],
+        List[Tuple["ZarrNii", pd.DataFrame]],
+    ]:
         """Extract fixed-size patches centered at specified coordinates.
 
         Crops the image to extract patches of a fixed size (in voxels) centered
@@ -3398,12 +3544,23 @@ class ZarrNii:
                 default to ``'millimeter'``.  When the supplied units differ from
                 the units stored in the image, the coordinates are automatically
                 converted before locating the patch center.
+            df: Optional dataframe of point properties with physical coordinates.
+                Rows outside the centered patch are dropped, and output voxel
+                coordinate columns are added relative to the cropped image.
+            df_coord_columns: Input dataframe coordinate column names for
+                x, y, z (physical coordinates).
+            out_phys_coord_columns: Output physical coordinate column names for
+                x, y, z. Defaults to *df_coord_columns* when None.
+            out_voxel_coord_columns: Output voxel coordinate column names for
+                x, y, z in the cropped image.
 
         Returns:
             Single ZarrNii instance (when centers is a single tuple) or list of
             ZarrNii instances (when centers is a list) with cropped data and
             updated spatial metadata. All patches will have exactly the shape
-            specified by patch_size (plus any non-spatial dimensions).
+            specified by patch_size (plus any non-spatial dimensions). When
+            *df* is provided, returns a tuple of (cropped_znimg, cropped_df)
+            for single center or a list of tuples for batch mode.
 
         Raises:
             ValueError: If coordinates/dimensions are invalid, or if
@@ -3456,6 +3613,16 @@ class ZarrNii:
             - Coordinates from atlas.sample_region_patches() can be used directly
         """
         _validate_axes_units(centers_units)
+        input_coord_columns = self._validate_xyz_column_names(
+            df_coord_columns, "df_coord_columns"
+        )
+        output_phys_coord_columns = self._validate_xyz_column_names(
+            out_phys_coord_columns if out_phys_coord_columns is not None else df_coord_columns,
+            "out_phys_coord_columns",
+        )
+        output_voxel_coord_columns = self._validate_xyz_column_names(
+            out_voxel_coord_columns, "out_voxel_coord_columns"
+        )
 
         # Check if this is batch processing (list of centers)
         is_batch = isinstance(centers, list)
@@ -3464,7 +3631,15 @@ class ZarrNii:
             # Batch processing: recursively call crop_centered for each center
             return [
                 self.crop_centered(
-                    center, patch_size, spatial_dims, fill_value, centers_units
+                    center,
+                    patch_size,
+                    spatial_dims,
+                    fill_value,
+                    centers_units,
+                    df,
+                    input_coord_columns,
+                    output_phys_coord_columns,
+                    output_voxel_coord_columns,
                 )
                 for center in centers
             ]
@@ -3591,12 +3766,25 @@ class ZarrNii:
                 translation=new_translation,
             )
 
-            return ZarrNii(
+            cropped_znimg = ZarrNii(
                 ngff_image=padded_image,
                 axes_order=self.axes_order,
                 xyz_orientation=self.xyz_orientation,
                 _omero=self._omero,
             )
+            if df is None:
+                return cropped_znimg
+
+            cropped_df = self._crop_dataframe_to_bbox(
+                df=df,
+                bbox_vox_min_xyz=voxel_min_xyz.astype(float),
+                bbox_vox_max_xyz=voxel_max_xyz.astype(float),
+                input_coord_columns=input_coord_columns,
+                output_phys_coord_columns=output_phys_coord_columns,
+                output_voxel_coord_columns=output_voxel_coord_columns,
+                cropped_znimg=cropped_znimg,
+            )
+            return cropped_znimg, cropped_df
 
         # Create mapping from x,y,z to voxel coordinates for cropping
         bbox_vox_min = {
@@ -3664,12 +3852,25 @@ class ZarrNii:
                 translation=new_translation,
             )
 
-        return ZarrNii(
+        cropped_znimg = ZarrNii(
             ngff_image=cropped_image,
             axes_order=self.axes_order,
             xyz_orientation=self.xyz_orientation,
             _omero=self._omero,
         )
+        if df is None:
+            return cropped_znimg
+
+        cropped_df = self._crop_dataframe_to_bbox(
+            df=df,
+            bbox_vox_min_xyz=voxel_min_xyz.astype(float),
+            bbox_vox_max_xyz=voxel_max_xyz.astype(float),
+            input_coord_columns=input_coord_columns,
+            output_phys_coord_columns=output_phys_coord_columns,
+            output_voxel_coord_columns=output_voxel_coord_columns,
+            cropped_znimg=cropped_znimg,
+        )
+        return cropped_znimg, cropped_df
 
     def downsample(
         self,

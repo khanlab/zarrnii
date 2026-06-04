@@ -628,6 +628,64 @@ class TestZarrNiiAtlas:
         with pytest.raises(ValueError, match="bbox_max should be None"):
             atlas.crop(bboxes, bbox_max=(10.0, 10.0, 10.0))
 
+    def test_crop_with_dataframe_returns_filtered_points(self, sample_atlas):
+        """Test crop with regionprops-style DataFrame filtering and voxel coords."""
+        atlas = sample_atlas
+        points_df = pd.DataFrame(
+            {
+                "pos_x": [2.0, 7.0, 8.0, 1.0],
+                "pos_y": [2.0, 7.0, 7.0, 1.0],
+                "pos_z": [2.0, 7.0, 7.0, 1.0],
+                "area": [10, 20, 30, 40],
+            }
+        )
+
+        cropped, cropped_df = atlas.crop((2, 2, 2), (8, 8, 8), df=points_df)
+
+        assert isinstance(cropped, ZarrNii)
+        assert cropped.shape == (1, 6, 6, 6)
+        assert isinstance(cropped_df, pd.DataFrame)
+        assert len(cropped_df) == 2
+        assert list(cropped_df["area"]) == [10, 20]
+        assert "vox_x" in cropped_df.columns
+        assert "vox_y" in cropped_df.columns
+        assert "vox_z" in cropped_df.columns
+        np.testing.assert_allclose(cropped_df["vox_x"].values, [0.0, 5.0])
+        np.testing.assert_allclose(cropped_df["vox_y"].values, [0.0, 5.0])
+        np.testing.assert_allclose(cropped_df["vox_z"].values, [0.0, 5.0])
+
+    def test_crop_centered_with_dataframe_custom_columns(self, sample_atlas):
+        """Test crop_centered with custom dataframe coordinate input/output columns."""
+        atlas = sample_atlas
+        points_df = pd.DataFrame(
+            {
+                "px": [3.0, 6.0, 7.0],
+                "py": [3.0, 6.0, 6.0],
+                "pz": [3.0, 6.0, 6.0],
+                "value": [1.5, 2.5, 3.5],
+            }
+        )
+
+        patch, patch_df = atlas.crop_centered(
+            (5.0, 5.0, 5.0),
+            patch_size=(4, 4, 4),
+            df=points_df,
+            df_coord_columns=("px", "py", "pz"),
+            out_phys_coord_columns=("pos_x", "pos_y", "pos_z"),
+            out_voxel_coord_columns=("crop_x", "crop_y", "crop_z"),
+        )
+
+        assert isinstance(patch, ZarrNii)
+        assert patch.shape == (1, 4, 4, 4)
+        assert len(patch_df) == 2
+        assert "value" in patch_df.columns
+        np.testing.assert_allclose(patch_df["pos_x"].values, [3.0, 6.0])
+        np.testing.assert_allclose(patch_df["pos_y"].values, [3.0, 6.0])
+        np.testing.assert_allclose(patch_df["pos_z"].values, [3.0, 6.0])
+        np.testing.assert_allclose(patch_df["crop_x"].values, [0.0, 3.0])
+        np.testing.assert_allclose(patch_df["crop_y"].values, [0.0, 3.0])
+        np.testing.assert_allclose(patch_df["crop_z"].values, [0.0, 3.0])
+
     def test_crop_centered_fixed_size(self, sample_atlas):
         """Test that crop_centered always returns the prescribed patch size."""
         atlas = sample_atlas
