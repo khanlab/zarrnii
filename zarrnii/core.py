@@ -3192,6 +3192,16 @@ class ZarrNii:
         cropped_znimg: "ZarrNii",
     ) -> pd.DataFrame:
         """Filter dataframe points to a crop and add cropped-image voxel coordinates."""
+
+        def _add_empty_output_columns(df_in: pd.DataFrame) -> pd.DataFrame:
+            df_out = df_in.copy()
+            for col in output_phys_coord_columns:
+                if col not in df_out.columns:
+                    df_out[col] = pd.Series(dtype=float)
+            for col in output_voxel_coord_columns:
+                df_out[col] = pd.Series(dtype=float)
+            return df_out
+
         if not isinstance(df, pd.DataFrame):
             raise TypeError("df must be a pandas DataFrame")
 
@@ -3203,15 +3213,9 @@ class ZarrNii:
             )
 
         if df.empty:
-            cropped_df = df.copy()
-            for col in output_phys_coord_columns:
-                if col not in cropped_df.columns:
-                    cropped_df[col] = pd.Series(dtype=float)
-            for col in output_voxel_coord_columns:
-                cropped_df[col] = pd.Series(dtype=float)
-            return cropped_df
+            return _add_empty_output_columns(df)
 
-        coords_phys = df.loc[:, list(input_coord_columns)].to_numpy(dtype=float)
+        coords_phys = df.loc[:, input_coord_columns].to_numpy(dtype=float)
         coords_phys_h = np.column_stack(
             [coords_phys, np.ones(coords_phys.shape[0], dtype=float)]
         )
@@ -3225,19 +3229,18 @@ class ZarrNii:
 
         cropped_df = df.loc[in_bounds].copy()
         if cropped_df.empty:
-            for col in output_phys_coord_columns:
-                if col not in cropped_df.columns:
-                    cropped_df[col] = pd.Series(dtype=float)
-            for col in output_voxel_coord_columns:
-                cropped_df[col] = pd.Series(dtype=float)
-            return cropped_df
+            return _add_empty_output_columns(cropped_df)
 
         kept_phys = coords_phys[in_bounds]
         for i, col in enumerate(output_phys_coord_columns):
             cropped_df[col] = kept_phys[:, i]
 
-        kept_phys_h = np.column_stack([kept_phys, np.ones(kept_phys.shape[0], dtype=float)])
-        cropped_affine_inv = np.linalg.inv(cropped_znimg.get_affine_matrix(axes_order="XYZ"))
+        kept_phys_h = np.column_stack(
+            [kept_phys, np.ones(kept_phys.shape[0], dtype=float)]
+        )
+        cropped_affine_inv = np.linalg.inv(
+            cropped_znimg.get_affine_matrix(axes_order="XYZ")
+        )
         coords_vox_crop = (cropped_affine_inv @ kept_phys_h.T).T[:, :3]
 
         for i, col in enumerate(output_voxel_coord_columns):
@@ -3360,7 +3363,11 @@ class ZarrNii:
             df_coord_columns, "df_coord_columns"
         )
         output_phys_coord_columns = self._validate_xyz_column_names(
-            out_phys_coord_columns if out_phys_coord_columns is not None else df_coord_columns,
+            (
+                out_phys_coord_columns
+                if out_phys_coord_columns is not None
+                else df_coord_columns
+            ),
             "out_phys_coord_columns",
         )
         output_voxel_coord_columns = self._validate_xyz_column_names(
@@ -3478,8 +3485,12 @@ class ZarrNii:
 
         cropped_df = self._crop_dataframe_to_bbox(
             df=df,
-            bbox_vox_min_xyz=np.array([bbox_vox_min["x"], bbox_vox_min["y"], bbox_vox_min["z"]]),
-            bbox_vox_max_xyz=np.array([bbox_vox_max["x"], bbox_vox_max["y"], bbox_vox_max["z"]]),
+            bbox_vox_min_xyz=np.array(
+                [bbox_vox_min["x"], bbox_vox_min["y"], bbox_vox_min["z"]]
+            ),
+            bbox_vox_max_xyz=np.array(
+                [bbox_vox_max["x"], bbox_vox_max["y"], bbox_vox_max["z"]]
+            ),
             input_coord_columns=input_coord_columns,
             output_phys_coord_columns=output_phys_coord_columns,
             output_voxel_coord_columns=output_voxel_coord_columns,
@@ -3617,7 +3628,11 @@ class ZarrNii:
             df_coord_columns, "df_coord_columns"
         )
         output_phys_coord_columns = self._validate_xyz_column_names(
-            out_phys_coord_columns if out_phys_coord_columns is not None else df_coord_columns,
+            (
+                out_phys_coord_columns
+                if out_phys_coord_columns is not None
+                else df_coord_columns
+            ),
             "out_phys_coord_columns",
         )
         output_voxel_coord_columns = self._validate_xyz_column_names(
