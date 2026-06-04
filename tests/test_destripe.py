@@ -1,12 +1,16 @@
 # NOTE FOR COPILOT:
-# The destripe API has been updated:
-# - downsample_grid now supports factor (int) AND patch_size (int) for backward compatibility.
-# - upsample_grid now supports factor (int) and optional out_shape, in addition to legacy info dict.
-# Please update existing tests to cover:
-# 1) downsample_grid(img, factor=2) still works
-# 2) downsample_grid(img, patch_size=1024) still works and returns expected patch layout (if applicable)
-# 3) upsample_grid(downsample_grid(img, factor=2), factor=2, out_shape=img.shape[-2:]) restores shape
-# Add new tests rather than deleting old ones unless behavior is intentionally removed.
+# The API changed: downsample_grid, destripe_block, destripe no longer accept 'factor'.
+# Update tests to use 'patch_size' instead, keeping semantics identical.
+# Ensure tests still cover overlap logic and output shape.
+
+"""
+COPILOT TASK:
+Add new unit tests for destripe_grid/downsample_grid/upsample_grid that validate:
+1) patch_size parameter works (including odd sizes)
+2) output dtype preserved for integer inputs
+3) overlap merge behavior matches max-merge rule
+4) new parameters do not change output shape
+"""
 
 
 """Tests for destriping functionality."""
