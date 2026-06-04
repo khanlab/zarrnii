@@ -76,12 +76,22 @@ def matlab_stretchlim(img: np.ndarray, tol: tuple[float, float] = (0.01, 0.99)) 
     return lo, hi
     
 def _odd(n: int) -> int:
-    """Return the next odd integer >= n (minimum 1)."""
-    n = int(n)
-    if n <= 1:
-        return 1
-    return n if (n % 2 == 1) else n + 1
+    """Return an odd integer close to n, preserving sign for negatives.
 
+    Examples:
+      _odd(0)  -> 1
+      _odd(2)  -> 3
+      _odd(3)  -> 3
+      _odd(-1) -> -1
+      _odd(-2) -> -1
+    """
+    n = int(n)
+    if n == 0:
+        return 1
+    if n % 2 != 0:
+        return n
+    # even -> make it odd, preserving sign
+    return n + 1 if n > 0 else n + 1  # e.g. -2 -> -1
 
 def matlab_imadjust_default(img: np.ndarray) -> np.ndarray:
     """Approximate MATLAB imadjust(I) for grayscale images.
@@ -369,9 +379,12 @@ def destripe_block(
     diff_thresh: float = 0.2,
     med_size: int = 61,
     phase_size: int = 512,
-    guided_neighborhood: int = 15,
+    guided_neighborhood: int = 35,   # MATLAB uses 35
     guided_smoothing: float = 0.01,
-    min_obj_size: int = 30,
+    min_obj_size: int = 50,          # MATLAB uses bwareaopen(v,50)
+    post_preserve_detail: bool = True,
+    post_med_size: int = 5,
+    post_eps: float = 0.001,
     return_adjusted_float: bool = True,
     computing_meta: bool = False,
 ) -> np.ndarray:
@@ -508,6 +521,35 @@ def destripe_block(
     img_recon = upsample_grid(I_stack, info).astype(np.float32)
     img_recon = img_recon[:orig_shape[0], :orig_shape[1]]
 
+    # MATLAB post-processing for detail preservation:
+    # E = img_recon./(II0+0.001);
+    # post_med_size = 5;
+    # logE = medfilt2(E,[post_med_size,post_med_size]);
+    # logE(isnan(logE)) = 0;
+    # E = exp(logE);
+    # img_recon = II0.*E/mean(E(:));
+    if post_preserve_detail:
+        E_ratio = img_recon / (II0_adj + float(post_eps))
+
+        logE = median_filter(
+            E_ratio,
+            size=(int(post_med_size), int(post_med_size)),
+            mode="constant",
+            cval=0.0,
+        ).astype(np.float32)
+
+        logE = np.nan_to_num(logE, nan=0.0, posinf=0.0, neginf=0.0)
+
+        E = np.exp(logE).astype(np.float32)
+
+        E_mean = float(np.mean(E))
+        if np.isfinite(E_mean) and E_mean > 0:
+            img_recon = II0_adj * E / E_mean
+        else:
+            img_recon = II0_adj
+
+        img_recon = img_recon.astype(np.float32)
+
     if return_adjusted_float:
         out = img_recon.astype(np.float32)
     else:
@@ -562,6 +604,9 @@ def destripe(
     guided_smoothing: float = 0.01,
     min_obj_size: int = 30,
     return_adjusted_float: bool = True,
+    post_preserve_detail: bool = True,
+    post_med_size: int = 5,
+    post_eps: float = 0.001,
 ) -> da.Array:
     """Apply patch-based destriping to each full XY Z-slice of a Dask array."""
     if not _has_allowed_chunking(img):
