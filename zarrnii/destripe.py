@@ -362,6 +362,8 @@ def upsample_grid(I_stack: np.ndarray, info: dict):
     patch_size = int(info["patchSize"])
     h_pad, w_pad = info["padSize"]
     img_recon = np.zeros((h_pad, w_pad), dtype=I_stack.dtype)
+    
+    out = np.zeros(info["out_shape"], dtype=I_stack.dtype)  # example
 
     p = 0
     for y1 in info["y_starts"]:
@@ -370,8 +372,10 @@ def upsample_grid(I_stack: np.ndarray, info: dict):
             patch = I_stack[:, :, p]
             img_recon[y1:y1 + patch_size, x1:x1 + patch_size] = np.maximum(region, patch)
             p += 1
+            
+    out = img_recon
 
-    return img_recon
+    return out
 
 
 # -------------------------------------------------------------------------
@@ -394,6 +398,7 @@ def destripe_block(
     post_eps: float = 0.001,
     return_adjusted_float: bool = True,
     computing_meta: bool = False,
+    factor: int | None = None,
 ) -> np.ndarray:
     """Destripe one 2D image/slice, closely following the MATLAB script.
 
@@ -404,6 +409,10 @@ def destripe_block(
         imadjusted [0,1] float domain. False rescales/casts back to the input
         dtype; use only if needed by an existing pipeline.
     """
+    
+    if factor is not None:
+        patch_size = int(factor)
+    
     if computing_meta:
         return np.zeros_like(block, dtype=np.float32)
 
@@ -614,7 +623,12 @@ def destripe(
     post_preserve_detail: bool = True,
     post_med_size: int = 5,
     post_eps: float = 0.001,
+    factor: int | None = None,
 ) -> da.Array:
+
+    if factor is not None:
+        patch_size = int(factor)
+        
     """Apply patch-based destriping to each full XY Z-slice of a Dask array."""
     if not _has_allowed_chunking(img):
         raise ValueError(
