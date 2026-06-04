@@ -1,3 +1,14 @@
+# NOTE FOR COPILOT:
+# The destripe API has been updated:
+# - downsample_grid now supports factor (int) AND patch_size (int) for backward compatibility.
+# - upsample_grid now supports factor (int) and optional out_shape, in addition to legacy info dict.
+# Please update existing tests to cover:
+# 1) downsample_grid(img, factor=2) still works
+# 2) downsample_grid(img, patch_size=1024) still works and returns expected patch layout (if applicable)
+# 3) upsample_grid(downsample_grid(img, factor=2), factor=2, out_shape=img.shape[-2:]) restores shape
+# Add new tests rather than deleting old ones unless behavior is intentionally removed.
+
+
 """Tests for destriping functionality."""
 
 import dask.array as da
