@@ -294,120 +294,58 @@ def phasecong(
 # MATLAB-style patch extraction / reconstruction
 # -------------------------------------------------------------------------
 
-def downsample_grid(img: np.ndarray, patch_size: int = 1024) -> Tuple[np.ndarray, Dict]:
+def downsample_grid(img: np.ndarray, factor: int = 2) -> np.ndarray:
     """
-    Extract 50%-overlapped patches with +Y/+X zero padding.
+    Pixel-unshuffle: split a 2D image into (factor, factor, H//factor, W//factor)
+    by taking interleaved samples.
 
-    Returns
-    -------
-    I_stack : (patch_size, patch_size, N) ndarray
-        Patch stack in row-major order: for y in rows, for x in cols.
-    info : dict
-        Metadata needed to reconstruct via upsample_grid().
+    Matches tests in tests/test_destripe.py:
+      - Crops to multiples of `factor`
+      - stack[i, j] = img[i::factor, j::factor] (cropped)
     """
+    if factor <= 0:
+        raise ValueError("factor must be >= 1")
+
+    img = np.asarray(img)
     if img.ndim != 2:
         raise ValueError("downsample_grid expects a 2D array")
-    if patch_size <= 0:
-        raise ValueError("patch_size must be > 0")
 
-    H, W = img.shape
-    P = int(patch_size)
-    stride = max(1, P // 2)
+    h, w = img.shape
+    h_crop = (h // factor) * factor
+    w_crop = (w // factor) * factor
+    imgc = img[:h_crop, :w_crop]
 
-    # number of patches along X/Y (matches MATLAB-ish: cover full image, pad on + side if needed)
-    npx = int(np.ceil(max(W - P, 0) / stride)) + 1
-    npy = int(np.ceil(max(H - P, 0) / stride)) + 1
+    out_h = h_crop // factor
+    out_w = w_crop // factor
 
-    padded_W = P + stride * (npx - 1)
-    padded_H = P + stride * (npy - 1)
-
-    pad_x = max(0, padded_W - W)
-    pad_y = max(0, padded_H - H)
-
-    # pad only bottom/right with zeros
-    img_pad = np.pad(img, ((0, pad_y), (0, pad_x)), mode="constant", constant_values=0)
-
-    # extract patches
-    N = npx * npy
-    I_stack = np.empty((P, P, N), dtype=img_pad.dtype)
-
-    k = 0
-    for iy in range(npy):
-        y0 = iy * stride
-        for ix in range(npx):
-            x0 = ix * stride
-            I_stack[:, :, k] = img_pad[y0 : y0 + P, x0 : x0 + P]
-            k += 1
-
-    info = {
-        "orig_shape": (H, W),
-        "patch_size": P,
-        "stride": stride,
-        "npx": npx,
-        "npy": npy,
-        "pad_x": pad_x,
-        "pad_y": pad_y,
-    }
-    return I_stack, info
+    stack = np.empty((factor, factor, out_h, out_w), dtype=imgc.dtype)
+    for i in range(factor):
+        for j in range(factor):
+            stack[i, j] = imgc[i::factor, j::factor]
+    return stack
 
 
-def upsample_grid(I_stack: np.ndarray, info: Dict) -> np.ndarray:
+
+def upsample_grid(stack: np.ndarray, factor: int = 2) -> np.ndarray:
     """
-    Merge patches with max intensity in overlapping regions and crop to original size.
-
-    Parameters
-    ----------
-    I_stack : (P,P,N) ndarray
-    info : dict
-        Returned from downsample_grid().
-
-    Returns
-    -------
-    img : (H,W) ndarray
-        Reconstructed image cropped back to original shape.
+    Inverse of downsample_grid (pixel-shuffle): interleave (factor,factor,H,W)
+    back into a (H*factor, W*factor) image.
     """
-    if I_stack.ndim != 3:
-        raise ValueError("upsample_grid expects a 3D patch stack (P,P,N)")
+    if factor <= 0:
+        raise ValueError("factor must be >= 1")
 
-    H, W = info["orig_shape"]
-    P = int(info["patch_size"])
-    stride = int(info["stride"])
-    npx = int(info["npx"])
-    npy = int(info["npy"])
-    pad_x = int(info["pad_x"])
-    pad_y = int(info["pad_y"])
+    stack = np.asarray(stack)
+    if stack.ndim != 4:
+        raise ValueError("upsample_grid expects a 4D array (factor,factor,H,W)")
 
-    expected_N = npx * npy
-    if I_stack.shape[0] != P or I_stack.shape[1] != P or I_stack.shape[2] != expected_N:
-        raise ValueError(
-            f"I_stack shape mismatch. Expected ({P},{P},{expected_N}), got {I_stack.shape}"
-        )
+    f0, f1, h, w = stack.shape
+    if f0 != factor or f1 != factor:
+        raise ValueError(f"stack shape {stack.shape} does not match factor={factor}")
 
-    out_H = H + pad_y
-    out_W = W + pad_x
-
-    # start with -inf so max-merge works for floats; for ints use min of dtype
-    if np.issubdtype(I_stack.dtype, np.floating):
-        out = np.full((out_H, out_W), -np.inf, dtype=I_stack.dtype)
-    else:
-        out = np.full((out_H, out_W), np.iinfo(I_stack.dtype).min, dtype=I_stack.dtype)
-
-    k = 0
-    for iy in range(npy):
-        y0 = iy * stride
-        for ix in range(npx):
-            x0 = ix * stride
-            patch = I_stack[:, :, k]
-            out[y0 : y0 + P, x0 : x0 + P] = np.maximum(out[y0 : y0 + P, x0 : x0 + P], patch)
-            k += 1
-
-    # crop back to original
-    out = out[:H, :W]
-
-    # if float and we used -inf, clean it
-    if np.issubdtype(out.dtype, np.floating):
-        out = np.nan_to_num(out, neginf=0.0)
-
+    out = np.empty((h * factor, w * factor), dtype=stack.dtype)
+    for i in range(factor):
+        for j in range(factor):
+            out[i::factor, j::factor] = stack[i, j]
     return out
 
 
