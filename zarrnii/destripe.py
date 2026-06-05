@@ -20,6 +20,7 @@ import dask.array as da
 from scipy.ndimage import binary_fill_holes, median_filter, uniform_filter
 from skimage.morphology import binary_dilation, disk, remove_small_objects
 from skimage.transform import resize
+from typing import Dict, Tuple
 
 
 # -------------------------------------------------------------------------
@@ -293,87 +294,119 @@ def phasecong(
 # MATLAB-style patch extraction / reconstruction
 # -------------------------------------------------------------------------
 
-def downsample_grid(img: np.ndarray, factor: int | None = None, patch_size: int = 1024):
+def downsample_grid(img: np.ndarray, patch_size: int = 1024) -> Tuple[np.ndarray, Dict]:
     """
-    If `factor` is provided, use it (backward compatible).
-    Otherwise use `patch_size`.
-    """
-    if factor is not None:
-        # old behavior path
-        factor = int(factor)
-        # ... implement old factor-based downsample ...
-        return out
+    Extract 50%-overlapped patches with +Y/+X zero padding.
 
-    patch_size = int(patch_size)
-    
-    """Extract 50%-overlapped patches with +Y/+X zero padding.
-
-    Matches MATLAB downsample_grid(img, patchSize) indexing, translated to
-    Python 0-based coordinates.
+    Returns
+    -------
+    I_stack : (patch_size, patch_size, N) ndarray
+        Patch stack in row-major order: for y in rows, for x in cols.
+    info : dict
+        Metadata needed to reconstruct via upsample_grid().
     """
-    img = np.asarray(img)
     if img.ndim != 2:
-        img = np.squeeze(img)
-    if img.ndim != 2:
-        raise ValueError(f"Expected 2D image, got shape {img.shape}")
+        raise ValueError("downsample_grid expects a 2D array")
+    if patch_size <= 0:
+        raise ValueError("patch_size must be > 0")
 
-    h, w = img.shape
-    stride = patch_size // 2
-    if stride < 1:
-        raise ValueError("patch_size must be >= 2")
+    H, W = img.shape
+    P = int(patch_size)
+    stride = max(1, P // 2)
 
-    h_pad = int(np.ceil((h - patch_size) / stride) * stride + patch_size)
-    w_pad = int(np.ceil((w - patch_size) / stride) * stride + patch_size)
-    h_pad = max(h_pad, patch_size)
-    w_pad = max(w_pad, patch_size)
+    # number of patches along X/Y (matches MATLAB-ish: cover full image, pad on + side if needed)
+    npx = int(np.ceil(max(W - P, 0) / stride)) + 1
+    npy = int(np.ceil(max(H - P, 0) / stride)) + 1
 
-    img_pad = np.zeros((h_pad, w_pad), dtype=img.dtype)
-    img_pad[:h, :w] = img
+    padded_W = P + stride * (npx - 1)
+    padded_H = P + stride * (npy - 1)
 
-    y_starts = np.arange(0, h_pad - patch_size + 1, stride, dtype=np.int64)
-    x_starts = np.arange(0, w_pad - patch_size + 1, stride, dtype=np.int64)
+    pad_x = max(0, padded_W - W)
+    pad_y = max(0, padded_H - H)
 
-    num_patch_y = len(y_starts)
-    num_patch_x = len(x_starts)
-    num_patches = num_patch_y * num_patch_x
+    # pad only bottom/right with zeros
+    img_pad = np.pad(img, ((0, pad_y), (0, pad_x)), mode="constant", constant_values=0)
 
-    I_stack = np.zeros((patch_size, patch_size, num_patches), dtype=img.dtype)
+    # extract patches
+    N = npx * npy
+    I_stack = np.empty((P, P, N), dtype=img_pad.dtype)
 
-    p = 0
-    for y1 in y_starts:
-        for x1 in x_starts:
-            I_stack[:, :, p] = img_pad[y1:y1 + patch_size, x1:x1 + patch_size]
-            p += 1
+    k = 0
+    for iy in range(npy):
+        y0 = iy * stride
+        for ix in range(npx):
+            x0 = ix * stride
+            I_stack[:, :, k] = img_pad[y0 : y0 + P, x0 : x0 + P]
+            k += 1
 
     info = {
-        "padSize": (h_pad, w_pad),
-        "patchSize": patch_size,
+        "orig_shape": (H, W),
+        "patch_size": P,
         "stride": stride,
-        "y_starts": y_starts,
-        "x_starts": x_starts,
-        "numPatchY": num_patch_y,
-        "numPatchX": num_patch_x,
+        "npx": npx,
+        "npy": npy,
+        "pad_x": pad_x,
+        "pad_y": pad_y,
     }
     return I_stack, info
 
 
-def upsample_grid(I_stack: np.ndarray, info: dict):
-    """Merge patches with max intensity in overlapping regions."""
-    patch_size = int(info["patchSize"])
-    h_pad, w_pad = info["padSize"]
-    img_recon = np.zeros((h_pad, w_pad), dtype=I_stack.dtype)
-    
-    out = np.zeros(info["out_shape"], dtype=I_stack.dtype)  # example
+def upsample_grid(I_stack: np.ndarray, info: Dict) -> np.ndarray:
+    """
+    Merge patches with max intensity in overlapping regions and crop to original size.
 
-    p = 0
-    for y1 in info["y_starts"]:
-        for x1 in info["x_starts"]:
-            region = img_recon[y1:y1 + patch_size, x1:x1 + patch_size]
-            patch = I_stack[:, :, p]
-            img_recon[y1:y1 + patch_size, x1:x1 + patch_size] = np.maximum(region, patch)
-            p += 1
-            
-    out = img_recon
+    Parameters
+    ----------
+    I_stack : (P,P,N) ndarray
+    info : dict
+        Returned from downsample_grid().
+
+    Returns
+    -------
+    img : (H,W) ndarray
+        Reconstructed image cropped back to original shape.
+    """
+    if I_stack.ndim != 3:
+        raise ValueError("upsample_grid expects a 3D patch stack (P,P,N)")
+
+    H, W = info["orig_shape"]
+    P = int(info["patch_size"])
+    stride = int(info["stride"])
+    npx = int(info["npx"])
+    npy = int(info["npy"])
+    pad_x = int(info["pad_x"])
+    pad_y = int(info["pad_y"])
+
+    expected_N = npx * npy
+    if I_stack.shape[0] != P or I_stack.shape[1] != P or I_stack.shape[2] != expected_N:
+        raise ValueError(
+            f"I_stack shape mismatch. Expected ({P},{P},{expected_N}), got {I_stack.shape}"
+        )
+
+    out_H = H + pad_y
+    out_W = W + pad_x
+
+    # start with -inf so max-merge works for floats; for ints use min of dtype
+    if np.issubdtype(I_stack.dtype, np.floating):
+        out = np.full((out_H, out_W), -np.inf, dtype=I_stack.dtype)
+    else:
+        out = np.full((out_H, out_W), np.iinfo(I_stack.dtype).min, dtype=I_stack.dtype)
+
+    k = 0
+    for iy in range(npy):
+        y0 = iy * stride
+        for ix in range(npx):
+            x0 = ix * stride
+            patch = I_stack[:, :, k]
+            out[y0 : y0 + P, x0 : x0 + P] = np.maximum(out[y0 : y0 + P, x0 : x0 + P], patch)
+            k += 1
+
+    # crop back to original
+    out = out[:H, :W]
+
+    # if float and we used -inf, clean it
+    if np.issubdtype(out.dtype, np.floating):
+        out = np.nan_to_num(out, neginf=0.0)
 
     return out
 
@@ -443,6 +476,7 @@ def destripe_block(
     # [I_stack,info] = downsample_grid(II0,patchSize);
     mask_stack, _ = downsample_grid(mask_full, patch_size=patch_size)
     I_stack, info = downsample_grid(II0_adj, patch_size=patch_size)
+    
 
     dZ = I_stack.shape[2]
 
