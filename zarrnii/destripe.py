@@ -15,13 +15,13 @@ Note:
 
 from __future__ import annotations
 
-from typing import Dict, Tuple
-
-import dask.array as da
 import numpy as np
+import dask.array as da
 from scipy.ndimage import binary_fill_holes, median_filter, uniform_filter
 from skimage.morphology import binary_dilation, disk, remove_small_objects
 from skimage.transform import resize
+from typing import Dict, Tuple
+
 
 # -------------------------------------------------------------------------
 # MATLAB-like helpers
