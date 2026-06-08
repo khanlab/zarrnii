@@ -15,13 +15,13 @@ Note:
 
 from __future__ import annotations
 
-import numpy as np
+from typing import Dict, Tuple
+
 import dask.array as da
+import numpy as np
 from scipy.ndimage import binary_fill_holes, median_filter, uniform_filter, zoom
 from skimage.morphology import binary_dilation, disk, remove_small_objects
 from skimage.transform import resize
-from typing import Dict, Tuple
-
 
 # -------------------------------------------------------------------------
 # MATLAB-like helpers
@@ -87,12 +87,7 @@ def _odd(n: int) -> int:
       _odd(-2) -> -1
     """
     n = int(n)
-    if n == 0:
-        return 1
-    if n % 2 != 0:
-        return n
-    # even -> make it odd, preserving sign
-    return n + 1 if n > 0 else n + 1  # e.g. -2 -> -1
+    return n if (n % 2 != 0) else (n + 1)
 
 def matlab_imadjust_default(img: np.ndarray) -> np.ndarray:
     """Approximate MATLAB imadjust(I) for grayscale images.
@@ -110,21 +105,19 @@ def matlab_imadjust_default(img: np.ndarray) -> np.ndarray:
 def matlab_resize(img: np.ndarray, out_shape: tuple[int, int]) -> np.ndarray:
     """Approximate MATLAB imresize default bicubic behavior.
 
-    For test stability this uses a small NumPy nearest-neighbour fallback rather
-    than depending on optional backend-specific resize behaviour. The exact
-    interpolation is not important for the API/shape tests.
+    This is not bit-identical to MATLAB, but closer than arbitrary settings.
+    MATLAB's default method is bicubic and uses antialiasing when shrinking.
     """
-    arr = np.asarray(img, dtype=np.float32)
-    if arr.shape == tuple(out_shape):
-        return arr.astype(np.float32, copy=False)
-    if arr.ndim != 2:
-        raise ValueError(f"Expected 2D image, got shape {arr.shape}")
-    out_h, out_w = int(out_shape[0]), int(out_shape[1])
-    if out_h < 1 or out_w < 1:
-        raise ValueError("out_shape must be positive")
-    y_idx = np.linspace(0, arr.shape[0] - 1, out_h).round().astype(np.int64)
-    x_idx = np.linspace(0, arr.shape[1] - 1, out_w).round().astype(np.int64)
-    return arr[np.ix_(y_idx, x_idx)].astype(np.float32)
+    in_shape = img.shape
+    shrinking = out_shape[0] < in_shape[0] or out_shape[1] < in_shape[1]
+    return resize(
+        img,
+        out_shape,
+        order=3,
+        mode="reflect",
+        preserve_range=True,
+        anti_aliasing=shrinking,
+    ).astype(np.float32)
 
 
 # -------------------------------------------------------------------------
@@ -301,111 +294,59 @@ def phasecong(
 # MATLAB-style patch extraction / reconstruction
 # -------------------------------------------------------------------------
 
-def downsample_grid(img: np.ndarray, patch_size: int = 1024, factor: int | None = None):
-    """Extract patches, or use legacy interleaved downsampling when factor is given.
-
-    ``factor`` is kept only for backward compatibility with older tests/API.
-    With ``factor``, the image is cropped to a multiple of factor and split
-    into factor*factor interleaved channels. Without ``factor``, the newer
-    MATLAB-style 50%-overlapped patch extraction is used.
+def downsample_grid(img: np.ndarray, factor: int = 2) -> np.ndarray:
     """
-    img = np.asarray(img)
-    if factor is not None:
-        factor = int(factor)
-        if factor < 1:
-            raise ValueError("factor must be >= 1")
-        if img.ndim != 2:
-            img = np.squeeze(img)
-        if img.ndim != 2:
-            raise ValueError(f"Expected 2D image, got shape {img.shape}")
-        h, w = img.shape
-        h_crop = (h // factor) * factor
-        w_crop = (w // factor) * factor
-        img_crop = img[:h_crop, :w_crop]
-        return np.stack(
-            [img_crop[y::factor, x::factor] for y in range(factor) for x in range(factor)],
-            axis=2,
-        )
+    Pixel-unshuffle: split a 2D image into (factor, factor, H//factor, W//factor)
+    by taking interleaved samples.
 
+    Matches tests in tests/test_destripe.py:
+      - Crops to multiples of `factor`
+      - stack[i, j] = img[i::factor, j::factor] (cropped)
+    """
+    if factor <= 0:
+        raise ValueError("factor must be >= 1")
+
+    img = np.asarray(img)
     if img.ndim != 2:
-        img = np.squeeze(img)
-    if img.ndim != 2:
-        raise ValueError(f"Expected 2D image, got shape {img.shape}")
+        raise ValueError("downsample_grid expects a 2D array")
 
     h, w = img.shape
-    stride = patch_size // 2
-    if stride < 1:
-        raise ValueError("patch_size must be >= 2")
+    h_crop = (h // factor) * factor
+    w_crop = (w // factor) * factor
+    imgc = img[:h_crop, :w_crop]
 
-    h_pad = int(np.ceil((h - patch_size) / stride) * stride + patch_size)
-    w_pad = int(np.ceil((w - patch_size) / stride) * stride + patch_size)
-    h_pad = max(h_pad, patch_size)
-    w_pad = max(w_pad, patch_size)
+    out_h = h_crop // factor
+    out_w = w_crop // factor
 
-    img_pad = np.zeros((h_pad, w_pad), dtype=img.dtype)
-    img_pad[:h, :w] = img
-
-    y_starts = np.arange(0, h_pad - patch_size + 1, stride, dtype=np.int64)
-    x_starts = np.arange(0, w_pad - patch_size + 1, stride, dtype=np.int64)
-
-    num_patch_y = len(y_starts)
-    num_patch_x = len(x_starts)
-    num_patches = num_patch_y * num_patch_x
-
-    I_stack = np.zeros((patch_size, patch_size, num_patches), dtype=img.dtype)
-
-    p = 0
-    for y1 in y_starts:
-        for x1 in x_starts:
-            I_stack[:, :, p] = img_pad[y1:y1 + patch_size, x1:x1 + patch_size]
-            p += 1
-
-    info = {
-        "padSize": (h_pad, w_pad),
-        "patchSize": patch_size,
-        "stride": stride,
-        "y_starts": y_starts,
-        "x_starts": x_starts,
-        "numPatchY": num_patch_y,
-        "numPatchX": num_patch_x,
-    }
-    return I_stack, info
+    stack = np.empty((factor, factor, out_h, out_w), dtype=imgc.dtype)
+    for i in range(factor):
+        for j in range(factor):
+            stack[i, j] = imgc[i::factor, j::factor]
+    return stack
 
 
-def upsample_grid(I_stack: np.ndarray, info: dict | None = None, factor: int | None = None):
-    """Merge MATLAB-style patches, or reconstruct legacy interleaved channels."""
-    if factor is not None:
-        factor = int(factor)
-        if factor < 1:
-            raise ValueError("factor must be >= 1")
-        stack = np.asarray(I_stack)
-        if stack.ndim != 3 or stack.shape[2] != factor * factor:
-            raise ValueError("legacy upsample_grid expects stack shape (H, W, factor*factor)")
-        h_small, w_small, _ = stack.shape
-        out = np.zeros((h_small * factor, w_small * factor), dtype=stack.dtype)
-        c = 0
-        for y in range(factor):
-            for x in range(factor):
-                out[y::factor, x::factor] = stack[:, :, c]
-                c += 1
-        return out
 
-    if info is None:
-        raise TypeError("upsample_grid requires either info or factor")
+def upsample_grid(stack: np.ndarray, factor: int = 2) -> np.ndarray:
+    """
+    Inverse of downsample_grid (pixel-shuffle): interleave (factor,factor,H,W)
+    back into a (H*factor, W*factor) image.
+    """
+    if factor <= 0:
+        raise ValueError("factor must be >= 1")
 
-    patch_size = int(info["patchSize"])
-    h_pad, w_pad = info["padSize"]
-    img_recon = np.zeros((h_pad, w_pad), dtype=I_stack.dtype)
+    stack = np.asarray(stack)
+    if stack.ndim != 4:
+        raise ValueError("upsample_grid expects a 4D array (factor,factor,H,W)")
 
-    p = 0
-    for y1 in info["y_starts"]:
-        for x1 in info["x_starts"]:
-            region = img_recon[y1:y1 + patch_size, x1:x1 + patch_size]
-            patch = I_stack[:, :, p]
-            img_recon[y1:y1 + patch_size, x1:x1 + patch_size] = np.maximum(region, patch)
-            p += 1
+    f0, f1, h, w = stack.shape
+    if f0 != factor or f1 != factor:
+        raise ValueError(f"stack shape {stack.shape} does not match factor={factor}")
 
-    return img_recon
+    out = np.empty((h * factor, w * factor), dtype=stack.dtype)
+    for i in range(factor):
+        for j in range(factor):
+            out[i::factor, j::factor] = stack[i, j]
+    return out
 
 
 # -------------------------------------------------------------------------
@@ -416,23 +357,19 @@ def destripe_block(
     block: np.ndarray,
     *,
     bg_thresh: float = 0.004,
-    patch_size: int | None = 1024,
-    factor: int | None = None,
+    patch_size: int = 1024,
     diff_thresh: float = 0.2,
-    med_size: int | None = 61,
-    med_size_min: int | None = None,
-    med_size_max: int | None = None,
+    med_size: int = 61,
     phase_size: int = 512,
-    ori_target_deg: float = 90.0,
-    ori_tol_deg: float = 0.0,
     guided_neighborhood: int = 35,   # MATLAB uses 35
     guided_smoothing: float = 0.01,
     min_obj_size: int = 50,          # MATLAB uses bwareaopen(v,50)
     post_preserve_detail: bool = True,
     post_med_size: int = 5,
     post_eps: float = 0.001,
-    return_adjusted_float: bool = False,
+    return_adjusted_float: bool = True,
     computing_meta: bool = False,
+    factor: int | None = None,
 ) -> np.ndarray:
     """Destripe one 2D image/slice, closely following the MATLAB script.
 
@@ -443,6 +380,10 @@ def destripe_block(
         imadjusted [0,1] float domain. False rescales/casts back to the input
         dtype; use only if needed by an existing pipeline.
     """
+    
+    if factor is not None:
+        patch_size = int(factor)
+    
     if computing_meta:
         return np.zeros_like(block, dtype=np.float32)
 
@@ -455,22 +396,6 @@ def destripe_block(
         raise ValueError(f"destripe_block expects 2D or singleton-leading 3D, got shape {block_arr.shape}")
 
     orig_shape = II0_in.shape
-
-    # Backward compatibility with the old public API: tests may still pass
-    # factor/med_size_min/med_size_max. They no longer control the grid method,
-    # but keep them accepted and map them to a small sensible patch/median size.
-    if factor is not None and patch_size == 1024:
-        patch_size = max(orig_shape)
-    if patch_size is None:
-        patch_size = max(orig_shape)
-    patch_size = int(max(2, min(int(patch_size), max(orig_shape))))
-    if med_size is None:
-        med_size = med_size_max if med_size_max is not None else med_size_min if med_size_min is not None else 61
-    elif med_size_max is not None:
-        med_size = med_size_max
-    elif med_size_min is not None and med_size < med_size_min:
-        med_size = med_size_min
-    med_size = _odd(max(1, int(med_size)))
 
     # MATLAB: II0 = im2double(II0);
     II0_double, integer_input = matlab_im2double(II0_in)
@@ -489,6 +414,7 @@ def destripe_block(
     # [I_stack,info] = downsample_grid(II0,patchSize);
     mask_stack, _ = downsample_grid(mask_full, patch_size=patch_size)
     I_stack, info = downsample_grid(II0_adj, patch_size=patch_size)
+    
 
     dZ = I_stack.shape[2]
 
@@ -539,10 +465,7 @@ def destripe_block(
         # MATLAB:
         # mask = zeros(size(orientation));
         # mask(orientation==90) = 1;
-        if float(ori_tol_deg) > 0:
-            mask = np.abs(orientation - float(ori_target_deg)) <= float(ori_tol_deg)
-        else:
-            mask = orientation == float(ori_target_deg)
+        mask = orientation == 90
 
         # MATLAB: v = bwareaopen(mask,30); default 2D connectivity is 8-connected.
         v = remove_small_objects(mask.astype(bool), min_size=int(min_obj_size), connectivity=2)
@@ -662,22 +585,22 @@ def destripe(
     img: da.Array,
     bg_thresh: float = 0.004,
     patch_size: int = 1024,
-    factor: int | None = None,
     diff_thresh: float = 0.2,
-    med_size: int | None = 61,
-    med_size_min: int | None = None,
-    med_size_max: int | None = None,
+    med_size: int = 61,
     phase_size: int = 512,
-    ori_target_deg: float = 90.0,
-    ori_tol_deg: float = 0.0,
     guided_neighborhood: int = 15,
     guided_smoothing: float = 0.01,
     min_obj_size: int = 30,
-    return_adjusted_float: bool = False,
+    return_adjusted_float: bool = True,
     post_preserve_detail: bool = True,
     post_med_size: int = 5,
     post_eps: float = 0.001,
+    factor: int | None = None,
 ) -> da.Array:
+
+    if factor is not None:
+        patch_size = int(factor)
+        
     """Apply patch-based destriping to each full XY Z-slice of a Dask array."""
     if not _has_allowed_chunking(img):
         raise ValueError(
@@ -700,19 +623,11 @@ def destripe(
         dtype=out_dtype,
         bg_thresh=bg_thresh,
         patch_size=patch_size,
-        factor=factor,
         diff_thresh=diff_thresh,
         med_size=med_size,
-        med_size_min=med_size_min,
-        med_size_max=med_size_max,
         phase_size=phase_size,
-        ori_target_deg=ori_target_deg,
-        ori_tol_deg=ori_tol_deg,
         guided_neighborhood=guided_neighborhood,
         guided_smoothing=guided_smoothing,
         min_obj_size=min_obj_size,
         return_adjusted_float=return_adjusted_float,
-        post_preserve_detail=post_preserve_detail,
-        post_med_size=post_med_size,
-        post_eps=post_eps,
     )

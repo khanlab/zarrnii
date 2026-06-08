@@ -12,7 +12,6 @@ Add new unit tests for destripe_grid/downsample_grid/upsample_grid that validate
 4) new parameters do not change output shape
 """
 
-
 """Tests for destriping functionality."""
 
 import dask.array as da
