@@ -87,7 +87,12 @@ def _odd(n: int) -> int:
       _odd(-2) -> -1
     """
     n = int(n)
-    return n if (n % 2 != 0) else (n + 1)
+    if n == 0:
+        return 1
+    if n % 2 != 0:
+        return n
+    # even -> make it odd, preserving sign
+    return n + 1 if n > 0 else n + 1  # e.g. -2 -> -1
 
 def matlab_imadjust_default(img: np.ndarray) -> np.ndarray:
     """Approximate MATLAB imadjust(I) for grayscale images.
@@ -294,59 +299,73 @@ def phasecong(
 # MATLAB-style patch extraction / reconstruction
 # -------------------------------------------------------------------------
 
-def downsample_grid(img: np.ndarray, factor: int = 2) -> np.ndarray:
-    """
-    Pixel-unshuffle: split a 2D image into (factor, factor, H//factor, W//factor)
-    by taking interleaved samples.
+def downsample_grid(img: np.ndarray, patch_size: int = 1024):
+    """Extract 50%-overlapped patches with +Y/+X zero padding.
 
-    Matches tests in tests/test_destripe.py:
-      - Crops to multiples of `factor`
-      - stack[i, j] = img[i::factor, j::factor] (cropped)
+    Matches MATLAB downsample_grid(img, patchSize) indexing, translated to
+    Python 0-based coordinates.
     """
-    if factor <= 0:
-        raise ValueError("factor must be >= 1")
-
     img = np.asarray(img)
     if img.ndim != 2:
-        raise ValueError("downsample_grid expects a 2D array")
+        img = np.squeeze(img)
+    if img.ndim != 2:
+        raise ValueError(f"Expected 2D image, got shape {img.shape}")
 
     h, w = img.shape
-    h_crop = (h // factor) * factor
-    w_crop = (w // factor) * factor
-    imgc = img[:h_crop, :w_crop]
+    stride = patch_size // 2
+    if stride < 1:
+        raise ValueError("patch_size must be >= 2")
 
-    out_h = h_crop // factor
-    out_w = w_crop // factor
+    h_pad = int(np.ceil((h - patch_size) / stride) * stride + patch_size)
+    w_pad = int(np.ceil((w - patch_size) / stride) * stride + patch_size)
+    h_pad = max(h_pad, patch_size)
+    w_pad = max(w_pad, patch_size)
 
-    stack = np.empty((factor, factor, out_h, out_w), dtype=imgc.dtype)
-    for i in range(factor):
-        for j in range(factor):
-            stack[i, j] = imgc[i::factor, j::factor]
-    return stack
+    img_pad = np.zeros((h_pad, w_pad), dtype=img.dtype)
+    img_pad[:h, :w] = img
+
+    y_starts = np.arange(0, h_pad - patch_size + 1, stride, dtype=np.int64)
+    x_starts = np.arange(0, w_pad - patch_size + 1, stride, dtype=np.int64)
+
+    num_patch_y = len(y_starts)
+    num_patch_x = len(x_starts)
+    num_patches = num_patch_y * num_patch_x
+
+    I_stack = np.zeros((patch_size, patch_size, num_patches), dtype=img.dtype)
+
+    p = 0
+    for y1 in y_starts:
+        for x1 in x_starts:
+            I_stack[:, :, p] = img_pad[y1:y1 + patch_size, x1:x1 + patch_size]
+            p += 1
+
+    info = {
+        "padSize": (h_pad, w_pad),
+        "patchSize": patch_size,
+        "stride": stride,
+        "y_starts": y_starts,
+        "x_starts": x_starts,
+        "numPatchY": num_patch_y,
+        "numPatchX": num_patch_x,
+    }
+    return I_stack, info
 
 
+def upsample_grid(I_stack: np.ndarray, info: dict):
+    """Merge patches with max intensity in overlapping regions."""
+    patch_size = int(info["patchSize"])
+    h_pad, w_pad = info["padSize"]
+    img_recon = np.zeros((h_pad, w_pad), dtype=I_stack.dtype)
 
-def upsample_grid(stack: np.ndarray, factor: int = 2) -> np.ndarray:
-    """
-    Inverse of downsample_grid (pixel-shuffle): interleave (factor,factor,H,W)
-    back into a (H*factor, W*factor) image.
-    """
-    if factor <= 0:
-        raise ValueError("factor must be >= 1")
+    p = 0
+    for y1 in info["y_starts"]:
+        for x1 in info["x_starts"]:
+            region = img_recon[y1:y1 + patch_size, x1:x1 + patch_size]
+            patch = I_stack[:, :, p]
+            img_recon[y1:y1 + patch_size, x1:x1 + patch_size] = np.maximum(region, patch)
+            p += 1
 
-    stack = np.asarray(stack)
-    if stack.ndim != 4:
-        raise ValueError("upsample_grid expects a 4D array (factor,factor,H,W)")
-
-    f0, f1, h, w = stack.shape
-    if f0 != factor or f1 != factor:
-        raise ValueError(f"stack shape {stack.shape} does not match factor={factor}")
-
-    out = np.empty((h * factor, w * factor), dtype=stack.dtype)
-    for i in range(factor):
-        for j in range(factor):
-            out[i::factor, j::factor] = stack[i, j]
-    return out
+    return img_recon
 
 
 # -------------------------------------------------------------------------
@@ -369,7 +388,6 @@ def destripe_block(
     post_eps: float = 0.001,
     return_adjusted_float: bool = True,
     computing_meta: bool = False,
-    factor: int | None = None,
 ) -> np.ndarray:
     """Destripe one 2D image/slice, closely following the MATLAB script.
 
@@ -380,10 +398,6 @@ def destripe_block(
         imadjusted [0,1] float domain. False rescales/casts back to the input
         dtype; use only if needed by an existing pipeline.
     """
-    
-    if factor is not None:
-        patch_size = int(factor)
-    
     if computing_meta:
         return np.zeros_like(block, dtype=np.float32)
 
@@ -414,7 +428,6 @@ def destripe_block(
     # [I_stack,info] = downsample_grid(II0,patchSize);
     mask_stack, _ = downsample_grid(mask_full, patch_size=patch_size)
     I_stack, info = downsample_grid(II0_adj, patch_size=patch_size)
-    
 
     dZ = I_stack.shape[2]
 
@@ -595,12 +608,7 @@ def destripe(
     post_preserve_detail: bool = True,
     post_med_size: int = 5,
     post_eps: float = 0.001,
-    factor: int | None = None,
 ) -> da.Array:
-
-    if factor is not None:
-        patch_size = int(factor)
-        
     """Apply patch-based destriping to each full XY Z-slice of a Dask array."""
     if not _has_allowed_chunking(img):
         raise ValueError(
