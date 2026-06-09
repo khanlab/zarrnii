@@ -23,7 +23,6 @@ from scipy.ndimage import binary_fill_holes, median_filter, uniform_filter, zoom
 from skimage.morphology import binary_dilation, disk, remove_small_objects
 from skimage.transform import resize
 
-
 # -------------------------------------------------------------------------
 # MATLAB-like helpers
 # -------------------------------------------------------------------------
