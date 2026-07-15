@@ -25,9 +25,14 @@ Typical usage::
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from zarrnii.plugins.markers import hookimpl
+
+if TYPE_CHECKING:
+    import dask.array as da
 
 
 class N4BiasFieldApply:
@@ -87,7 +92,11 @@ class N4BiasFieldApply:
         return np.maximum(lowres_array, np.finfo(np.float32).eps)
 
     @hookimpl
-    def highres_func(self, fullres_array, upsampled_output):
+    def highres_func(
+        self,
+        fullres_array: np.ndarray | da.Array,
+        upsampled_output: np.ndarray | da.Array,
+    ) -> np.ndarray | da.Array:
         """
         Apply the upsampled bias field to full-resolution data.
 

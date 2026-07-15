@@ -900,7 +900,7 @@ class TestN4BiasFieldApply:
 
         plugin = N4BiasFieldApply()
         desc = plugin.scaled_processing_plugin_description()
-        assert "pre-computed" in desc.lower() or "Pre-computed" in desc
+        assert "pre-computed" in desc.lower()
         assert "ANTsPy" in desc or "antspy" in desc.lower()
 
     def test_repr(self):
