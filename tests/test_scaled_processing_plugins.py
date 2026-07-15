@@ -516,9 +516,7 @@ class TestN4BiasFieldCorrection:
 
         # Result should have the same shape
         assert result.shape == test_data.shape
-        # Result should be positive (bias field)
-        assert np.all(result > 0)
-        # Result should be finite
+        # lowres_func returns log(bias_field); values must be finite
         assert np.all(np.isfinite(result))
 
     @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
@@ -535,7 +533,6 @@ class TestN4BiasFieldCorrection:
         result = plugin.lowres_func(test_data)
 
         assert result.shape == test_data.shape
-        assert np.all(result > 0)
         assert np.all(np.isfinite(result))
 
     @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
@@ -555,16 +552,19 @@ class TestN4BiasFieldCorrection:
 
     @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
     def test_n4_highres_func_application(self):
-        """Test the N4 highres_func with upsampled bias field."""
+        """Test the N4 highres_func with an upsampled log bias field."""
         from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
 
         plugin = N4BiasFieldCorrection()
 
-        # Create test data - both arrays same size
+        # highres_func receives log(bias_field) as upsampled_output.
+        # log(2) → bias = exp(log(2)) = 2 → correction = 100 / 2 = 50.
         fullres_data = da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 100
-        upsampled_bias = da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 2
+        upsampled_log_bias = da.ones(
+            (40, 40), chunks=(20, 20), dtype=np.float32
+        ) * np.log(2.0)
 
-        result = plugin.highres_func(fullres_data, upsampled_bias)
+        result = plugin.highres_func(fullres_data, upsampled_log_bias)
 
         # Result should have same shape as full-res data
         assert result.shape == fullres_data.shape
@@ -583,11 +583,14 @@ class TestN4BiasFieldCorrection:
 
         plugin = N4BiasFieldCorrection()
 
-        # Test with some zero values in bias field
+        # Very large negative log values → exp → near-zero bias field; should
+        # not produce inf values thanks to the epsilon clamp.
         fullres_data = da.ones((20, 20), chunks=(10, 10), dtype=np.float32) * 100
-        upsampled_bias = da.zeros((20, 20), chunks=(10, 10), dtype=np.float32)
+        upsampled_log_bias = da.full(
+            (20, 20), fill_value=-1000.0, chunks=(10, 10), dtype=np.float32
+        )
 
-        result = plugin.highres_func(fullres_data, upsampled_bias)
+        result = plugin.highres_func(fullres_data, upsampled_log_bias)
 
         assert result.shape == fullres_data.shape
         # Should not result in inf values
@@ -611,6 +614,210 @@ class TestN4BiasFieldCorrection:
 
             assert "N4BiasFieldCorrection" in repr_str
             assert "shrink_factor=3" in repr_str
+
+    @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
+    def test_n4_lowres_func_accepts_mask(self):
+        """Test that N4 lowres_func signature accepts a mask parameter."""
+        import inspect
+
+        from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
+
+        plugin = N4BiasFieldCorrection()
+        sig = inspect.signature(plugin.lowres_func)
+        assert "mask" in sig.parameters
+
+    @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
+    def test_n4_lowres_func_returns_log_space(self):
+        """Test that N4 lowres_func returns log(bias_field)."""
+        from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
+
+        plugin = N4BiasFieldCorrection(convergence={"iters": [5], "tol": 0.01})
+        test_data = np.ones((20, 20), dtype=np.float32) * 100
+
+        log_bias = plugin.lowres_func(test_data)
+
+        # Exponentiated result must be strictly positive (valid bias field)
+        assert np.all(np.isfinite(log_bias))
+        bias_field = np.exp(log_bias)
+        assert np.all(bias_field > 0)
+
+    @pytest.mark.skipif(not HAS_ANTSPYX, reason="antspyx not available")
+    def test_n4_highres_func_log_exp_consistency(self):
+        """Test that highres_func correctly exponentiates the log bias field."""
+        from zarrnii.plugins.scaled_processing.n4_biasfield import N4BiasFieldCorrection
+
+        plugin = N4BiasFieldCorrection()
+
+        # Build consistent (log_bias, fullres) pair: log(4) in → divide by 4
+        log_bias_value = np.log(4.0)
+        fullres_data = np.ones((10, 10), dtype=np.float32) * 200
+        upsampled_log_bias = np.full((10, 10), log_bias_value, dtype=np.float32)
+
+        result = plugin.highres_func(fullres_data, upsampled_log_bias)
+        np.testing.assert_allclose(result, 50.0, rtol=1e-5)
+
+
+class TestLoadMaskArray:
+    """Test ZarrNii._load_mask_array helper."""
+
+    def test_none_returns_none(self):
+        """_load_mask_array(None) returns None."""
+        assert ZarrNii._load_mask_array(None) is None
+
+    def test_numpy_passthrough(self):
+        """A numpy array is returned as-is."""
+        arr = np.ones((5, 5), dtype=np.uint8)
+        result = ZarrNii._load_mask_array(arr)
+        assert result is arr
+
+    def test_zarrnii_instance(self):
+        """A ZarrNii instance is computed to a numpy array."""
+        data = np.ones((1, 4, 4, 4), dtype=np.uint8)
+        znii = ZarrNii.from_darr(
+            da.from_array(data), spacing=(1.0, 1.0, 1.0), dims=["c", "z", "y", "x"]
+        )
+        result = ZarrNii._load_mask_array(znii)
+        assert isinstance(result, np.ndarray)
+        assert result.shape == data.shape
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_nifti_path(self, nifti_nib):
+        """A NIfTI path string is loaded and returned as numpy array."""
+        nifti_nib.to_filename("mask.nii")
+        result = ZarrNii._load_mask_array("mask.nii")
+        assert isinstance(result, np.ndarray)
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_nifti_gz_path(self, nifti_nib):
+        """A .nii.gz path string is loaded and returned as numpy array."""
+        nifti_nib.to_filename("mask.nii.gz")
+        result = ZarrNii._load_mask_array("mask.nii.gz")
+        assert isinstance(result, np.ndarray)
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_ome_zarr_path(self, nifti_nib):
+        """An OME-Zarr directory path is loaded and returned as numpy array."""
+        nifti_nib.to_filename("source.nii")
+        znii = ZarrNii.from_nifti("source.nii")
+        znii.to_ome_zarr("mask.ome.zarr")
+        result = ZarrNii._load_mask_array("mask.ome.zarr")
+        assert isinstance(result, np.ndarray)
+
+
+class TestApplyScaledProcessingMask:
+    """Test mask forwarding in apply_scaled_processing."""
+
+    def test_mask_forwarded_to_lowres_func(self):
+        """Mask numpy array is passed to lowres_func when plugin supports it."""
+        received_mask = {}
+
+        class MaskAwarePlugin:
+            @hookimpl
+            def lowres_func(self, lowres_array, mask=None):
+                received_mask["value"] = mask
+                return lowres_array
+
+            @hookimpl
+            def highres_func(self, fullres_array, upsampled_output):
+                return fullres_array
+
+        data = np.random.rand(1, 8, 8, 8).astype(np.float32) * 100
+        znii = ZarrNii.from_darr(
+            da.from_array(data, chunks=(1, 4, 4, 4)),
+            spacing=(1.0, 1.0, 1.0),
+            dims=["c", "z", "y", "x"],
+        )
+        mask_arr = np.ones((1, 4, 4, 4), dtype=np.uint8)
+
+        znii.apply_scaled_processing(
+            MaskAwarePlugin(), downsample_factor=2, mask=mask_arr
+        )
+
+        assert received_mask["value"] is not None
+        assert isinstance(received_mask["value"], np.ndarray)
+
+    def test_mask_not_forwarded_when_plugin_lacks_param(self):
+        """No mask is passed when plugin.lowres_func has no mask parameter."""
+        call_args = {}
+
+        class NoMaskPlugin:
+            @hookimpl
+            def lowres_func(self, lowres_array):
+                call_args["called"] = True
+                return lowres_array
+
+            @hookimpl
+            def highres_func(self, fullres_array, upsampled_output):
+                return fullres_array
+
+        data = np.random.rand(1, 8, 8, 8).astype(np.float32) * 100
+        znii = ZarrNii.from_darr(
+            da.from_array(data, chunks=(1, 4, 4, 4)),
+            spacing=(1.0, 1.0, 1.0),
+            dims=["c", "z", "y", "x"],
+        )
+        mask_arr = np.ones((1, 4, 4, 4), dtype=np.uint8)
+
+        # Should not raise even though a mask is supplied
+        result = znii.apply_scaled_processing(
+            NoMaskPlugin(), downsample_factor=2, mask=mask_arr
+        )
+        assert call_args.get("called")
+        assert result.shape == znii.shape
+
+    def test_mask_forwarded_map_blocks(self):
+        """Mask is forwarded to lowres_func in map_blocks method."""
+        received_mask = {}
+
+        class MaskAwarePlugin:
+            @hookimpl
+            def lowres_func(self, lowres_array, mask=None):
+                received_mask["value"] = mask
+                return lowres_array
+
+            @hookimpl
+            def highres_func(self, fullres_array, upsampled_output):
+                return fullres_array
+
+        data = np.random.rand(1, 8, 8, 8).astype(np.float32) * 100
+        znii = ZarrNii.from_darr(
+            da.from_array(data, chunks=(1, 4, 4, 4)),
+            spacing=(1.0, 1.0, 1.0),
+            dims=["c", "z", "y", "x"],
+        )
+        mask_arr = np.ones((1, 4, 4, 4), dtype=np.uint8)
+
+        znii.apply_scaled_processing(
+            MaskAwarePlugin(), downsample_factor=2, method="map_blocks", mask=mask_arr
+        )
+
+        assert received_mask["value"] is not None
+
+    @pytest.mark.usefixtures("cleandir")
+    def test_mask_loaded_from_nifti_path(self, nifti_nib):
+        """Mask can be specified as a NIfTI file path."""
+        received_mask = {}
+
+        class MaskAwarePlugin:
+            @hookimpl
+            def lowres_func(self, lowres_array, mask=None):
+                received_mask["value"] = mask
+                return lowres_array
+
+            @hookimpl
+            def highres_func(self, fullres_array, upsampled_output):
+                return fullres_array
+
+        nifti_nib.to_filename("test.nii")
+        nifti_nib.to_filename("mask.nii")
+        znii = ZarrNii.from_nifti("test.nii", axes_order="ZYX")
+
+        znii.apply_scaled_processing(
+            MaskAwarePlugin(), downsample_factor=2, mask="mask.nii"
+        )
+
+        assert received_mask["value"] is not None
+        assert isinstance(received_mask["value"], np.ndarray)
 
 
 class TestSegmentationCleaner:

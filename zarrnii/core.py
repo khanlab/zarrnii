@@ -7093,6 +7093,7 @@ class ZarrNii:
         upsampled_ome_zarr_path: Optional[str] = None,
         method: Literal["default", "map_blocks"] = "default",
         lowres_znimg: Optional["ZarrNii"] = None,
+        mask: Optional[Any] = None,
         **kwargs,
     ) -> "ZarrNii":
         """
@@ -7131,6 +7132,11 @@ class ZarrNii:
             implementations that use ``np.maximum``, ``np.where``, and standard
             arithmetic operators work correctly with both methods.
 
+            If the plugin's ``lowres_func`` accepts a ``mask`` keyword argument,
+            it will be passed the mask array loaded from the *mask* parameter.
+            Plugins that do not declare ``mask`` in their signature receive the
+            standard single-argument call and are unaffected by this parameter.
+
         Args:
             plugin: Plugin instance or class to apply.  The plugin must have
                 ``lowres_func(lowres_array: np.ndarray) -> np.ndarray`` and
@@ -7155,6 +7161,12 @@ class ZarrNii:
                 reusing a previously computed pyramid level or for applying the
                 same correction to multiple channels.  Only used by the
                 ``"map_blocks"`` method (ignored for ``"default"``).
+            mask: Optional mask at the same resolution as the low-resolution
+                image.  Can be a :class:`ZarrNii` instance, a path to an
+                OME-Zarr directory (string or :class:`pathlib.Path`), or a
+                path to a NIfTI file (``*.nii`` / ``*.nii.gz``).  The mask is
+                passed to ``plugin.lowres_func`` only when that method declares
+                a ``mask`` keyword argument in its signature.
             **kwargs: Additional arguments passed to the plugin constructor when
                 *plugin* is a class.
 
@@ -7166,6 +7178,8 @@ class ZarrNii:
                 also supplied, or if the plugin is missing the required hooks.
             ValueError: If an unsupported *method* value is given.
         """
+        import inspect
+
         if method not in ("default", "map_blocks"):
             raise ValueError(
                 f"Unsupported method {method!r}. " "Choose 'default' or 'map_blocks'."
@@ -7189,9 +7203,25 @@ class ZarrNii:
                 "decorated with @hookimpl"
             )
 
+        # Load mask as numpy array if provided
+        mask_array = ZarrNii._load_mask_array(mask)
+
+        # Determine whether this plugin's lowres_func accepts a mask argument
+        _lowres_accepts_mask = (
+            "mask" in inspect.signature(plugin.lowres_func).parameters
+        )
+
+        def _call_lowres(arr):
+            if mask_array is not None and _lowres_accepts_mask:
+                return plugin.lowres_func(arr, mask=mask_array)
+            return plugin.lowres_func(arr)
+
         if method == "map_blocks":
             return self._apply_scaled_processing_map_blocks(
-                plugin, downsample_factor=downsample_factor, lowres_znimg=lowres_znimg
+                plugin,
+                downsample_factor=downsample_factor,
+                lowres_znimg=lowres_znimg,
+                call_lowres=_call_lowres,
             )
 
         # ------------------------------------------------------------------
@@ -7232,7 +7262,7 @@ class ZarrNii:
         lowres_chunks = tuple(lowres_chunks)
 
         _lowres_znimg.data = da.from_array(
-            plugin.lowres_func(lowres_array), chunks=lowres_chunks
+            _call_lowres(lowres_array), chunks=lowres_chunks
         )
 
         # Use temporary OME-Zarr to break up dask graph for performance
@@ -7263,6 +7293,7 @@ class ZarrNii:
         plugin,
         downsample_factor: int = 4,
         lowres_znimg: Optional["ZarrNii"] = None,
+        call_lowres=None,
     ) -> "ZarrNii":
         """
         Back-end for :meth:`apply_scaled_processing` using fused map_blocks.
@@ -7285,6 +7316,10 @@ class ZarrNii:
                 *lowres_znimg* when it is not supplied.
             lowres_znimg: Pre-computed downsampled image.  If ``None``, the
                 image is downsampled by *downsample_factor*.
+            call_lowres: Optional callable ``(array) -> array`` that wraps
+                ``plugin.lowres_func``.  When provided it is used in place of
+                a direct call to ``plugin.lowres_func`` so that extra arguments
+                (e.g., a mask) can be forwarded transparently.
 
         Returns:
             New :class:`ZarrNii` instance with the processed data.
@@ -7313,7 +7348,10 @@ class ZarrNii:
                 )
 
         lowres_array = lowres_znimg.data.compute()
-        lowres_result = plugin.lowres_func(lowres_array)
+        if call_lowres is not None:
+            lowres_result = call_lowres(lowres_array)
+        else:
+            lowres_result = plugin.lowres_func(lowres_array)
 
         # Step 2: Determine spatial vs non-spatial axis indices
         _spatial_dim_names = {"x", "y", "z"}
@@ -7404,6 +7442,33 @@ class ZarrNii:
         )
 
         return corrected_znimg
+
+    @staticmethod
+    def _load_mask_array(mask) -> Optional[np.ndarray]:
+        """Load a mask as a numpy array for use in scaled processing.
+
+        Args:
+            mask: Mask source.  May be ``None``, a :class:`numpy.ndarray`, a
+                :class:`ZarrNii` instance, or a string / :class:`pathlib.Path`
+                pointing to an OME-Zarr directory or a NIfTI file
+                (``*.nii`` / ``*.nii.gz``).
+
+        Returns:
+            Computed numpy array, or ``None`` when *mask* is ``None``.
+        """
+        if mask is None:
+            return None
+        if isinstance(mask, np.ndarray):
+            return mask
+        if isinstance(mask, ZarrNii):
+            return mask.data.compute()
+        # String or Path — auto-detect format by extension
+        mask_str = str(mask)
+        if mask_str.endswith(".nii") or mask_str.endswith(".nii.gz"):
+            znii = ZarrNii.from_nifti(mask_str)
+        else:
+            znii = ZarrNii.from_ome_zarr(mask_str)
+        return znii.data.compute()
 
     def __repr__(self) -> str:
         """String representation."""

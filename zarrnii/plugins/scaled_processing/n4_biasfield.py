@@ -30,8 +30,14 @@ class N4BiasFieldCorrection:
     the N4 bias field correction algorithm from ANTsPy and applies the
     correction to full resolution data by division.
 
+    The bias field is estimated in log space: ``lowres_func`` returns
+    ``log(bias_field)``, which is upsampled via interpolation, and
+    ``highres_func`` exponentiates the result before applying the correction.
+    Performing interpolation in log space preserves the multiplicative
+    structure of the bias field.
+
     Parameters:
-        spline_param: Spacing between knots for spline fitting (default: 200)
+        spline_param: Spacing between knots for spline fitting (default: [2,2,2])
         convergence: Convergence criteria [iters, tol] (default: [50, 0.001])
         shrink_factor: Shrink factor for processing (default: 1)
     """
@@ -68,18 +74,25 @@ class N4BiasFieldCorrection:
         self.shrink_factor = shrink_factor
 
     @hookimpl
-    def lowres_func(self, lowres_array: np.ndarray) -> np.ndarray:
+    def lowres_func(
+        self, lowres_array: np.ndarray, mask: Optional[np.ndarray] = None
+    ) -> np.ndarray:
         """
         Estimate bias field from low-resolution data using N4 algorithm.
 
         This function uses ANTsPy's N4 bias field correction to estimate
-        the bias field at low resolution.
+        the bias field at low resolution.  The result is returned in log
+        space so that subsequent upsampling interpolation is performed on
+        a quantity that varies smoothly in an additive sense.
 
         Args:
             lowres_array: Downsampled input image
+            mask: Optional binary mask (same spatial shape as ``lowres_array``)
+                indicating voxels to use for bias field estimation.  Voxels
+                where mask is zero are excluded from the N4 fit.
 
         Returns:
-            Estimated bias field at low resolution
+            Log of the estimated bias field at low resolution
         """
         if lowres_array.size == 0:
             raise ValueError("Input array is empty")
@@ -102,6 +115,15 @@ class N4BiasFieldCorrection:
         if work_array.dtype.kind in ["i", "u"]:  # integer types
             work_array = work_array.astype(np.float32)
 
+        # Prepare spatial mask for ANTs (common to all batches)
+        ants_mask = None
+        if mask is not None:
+            # Use only spatial dimensions of the mask
+            mask_spatial = mask
+            if mask_spatial.ndim > 3:
+                mask_spatial = mask_spatial.reshape(-1, *mask_spatial.shape[-3:])[0]
+            ants_mask = ants.from_numpy(np.asarray(mask_spatial, dtype=np.float32))
+
         # Apply N4 bias field correction
         if work_array.ndim == 2:
             # For 2D data
@@ -110,6 +132,7 @@ class N4BiasFieldCorrection:
             # Use return_bias_field=True to get the bias field
             bias_result = ants.n4_bias_field_correction(
                 ants_img,
+                mask=ants_mask,
                 return_bias_field=True,
                 spline_param=self.spline_param,
                 convergence=self.convergence,
@@ -125,6 +148,7 @@ class N4BiasFieldCorrection:
                     ants_img = ants.from_numpy(work_array[i])
                     bias_result = ants.n4_bias_field_correction(
                         ants_img,
+                        mask=ants_mask,
                         return_bias_field=True,
                         spline_param=self.spline_param,
                         convergence=self.convergence,
@@ -135,6 +159,7 @@ class N4BiasFieldCorrection:
                 ants_img = ants.from_numpy(work_array)
                 bias_result = ants.n4_bias_field_correction(
                     ants_img,
+                    mask=ants_mask,
                     return_bias_field=True,
                     spline_param=self.spline_param,
                     convergence=self.convergence,
@@ -146,34 +171,38 @@ class N4BiasFieldCorrection:
         if original_shape != bias_field.shape:
             bias_field = bias_field.reshape(original_shape)
 
-        # Avoid division by zero by adding small epsilon
-        bias_field = np.maximum(bias_field, np.finfo(bias_field.dtype).eps)
+        # Clamp to positive values before taking log
+        bias_field = np.maximum(bias_field, np.finfo(np.float32).eps)
 
-        return bias_field
+        # Return log of bias field so upsampling interpolation is in log space
+        return np.log(bias_field.astype(np.float32))
 
     @hookimpl
     def highres_func(self, fullres_array, upsampled_output):
         """
         Apply bias field correction to full-resolution data.
 
-        This function takes the upsampled bias field (same size as
-        fullres_array) and applies it to the full-resolution data by division.
+        This function takes the upsampled log bias field (same size as
+        ``fullres_array``), exponentiates it to recover the bias field, and
+        applies the correction to the full-resolution data by division.
 
         Works with both dask arrays (``"default"`` method) and plain NumPy arrays
         (``"map_blocks"`` method) because only NumPy-compatible operations are used.
 
         Args:
             fullres_array: Full-resolution array (dask or NumPy)
-            upsampled_output: Upsampled bias field (same shape as fullres;
-                dask or NumPy)
+            upsampled_output: Upsampled log bias field (same shape as fullres;
+                dask or NumPy).  This is the value returned by ``lowres_func``
+                after upsampling.
 
         Returns:
             Bias-corrected full-resolution array (same type as inputs)
         """
-        # Avoid division by zero by clamping the bias field to a small epsilon.
-        # np.maximum works for both dask arrays (via __array_ufunc__) and NumPy.
+        # Exponentiate from log space to recover the bias field, then divide.
+        # np.exp and np.maximum work for both dask arrays and NumPy.
         epsilon = np.finfo(np.float32).eps
-        corrected_array = fullres_array / np.maximum(upsampled_output, epsilon)
+        bias_field = np.exp(upsampled_output)
+        corrected_array = fullres_array / np.maximum(bias_field, epsilon)
 
         return corrected_array
 

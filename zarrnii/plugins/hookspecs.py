@@ -70,7 +70,7 @@ class ZarrNiiSpec:
         """
 
     @hookspec
-    def lowres_func(self, lowres_array):
+    def lowres_func(self, lowres_array, mask=None):
         """Process low-resolution data and return the result.
 
         This function operates on a downsampled numpy array and computes
@@ -79,6 +79,10 @@ class ZarrNiiSpec:
 
         Args:
             lowres_array: Downsampled input image as numpy array.
+            mask: Optional binary mask numpy array with the same spatial shape
+                as ``lowres_array``.  Plugins may use this to restrict the
+                algorithm to a region of interest.  Plugins that do not need a
+                mask can omit this parameter from their implementation.
 
         Returns:
             Low-resolution output array (e.g., bias field, correction map).
