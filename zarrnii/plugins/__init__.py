@@ -18,6 +18,7 @@ __all__ = [
     "ThresholdSegmentation",
     "GaussianBiasFieldCorrection",
     "N4BiasFieldCorrection",
+    "N4BiasFieldApply",
     "SegmentationCleaner",
     "hookspec",
     "hookimpl",

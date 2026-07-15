@@ -7,10 +7,12 @@ algorithms are run at low resolution and applied to full resolution data.
 
 from .gaussian_biasfield import GaussianBiasFieldCorrection
 from .n4_biasfield import N4BiasFieldCorrection
+from .n4_biasfield_apply import N4BiasFieldApply
 from .segmentation_cleaner import SegmentationCleaner
 
 __all__ = [
     "GaussianBiasFieldCorrection",
     "N4BiasFieldCorrection",
+    "N4BiasFieldApply",
     "SegmentationCleaner",
 ]

@@ -873,3 +873,133 @@ class TestSegmentationCleaner:
         assert "mask_threshold=60" in repr_str
         assert "max_extent=0.2" in repr_str
         assert "exclusion_threshold=40" in repr_str
+
+
+class TestN4BiasFieldApply:
+    """Test the N4BiasFieldApply plugin."""
+
+    def test_plugin_import(self):
+        """Test that N4BiasFieldApply can be imported without antspyx."""
+        from zarrnii.plugins.scaled_processing.n4_biasfield_apply import (
+            N4BiasFieldApply,
+        )
+
+        plugin = N4BiasFieldApply()
+        assert plugin.scaled_processing_plugin_name() == "N4 Bias Field Apply"
+
+    def test_plugin_available_in_plugins_namespace(self):
+        """Test that N4BiasFieldApply is available from zarrnii.plugins."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+        assert plugin.scaled_processing_plugin_name() == "N4 Bias Field Apply"
+
+    def test_plugin_description(self):
+        """Test that the plugin description mentions key concepts."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+        desc = plugin.scaled_processing_plugin_description()
+        assert "pre-computed" in desc.lower() or "Pre-computed" in desc
+        assert "ANTsPy" in desc or "antspy" in desc.lower()
+
+    def test_repr(self):
+        """Test string representation."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+        assert repr(plugin) == "N4BiasFieldApply()"
+
+    def test_lowres_func_passthrough(self):
+        """Test that lowres_func returns the input unchanged (float cast)."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+
+        test_data = np.ones((10, 20, 20), dtype=np.float32) * 2.5
+        result = plugin.lowres_func(test_data)
+
+        assert result.shape == test_data.shape
+        assert_array_almost_equal(result, test_data)
+
+    def test_lowres_func_integer_cast(self):
+        """Test that lowres_func casts integer arrays to float32."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+
+        test_data = np.ones((10, 20, 20), dtype=np.uint16) * 100
+        result = plugin.lowres_func(test_data)
+
+        assert result.dtype.kind == "f"
+        assert result.shape == test_data.shape
+
+    def test_lowres_func_clamps_zero(self):
+        """Test that lowres_func clamps zero values to avoid later division by zero."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+
+        test_data = np.zeros((5, 5, 5), dtype=np.float32)
+        result = plugin.lowres_func(test_data)
+
+        assert np.all(result > 0)
+        assert np.all(np.isfinite(result))
+
+    def test_lowres_func_empty_array_raises(self):
+        """Test that lowres_func raises on empty input."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+
+        with pytest.raises(ValueError, match="Input array is empty"):
+            plugin.lowres_func(np.array([]))
+
+    def test_lowres_func_1d_raises(self):
+        """Test that lowres_func raises on 1-D input."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+
+        with pytest.raises(ValueError, match="at least 2D"):
+            plugin.lowres_func(np.array([1.0, 2.0, 3.0]))
+
+    def test_highres_func_divides(self):
+        """Test that highres_func divides fullres by the bias field."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+
+        fullres = da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 100
+        bias = da.ones((40, 40), chunks=(20, 20), dtype=np.float32) * 2
+
+        result = plugin.highres_func(fullres, bias).compute()
+
+        assert_array_almost_equal(result, np.full_like(result, 50.0), decimal=1)
+
+    def test_highres_func_zero_bias_field(self):
+        """Test that highres_func handles a zero bias field without inf values."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+
+        fullres = da.ones((20, 20), chunks=(10, 10), dtype=np.float32) * 100
+        bias = da.zeros((20, 20), chunks=(10, 10), dtype=np.float32)
+
+        result = plugin.highres_func(fullres, bias).compute()
+
+        assert result.shape == fullres.shape
+        assert np.all(np.isfinite(result))
+
+    def test_highres_func_numpy_arrays(self):
+        """Test that highres_func works with plain NumPy arrays (map_blocks path)."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+
+        fullres = np.ones((20, 20, 20), dtype=np.float32) * 60
+        bias = np.ones((20, 20, 20), dtype=np.float32) * 3
+
+        result = plugin.highres_func(fullres, bias)
+
+        assert_array_almost_equal(result, np.full_like(result, 20.0), decimal=1)
