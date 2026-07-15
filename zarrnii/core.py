@@ -22,6 +22,7 @@ Key Functions:
 from __future__ import annotations
 
 import copy
+import inspect
 import os
 import typing
 import warnings
@@ -7178,8 +7179,6 @@ class ZarrNii:
                 also supplied, or if the plugin is missing the required hooks.
             ValueError: If an unsupported *method* value is given.
         """
-        import inspect
-
         if method not in ("default", "map_blocks"):
             raise ValueError(
                 f"Unsupported method {method!r}. " "Choose 'default' or 'map_blocks'."

@@ -37,8 +37,9 @@ class N4BiasFieldCorrection:
     structure of the bias field.
 
     Parameters:
-        spline_param: Spacing between knots for spline fitting (default: [2,2,2])
-        convergence: Convergence criteria [iters, tol] (default: [50, 0.001])
+        spline_param: Spacing between knots for spline fitting (default: [2, 2, 2])
+        convergence: Convergence criteria dict with 'iters' and 'tol'
+            (default: ``{"iters": [50, 50, 50, 50], "tol": 1e-07}``)
         shrink_factor: Shrink factor for processing (default: 1)
     """
 
