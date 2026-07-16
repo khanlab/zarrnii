@@ -1022,11 +1022,17 @@ class TestN4BiasFieldApply:
         """Test that a non-positive log_offset raises ValueError."""
         from zarrnii.plugins import N4BiasFieldApply
 
-        with pytest.raises(ValueError, match="log_offset must be strictly positive"):
-            N4BiasFieldApply(log_space=True, log_offset=0.0)
+        # Validation fires regardless of log_space
+        for log_space in (True, False):
+            with pytest.raises(
+                ValueError, match="log_offset must be strictly positive"
+            ):
+                N4BiasFieldApply(log_space=log_space, log_offset=0.0)
 
-        with pytest.raises(ValueError, match="log_offset must be strictly positive"):
-            N4BiasFieldApply(log_space=True, log_offset=-1e-6)
+            with pytest.raises(
+                ValueError, match="log_offset must be strictly positive"
+            ):
+                N4BiasFieldApply(log_space=log_space, log_offset=-1e-6)
 
     def test_lowres_func_log_space_transforms(self):
         """Test that lowres_func log-transforms the field when log_space=True."""

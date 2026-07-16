@@ -135,9 +135,10 @@ class N4BiasFieldApply:
             lowres_array = lowres_array.astype(np.float32)
 
         if self.log_space:
-            # Add log_offset before log for numerical stability, ensuring the
-            # argument is strictly positive even when the field contains zeros.
-            return np.log(lowres_array + self.log_offset)
+            # Clamp to zero first, then add log_offset to guarantee the
+            # argument to log is strictly positive even if the bias field
+            # contains negative values (e.g. from integer underflow).
+            return np.log(np.maximum(lowres_array, 0.0) + self.log_offset)
         else:
             # Clamp to a small positive value to guard against division by zero
             # when the field is later upsampled and applied.
