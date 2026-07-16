@@ -908,7 +908,17 @@ class TestN4BiasFieldApply:
         from zarrnii.plugins import N4BiasFieldApply
 
         plugin = N4BiasFieldApply()
-        assert repr(plugin) == "N4BiasFieldApply()"
+        assert "N4BiasFieldApply" in repr(plugin)
+        assert "log_space=False" in repr(plugin)
+
+    def test_repr_log_space(self):
+        """Test string representation with log_space enabled."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(log_space=True, log_offset=1e-4)
+        r = repr(plugin)
+        assert "log_space=True" in r
+        assert "log_offset=0.0001" in r
 
     def test_lowres_func_passthrough(self):
         """Test that lowres_func returns the input unchanged (float cast)."""
@@ -1003,3 +1013,94 @@ class TestN4BiasFieldApply:
         result = plugin.highres_func(fullres, bias)
 
         assert_array_almost_equal(result, np.full_like(result, 20.0), decimal=1)
+
+    # ------------------------------------------------------------------
+    # log-space tests
+    # ------------------------------------------------------------------
+
+    def test_log_offset_must_be_positive(self):
+        """Test that a non-positive log_offset raises ValueError."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        with pytest.raises(ValueError, match="log_offset must be strictly positive"):
+            N4BiasFieldApply(log_space=True, log_offset=0.0)
+
+        with pytest.raises(ValueError, match="log_offset must be strictly positive"):
+            N4BiasFieldApply(log_space=True, log_offset=-1e-6)
+
+    def test_lowres_func_log_space_transforms(self):
+        """Test that lowres_func log-transforms the field when log_space=True."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        log_offset = 1e-6
+        plugin = N4BiasFieldApply(log_space=True, log_offset=log_offset)
+
+        bias = np.array([[2.0, 4.0], [8.0, 16.0]], dtype=np.float32)
+        result = plugin.lowres_func(bias)
+
+        expected = np.log(bias + log_offset)
+        assert_array_almost_equal(result, expected, decimal=5)
+
+    def test_lowres_func_log_space_zero_input(self):
+        """Test that lowres_func with log_space handles zero values safely."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(log_space=True, log_offset=1e-6)
+
+        bias = np.zeros((5, 5), dtype=np.float32)
+        result = plugin.lowres_func(bias)
+
+        assert np.all(np.isfinite(result))
+
+    def test_highres_func_log_space_roundtrip(self):
+        """Test that log_space lowres→highres is a roundtrip through exp."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        log_offset = 1e-6
+        plugin = N4BiasFieldApply(log_space=True, log_offset=log_offset)
+
+        # Bias field value of 2.0 → lowres_func produces log(2+offset)
+        # highres_func should divide fullres by exp(log(2+offset)) ≈ 2
+        bias_value = 2.0
+        log_bias = np.log(np.array([[bias_value]], dtype=np.float32) + log_offset)
+
+        fullres = np.ones((1, 1), dtype=np.float32) * 100.0
+        result = plugin.highres_func(fullres, log_bias)
+
+        # exp(log(2 + offset)) ≈ 2, so result ≈ 100/2 = 50
+        assert_array_almost_equal(result, np.full_like(result, 50.0), decimal=1)
+
+    def test_highres_func_log_space_dask(self):
+        """Test that log_space highres_func works with dask arrays."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(log_space=True)
+
+        # Simulate upsampled log-bias with value log(4) everywhere
+        log_bias = da.full((20, 20), np.log(4.0), chunks=(10, 10), dtype=np.float32)
+        fullres = da.ones((20, 20), chunks=(10, 10), dtype=np.float32) * 100
+
+        result = plugin.highres_func(fullres, log_bias).compute()
+
+        # fullres / exp(log(4)) = 100 / 4 = 25
+        assert_array_almost_equal(result, np.full_like(result, 25.0), decimal=1)
+
+    def test_lowres_func_log_space_integer_cast(self):
+        """Test that lowres_func casts integer arrays before log-transforming."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(log_space=True)
+
+        bias = np.ones((5, 5), dtype=np.uint16) * 10
+        result = plugin.lowres_func(bias)
+
+        assert result.dtype.kind == "f"
+        assert np.all(np.isfinite(result))
+
+    def test_description_mentions_log_space(self):
+        """Test that description notes log-space mode when enabled."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(log_space=True)
+        desc = plugin.scaled_processing_plugin_description()
+        assert "log" in desc.lower()
