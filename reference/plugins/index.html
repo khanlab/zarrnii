@@ -999,6 +999,84 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#zarrnii.plugins.N4BiasFieldApply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        N4BiasFieldApply
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="N4BiasFieldApply">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.plugins.N4BiasFieldApply-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.plugins.N4BiasFieldApply.lowres_func" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lowres_func
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.plugins.N4BiasFieldApply.highres_func" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        highres_func
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.plugins.N4BiasFieldApply.scaled_processing_plugin_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scaled_processing_plugin_name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.plugins.N4BiasFieldApply.scaled_processing_plugin_description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scaled_processing_plugin_description
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#zarrnii.plugins.SegmentationCleaner" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2706,6 +2784,84 @@
         
           <li class="md-nav__item">
   <a href="#zarrnii.plugins.N4BiasFieldCorrection.scaled_processing_plugin_description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scaled_processing_plugin_description
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.plugins.N4BiasFieldApply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        N4BiasFieldApply
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="N4BiasFieldApply">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.plugins.N4BiasFieldApply-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.plugins.N4BiasFieldApply.lowres_func" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lowres_func
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.plugins.N4BiasFieldApply.highres_func" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        highres_func
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.plugins.N4BiasFieldApply.scaled_processing_plugin_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scaled_processing_plugin_name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.plugins.N4BiasFieldApply.scaled_processing_plugin_description" class="md-nav__link">
     <span class="md-ellipsis">
       
         scaled_processing_plugin_description
@@ -4868,6 +5024,530 @@ dask or NumPy)</p>
         <span class="s2">&quot;Multi-resolution N4 bias field correction. Estimates smooth bias &quot;</span>
         <span class="s2">&quot;field at low resolution using ANTsPy N4 algorithm and applies &quot;</span>
         <span class="s2">&quot;correction to full resolution data by division.&quot;</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="zarrnii.plugins.N4BiasFieldApply" class="doc doc-heading">
+              <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">plugins</span><span class="o">.</span><span class="n">N4BiasFieldApply</span><span class="p">(</span><span class="n">log_space</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">log_offset</span><span class="o">=</span><span class="mf">1e-06</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Bias field correction plugin for pre-computed N4 bias fields.</p>
+<p>This plugin is a companion to the full
+:class:<code>~zarrnii.plugins.N4BiasFieldCorrection</code> plugin.  Instead of
+running N4 itself it expects the user to supply the already-corrected
+downsampled image through the <code>lowres_znimg</code> parameter of
+:meth:<code>~zarrnii.core.ZarrNii.apply_scaled_processing</code>.</p>
+<p>The <code>lowres_func</code> is a passthrough — it validates, float-casts, and
+zero-clamps the input, then optionally log-transforms it before upsampling.
+The <code>highres_func</code> divides the full-resolution image by the (optionally
+exponentiated) upsampled bias field to produce a corrected image.</p>
+<p>Because no ANTsPy call is made this plugin has <strong>no antspyx dependency</strong>
+and works with the base <code>zarrnii</code> install.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>log_space</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>When <code>True</code> the bias field is log-transformed before
+upsampling and exponentiated before the correction is applied.
+This produces smoother interpolation because the bias field is
+approximately log-linear.  Default: <code>False</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>log_offset</code></b>
+              (<code><span title="float">float</span></code>, default:
+                  <code>1e-06</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Small positive constant added to the bias field before
+taking the logarithm to guard against <code>log(0)</code>.  Only used
+when <code>log_space=True</code>.  Default: <code>1e-6</code>.</p>
+          </div>
+        </li>
+    </ul>
+        <p>Example (linear space, default)::</p>
+<pre><code>corrected = fullres.apply_scaled_processing(
+    N4BiasFieldApply(),
+    method="map_blocks",
+    lowres_znimg=precomputed_bias_field_znimg,
+)
+</code></pre>
+<p>Example (log space)::</p>
+<pre><code>corrected = fullres.apply_scaled_processing(
+    N4BiasFieldApply(log_space=True),
+    method="map_blocks",
+    lowres_znimg=precomputed_bias_field_znimg,
+)
+</code></pre>
+
+        <p>Initialize the N4BiasFieldApply plugin.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>log_space</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>If <code>True</code>, log-transform the bias field before
+upsampling and exponentiate after upsampling before dividing.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>log_offset</code></b>
+              (<code><span title="float">float</span></code>, default:
+                  <code>1e-06</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Small positive constant added before <code>log</code> for
+numerical stability.  Only used when <code>log_space=True</code>.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="ValueError">ValueError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If <code>log_offset</code> is not strictly positive.</p>
+          </div>
+        </li>
+    </ul>
+
+
+
+
+
+
+
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield_apply.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_space</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">log_offset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Initialize the N4BiasFieldApply plugin.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        log_space: If ``True``, log-transform the bias field before</span>
+<span class="sd">            upsampling and exponentiate after upsampling before dividing.</span>
+<span class="sd">        log_offset: Small positive constant added before ``log`` for</span>
+<span class="sd">            numerical stability.  Only used when ``log_space=True``.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If ``log_offset`` is not strictly positive.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">log_offset</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;log_offset must be strictly positive, got </span><span class="si">{</span><span class="n">log_offset</span><span class="si">!r}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">log_space</span> <span class="o">=</span> <span class="n">log_space</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">log_offset</span> <span class="o">=</span> <span class="n">log_offset</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+<h4 id="zarrnii.plugins.N4BiasFieldApply-functions">Functions</h4>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.plugins.N4BiasFieldApply.lowres_func" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">plugins</span><span class="o">.</span><span class="n">N4BiasFieldApply</span><span class="o">.</span><span class="n">lowres_func</span><span class="p">(</span><span class="n">lowres_array</span><span class="p">)</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return the pre-computed bias field, optionally log-transformed.</p>
+<p>The downsampled input is expected to already contain the N4 bias
+field values (i.e. the output of a prior N4 run).  When
+<code>log_space=True</code> the field is transformed as
+<code>log(field + log_offset)</code> before being returned so that the
+subsequent upsampling step interpolates in log space.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>lowres_array</code></b>
+              (<code><span title="numpy.ndarray">ndarray</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Pre-computed bias field at low resolution.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="numpy.ndarray">ndarray</span></code>
+          –
+          <div class="doc-md-description">
+            <p>The bias field, cast to float32, zero-clamped, and optionally</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><span title="numpy.ndarray">ndarray</span></code>
+          –
+          <div class="doc-md-description">
+            <p>log-transformed.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield_apply.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">lowres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lowres_array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return the pre-computed bias field, optionally log-transformed.</span>
+
+<span class="sd">    The downsampled input is expected to already contain the N4 bias</span>
+<span class="sd">    field values (i.e. the output of a prior N4 run).  When</span>
+<span class="sd">    ``log_space=True`` the field is transformed as</span>
+<span class="sd">    ``log(field + log_offset)`` before being returned so that the</span>
+<span class="sd">    subsequent upsampling step interpolates in log space.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        lowres_array: Pre-computed bias field at low resolution.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The bias field, cast to float32, zero-clamped, and optionally</span>
+<span class="sd">        log-transformed.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">lowres_array</span><span class="o">.</span><span class="n">size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Input array is empty&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">lowres_array</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Input array must be at least 2D&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Ensure float so that subsequent division in highres_func is safe.</span>
+    <span class="k">if</span> <span class="n">lowres_array</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">kind</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;u&quot;</span><span class="p">):</span>
+        <span class="n">lowres_array</span> <span class="o">=</span> <span class="n">lowres_array</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_space</span><span class="p">:</span>
+        <span class="c1"># Clamp to zero first, then add log_offset to guarantee the</span>
+        <span class="c1"># argument to log is strictly positive even if the bias field</span>
+        <span class="c1"># contains negative values (e.g. from integer underflow).</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">lowres_array</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_offset</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># Clamp to a small positive value to guard against division by zero</span>
+        <span class="c1"># when the field is later upsampled and applied.</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">lowres_array</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">finfo</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">eps</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.plugins.N4BiasFieldApply.highres_func" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">plugins</span><span class="o">.</span><span class="n">N4BiasFieldApply</span><span class="o">.</span><span class="n">highres_func</span><span class="p">(</span><span class="n">fullres_array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">)</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Apply the upsampled bias field to full-resolution data.</p>
+<p>Divides the full-resolution image by the (optionally exponentiated)
+upsampled bias field to produce a bias-corrected image.</p>
+<p>When <code>log_space=True</code> the upsampled field is first exponentiated
+(<code>exp(upsampled_log_bias)</code>) before dividing, recovering the linear
+bias field that was log-transformed in :meth:<code>lowres_func</code>.</p>
+<p>Works with both dask arrays (<code>"default"</code> method) and plain NumPy
+arrays (<code>"map_blocks"</code> method) because only NumPy-compatible
+operations are used.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>fullres_array</code></b>
+              (<code><span title="numpy.ndarray">ndarray</span> | <span title="dask.array.Array">Array</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Full-resolution array (dask or NumPy).</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>upsampled_output</code></b>
+              (<code><span title="numpy.ndarray">ndarray</span> | <span title="dask.array.Array">Array</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Upsampled bias field with the same shape as
+<code>fullres_array</code> (dask or NumPy).  Contains log-transformed
+values when <code>log_space=True</code>.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="numpy.ndarray">ndarray</span> | <span title="dask.array.Array">Array</span></code>
+          –
+          <div class="doc-md-description">
+            <p>Bias-corrected full-resolution array (same type as inputs).</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield_apply.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">fullres_array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+    <span class="n">upsampled_output</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Apply the upsampled bias field to full-resolution data.</span>
+
+<span class="sd">    Divides the full-resolution image by the (optionally exponentiated)</span>
+<span class="sd">    upsampled bias field to produce a bias-corrected image.</span>
+
+<span class="sd">    When ``log_space=True`` the upsampled field is first exponentiated</span>
+<span class="sd">    (``exp(upsampled_log_bias)``) before dividing, recovering the linear</span>
+<span class="sd">    bias field that was log-transformed in :meth:`lowres_func`.</span>
+
+<span class="sd">    Works with both dask arrays (``&quot;default&quot;`` method) and plain NumPy</span>
+<span class="sd">    arrays (``&quot;map_blocks&quot;`` method) because only NumPy-compatible</span>
+<span class="sd">    operations are used.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        fullres_array: Full-resolution array (dask or NumPy).</span>
+<span class="sd">        upsampled_output: Upsampled bias field with the same shape as</span>
+<span class="sd">            ``fullres_array`` (dask or NumPy).  Contains log-transformed</span>
+<span class="sd">            values when ``log_space=True``.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Bias-corrected full-resolution array (same type as inputs).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">epsilon</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">finfo</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">eps</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_space</span><span class="p">:</span>
+        <span class="n">bias</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">upsampled_output</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">bias</span> <span class="o">=</span> <span class="n">upsampled_output</span>
+    <span class="k">return</span> <span class="n">fullres_array</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">bias</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.plugins.N4BiasFieldApply.scaled_processing_plugin_name" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">plugins</span><span class="o">.</span><span class="n">N4BiasFieldApply</span><span class="o">.</span><span class="n">scaled_processing_plugin_name</span><span class="p">()</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return the name of the algorithm.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield_apply.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the name of the algorithm.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="s2">&quot;N4 Bias Field Apply&quot;</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.plugins.N4BiasFieldApply.scaled_processing_plugin_description" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">plugins</span><span class="o">.</span><span class="n">N4BiasFieldApply</span><span class="o">.</span><span class="n">scaled_processing_plugin_description</span><span class="p">()</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return a description of the algorithm.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield_apply.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_description</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a description of the algorithm.&quot;&quot;&quot;</span>
+    <span class="n">log_note</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s2">&quot; Bias field is interpolated in log space for smoother upsampling.&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_space</span>
+        <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="s2">&quot;Apply a pre-computed N4 bias field to full-resolution data. &quot;</span>
+        <span class="s2">&quot;The bias field must be supplied as a pre-computed downsampled &quot;</span>
+        <span class="s2">&quot;image via the ``lowres_znimg`` argument; no ANTsPy dependency &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;is required.</span><span class="si">{</span><span class="n">log_note</span><span class="si">}</span><span class="s2">&quot;</span>
     <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
