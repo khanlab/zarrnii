@@ -22,6 +22,7 @@ Key Functions:
 from __future__ import annotations
 
 import copy
+import inspect
 import os
 import typing
 import warnings
@@ -7093,6 +7094,7 @@ class ZarrNii:
         upsampled_ome_zarr_path: Optional[str] = None,
         method: Literal["default", "map_blocks"] = "default",
         lowres_znimg: Optional["ZarrNii"] = None,
+        lowres_mask: Optional["ZarrNii"] = None,
         **kwargs,
     ) -> "ZarrNii":
         """
@@ -7155,6 +7157,10 @@ class ZarrNii:
                 reusing a previously computed pyramid level or for applying the
                 same correction to multiple channels.  Only used by the
                 ``"map_blocks"`` method (ignored for ``"default"``).
+            lowres_mask: Optional low-resolution mask image matching
+                ``lowres_znimg`` shape/dims. The mask is upsampled alongside
+                the low-resolution result and forwarded to plugins that support
+                an ``upsampled_lowres_mask`` input in ``highres_func``.
             **kwargs: Additional arguments passed to the plugin constructor when
                 *plugin* is a class.
 
@@ -7191,7 +7197,10 @@ class ZarrNii:
 
         if method == "map_blocks":
             return self._apply_scaled_processing_map_blocks(
-                plugin, downsample_factor=downsample_factor, lowres_znimg=lowres_znimg
+                plugin,
+                downsample_factor=downsample_factor,
+                lowres_znimg=lowres_znimg,
+                lowres_mask=lowres_mask,
             )
 
         # ------------------------------------------------------------------
@@ -7203,6 +7212,10 @@ class ZarrNii:
 
         # Convert to numpy array for lowres processing
         lowres_array = _lowres_znimg.data.compute()
+        lowres_mask_array = self._prepare_scaled_processing_lowres_mask(
+            lowres_mask=lowres_mask,
+            reference_lowres_znimg=_lowres_znimg,
+        )
 
         # Step 2: Apply low-resolution function and prepare for upsampling
         # Construct chunk size: map spatial dimensions to their positions
@@ -7250,19 +7263,97 @@ class ZarrNii:
 
         corrected_znimg = self.copy()
 
+        upsampled_mask_data = None
+        if lowres_mask_array is not None:
+            _lowres_mask_znimg = _lowres_znimg.copy()
+            _lowres_mask_znimg.data = da.from_array(lowres_mask_array, chunks=lowres_chunks)
+            lowres_mask_upsampled_path = tempfile.mkdtemp(suffix="_SPIM_mask.ome.zarr")
+            _lowres_mask_znimg.upsample(to_shape=self.shape).to_ome_zarr(
+                lowres_mask_upsampled_path, max_layer=1
+            )
+            upsampled_mask_znimg = ZarrNii.from_ome_zarr(lowres_mask_upsampled_path)
+            upsampled_mask_data = upsampled_mask_znimg.data.rechunk(
+                upsampled_znimg.data.chunks
+            )
+
         # Step 4: Apply high-resolution function
         # rechunk original data to use same chunksize as upsampled_data, before multiplying
-        corrected_znimg.data = plugin.highres_func(
-            self.data.rechunk(upsampled_znimg.data.chunks), upsampled_znimg.data
+        corrected_znimg.data = self._call_scaled_processing_highres_func(
+            plugin=plugin,
+            fullres_array=self.data.rechunk(upsampled_znimg.data.chunks),
+            upsampled_output=upsampled_znimg.data,
+            upsampled_lowres_mask=upsampled_mask_data,
         )
 
         return corrected_znimg
+
+    def _prepare_scaled_processing_lowres_mask(
+        self,
+        lowres_mask: Optional["ZarrNii"],
+        reference_lowres_znimg: "ZarrNii",
+    ) -> Optional[np.ndarray]:
+        """Validate/cast optional lowres mask for scaled processing."""
+        if lowres_mask is None:
+            return None
+
+        if lowres_mask.shape != reference_lowres_znimg.shape:
+            raise ValueError(
+                "lowres_mask shape must match low-resolution input shape. "
+                f"Got lowres_mask.shape={lowres_mask.shape} and "
+                f"lowres_shape={reference_lowres_znimg.shape}."
+            )
+
+        if tuple(lowres_mask.dims) != tuple(reference_lowres_znimg.dims):
+            raise ValueError(
+                "lowres_mask dims must match low-resolution input dims. "
+                f"Got lowres_mask.dims={lowres_mask.dims} and "
+                f"lowres_dims={reference_lowres_znimg.dims}."
+            )
+
+        lowres_mask_array = lowres_mask.data.compute()
+        if lowres_mask_array.dtype.kind in ("i", "u"):
+            lowres_mask_array = lowres_mask_array.astype(np.float32)
+        lowres_mask_array = np.asarray(lowres_mask_array, dtype=np.float32)
+        return np.clip(lowres_mask_array, 0.0, 1.0)
+
+    def _call_scaled_processing_highres_func(
+        self,
+        plugin,
+        fullres_array,
+        upsampled_output,
+        upsampled_lowres_mask=None,
+    ):
+        """Call highres_func with optional upsampled_lowres_mask when supported."""
+        if upsampled_lowres_mask is None:
+            return plugin.highres_func(fullres_array, upsampled_output)
+
+        sig = inspect.signature(plugin.highres_func)
+        params = list(sig.parameters.values())
+        has_varkw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
+        has_varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in params)
+
+        if has_varkw or "upsampled_lowres_mask" in sig.parameters:
+            return plugin.highres_func(
+                fullres_array,
+                upsampled_output,
+                upsampled_lowres_mask=upsampled_lowres_mask,
+            )
+
+        if has_varargs or len(params) >= 3:
+            return plugin.highres_func(
+                fullres_array,
+                upsampled_output,
+                upsampled_lowres_mask,
+            )
+
+        return plugin.highres_func(fullres_array, upsampled_output)
 
     def _apply_scaled_processing_map_blocks(
         self,
         plugin,
         downsample_factor: int = 4,
         lowres_znimg: Optional["ZarrNii"] = None,
+        lowres_mask: Optional["ZarrNii"] = None,
     ) -> "ZarrNii":
         """
         Back-end for :meth:`apply_scaled_processing` using fused map_blocks.
@@ -7285,6 +7376,10 @@ class ZarrNii:
                 *lowres_znimg* when it is not supplied.
             lowres_znimg: Pre-computed downsampled image.  If ``None``, the
                 image is downsampled by *downsample_factor*.
+            lowres_mask: Optional low-resolution mask matching
+                ``lowres_znimg`` shape/dims. When provided, it is interpolated
+                blockwise and passed to mask-aware ``highres_func``
+                implementations.
 
         Returns:
             New :class:`ZarrNii` instance with the processed data.
@@ -7314,6 +7409,10 @@ class ZarrNii:
 
         lowres_array = lowres_znimg.data.compute()
         lowres_result = plugin.lowres_func(lowres_array)
+        lowres_mask_array = self._prepare_scaled_processing_lowres_mask(
+            lowres_mask=lowres_mask,
+            reference_lowres_znimg=lowres_znimg,
+        )
 
         # Step 2: Determine spatial vs non-spatial axis indices
         _spatial_dim_names = {"x", "y", "z"}
@@ -7325,12 +7424,25 @@ class ZarrNii:
         # Step 3: Probe output dtype via a tiny test call to highres_func
         _probe_full = np.ones((1,) * len(_dims), dtype=self.data.dtype)
         _probe_up = np.ones((1,) * len(_dims), dtype=np.float32)
-        _output_dtype = np.asarray(plugin.highres_func(_probe_full, _probe_up)).dtype
+        _probe_mask = (
+            np.ones((1,) * len(_dims), dtype=np.float32)
+            if lowres_mask_array is not None
+            else None
+        )
+        _output_dtype = np.asarray(
+            self._call_scaled_processing_highres_func(
+                plugin=plugin,
+                fullres_array=_probe_full,
+                upsampled_output=_probe_up,
+                upsampled_lowres_mask=_probe_mask,
+            )
+        ).dtype
 
         # Step 4: Build a fused map_blocks callback
         # Capture variables needed inside the closure by value
         _eff_factor = float(_effective_factor)
         _lowres_result = lowres_result  # numpy array, small
+        _lowres_mask_array = lowres_mask_array  # optional numpy array, small
 
         def _fused_block(block, block_info=None):
             """Interpolate lowres correction at block coords, apply highres_func.
@@ -7365,6 +7477,11 @@ class ZarrNii:
             ]
 
             upsampled_block = np.empty(block.shape, dtype=np.float32)
+            upsampled_mask_block = (
+                np.empty(block.shape, dtype=np.float32)
+                if _lowres_mask_array is not None
+                else None
+            )
 
             for ns_abs in itertools.product(*nonspatial_ranges) or [()]:
                 # ``itertools.product(*[])`` yields one empty tuple, so the loop
@@ -7384,6 +7501,11 @@ class ZarrNii:
                 lowres_slice = (
                     _lowres_result[ns_abs] if _nonspatial_idxs else _lowres_result
                 )
+                lowres_mask_slice = (
+                    _lowres_mask_array[ns_abs]
+                    if (_nonspatial_idxs and _lowres_mask_array is not None)
+                    else _lowres_mask_array
+                )
 
                 interpolated = map_coordinates(
                     lowres_slice,
@@ -7393,8 +7515,23 @@ class ZarrNii:
                 ).reshape(spatial_block_shape)
 
                 upsampled_block[tuple(block_selector)] = interpolated
+                if upsampled_mask_block is not None:
+                    interpolated_mask = map_coordinates(
+                        lowres_mask_slice,
+                        coords,
+                        order=1,
+                        mode="nearest",
+                    ).reshape(spatial_block_shape)
+                    upsampled_mask_block[tuple(block_selector)] = interpolated_mask
 
-            return plugin.highres_func(block, upsampled_block)
+            if upsampled_mask_block is not None:
+                upsampled_mask_block = np.clip(upsampled_mask_block, 0.0, 1.0)
+            return self._call_scaled_processing_highres_func(
+                plugin=plugin,
+                fullres_array=block,
+                upsampled_output=upsampled_block,
+                upsampled_lowres_mask=upsampled_mask_block,
+            )
 
         corrected_znimg = self.copy()
         corrected_znimg.data = da.map_blocks(

@@ -1110,3 +1110,87 @@ class TestN4BiasFieldApply:
         plugin = N4BiasFieldApply(log_space=True)
         desc = plugin.scaled_processing_plugin_description()
         assert "log" in desc.lower()
+
+    def test_highres_func_mask_blends_correction(self):
+        """Test that optional mask constrains correction to masked regions."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+        fullres = np.full((8, 8), 100.0, dtype=np.float32)
+        bias = np.full((8, 8), 2.0, dtype=np.float32)
+        mask = np.zeros((8, 8), dtype=np.float32)
+        mask[:, :4] = 1.0
+
+        result = plugin.highres_func(fullres, bias, upsampled_lowres_mask=mask)
+
+        assert np.allclose(result[:, :4], 50.0)
+        assert np.allclose(result[:, 4:], 100.0)
+
+    def test_apply_scaled_processing_map_blocks_n4_apply_with_lowres_mask(self):
+        """Test that map_blocks path respects lowres_mask for N4BiasFieldApply."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        fullres_data = np.full((16, 16, 16), 100.0, dtype=np.float32)
+        lowres_bias = np.full((8, 8, 8), 2.0, dtype=np.float32)
+        lowres_mask = np.zeros((8, 8, 8), dtype=np.float32)
+        lowres_mask[:, :, :4] = 1.0
+
+        znimg = ZarrNii.from_darr(
+            da.from_array(fullres_data, chunks=(8, 8, 8)),
+            spacing=(1.0, 1.0, 1.0),
+            dims=["z", "y", "x"],
+        )
+        lowres_znimg = ZarrNii.from_darr(
+            da.from_array(lowres_bias, chunks=(4, 4, 4)),
+            spacing=(2.0, 2.0, 2.0),
+            dims=["z", "y", "x"],
+        )
+        lowres_mask_znimg = ZarrNii.from_darr(
+            da.from_array(lowres_mask, chunks=(4, 4, 4)),
+            spacing=(2.0, 2.0, 2.0),
+            dims=["z", "y", "x"],
+        )
+
+        corrected = znimg.apply_scaled_processing(
+            N4BiasFieldApply(),
+            method="map_blocks",
+            lowres_znimg=lowres_znimg,
+            lowres_mask=lowres_mask_znimg,
+        )
+        corrected_data = corrected.data.compute()
+
+        assert np.all(np.isfinite(corrected_data))
+        assert np.all(corrected_data[:, :, :6] < 60.0)
+        assert np.all(corrected_data[:, :, 10:] > 90.0)
+
+    def test_apply_scaled_processing_map_blocks_lowres_mask_shape_mismatch(self):
+        """Test that lowres_mask shape mismatch raises ValueError."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        fullres_data = np.full((16, 16, 16), 100.0, dtype=np.float32)
+        lowres_bias = np.full((8, 8, 8), 2.0, dtype=np.float32)
+        bad_lowres_mask = np.ones((7, 8, 8), dtype=np.float32)
+
+        znimg = ZarrNii.from_darr(
+            da.from_array(fullres_data, chunks=(8, 8, 8)),
+            spacing=(1.0, 1.0, 1.0),
+            dims=["z", "y", "x"],
+        )
+        lowres_znimg = ZarrNii.from_darr(
+            da.from_array(lowres_bias, chunks=(4, 4, 4)),
+            spacing=(2.0, 2.0, 2.0),
+            dims=["z", "y", "x"],
+        )
+        lowres_mask_znimg = ZarrNii.from_darr(
+            da.from_array(bad_lowres_mask, chunks=(4, 4, 4)),
+            spacing=(2.0, 2.0, 2.0),
+            dims=["z", "y", "x"],
+        )
+
+        with pytest.raises(ValueError, match="lowres_mask shape must match"):
+            znimg.apply_scaled_processing(
+                N4BiasFieldApply(),
+                method="map_blocks",
+                lowres_znimg=lowres_znimg,
+                lowres_mask=lowres_mask_znimg,
+            )
