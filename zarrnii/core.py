@@ -7269,7 +7269,9 @@ class ZarrNii:
             _lowres_mask_znimg.data = da.from_array(
                 lowres_mask_array, chunks=lowres_chunks
             )
-            lowres_mask_upsampled_path = tempfile.mkdtemp(suffix="_SPIM_mask.ome.zarr")
+            lowres_mask_upsampled_path = tempfile.mkdtemp(
+                suffix="_upsampled_mask.ome.zarr"
+            )
             _lowres_mask_znimg.upsample(to_shape=self.shape).to_ome_zarr(
                 lowres_mask_upsampled_path, max_layer=1
             )
@@ -7331,17 +7333,19 @@ class ZarrNii:
 
         sig = inspect.signature(plugin.highres_func)
         params = list(sig.parameters.values())
-        has_varkw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
-        has_varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in params)
+        has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
+        has_var_positional = any(
+            p.kind == inspect.Parameter.VAR_POSITIONAL for p in params
+        )
 
-        if has_varkw or "upsampled_lowres_mask" in sig.parameters:
+        if has_var_keyword or "upsampled_lowres_mask" in sig.parameters:
             return plugin.highres_func(
                 fullres_array,
                 upsampled_output,
                 upsampled_lowres_mask=upsampled_lowres_mask,
             )
 
-        if has_varargs or len(params) >= 3:
+        if has_var_positional or len(params) >= 3:
             return plugin.highres_func(
                 fullres_array,
                 upsampled_output,
