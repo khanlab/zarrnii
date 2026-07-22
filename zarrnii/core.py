@@ -7329,22 +7329,30 @@ class ZarrNii:
         if upsampled_lowres_mask is None:
             return plugin.highres_func(fullres_array, upsampled_output)
 
-        sig = inspect.signature(plugin.highres_func)
-        params = list(sig.parameters.values())
-        has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
-        mask_param = sig.parameters.get("upsampled_lowres_mask")
-
-        if has_var_keyword:
-            return plugin.highres_func(
-                fullres_array,
-                upsampled_output,
-                upsampled_lowres_mask=upsampled_lowres_mask,
+        mask_dispatch = getattr(plugin, "_scaled_processing_mask_dispatch", None)
+        if mask_dispatch is None:
+            sig = inspect.signature(plugin.highres_func)
+            params = list(sig.parameters.values())
+            has_var_keyword = any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in params
             )
+            mask_param = sig.parameters.get("upsampled_lowres_mask")
+            if has_var_keyword:
+                mask_dispatch = "keyword"
+            elif mask_param is None:
+                mask_dispatch = "none"
+            elif mask_param.kind == inspect.Parameter.POSITIONAL_ONLY:
+                mask_dispatch = "positional"
+            else:
+                mask_dispatch = "keyword"
+            try:
+                setattr(plugin, "_scaled_processing_mask_dispatch", mask_dispatch)
+            except Exception:
+                pass
 
-        if mask_param is None:
+        if mask_dispatch == "none":
             return plugin.highres_func(fullres_array, upsampled_output)
-
-        if mask_param.kind == inspect.Parameter.POSITIONAL_ONLY:
+        if mask_dispatch == "positional":
             return plugin.highres_func(
                 fullres_array,
                 upsampled_output,
@@ -7532,8 +7540,6 @@ class ZarrNii:
                     ).reshape(spatial_block_shape)
                     upsampled_mask_block[tuple(block_selector)] = interpolated_mask
 
-            if upsampled_mask_block is not None:
-                upsampled_mask_block = np.clip(upsampled_mask_block, 0.0, 1.0)
             return self._call_scaled_processing_highres_func(
                 plugin=plugin,
                 fullres_array=block,

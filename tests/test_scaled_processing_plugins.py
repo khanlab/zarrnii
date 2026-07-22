@@ -1196,3 +1196,86 @@ class TestN4BiasFieldApply:
                 lowres_znimg=lowres_znimg,
                 lowres_mask=lowres_mask_znimg,
             )
+
+    def test_apply_scaled_processing_default_n4_apply_with_lowres_mask(self):
+        """Test that default path respects lowres_mask for N4BiasFieldApply."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        fullres_data = np.full((1, 16, 16, 16), 100.0, dtype=np.float32)
+        lowres_mask = np.zeros((1, 8, 8, 8), dtype=np.float32)
+        lowres_mask[:, :, :, :4] = 1.0
+
+        znimg = ZarrNii.from_darr(
+            da.from_array(fullres_data, chunks=(1, 8, 8, 8)),
+            spacing=(1.0, 1.0, 1.0),
+            dims=["c", "z", "y", "x"],
+        )
+        lowres_mask_znimg = ZarrNii.from_darr(
+            da.from_array(lowres_mask, chunks=(1, 4, 4, 4)),
+            spacing=(2.0, 2.0, 2.0),
+            dims=["c", "z", "y", "x"],
+        )
+
+        corrected = znimg.apply_scaled_processing(
+            N4BiasFieldApply(),
+            method="default",
+            downsample_factor=2,
+            lowres_mask=lowres_mask_znimg,
+        )
+        corrected_data = corrected.data.compute()
+
+        # Masked side should be corrected near 100/100=1, unmasked side stays near 100.
+        assert np.all(corrected_data[:, :, :, :6] < 5.0)
+        assert np.all(corrected_data[:, :, :, 10:] > 90.0)
+
+    def test_map_blocks_dtype_probe_with_mask_aware_highres_func(self):
+        """Test dtype probing when plugin highres_func requires mask argument."""
+
+        class MaskAwareDtypePlugin:
+            @hookimpl
+            def lowres_func(self, lowres_array):
+                return np.ones_like(lowres_array, dtype=np.float32)
+
+            @hookimpl
+            def highres_func(
+                self, fullres_array, upsampled_output, upsampled_lowres_mask
+            ):
+                return (fullres_array * 0 + upsampled_lowres_mask).astype(np.float64)
+
+            @hookimpl
+            def scaled_processing_plugin_name(self):
+                return "MaskAwareDtypePlugin"
+
+            @hookimpl
+            def scaled_processing_plugin_description(self):
+                return "Test plugin for mask-aware dtype probing"
+
+        fullres_data = np.full((1, 16, 16, 16), 7.0, dtype=np.float32)
+        lowres_data = np.ones((1, 8, 8, 8), dtype=np.float32)
+        lowres_mask = np.ones((1, 8, 8, 8), dtype=np.float32)
+
+        znimg = ZarrNii.from_darr(
+            da.from_array(fullres_data, chunks=(1, 8, 8, 8)),
+            spacing=(1.0, 1.0, 1.0),
+            dims=["c", "z", "y", "x"],
+        )
+        lowres_znimg = ZarrNii.from_darr(
+            da.from_array(lowres_data, chunks=(1, 4, 4, 4)),
+            spacing=(2.0, 2.0, 2.0),
+            dims=["c", "z", "y", "x"],
+        )
+        lowres_mask_znimg = ZarrNii.from_darr(
+            da.from_array(lowres_mask, chunks=(1, 4, 4, 4)),
+            spacing=(2.0, 2.0, 2.0),
+            dims=["c", "z", "y", "x"],
+        )
+
+        result = znimg.apply_scaled_processing(
+            MaskAwareDtypePlugin(),
+            method="map_blocks",
+            lowres_znimg=lowres_znimg,
+            lowres_mask=lowres_mask_znimg,
+        )
+
+        assert result.data.dtype == np.float64
+        assert np.all(np.isfinite(result.data.compute()))
