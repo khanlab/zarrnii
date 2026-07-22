@@ -190,6 +190,7 @@ class N4BiasFieldApply:
         if upsampled_lowres_mask is None:
             return corrected
 
+        # Defensive clip for direct calls that bypass core mask preprocessing.
         mask = np.clip(upsampled_lowres_mask, 0.0, 1.0)
         return corrected * mask + fullres_array * (1.0 - mask)
 

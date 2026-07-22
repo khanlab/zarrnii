@@ -7315,8 +7315,6 @@ class ZarrNii:
             )
 
         lowres_mask_array = lowres_mask.data.compute()
-        if lowres_mask_array.dtype.kind in ("i", "u"):
-            lowres_mask_array = lowres_mask_array.astype(np.float32)
         lowres_mask_array = np.asarray(lowres_mask_array, dtype=np.float32)
         return np.clip(lowres_mask_array, 0.0, 1.0)
 
@@ -7336,24 +7334,27 @@ class ZarrNii:
         has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
         mask_param = sig.parameters.get("upsampled_lowres_mask")
 
-        if has_var_keyword or "upsampled_lowres_mask" in sig.parameters:
+        if has_var_keyword:
             return plugin.highres_func(
                 fullres_array,
                 upsampled_output,
                 upsampled_lowres_mask=upsampled_lowres_mask,
             )
 
-        if (
-            mask_param is not None
-            and mask_param.kind == inspect.Parameter.POSITIONAL_ONLY
-        ):
+        if mask_param is None:
+            return plugin.highres_func(fullres_array, upsampled_output)
+
+        if mask_param.kind == inspect.Parameter.POSITIONAL_ONLY:
             return plugin.highres_func(
                 fullres_array,
                 upsampled_output,
                 upsampled_lowres_mask,
             )
-
-        return plugin.highres_func(fullres_array, upsampled_output)
+        return plugin.highres_func(
+            fullres_array,
+            upsampled_output,
+            upsampled_lowres_mask=upsampled_lowres_mask,
+        )
 
     def _apply_scaled_processing_map_blocks(
         self,
