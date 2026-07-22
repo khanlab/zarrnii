@@ -1160,7 +1160,9 @@ class TestN4BiasFieldApply:
         corrected_data = corrected.data.compute()
 
         assert np.all(np.isfinite(corrected_data))
+        # Left side should be corrected toward 100/2=50 (allowing interpolation blend).
         assert np.all(corrected_data[:, :, :, :6] < 60.0)
+        # Right side should remain near original 100 outside the mask.
         assert np.all(corrected_data[:, :, :, 10:] > 90.0)
 
     def test_apply_scaled_processing_map_blocks_lowres_mask_shape_mismatch(self):

@@ -7265,14 +7265,14 @@ class ZarrNii:
 
         upsampled_mask_data = None
         if lowres_mask_array is not None:
-            _lowres_mask_znimg = _lowres_znimg.copy()
-            _lowres_mask_znimg.data = da.from_array(
+            lowres_mask_znimg_container = _lowres_znimg.copy()
+            lowres_mask_znimg_container.data = da.from_array(
                 lowres_mask_array, chunks=lowres_chunks
             )
             lowres_mask_upsampled_path = tempfile.mkdtemp(
                 suffix="_upsampled_mask.ome.zarr"
             )
-            _lowres_mask_znimg.upsample(to_shape=self.shape).to_ome_zarr(
+            lowres_mask_znimg_container.upsample(to_shape=self.shape).to_ome_zarr(
                 lowres_mask_upsampled_path, max_layer=1
             )
             upsampled_mask_znimg = ZarrNii.from_ome_zarr(lowres_mask_upsampled_path)
@@ -7334,9 +7334,7 @@ class ZarrNii:
         sig = inspect.signature(plugin.highres_func)
         params = list(sig.parameters.values())
         has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
-        has_var_positional = any(
-            p.kind == inspect.Parameter.VAR_POSITIONAL for p in params
-        )
+        mask_param = sig.parameters.get("upsampled_lowres_mask")
 
         if has_var_keyword or "upsampled_lowres_mask" in sig.parameters:
             return plugin.highres_func(
@@ -7345,7 +7343,10 @@ class ZarrNii:
                 upsampled_lowres_mask=upsampled_lowres_mask,
             )
 
-        if has_var_positional or len(params) >= 3:
+        if (
+            mask_param is not None
+            and mask_param.kind == inspect.Parameter.POSITIONAL_ONLY
+        ):
             return plugin.highres_func(
                 fullres_array,
                 upsampled_output,
