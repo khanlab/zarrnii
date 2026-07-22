@@ -7266,7 +7266,9 @@ class ZarrNii:
         upsampled_mask_data = None
         if lowres_mask_array is not None:
             _lowres_mask_znimg = _lowres_znimg.copy()
-            _lowres_mask_znimg.data = da.from_array(lowres_mask_array, chunks=lowres_chunks)
+            _lowres_mask_znimg.data = da.from_array(
+                lowres_mask_array, chunks=lowres_chunks
+            )
             lowres_mask_upsampled_path = tempfile.mkdtemp(suffix="_SPIM_mask.ome.zarr")
             _lowres_mask_znimg.upsample(to_shape=self.shape).to_ome_zarr(
                 lowres_mask_upsampled_path, max_layer=1
