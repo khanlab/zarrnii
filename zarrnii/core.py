@@ -7347,7 +7347,8 @@ class ZarrNii:
                 mask_dispatch = "keyword"
             try:
                 setattr(plugin, "_scaled_processing_mask_dispatch", mask_dispatch)
-            except Exception:
+            except (AttributeError, TypeError):
+                # Some plugin instances may be immutable/frozen.
                 pass
 
         if mask_dispatch == "none":

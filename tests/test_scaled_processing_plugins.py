@@ -1240,7 +1240,9 @@ class TestN4BiasFieldApply:
             def highres_func(
                 self, fullres_array, upsampled_output, upsampled_lowres_mask
             ):
-                return (fullres_array * 0 + upsampled_lowres_mask).astype(np.float64)
+                return (np.zeros_like(fullres_array) + upsampled_lowres_mask).astype(
+                    np.float64
+                )
 
             @hookimpl
             def scaled_processing_plugin_name(self):
