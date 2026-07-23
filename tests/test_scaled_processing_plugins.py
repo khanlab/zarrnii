@@ -1110,3 +1110,258 @@ class TestN4BiasFieldApply:
         plugin = N4BiasFieldApply(log_space=True)
         desc = plugin.scaled_processing_plugin_description()
         assert "log" in desc.lower()
+
+    # ------------------------------------------------------------------
+    # scale / offset parameter tests
+    # ------------------------------------------------------------------
+
+    def test_init_scale_offset_defaults(self):
+        """Test that scale defaults to 1.0 and offset defaults to 0.0."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+        assert plugin.scale == 1.0
+        assert plugin.offset == 0.0
+
+    def test_init_custom_scale_offset(self):
+        """Test that custom scale and offset are stored correctly."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(scale=2.5, offset=-10.0)
+        assert plugin.scale == 2.5
+        assert plugin.offset == -10.0
+
+    def test_repr_includes_scale_offset(self):
+        """Test that __repr__ includes scale and offset."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(scale=2.0, offset=5.0)
+        r = repr(plugin)
+        assert "scale=2.0" in r
+        assert "offset=5.0" in r
+
+    def test_highres_func_scale_only(self):
+        """Test that scale is applied after bias-field division."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(scale=2.0, offset=0.0)
+
+        fullres = np.ones((10, 10), dtype=np.float32) * 60.0
+        bias = np.ones((10, 10), dtype=np.float32) * 3.0  # corrected = 20.0
+
+        result = plugin.highres_func(fullres, bias)
+
+        # scale * (60 / 3) + 0 = 2 * 20 = 40
+        assert_array_almost_equal(result, np.full_like(result, 40.0), decimal=4)
+
+    def test_highres_func_offset_only(self):
+        """Test that offset is applied after bias-field division."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(scale=1.0, offset=5.0)
+
+        fullres = np.ones((10, 10), dtype=np.float32) * 60.0
+        bias = np.ones((10, 10), dtype=np.float32) * 3.0  # corrected = 20.0
+
+        result = plugin.highres_func(fullres, bias)
+
+        # 1 * (60 / 3) + 5 = 25
+        assert_array_almost_equal(result, np.full_like(result, 25.0), decimal=4)
+
+    def test_highres_func_scale_and_offset(self):
+        """Test that scale * corrected + offset is applied."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(scale=0.5, offset=10.0)
+
+        fullres = np.ones((10, 10), dtype=np.float32) * 100.0
+        bias = np.ones((10, 10), dtype=np.float32) * 2.0  # corrected = 50.0
+
+        result = plugin.highres_func(fullres, bias)
+
+        # 0.5 * (100 / 2) + 10 = 0.5 * 50 + 10 = 35
+        assert_array_almost_equal(result, np.full_like(result, 35.0), decimal=4)
+
+    def test_highres_func_scale_offset_dask(self):
+        """Test that scale/offset work with dask arrays."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(scale=3.0, offset=-5.0)
+
+        fullres = da.ones((20, 20), chunks=(10, 10), dtype=np.float32) * 60.0
+        bias = da.ones((20, 20), chunks=(10, 10), dtype=np.float32) * 4.0
+
+        result = plugin.highres_func(fullres, bias).compute()
+
+        # 3 * (60 / 4) - 5 = 3 * 15 - 5 = 40
+        assert_array_almost_equal(result, np.full_like(result, 40.0), decimal=4)
+
+    def test_description_mentions_scale_offset(self):
+        """Test that description notes rescaling when scale/offset are non-default."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(scale=2.0, offset=1.0)
+        desc = plugin.scaled_processing_plugin_description()
+        assert "scale" in desc.lower()
+        assert "offset" in desc.lower()
+
+    def test_description_no_rescale_note_for_defaults(self):
+        """Test that description does not mention rescaling when defaults are used."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+        desc = plugin.scaled_processing_plugin_description()
+        # "Intensity rescaling" note should not appear for default scale=1, offset=0
+        assert "intensity rescaling" not in desc.lower()
+
+    # ------------------------------------------------------------------
+    # mask (negative bias values) tests
+    # ------------------------------------------------------------------
+
+    def test_lowres_func_preserves_negative_values(self):
+        """Test that lowres_func preserves negative values as outside-mask sentinels."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+
+        # Mix of valid positive bias values and -1 sentinel for outside-mask
+        arr = np.array([[2.0, -1.0], [1.5, -1.0]], dtype=np.float32)
+        result = plugin.lowres_func(arr)
+
+        # Positive values should be clamped to >= eps (still positive)
+        assert result[0, 0] > 0
+        assert result[1, 0] > 0
+        # Negative sentinel values should be preserved (still negative)
+        assert result[0, 1] < 0
+        assert result[1, 1] < 0
+
+    def test_lowres_func_log_space_preserves_negative_values(self):
+        """Test that lowres_func with log_space preserves negative sentinel values."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(log_space=True, log_offset=1e-6)
+
+        arr = np.array([[2.0, -1.0], [1.0, -1.0]], dtype=np.float32)
+        result = plugin.lowres_func(arr)
+
+        # Inside-mask positive values should be log-transformed (finite)
+        assert np.isfinite(result[0, 0])
+        assert np.isfinite(result[1, 0])
+        # Outside-mask sentinel values must remain negative
+        assert result[0, 1] < 0
+        assert result[1, 1] < 0
+
+    def test_highres_func_outside_mask_unchanged(self):
+        """Test that outside-mask voxels (upsampled bias < 0) are left unchanged."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+
+        fullres = np.ones((4, 4), dtype=np.float32) * 100.0
+        # Left half: valid bias (positive); right half: outside-mask sentinel
+        bias = np.array(
+            [
+                [2.0, 2.0, -1.0, -1.0],
+                [2.0, 2.0, -1.0, -1.0],
+                [2.0, 2.0, -1.0, -1.0],
+                [2.0, 2.0, -1.0, -1.0],
+            ],
+            dtype=np.float32,
+        )
+
+        result = plugin.highres_func(fullres, bias)
+
+        # Inside mask: 100 / 2 = 50
+        assert_array_almost_equal(result[:, :2], np.full((4, 2), 50.0), decimal=4)
+        # Outside mask: original value unchanged
+        assert_array_almost_equal(result[:, 2:], np.full((4, 2), 100.0), decimal=4)
+
+    def test_highres_func_mask_with_scale_offset(self):
+        """Test that scale/offset is applied inside mask but not outside."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(scale=2.0, offset=5.0)
+
+        fullres = np.ones((4, 4), dtype=np.float32) * 60.0
+        # Left half: valid bias; right half: outside-mask sentinel
+        bias = np.array(
+            [
+                [3.0, 3.0, -1.0, -1.0],
+                [3.0, 3.0, -1.0, -1.0],
+                [3.0, 3.0, -1.0, -1.0],
+                [3.0, 3.0, -1.0, -1.0],
+            ],
+            dtype=np.float32,
+        )
+
+        result = plugin.highres_func(fullres, bias)
+
+        # Inside mask: 2 * (60 / 3) + 5 = 2 * 20 + 5 = 45
+        assert_array_almost_equal(result[:, :2], np.full((4, 2), 45.0), decimal=4)
+        # Outside mask: original value (scale/offset NOT applied)
+        assert_array_almost_equal(result[:, 2:], np.full((4, 2), 60.0), decimal=4)
+
+    def test_highres_func_all_negative_bias_unchanged(self):
+        """Test that when all bias values are negative, fullres is returned unchanged."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(scale=2.0, offset=10.0)
+
+        fullres = np.ones((5, 5), dtype=np.float32) * 42.0
+        bias = np.full((5, 5), -1.0, dtype=np.float32)
+
+        result = plugin.highres_func(fullres, bias)
+
+        assert_array_almost_equal(result, fullres, decimal=4)
+
+    def test_highres_func_all_positive_bias_no_masking(self):
+        """Test that when all bias values are positive, correction is applied everywhere."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(scale=1.0, offset=0.0)
+
+        fullres = np.ones((5, 5), dtype=np.float32) * 100.0
+        bias = np.full((5, 5), 4.0, dtype=np.float32)
+
+        result = plugin.highres_func(fullres, bias)
+
+        assert_array_almost_equal(result, np.full((5, 5), 25.0), decimal=4)
+
+    def test_highres_func_mask_log_space(self):
+        """Test mask handling in log_space mode (typical N4 bias values > 1)."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply(log_space=True)
+
+        fullres = np.ones((4, 4), dtype=np.float32) * 100.0
+        # Left half: log-transformed bias (log(4) ≈ 1.386); right half: -1 sentinel
+        log_bias_value = np.log(4.0)
+        bias = np.array(
+            [
+                [log_bias_value, log_bias_value, -1.0, -1.0],
+                [log_bias_value, log_bias_value, -1.0, -1.0],
+                [log_bias_value, log_bias_value, -1.0, -1.0],
+                [log_bias_value, log_bias_value, -1.0, -1.0],
+            ],
+            dtype=np.float32,
+        )
+
+        result = plugin.highres_func(fullres, bias)
+
+        # Inside mask (log(4) > 0): 100 / exp(log(4)) = 100 / 4 = 25
+        assert_array_almost_equal(result[:, :2], np.full((4, 2), 25.0), decimal=1)
+        # Outside mask (-1 < 0): original unchanged
+        assert_array_almost_equal(result[:, 2:], np.full((4, 2), 100.0), decimal=4)
+
+    def test_lowres_func_masked_roundtrip_all_positive(self):
+        """Test that all-positive input is unchanged by the new mask-aware code path."""
+        from zarrnii.plugins import N4BiasFieldApply
+
+        plugin = N4BiasFieldApply()
+
+        arr = np.array([[1.5, 2.0], [0.5, 3.0]], dtype=np.float32)
+        result = plugin.lowres_func(arr)
+
+        # All positive: inside_mask = True everywhere; clamp to eps (no change above eps)
+        assert np.all(result > 0)
+        assert np.all(np.isfinite(result))
