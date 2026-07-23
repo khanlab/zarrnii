@@ -159,8 +159,10 @@ class N4BiasFieldApply:
             log_offset: Small positive constant added before ``log`` for
                 numerical stability.  Only used when ``log_space=True``.
             scale: Multiplicative factor for the linear rescaling applied
-                after bias-field division: ``corrected = scale * (x / bias)
-                + offset``.  Default ``1.0`` leaves intensity unchanged.
+                after bias-field division.  The correction is computed in
+                two steps: first ``corrected = x / bias``, then
+                ``corrected = scale * corrected + offset``.
+                Default ``1.0`` leaves intensity unchanged.
             offset: Additive constant for the linear rescaling applied after
                 bias-field division.  Default ``0.0`` leaves intensity
                 unchanged.
