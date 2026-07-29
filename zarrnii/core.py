@@ -5566,6 +5566,136 @@ class ZarrNii:
         return znimg
 
     @classmethod
+    def from_bmit_recon(
+        cls,
+        scan_dir: str,
+        orientation: str = "RAS",
+        chunks: Union[str, Tuple[int, ...]] = "auto",
+        name: str = "image",
+        level: int = 0,
+        axes_units: Optional[Dict[str, str]] = None,
+    ) -> "ZarrNii":
+        """Load reconstructed CT data from the BMIT beamline at the CLS.
+
+        Reads 2D TIFF slices from the ``sli`` subdirectory of *scan_dir* and
+        parses ``reco_params_simple.txt`` to extract pixel spacing.  The
+        resulting ZarrNii is built via :meth:`from_tif_stack`.
+
+        Expected directory structure::
+
+            scan_dir/
+            ├── sli/
+            │   ├── slice_0000.tif
+            │   ├── slice_0001.tif
+            │   └── ...
+            └── reco_params_simple.txt
+
+        The ``reco_params_simple.txt`` file must contain a ``pixel size`` line
+        (e.g. ``pixel size 5.2 um``) and optionally a ``reconstruct every Nth
+        row`` line (e.g. ``reconstruct every 20th row``).  The *x* and *y*
+        voxel spacings are set to the parsed pixel size; the *z* spacing is
+        ``pixel_size * N`` (default ``N = 1`` when the line is absent).
+
+        Args:
+            scan_dir: Path to the scan directory containing ``sli/`` and
+                ``reco_params_simple.txt``.
+            orientation: Anatomical orientation string in XYZ order.
+            chunks: Dask chunking strategy passed to :meth:`from_tif_stack`.
+            name: Name for the resulting image.
+            level: Downsampling level to apply (0 = full resolution).
+            axes_units: Optional override for axis unit metadata.  When
+                ``None``, units are taken from ``reco_params_simple.txt``
+                (typically ``"micrometer"``).
+
+        Returns:
+            ZarrNii instance containing the reconstructed volume.
+
+        Raises:
+            FileNotFoundError: If *scan_dir* does not exist.
+            FileNotFoundError: If ``sli`` subdirectory is missing.
+            FileNotFoundError: If ``reco_params_simple.txt`` is missing.
+            ValueError: If no TIFF files are found in the ``sli`` subdirectory.
+            ValueError: If ``pixel size`` cannot be parsed from
+                ``reco_params_simple.txt``.
+        """
+        import glob as glob_module
+        import re
+
+        scan_path = os.path.abspath(scan_dir)
+        if not os.path.isdir(scan_path):
+            raise FileNotFoundError(
+                f"scan_dir does not exist or is not a directory: '{scan_path}'"
+            )
+
+        sli_dir = os.path.join(scan_path, "sli")
+        if not os.path.isdir(sli_dir):
+            raise FileNotFoundError(
+                f"Expected 'sli' subdirectory not found in '{scan_path}'"
+            )
+
+        params_file = os.path.join(scan_path, "reco_params_simple.txt")
+        if not os.path.isfile(params_file):
+            raise FileNotFoundError(
+                f"Expected 'reco_params_simple.txt' not found in '{scan_path}'"
+            )
+
+        tif_paths = sorted(
+            glob_module.glob(os.path.join(sli_dir, "*.tif"))
+            + glob_module.glob(os.path.join(sli_dir, "*.tiff"))
+        )
+        if not tif_paths:
+            raise ValueError(f"No TIFF files found in '{sli_dir}'")
+
+        with open(params_file) as fh:
+            params_text = fh.read()
+
+        pixel_size_match = re.search(
+            r"pixel\s+size\s+([\d.]+)\s*(\S+)", params_text, re.IGNORECASE
+        )
+        if pixel_size_match is None:
+            raise ValueError(f"Could not parse 'pixel size' from '{params_file}'")
+        pixel_size = float(pixel_size_match.group(1))
+        pixel_unit = pixel_size_match.group(2).lower()
+
+        _unit_map = {
+            "um": "micrometer",
+            "µm": "micrometer",
+            "micrometer": "micrometer",
+            "nm": "nanometer",
+            "nanometer": "nanometer",
+            "mm": "millimeter",
+            "millimeter": "millimeter",
+            "m": "meter",
+            "meter": "meter",
+            "cm": "centimeter",
+            "centimeter": "centimeter",
+        }
+        unit_name = _unit_map.get(pixel_unit, "micrometer")
+
+        nth_row_match = re.search(
+            r"reconstruct\s+every\s+(\d+)\S*\s+row", params_text, re.IGNORECASE
+        )
+        nth_row = int(nth_row_match.group(1)) if nth_row_match is not None else 1
+
+        z_spacing = pixel_size * nth_row
+        xy_spacing = pixel_size
+
+        if axes_units is None:
+            axes_units = {"z": unit_name, "y": unit_name, "x": unit_name}
+
+        return cls.from_tif_stack(
+            tif_paths,
+            stack_mode="z",
+            axes_order="ZYX",
+            orientation=orientation,
+            spacing=(z_spacing, xy_spacing, xy_spacing),
+            chunks=chunks,
+            name=name,
+            level=level,
+            axes_units=axes_units,
+        )
+
+    @classmethod
     def from_ome_tif(
         cls,
         path: str,
