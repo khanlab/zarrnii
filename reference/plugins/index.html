@@ -5160,9 +5160,7 @@ numerical stability.  Only used when <code>log_space=True</code>.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield_apply.py</code></summary>
-                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 90</span>
-<span class="normal"> 91</span>
-<span class="normal"> 92</span>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 92</span>
 <span class="normal"> 93</span>
 <span class="normal"> 94</span>
 <span class="normal"> 95</span>
@@ -5178,7 +5176,9 @@ numerical stability.  Only used when <code>log_space=True</code>.</p>
 <span class="normal">105</span>
 <span class="normal">106</span>
 <span class="normal">107</span>
-<span class="normal">108</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_space</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">log_offset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">):</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_space</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">log_offset</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Initialize the N4BiasFieldApply plugin.</span>
 
@@ -5266,9 +5266,7 @@ subsequent upsampling step interpolates in log space.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield_apply.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">110</span>
-<span class="normal">111</span>
-<span class="normal">112</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">112</span>
 <span class="normal">113</span>
 <span class="normal">114</span>
 <span class="normal">115</span>
@@ -5301,7 +5299,9 @@ subsequent upsampling step interpolates in log space.</p>
 <span class="normal">142</span>
 <span class="normal">143</span>
 <span class="normal">144</span>
-<span class="normal">145</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">lowres_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lowres_array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Return the pre-computed bias field, optionally log-transformed.</span>
@@ -5347,7 +5347,7 @@ subsequent upsampling step interpolates in log space.</p>
 
 
 <h5 id="zarrnii.plugins.N4BiasFieldApply.highres_func" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">plugins</span><span class="o">.</span><span class="n">N4BiasFieldApply</span><span class="o">.</span><span class="n">highres_func</span><span class="p">(</span><span class="n">fullres_array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">plugins</span><span class="o">.</span><span class="n">N4BiasFieldApply</span><span class="o">.</span><span class="n">highres_func</span><span class="p">(</span><span class="n">fullres_array</span><span class="p">,</span> <span class="n">upsampled_output</span><span class="p">,</span> <span class="n">upsampled_lowres_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h5>
 
@@ -5385,6 +5385,19 @@ operations are used.</p>
 values when <code>log_space=True</code>.</p>
           </div>
         </li>
+        <li class="doc-section-item field-body">
+            <b><code>upsampled_lowres_mask</code></b>
+              (<code><span title="numpy.ndarray">ndarray</span> | <span title="dask.array.Array">Array</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Optional upsampled mask (0..1) used to
+constrain where correction is applied. When provided,
+correction is blended as
+<code>corrected * mask + original * (1 - mask)</code>.</p>
+          </div>
+        </li>
     </ul>
 
 
@@ -5402,9 +5415,7 @@ values when <code>log_space=True</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield_apply.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">147</span>
-<span class="normal">148</span>
-<span class="normal">149</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">149</span>
 <span class="normal">150</span>
 <span class="normal">151</span>
 <span class="normal">152</span>
@@ -5436,11 +5447,24 @@ values when <code>log_space=True</code>.</p>
 <span class="normal">178</span>
 <span class="normal">179</span>
 <span class="normal">180</span>
-<span class="normal">181</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">highres_func</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">fullres_array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
     <span class="n">upsampled_output</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+    <span class="n">upsampled_lowres_mask</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="n">da</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Apply the upsampled bias field to full-resolution data.</span>
@@ -5461,6 +5485,10 @@ values when <code>log_space=True</code>.</p>
 <span class="sd">        upsampled_output: Upsampled bias field with the same shape as</span>
 <span class="sd">            ``fullres_array`` (dask or NumPy).  Contains log-transformed</span>
 <span class="sd">            values when ``log_space=True``.</span>
+<span class="sd">        upsampled_lowres_mask: Optional upsampled mask (0..1) used to</span>
+<span class="sd">            constrain where correction is applied. When provided,</span>
+<span class="sd">            correction is blended as</span>
+<span class="sd">            ``corrected * mask + original * (1 - mask)``.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Bias-corrected full-resolution array (same type as inputs).</span>
@@ -5470,7 +5498,12 @@ values when <code>log_space=True</code>.</p>
         <span class="n">bias</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">upsampled_output</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">bias</span> <span class="o">=</span> <span class="n">upsampled_output</span>
-    <span class="k">return</span> <span class="n">fullres_array</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">bias</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
+    <span class="n">corrected</span> <span class="o">=</span> <span class="n">fullres_array</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">bias</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">upsampled_lowres_mask</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">corrected</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">upsampled_lowres_mask</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">,</span> <span class="n">corrected</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -5493,10 +5526,10 @@ values when <code>log_space=True</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield_apply.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">183</span>
-<span class="normal">184</span>
-<span class="normal">185</span>
-<span class="normal">186</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the name of the algorithm.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="s2">&quot;N4 Bias Field Apply&quot;</span>
@@ -5522,20 +5555,22 @@ values when <code>log_space=True</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/plugins/scaled_processing/n4_biasfield_apply.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">188</span>
-<span class="normal">189</span>
-<span class="normal">190</span>
-<span class="normal">191</span>
-<span class="normal">192</span>
-<span class="normal">193</span>
-<span class="normal">194</span>
-<span class="normal">195</span>
-<span class="normal">196</span>
-<span class="normal">197</span>
-<span class="normal">198</span>
-<span class="normal">199</span>
-<span class="normal">200</span>
-<span class="normal">201</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@hookimpl</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">scaled_processing_plugin_description</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a description of the algorithm.&quot;&quot;&quot;</span>
     <span class="n">log_note</span> <span class="o">=</span> <span class="p">(</span>
@@ -5546,7 +5581,9 @@ values when <code>log_space=True</code>.</p>
     <span class="k">return</span> <span class="p">(</span>
         <span class="s2">&quot;Apply a pre-computed N4 bias field to full-resolution data. &quot;</span>
         <span class="s2">&quot;The bias field must be supplied as a pre-computed downsampled &quot;</span>
-        <span class="s2">&quot;image via the ``lowres_znimg`` argument; no ANTsPy dependency &quot;</span>
+        <span class="s2">&quot;image via the ``lowres_znimg`` argument. Optionally provide &quot;</span>
+        <span class="s2">&quot;``lowres_mask`` to constrain correction to masked regions; no &quot;</span>
+        <span class="s2">&quot;ANTsPy dependency &quot;</span>
         <span class="sa">f</span><span class="s2">&quot;is required.</span><span class="si">{</span><span class="n">log_note</span><span class="si">}</span><span class="s2">&quot;</span>
     <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
