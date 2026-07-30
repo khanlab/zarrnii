@@ -1111,7 +1111,7 @@ class TestN4BiasFieldApply:
         desc = plugin.scaled_processing_plugin_description()
         assert "log" in desc.lower()
 
-    def test_highres_func_mask_blends_correction(self):
+    def test_highres_func_mask_zeros_outside_mask(self):
         """Test that optional mask constrains correction to masked regions."""
         from zarrnii.plugins import N4BiasFieldApply
 
@@ -1124,7 +1124,7 @@ class TestN4BiasFieldApply:
         result = plugin.highres_func(fullres, bias, upsampled_lowres_mask=mask)
 
         assert np.allclose(result[:, :4], 50.0)
-        assert np.allclose(result[:, 4:], 100.0)
+        assert np.allclose(result[:, 4:], 0.0)
 
     def test_apply_scaled_processing_map_blocks_n4_apply_with_lowres_mask(self):
         """Test that map_blocks path respects lowres_mask for N4BiasFieldApply."""
@@ -1162,8 +1162,8 @@ class TestN4BiasFieldApply:
         assert np.all(np.isfinite(corrected_data))
         # Left side should be corrected toward 100/2=50 (allowing interpolation blend).
         assert np.all(corrected_data[:, :, :, :6] < 60.0)
-        # Right side should remain near original 100 outside the mask.
-        assert np.all(corrected_data[:, :, :, 10:] > 90.0)
+        # Right side should be zeroed outside the mask.
+        assert np.allclose(corrected_data[:, :, :, 10:], 0.0)
 
     def test_apply_scaled_processing_map_blocks_lowres_mask_shape_mismatch(self):
         """Test that lowres_mask shape mismatch raises ValueError."""
@@ -1224,9 +1224,9 @@ class TestN4BiasFieldApply:
         )
         corrected_data = corrected.data.compute()
 
-        # Masked side should be corrected near 100/100=1, unmasked side stays near 100.
+        # Masked side should be corrected near 100/100=1, unmasked side is zero.
         assert np.all(corrected_data[:, :, :, :6] < 5.0)
-        assert np.all(corrected_data[:, :, :, 10:] > 90.0)
+        assert np.allclose(corrected_data[:, :, :, 10:], 0.0)
 
     def test_map_blocks_dtype_probe_with_mask_aware_highres_func(self):
         """Test dtype probing when plugin highres_func requires mask argument."""
