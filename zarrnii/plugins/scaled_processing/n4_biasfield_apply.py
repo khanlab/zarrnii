@@ -7,6 +7,8 @@ full-resolution data.  Unlike :mod:`n4_biasfield`, this plugin has no ANTsPy
 dependency — N4 is assumed to have been run beforehand and the result is
 supplied via the ``lowres_znimg`` argument of
 :meth:`~zarrnii.core.ZarrNii.apply_scaled_processing`.
+An optional ``lowres_mask`` image can also be supplied so correction is only
+applied in masked regions after upsampling.
 
 Typical usage::
 
@@ -149,6 +151,7 @@ class N4BiasFieldApply:
         self,
         fullres_array: np.ndarray | da.Array,
         upsampled_output: np.ndarray | da.Array,
+        upsampled_lowres_mask: np.ndarray | da.Array | None = None,
     ) -> np.ndarray | da.Array:
         """
         Apply the upsampled bias field to full-resolution data.
@@ -169,6 +172,10 @@ class N4BiasFieldApply:
             upsampled_output: Upsampled bias field with the same shape as
                 ``fullres_array`` (dask or NumPy).  Contains log-transformed
                 values when ``log_space=True``.
+            upsampled_lowres_mask: Optional upsampled mask (0..1) used to
+                constrain where correction is applied. When provided,
+                correction is blended as
+                ``corrected * mask + original * (1 - mask)``.
 
         Returns:
             Bias-corrected full-resolution array (same type as inputs).
@@ -178,7 +185,12 @@ class N4BiasFieldApply:
             bias = np.exp(upsampled_output)
         else:
             bias = upsampled_output
-        return fullres_array / np.maximum(bias, epsilon)
+        corrected = fullres_array / np.maximum(bias, epsilon)
+
+        if upsampled_lowres_mask is None:
+            return corrected
+        else:
+            return np.where(upsampled_lowres_mask > 0.5, corrected, 0)
 
     @hookimpl
     def scaled_processing_plugin_name(self) -> str:
@@ -196,7 +208,9 @@ class N4BiasFieldApply:
         return (
             "Apply a pre-computed N4 bias field to full-resolution data. "
             "The bias field must be supplied as a pre-computed downsampled "
-            "image via the ``lowres_znimg`` argument; no ANTsPy dependency "
+            "image via the ``lowres_znimg`` argument. Optionally provide "
+            "``lowres_mask`` to constrain correction to masked regions; no "
+            "ANTsPy dependency "
             f"is required.{log_note}"
         )
 
