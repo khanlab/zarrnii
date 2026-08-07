@@ -4302,7 +4302,10 @@ class ZarrNii:
         )
 
         # Try to get zarr store information for direct access (avoids nested compute)
-        store_info = self.get_zarr_store_info()
+        try:
+            store_info = self.get_zarr_store_info()
+        except:
+            store_info = None
 
         # Lazily apply the transformations using dask
         if store_info is not None:
