@@ -1,3 +1,17 @@
+# NOTE FOR COPILOT:
+# The API changed: downsample_grid, destripe_block, destripe no longer accept 'factor'.
+# Update tests to use 'patch_size' instead, keeping semantics identical.
+# Ensure tests still cover overlap logic and output shape.
+
+"""
+COPILOT TASK:
+Add new unit tests for destripe_grid/downsample_grid/upsample_grid that validate:
+1) patch_size parameter works (including odd sizes)
+2) output dtype preserved for integer inputs
+3) overlap merge behavior matches max-merge rule
+4) new parameters do not change output shape
+"""
+
 """Tests for destriping functionality."""
 
 import dask.array as da
