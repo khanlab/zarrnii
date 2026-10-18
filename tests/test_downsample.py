@@ -1,3 +1,4 @@
+import dask.array as da
 import ngff_zarr as nz
 import numpy as np
 import pytest
@@ -121,12 +122,10 @@ def test_downsample_on_read(nifti_nib):
     print(xyz_orig)
     print(xyz_ds)
 
-    from math import ceil
-
-    # x y and z are modified by 2^level
-    assert_array_equal(ceil(xyz_orig[0] / (2**level)), xyz_ds[0])
-    assert_array_equal(ceil(xyz_orig[1] / (2**level)), xyz_ds[1])
-    assert_array_equal(ceil(xyz_orig[2] / (2**level)), xyz_ds[2])
+    # x y and z are divided by 2^level, dropping a trailing partial block
+    assert_array_equal(xyz_orig[0] // (2**level), xyz_ds[0])
+    assert_array_equal(xyz_orig[1] // (2**level), xyz_ds[1])
+    assert_array_equal(xyz_orig[2] // (2**level), xyz_ds[2])
 
 
 @pytest.mark.usefixtures("cleandir")
@@ -519,3 +518,82 @@ def test_upsample_preserves_axes_units():
         decimal=5,
         err_msg="Voxel size incorrect after upsample - units likely lost",
     )
+
+
+def _make_ngff_image(shape=(1, 15, 33, 32)):
+    data = np.random.default_rng(0).random(shape).astype("float32")
+    ngff_image = nz.NgffImage(
+        data=da.from_array(data, chunks=(1, 8, 16, 16)),
+        dims=["c", "z", "y", "x"],
+        scale={"c": 1.0, "z": 0.5, "y": 0.25, "x": 0.25},
+        translation={"c": 0.0, "z": 10.0, "y": -3.0, "x": 7.0},
+    )
+    return data, ngff_image
+
+
+def test_downsample_local_mean_averages_blocks():
+    """Default downsampling averages blocks and centres the translation on them."""
+    data, ngff_image = _make_ngff_image()
+    znimg = ZarrNii(ngff_image=ngff_image)
+
+    # factors are in z, y, x order for ZYX images
+    ds = znimg.downsample(factors=[1, 2, 4])
+
+    # trailing partial blocks are dropped, as in to_ome_zarr pyramids
+    assert ds.shape == (1, 15, 16, 8)
+    expected = data[:, :, :32, :32].reshape(1, 15, 16, 2, 8, 4).mean(axis=(3, 5))
+    assert_array_almost_equal(ds.data.compute(), expected, decimal=5)
+
+    assert ds.scale["z"] == pytest.approx(0.5)
+    assert ds.scale["y"] == pytest.approx(0.5)
+    assert ds.scale["x"] == pytest.approx(1.0)
+    assert ds.translation["z"] == pytest.approx(10.0)
+    assert ds.translation["y"] == pytest.approx(-3.0 + 0.25 * 0.5)
+    assert ds.translation["x"] == pytest.approx(7.0 + 0.25 * 1.5)
+
+
+@pytest.mark.parametrize("method", ["local_mean", "resize", "nearest", "zoom"])
+def test_downsample_methods(method):
+    """All ome-zarr-py downsampling methods are supported."""
+    data, ngff_image = _make_ngff_image()
+    ds = ZarrNii(ngff_image=ngff_image).downsample(factors=2, method=method)
+
+    assert ds.shape == (1, 7, 16, 16)
+    assert ds.data.dtype == data.dtype
+    assert np.isfinite(ds.data.compute()).all()
+    assert ds.scale["y"] == pytest.approx(0.5)
+    expected_y = -3.0 if method == "zoom" else -3.0 + 0.25 * 0.5
+    assert ds.translation["y"] == pytest.approx(expected_y)
+
+
+def test_downsample_nearest_preserves_labels():
+    """Nearest-neighbour downsampling only produces existing label values."""
+    labels = np.random.default_rng(0).integers(0, 5, (1, 16, 32, 32)).astype("uint16")
+    ngff_image = nz.NgffImage(
+        data=da.from_array(labels, chunks=(1, 8, 16, 16)),
+        dims=["c", "z", "y", "x"],
+        scale={"c": 1.0, "z": 1.0, "y": 1.0, "x": 1.0},
+        translation={"c": 0.0, "z": 0.0, "y": 0.0, "x": 0.0},
+    )
+    ds = ZarrNii(ngff_image=ngff_image).downsample(factors=2, method="nearest")
+    assert set(np.unique(ds.data.compute())) <= set(np.unique(labels))
+
+
+def test_downsample_matches_pyramid_level(tmp_path):
+    """Downsampling level 0 gives the same data as the written pyramid level."""
+    data, ngff_image = _make_ngff_image(shape=(1, 16, 32, 32))
+    znimg = ZarrNii(ngff_image=ngff_image)
+    path = str(tmp_path / "pyramid.ome.zarr")
+    znimg.to_ome_zarr(path, max_layer=2, scale_factors=[{"z": 2, "y": 2, "x": 2}])
+
+    level1 = ZarrNii.from_ome_zarr(path, level=1)
+    ds = ZarrNii.from_ome_zarr(path, level=0).downsample(factors=2)
+
+    assert ds.shape == level1.shape
+    assert_array_almost_equal(ds.data.compute(), level1.data.compute(), decimal=5)
+
+
+def test_downsample_invalid_method():
+    _, ngff_image = _make_ngff_image()
+    with pytest.raises(ValueError):
+        ZarrNii(ngff_image=ngff_image).downsample(factors=2, method="bogus")

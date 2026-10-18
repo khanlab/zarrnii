@@ -1436,52 +1436,78 @@ def downsample_ngff_image(
     ngff_image: nz.NgffImage,
     factors: Union[int, List[int]],
     spatial_dims: List[str] = ["z", "y", "x"],
+    method: str = "local_mean",
 ) -> nz.NgffImage:
     """
     Downsample an NgffImage by the specified factors.
+
+    Uses the same downsampling functions as the ome-zarr-py pyramid writer
+    (``ome_zarr.scale.Methods``), so downsampling an image matches reading the
+    corresponding level of a pyramid written by ``to_ome_zarr``. As there, each
+    output dimension is ``size // factor`` (at least 1), so a trailing partial
+    block is dropped.
 
     Args:
         ngff_image: Input NgffImage to downsample
         factors: Downsampling factors (int for isotropic, list for per-dimension)
         spatial_dims: Names of spatial dimensions
+        method: Downsampling method, one of ``'local_mean'`` (block average,
+            the default), ``'resize'`` (linear interpolation with
+            anti-aliasing), ``'nearest'`` (nearest neighbour, for labels) or
+            ``'zoom'`` (``scipy.ndimage.zoom``)
 
     Returns:
         New downsampled NgffImage
     """
+    from ome_zarr.scale import Methods, method_dispatch
+
+    method = Methods(method)
+
     if isinstance(factors, int):
         factors = [factors] * len(spatial_dims)
 
-    # Build downsampling slices
-    slices = []
-    spatial_idx = 0
-
+    # Per-dimension factors in data order, 1 for non-spatial dims
+    spatial_dims_lower = [d.lower() for d in spatial_dims]
+    dim_factors = {}
     for dim in ngff_image.dims:
-        if dim.lower() in [d.lower() for d in spatial_dims]:
-            if spatial_idx < len(factors):
-                factor = factors[spatial_idx]
-                slices.append(slice(None, None, factor))
-                spatial_idx += 1
-            else:
-                slices.append(slice(None))
+        if dim.lower() in spatial_dims_lower:
+            idx = spatial_dims_lower.index(dim.lower())
+            dim_factors[dim] = factors[idx] if idx < len(factors) else 1
         else:
-            # Non-spatial dimension, keep all
-            slices.append(slice(None))
+            dim_factors[dim] = 1
 
-    # Apply downsampling
-    downsampled_data = ngff_image.data[tuple(slices)]
+    if all(f == 1 for f in dim_factors.values()):
+        return _derive_ngff_image(ngff_image, data=ngff_image.data)
 
-    # Update scale to account for downsampling
+    output_shape = tuple(
+        max(1, size // dim_factors[dim])
+        for size, dim in zip(ngff_image.data.shape, ngff_image.dims)
+    )
+    dispatch = method_dispatch[method]
+    downsampled_data = dispatch["func"](
+        ngff_image.data, output_shape=output_shape, **dispatch["kwargs"]
+    )
+
     new_scale = ngff_image.scale.copy()
-    spatial_idx = 0
+    new_translation = dict(ngff_image.translation) if ngff_image.translation else {}
+    for dim, f in dim_factors.items():
+        if f == 1 or dim not in new_scale:
+            continue
+        # A downsampled voxel covers input voxels 0..f-1, so its centre is
+        # shifted by (f - 1) / 2 input voxels. zoom aligns the first voxel
+        # with the input instead, so its translation is unchanged.
+        if method != Methods.ZOOM:
+            new_translation[dim] = (
+                new_translation.get(dim, 0.0) + new_scale[dim] * (f - 1) / 2
+            )
+        new_scale[dim] *= f
 
-    for dim in ngff_image.dims:
-        if dim.lower() in [d.lower() for d in spatial_dims]:
-            if spatial_idx < len(factors) and dim in new_scale:
-                new_scale[dim] *= factors[spatial_idx]
-                spatial_idx += 1
-
-    # Create new NgffImage
-    return _derive_ngff_image(ngff_image, data=downsampled_data, scale=new_scale)
+    return _derive_ngff_image(
+        ngff_image,
+        data=downsampled_data,
+        scale=new_scale,
+        translation=new_translation,
+    )
 
 
 def _apply_near_isotropic_downsampling(znimg: "ZarrNii", axes_order: str) -> "ZarrNii":
@@ -3687,12 +3713,14 @@ class ZarrNii:
         along_z: int = 1,
         level: Optional[int] = None,
         spatial_dims: Optional[List[str]] = None,
+        method: str = "local_mean",
     ) -> "ZarrNii":
         """Reduce image resolution by downsampling.
 
-        Performs spatial downsampling by averaging blocks of voxels, effectively
-        reducing image resolution and size. Multiple parameter options provide
-        flexibility for different downsampling strategies.
+        Performs spatial downsampling, by default by averaging blocks of
+        voxels, effectively reducing image resolution and size. Multiple
+        parameter options provide flexibility for different downsampling
+        strategies.
 
         Args:
             factors: Downsampling factors for spatial dimensions. Can be:
@@ -3706,6 +3734,9 @@ class ZarrNii:
                 Takes precedence over along_* parameters
             spatial_dims: Names of spatial dimensions. If None, derived
                 from axes_order
+            method: Downsampling method, as for the ome-zarr-py pyramid
+                writer: ``'local_mean'`` (block average, default),
+                ``'resize'``, ``'nearest'`` (for label images) or ``'zoom'``
 
         Returns:
             New ZarrNii instance with downsampled data and updated metadata
@@ -3727,8 +3758,10 @@ class ZarrNii:
             >>> downsampled = znii.downsample(level=2)  # factors = 4
 
         Notes:
-            - Downsampling uses block averaging for anti-aliasing
-            - Spatial transformations are automatically scaled
+            - Each output dimension is ``size // factor``, as in pyramids
+              written by ``to_ome_zarr``; a trailing partial block is dropped
+            - Spatial transformations are automatically scaled, and translated
+              to the centre of each downsampled voxel
             - Non-spatial dimensions (channels, time) are preserved
             - Original data remains unchanged (creates new instance)
         """
@@ -3749,7 +3782,7 @@ class ZarrNii:
             )
 
         downsampled_image = downsample_ngff_image(
-            self.ngff_image, factors, spatial_dims
+            self.ngff_image, factors, spatial_dims, method=method
         )
         return ZarrNii(
             ngff_image=downsampled_image,

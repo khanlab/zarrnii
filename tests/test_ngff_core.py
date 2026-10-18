@@ -166,8 +166,8 @@ class TestNgffImageFunctions:
         assert downsampled.scale["y"] == 2.0  # 1.0 * 2
         assert downsampled.scale["x"] == 2.0  # 1.0 * 2
 
-        # Translation should be unchanged
-        assert downsampled.translation == ngff_image.translation
+        # Translation moves to the centre of the first block: t + scale * (f - 1) / 2
+        assert downsampled.translation == {"z": 11.0, "y": 20.5, "x": 30.5}
 
     def test_downsample_ngff_image_anisotropic(self):
         """Test anisotropic downsampling of an NgffImage."""
