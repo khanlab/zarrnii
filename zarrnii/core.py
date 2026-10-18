@@ -978,20 +978,27 @@ def _ngff_image_to_ome_zarr_transforms(
     # Additional levels with downsampling
     for factor in scale_factors:
         level_scale = []
+        level_translation = []
         for i, dim in enumerate(ngff_image.dims):
             if isinstance(factor, dict):
                 # Dict-based: apply per-axis factor; default to 1 for unlisted axes
-                level_scale.append(base_scale[i] * factor.get(dim, 1))
+                dim_factor = factor.get(dim, 1)
             elif dim in ["x", "y"]:
                 # Integer-based: ome-zarr-py only downsamples in the xy plane
-                level_scale.append(base_scale[i] * factor)
+                dim_factor = factor
             else:
-                level_scale.append(base_scale[i])
+                dim_factor = 1
+            level_scale.append(base_scale[i] * dim_factor)
+            # A downsampled voxel covers level-0 voxels 0..f-1, so its centre is
+            # shifted by (f - 1) / 2 level-0 voxels (same convention as ngff-zarr)
+            level_translation.append(
+                base_translation[i] + base_scale[i] * (dim_factor - 1) / 2
+            )
 
         coordinate_transformations.append(
             [
                 {"type": "scale", "scale": level_scale},
-                {"type": "translation", "translation": base_translation.copy()},
+                {"type": "translation", "translation": level_translation},
             ]
         )
 

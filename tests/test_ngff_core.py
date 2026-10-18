@@ -542,6 +542,47 @@ class TestOmeZarrWriter:
             assert y_scales[1] == 2 * y_scales[0]
             assert x_scales[1] == 2 * x_scales[0]
 
+    def test_to_ome_zarr_pyramid_translations(self):
+        """Test that downsampled levels are translated to the centre of each block.
+
+        With local-mean downsampling, voxel 0 of a level downsampled by f is the
+        mean of level-0 voxels 0..f-1, so its centre lies (f - 1) / 2 level-0
+        voxels from the level-0 origin.
+        """
+        from zarrnii import ZarrNii
+
+        data = np.random.default_rng(0).random((1, 16, 32, 32)).astype("float32")
+        scale = {"z": 0.5, "y": 0.25, "x": 0.25}
+        translation = {"z": 10.0, "y": -3.0, "x": 7.0}
+        ngff_image = nz.NgffImage(
+            data=da.from_array(data, chunks=(1, 16, 32, 32)),
+            dims=["c", "z", "y", "x"],
+            scale={"c": 1.0, **scale},
+            translation={"c": 0.0, **translation},
+        )
+        scale_factors = [{"z": 1, "y": 2, "x": 2}, {"z": 2, "y": 4, "x": 4}]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = os.path.join(tmpdir, "out.zarr")
+            ZarrNii(ngff_image=ngff_image).to_ome_zarr(
+                out_path, max_layer=3, scale_factors=scale_factors
+            )
+            ms = get_multiscales(out_path)
+
+            for factors, img in zip(
+                [{"z": 1, "y": 1, "x": 1}] + scale_factors, ms.images
+            ):
+                for dim in ["z", "y", "x"]:
+                    f = factors[dim]
+                    assert img.scale[dim] == pytest.approx(scale[dim] * f)
+                    assert img.translation[dim] == pytest.approx(
+                        translation[dim] + scale[dim] * (f - 1) / 2
+                    ), f"{dim} translation wrong for factors {factors}"
+
+                # the data at voxel 0 is the mean of the leading level-0 block
+                block = data[0, : factors["z"], : factors["y"], : factors["x"]]
+                assert float(img.data[0, 0, 0, 0]) == pytest.approx(block.mean())
+
     def test_get_scale_factors_from_file(self, simple_ngff_image):
         """Test extracting cumulative scale factors from an input OME-Zarr store."""
         from zarrnii.core import save_ngff_image_with_ome_zarr
