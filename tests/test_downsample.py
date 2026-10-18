@@ -597,3 +597,26 @@ def test_downsample_invalid_method():
     _, ngff_image = _make_ngff_image()
     with pytest.raises(ValueError):
         ZarrNii(ngff_image=ngff_image).downsample(factors=2, method="bogus")
+
+
+@pytest.mark.parametrize("method", ["local_mean", "resize", "nearest", "zoom"])
+def test_downsample_partial_block_single_chunk(method):
+    """Computed shape matches the declared shape when sizes aren't multiples
+    of the factor, including when a whole axis is a single chunk."""
+    data = np.random.default_rng(0).random((1, 75, 33, 32)).astype("float32")
+    ngff_image = nz.NgffImage(
+        data=da.from_array(data, chunks=data.shape),
+        dims=["c", "z", "y", "x"],
+        scale={"c": 1.0, "z": 0.5, "y": 0.25, "x": 0.25},
+        translation={"c": 0.0, "z": 0.0, "y": 0.0, "x": 0.0},
+    )
+    ds = ZarrNii(ngff_image=ngff_image).downsample(factors=[2, 2, 4], method=method)
+
+    assert ds.shape == (1, 37, 16, 8)
+    computed = ds.data.compute()
+    assert computed.shape == ds.shape
+    if method == "local_mean":
+        expected = (
+            data[:, :74, :32, :32].reshape(1, 37, 2, 16, 2, 8, 4).mean(axis=(2, 4, 6))
+        )
+        assert_array_almost_equal(computed, expected, decimal=5)
