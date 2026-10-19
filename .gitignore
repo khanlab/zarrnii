@@ -29,3 +29,8 @@ test_znimg.ome.zarr/
 # Generated files that should not be tracked
 zarrnii/_version.py
 __pycache__/
+
+# pixi
+.pixi/
+pixi.lock
+*.conda

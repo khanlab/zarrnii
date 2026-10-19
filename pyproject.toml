@@ -101,6 +101,45 @@ version-file = "zarrnii/_version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["zarrnii"]
 
+# ----------------------------------------------------------------------
+# Conda package, built with pixi-build and published to akhanf/khanlab on
+# release (.github/workflows/push_conda.yml). The run dependencies are
+# converted from [project.dependencies] above.
+# ----------------------------------------------------------------------
+
+[tool.pixi.workspace]
+channels = ["conda-forge", "https://prefix.dev/akhanf/khanlab"]
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+
+[tool.pixi.package]
+name = "zarrnii"
+# set from the release tag by the publish workflow
+version = "0.0.0.dev0"
+publish = true
+
+[tool.pixi.package.build.backend]
+name = "pixi-build-python"
+version = "*"
+channels = ["conda-forge"]
+
+[tool.pixi.package.build.config]
+ignore-pypi-mapping = false
+# not in the conda-forge mapping; published to akhanf/khanlab
+pypi-conda-map = { ngff-zarr = "ngff-zarr", imaris-ims-zarr = "imaris-ims-zarr" }
+
+[tool.pixi.package.host-dependencies]
+hatchling = "*"
+hatch-vcs = "*"
+
+[tool.pixi.package.run-dependencies]
+# ngff-zarr extras requested above, which the conversion leaves out (the cli
+# extra needs itkwasm-image-io, which is not on conda-forge)
+dask-image = "*"
+itk = ">=5.3.0"
+tensorstore = "*"
+jsonschema = "*"
+
 [tool.flake8]
 max-line-length = 88  # Matches Black's default line length
 extend-ignore = ["E203", "W503"]  # Compatibility with Black
