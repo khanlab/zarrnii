@@ -1483,9 +1483,18 @@ def downsample_ngff_image(
         max(1, size // dim_factors[dim])
         for size, dim in zip(ngff_image.data.shape, ngff_image.dims)
     )
+    # Crop to whole blocks first, so each method sees exact integer factors.
+    # Otherwise the ome-zarr-py kernels also compute a trailing partial block,
+    # and the result has more voxels than its declared shape.
+    crop = tuple(
+        slice(0, min(size, n * dim_factors[dim]))
+        for size, n, dim in zip(ngff_image.data.shape, output_shape, ngff_image.dims)
+    )
+    data = da.asarray(ngff_image.data)[crop]
+
     dispatch = method_dispatch[method]
     downsampled_data = dispatch["func"](
-        ngff_image.data, output_shape=output_shape, **dispatch["kwargs"]
+        data, output_shape=output_shape, **dispatch["kwargs"]
     )
 
     new_scale = ngff_image.scale.copy()
