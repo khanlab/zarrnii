@@ -1674,6 +1674,76 @@ def apply_transform_to_ngff_image(
     return reference_image
 
 
+def _linear_interp_weights(
+    coords: np.ndarray, size: int
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Indices and weights for 1-D linear interpolation along one axis.
+
+    Coordinates outside ``[0, size - 1]`` are clamped to the edge, as in
+    ``scipy.ndimage.map_coordinates(..., order=1, mode="nearest")``.
+
+    Args:
+        coords: Float coordinates (in voxels) along the axis.
+        size: Length of the axis being interpolated.
+
+    Returns:
+        ``(lo, hi, w)`` such that the interpolated value at ``coords[i]`` is
+        ``(1 - w[i]) * v[lo[i]] + w[i] * v[hi[i]]``.
+    """
+    coords = np.clip(coords, 0, size - 1)
+    lo = np.minimum(np.floor(coords).astype(np.intp), max(size - 2, 0))
+    hi = np.minimum(lo + 1, size - 1)
+    return lo, hi, coords - lo
+
+
+def _interp_linear_separable(
+    lowres: np.ndarray, axis_coords: List[np.ndarray]
+) -> np.ndarray:
+    """Linearly interpolate *lowres* on an axis-aligned grid.
+
+    Gives the same result, up to float32 rounding, as
+    ``map_coordinates(lowres, coords, order=1, mode="nearest")`` where
+    ``coords`` is the meshgrid of *axis_coords*, but interpolates one axis at a
+    time. It never builds a coordinate per output
+    voxel, so the only full-size temporaries are two float32 arrays in the last
+    axis, instead of ~48 bytes per voxel for the meshgrid and coordinates.
+
+    Args:
+        lowres: Array to interpolate, with one dimension per entry of
+            *axis_coords*.
+        axis_coords: For each axis, the 1-D coordinates (in *lowres* voxels)
+            to sample at.
+
+    Returns:
+        float32 array of shape ``tuple(len(c) for c in axis_coords)``.
+    """
+    weights = [_linear_interp_weights(c, n) for c, n in zip(axis_coords, lowres.shape)]
+
+    # Crop to the part of lowres that the output grid touches
+    starts = [int(lo.min()) for lo, _, _ in weights]
+    crop = tuple(
+        slice(start, int(hi.max()) + 1) for start, (_, hi, _) in zip(starts, weights)
+    )
+    result = np.asarray(lowres[crop], dtype=np.float64)
+
+    last_axis = len(weights) - 1
+    for axis, ((lo, hi, w), start) in enumerate(zip(weights, starts)):
+        # the last axis expands to the full output size, so do it in float32
+        dtype = np.float32 if axis == last_axis else np.float64
+        result = result.astype(dtype, copy=False)
+        w_shape = [1] * result.ndim
+        w_shape[axis] = -1
+
+        lower = np.take(result, lo - start, axis=axis)
+        upper = np.take(result, hi - start, axis=axis)
+        upper -= lower
+        upper *= w.astype(dtype).reshape(w_shape)
+        lower += upper
+        result = lower
+
+    return result
+
+
 # Utility functions for compatibility
 
 
@@ -7365,8 +7435,8 @@ class ZarrNii:
             The low-resolution result is kept in memory (small, already computed).
             Upsampling and ``highres_func`` are fused into a single
             :func:`dask.array.map_blocks` pass over the full-resolution data.
-            Inside each block, ``scipy.ndimage.map_coordinates`` interpolates the
-            correction field at the block's coordinates, and ``highres_func`` is
+            Inside each block, the correction field is linearly interpolated at
+            the block's coordinates, one axis at a time, and ``highres_func`` is
             called with two **NumPy arrays** (the block and the interpolated
             correction).  This avoids writing intermediate zarr files and is robust
             to datasets (e.g., Imaris) where chunk boundaries do not align nicely
@@ -7624,9 +7694,11 @@ class ZarrNii:
         The low-resolution correction field is kept as a plain NumPy array.
         Upsampling and ``highres_func`` are fused into a single
         :func:`dask.array.map_blocks` pass: for every full-resolution block,
-        ``scipy.ndimage.map_coordinates`` linearly interpolates the correction
-        field at that block's voxel coordinates (scaled to lowres space), and
-        then ``highres_func(block, interpolated_block)`` is called.
+        the correction field is linearly interpolated at that block's voxel
+        coordinates (scaled to lowres space), and then
+        ``highres_func(block, interpolated_block)`` is called. The grid is
+        axis-aligned, so the interpolation is separable
+        (:func:`_interp_linear_separable`) and needs no per-voxel coordinates.
 
         This avoids writing an intermediate OME-Zarr and is robust to datasets
         where chunk boundaries do not align with the upsampling grid (e.g.
@@ -7648,8 +7720,6 @@ class ZarrNii:
             New :class:`ZarrNii` instance with the processed data.
         """
         import itertools
-
-        from scipy.ndimage import map_coordinates
 
         # Step 1: Obtain low-resolution data (compute once — small array)
         if lowres_znimg is None:
@@ -7728,11 +7798,6 @@ class ZarrNii:
                 np.arange(arr_loc[i][0], arr_loc[i][1]).astype(np.float64) / _eff_factor
                 for i in _spatial_idxs
             ]
-            spatial_block_shape = tuple(block.shape[i] for i in _spatial_idxs)
-
-            # Pre-build flat coordinate grid (same for all non-spatial combos)
-            grids = np.meshgrid(*spatial_slices, indexing="ij")
-            coords = np.array([g.ravel() for g in grids])
 
             # Non-spatial absolute ranges for iterating over channels/time
             nonspatial_ranges = [
@@ -7770,22 +7835,13 @@ class ZarrNii:
                     else _lowres_mask_array
                 )
 
-                interpolated = map_coordinates(
-                    lowres_slice,
-                    coords,
-                    order=1,
-                    mode="nearest",
-                ).reshape(spatial_block_shape)
-
-                upsampled_block[tuple(block_selector)] = interpolated
+                upsampled_block[tuple(block_selector)] = _interp_linear_separable(
+                    lowres_slice, spatial_slices
+                )
                 if upsampled_mask_block is not None:
-                    interpolated_mask = map_coordinates(
-                        lowres_mask_slice,
-                        coords,
-                        order=1,
-                        mode="nearest",
-                    ).reshape(spatial_block_shape)
-                    upsampled_mask_block[tuple(block_selector)] = interpolated_mask
+                    upsampled_mask_block[tuple(block_selector)] = (
+                        _interp_linear_separable(lowres_mask_slice, spatial_slices)
+                    )
 
             return self._call_scaled_processing_highres_func(
                 plugin=plugin,
