@@ -583,6 +583,41 @@ class TestOmeZarrWriter:
                 block = data[0, : factors["z"], : factors["y"], : factors["x"]]
                 assert float(img.data[0, 0, 0, 0]) == pytest.approx(block.mean())
 
+    @pytest.mark.parametrize("ext", ["zarr", "ozx"])
+    def test_to_ome_zarr_roundtrip_geometry(self, ext):
+        """Test that voxel size, origin and units survive a write and read.
+
+        ome-zarr-py >= 0.18 ignores the transforms and axis units passed to
+        write_image (khanlab/zarrnii#272).
+        """
+        from zarrnii import ZarrNii
+
+        ngff_image = nz.NgffImage(
+            data=da.zeros((1, 16, 32, 32), dtype="uint16", chunks=8),
+            dims=["c", "z", "y", "x"],
+            scale={"c": 1.0, "z": 0.128, "y": 0.052, "x": 0.052},
+            translation={"c": 0.0, "z": 1.0, "y": 2.0, "x": 3.0},
+            axes_units={"z": "millimeter", "y": "millimeter", "x": "millimeter"},
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = os.path.join(tmpdir, f"out.{ext}")
+            ZarrNii(ngff_image=ngff_image).to_ome_zarr(
+                out_path,
+                max_layer=2,
+                scale_factors=[{"z": 2, "y": 2, "x": 2}],
+            )
+
+            for level, f in [(0, 1), (1, 2)]:
+                back = ZarrNii.from_ome_zarr(out_path, level=level)
+                for dim in ["z", "y", "x"]:
+                    scale = ngff_image.scale[dim]
+                    assert back.ngff_image.axes_units[dim] == "millimeter"
+                    assert back.scale[dim] == pytest.approx(scale * f)
+                    assert back.ngff_image.translation[dim] == pytest.approx(
+                        ngff_image.translation[dim] + scale * (f - 1) / 2
+                    )
+
     def test_get_scale_factors_from_file(self, simple_ngff_image):
         """Test extracting cumulative scale factors from an input OME-Zarr store."""
         from zarrnii.core import save_ngff_image_with_ome_zarr

@@ -515,6 +515,39 @@ def _compute_isotropic_scale_factors(
     return result
 
 
+def _ome_zarr_geometry_kwargs(
+    ngff_image: nz.NgffImage, axes: list, coordinate_transformations: list
+) -> dict:
+    """Build the voxel size/unit arguments for ``ome_zarr.writer.write_image``.
+
+    Since ome-zarr-py 0.18, ``write_image`` ignores ``coordinate_transformations``
+    and the ``unit`` keys of ``axes``, taking voxel sizes from ``scale`` and units
+    from ``axes_units`` instead.
+    """
+    level0_scale = coordinate_transformations[0][0]["scale"]
+    return {
+        "scale": dict(zip(ngff_image.dims, level0_scale)),
+        "axes_units": {ax["name"]: ax["unit"] for ax in axes if "unit" in ax},
+    }
+
+
+def _set_ome_zarr_geometry(
+    group: Any, axes: list, coordinate_transformations: list
+) -> None:
+    """Overwrite the axes and per-level transforms in written multiscales metadata.
+
+    ome-zarr-py >= 0.18 generates its own transforms, with no way to set an
+    origin, so ZarrNii's are written over them (ome/ome-zarr-py#710).
+    """
+    attrs = group.attrs.asdict()
+    ome = attrs.get("ome", attrs)
+    multiscale = ome["multiscales"][0]
+    multiscale["axes"] = axes
+    for dataset, transforms in zip(multiscale["datasets"], coordinate_transformations):
+        dataset["coordinateTransformations"] = transforms
+    group.attrs.update(attrs)
+
+
 def save_ngff_image_with_ome_zarr(
     ngff_image: nz.NgffImage,
     store_or_path: Union[str, Any],
@@ -621,6 +654,9 @@ def save_ngff_image_with_ome_zarr(
     coordinate_transformations = _ngff_image_to_ome_zarr_transforms(
         ngff_image, scale_factors
     )
+    geometry_kwargs = _ome_zarr_geometry_kwargs(
+        ngff_image, axes, coordinate_transformations
+    )
 
     # Check if the target is an OME-Zarr zip file (based on extension)
     if isinstance(store_or_path, str) and _is_ome_zarr_zip_path(store_or_path):
@@ -637,13 +673,14 @@ def save_ngff_image_with_ome_zarr(
                 group=store,
                 scale_factors=scale_factors,
                 method=method,
-                coordinate_transformations=coordinate_transformations,
                 axes=axes,
                 metadata={} if omero is None else {"omero": _to_primitive(omero)},
                 storage_options=storage_options,
                 compute=compute,
+                **geometry_kwargs,
                 **kwargs,
             )
+            _set_ome_zarr_geometry(store, axes, coordinate_transformations)
 
             # Add xyz_orientation metadata if provided
             if xyz_orientation:
@@ -668,13 +705,14 @@ def save_ngff_image_with_ome_zarr(
             group=store,
             scale_factors=scale_factors,
             method=method,
-            coordinate_transformations=coordinate_transformations,
             axes=axes,
             metadata={} if omero is None else {"omero": _to_primitive(omero)},
             storage_options=storage_options,
             compute=compute,
+            **geometry_kwargs,
             **kwargs,
         )
+        _set_ome_zarr_geometry(store, axes, coordinate_transformations)
 
         # Add xyz_orientation metadata if provided
         if xyz_orientation:
