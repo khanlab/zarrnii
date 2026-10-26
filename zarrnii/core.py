@@ -515,6 +515,54 @@ def _compute_isotropic_scale_factors(
     return result
 
 
+def _write_image_level_by_level(image: da.Array, group, method, **kwargs) -> None:
+    """``ome_zarr.writer.write_image``, but computing one pyramid level at a time.
+
+    ome-zarr derives every pyramid level from the level-0 graph and computes
+    all levels in one pass. Each lower level is downsampled block by block and
+    then rechunked, so dask holds partial blocks from across the whole image
+    until they can be merged, and peak memory grows with the image size.
+
+    Here ``write_image`` only creates the arrays and the metadata. Level 0 is
+    then computed and stored, and each lower level is computed from the level
+    stored before it, with the same downsampling ome-zarr uses. Peak memory
+    then depends on the chunk size and the number of threads, not on the image
+    size. Level 0 is read back once more, which costs less than holding it.
+
+    Args:
+        image: Full-resolution dask array.
+        group: zarr group to write into.
+        method: ``ome_zarr.scale.Methods`` used to downsample.
+        **kwargs: Other arguments for ``ome_zarr.writer.write_image``.
+    """
+    from ome_zarr.scale import method_dispatch
+    from ome_zarr.writer import write_image
+
+    write_image(image=image, group=group, method=method, compute=False, **kwargs)
+
+    attrs = group.attrs.asdict()
+    multiscales = (
+        attrs["ome"]["multiscales"] if "ome" in attrs else attrs["multiscales"]
+    )
+    paths = [dataset["path"] for dataset in multiscales[0]["datasets"]]
+    downsample = method_dispatch[method]
+
+    level = image
+    for idx, path in enumerate(paths):
+        zarr_array = group[path]
+        if idx > 0:
+            level = downsample["func"](
+                da.from_zarr(group[paths[idx - 1]]),
+                output_shape=zarr_array.shape,
+                **downsample["kwargs"],
+            )
+        # one dask chunk per shard (or chunk), as write_image does, so no two
+        # tasks write to the same one. (da.to_zarr into an existing array would
+        # instead rechunk to dask's "auto" size, i.e. larger blocks.)
+        write_chunks = getattr(zarr_array, "shards", None) or zarr_array.chunks
+        da.store(level.rechunk(write_chunks), zarr_array, lock=False)
+
+
 def save_ngff_image_with_ome_zarr(
     ngff_image: nz.NgffImage,
     store_or_path: Union[str, Any],
@@ -632,18 +680,26 @@ def save_ngff_image_with_ome_zarr(
             store = zarr.open_group(temp_zarr_path, mode="w", zarr_format=zarr_format)
 
             # Write the data to OME-Zarr using the new scale_factors API
-            write_image(
-                image=ngff_image.data,
-                group=store,
+            write_image_kwargs = dict(
                 scale_factors=scale_factors,
-                method=method,
                 coordinate_transformations=coordinate_transformations,
                 axes=axes,
                 metadata={} if omero is None else {"omero": _to_primitive(omero)},
                 storage_options=storage_options,
-                compute=compute,
                 **kwargs,
             )
+            if compute and isinstance(ngff_image.data, da.Array):
+                _write_image_level_by_level(
+                    ngff_image.data, store, method, **write_image_kwargs
+                )
+            else:
+                write_image(
+                    image=ngff_image.data,
+                    group=store,
+                    method=method,
+                    compute=compute,
+                    **write_image_kwargs,
+                )
 
             # Add xyz_orientation metadata if provided
             if xyz_orientation:
@@ -663,18 +719,26 @@ def save_ngff_image_with_ome_zarr(
             store = store_or_path
 
         # Write the data to OME-Zarr using the new scale_factors API
-        write_image(
-            image=ngff_image.data,
-            group=store,
+        write_image_kwargs = dict(
             scale_factors=scale_factors,
-            method=method,
             coordinate_transformations=coordinate_transformations,
             axes=axes,
             metadata={} if omero is None else {"omero": _to_primitive(omero)},
             storage_options=storage_options,
-            compute=compute,
             **kwargs,
         )
+        if compute and isinstance(ngff_image.data, da.Array):
+            _write_image_level_by_level(
+                ngff_image.data, store, method, **write_image_kwargs
+            )
+        else:
+            write_image(
+                image=ngff_image.data,
+                group=store,
+                method=method,
+                compute=compute,
+                **write_image_kwargs,
+            )
 
         # Add xyz_orientation metadata if provided
         if xyz_orientation:
