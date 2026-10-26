@@ -61,7 +61,7 @@ imaris = [
 ]
 
 n4 = [
-    "antspyx>=0.5.0",
+    "antspyx>=0.6.0",
 ]
 
 templateflow = [
