@@ -7634,8 +7634,8 @@ class ZarrNii:
         lowres_mask_array = np.asarray(lowres_mask_array, dtype=np.float32)
         return np.clip(lowres_mask_array, 0.0, 1.0)
 
+    @staticmethod
     def _call_scaled_processing_highres_func(
-        self,
         plugin,
         fullres_array,
         upsampled_output,
@@ -7721,6 +7721,8 @@ class ZarrNii:
         """
         import itertools
 
+        import dask
+
         # Step 1: Obtain low-resolution data (compute once — small array)
         if lowres_znimg is None:
             lowres_znimg = self.downsample(level=int(np.log2(downsample_factor)))
@@ -7772,16 +7774,16 @@ class ZarrNii:
         ).dtype
 
         # Step 4: Build a fused map_blocks callback
-        # Capture variables needed inside the closure by value
         _eff_factor = float(_effective_factor)
-        _lowres_result = lowres_result  # numpy array, small
-        _lowres_mask_array = lowres_mask_array  # optional numpy array, small
 
-        def _fused_block(block, block_info=None):
+        def _fused_block(block, _lowres_result, _lowres_mask_array, block_info=None):
             """Interpolate lowres correction at block coords, apply highres_func.
 
             Args:
                 block: NumPy array for this dask block (full-resolution data).
+                _lowres_result: Low-resolution correction field (NumPy).
+                _lowres_mask_array: Optional low-resolution mask (NumPy), or
+                    ``None``.
                 block_info: Dask block_info dict; ``block_info[0]["array-location"]``
                     gives the absolute index ranges ``[(start, stop), ...]`` for
                     each dimension in this block.
@@ -7843,17 +7845,29 @@ class ZarrNii:
                         _interp_linear_separable(lowres_mask_slice, spatial_slices)
                     )
 
-            return self._call_scaled_processing_highres_func(
+            # via the class, not self, so the closure doesn't carry the input
+            # image (and its whole dask graph) into every task
+            return ZarrNii._call_scaled_processing_highres_func(
                 plugin=plugin,
                 fullres_array=block,
                 upsampled_output=upsampled_block,
                 upsampled_lowres_mask=upsampled_mask_block,
             )
 
+        # The lowres arrays go into the graph once, as delayed arguments that
+        # each worker fetches once. Captured in the closure, they would be
+        # pickled into every task (several MB each), and a worker's queued
+        # tasks would each hold their own copy.
         corrected_znimg = self.copy()
         corrected_znimg.data = da.map_blocks(
             _fused_block,
             self.data,
+            dask.delayed(lowres_result, pure=True),
+            (
+                None
+                if lowres_mask_array is None
+                else dask.delayed(lowres_mask_array, pure=True)
+            ),
             dtype=_output_dtype,
         )
 
