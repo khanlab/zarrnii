@@ -23,7 +23,7 @@
 - **Run all quality checks**: `./scripts/quality-check.sh` (matches CI exactly)
 
 ### Development Environment
-- **Python version**: 3.11+ (requires Python >=3.11)
+- **Python version**: 3.12+ (requires Python >=3.12)
 - **Virtual environment**: uv automatically creates and manages .venv
 - **Available tools**: pytest, black, isort, mkdocs, jupyterlab, pre-commit
 
@@ -131,7 +131,7 @@ Available via justfile (if just is installed):
 - **GitHub Actions**: `.github/workflows/ci.yml` (testing and quality checks), `.github/workflows/gh-pages.yml` (documentation), `.github/workflows/release.yml` (PyPI), `.github/workflows/dependencies.yml` (automated dependency updates)
 - **Documentation deployment**: Automatic on push to main/master branch
 - **Release process**: Triggered by version tags (v*) using trusted publishing
-- **CI testing**: Automated testing on PRs and pushes with Python 3.11 and 3.12
+- **CI testing**: Automated testing on PRs and pushes with Python 3.12 and 3.13
 
 ## Library Overview
 ZarrNii bridges OME-Zarr and NIfTI formats for biomedical imaging. Core functionality:

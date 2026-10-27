@@ -5,7 +5,7 @@ description = "Package for working with OME-Zarr and NIFTI images in a unified m
 authors = [{name = "Ali Khan", email = "alik@robarts.ca"}]
 license = {text = "MIT"}
 readme = "README.md"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.12,<3.14"
 keywords = ["neuroimaging", "ome-zarr", "nifti", "biomedical", "imaging", "microscopy", "mri"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -13,8 +13,8 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
@@ -30,7 +30,7 @@ dependencies = [
     "scikit-image>=0.22.0",
     "h5py>=3.14.0",
     "pyyaml>=6.0",
-    "ome-zarr>=0.16.0",
+    "ome-zarr>=0.21.0",
     "pluggy>=1.0.0",
     "tifffile>=2024.1.30",
     "imaris-ims-zarr>=0.2.0",
@@ -61,7 +61,7 @@ imaris = [
 ]
 
 n4 = [
-    "antspyx>=0.5.0",
+    "antspyx>=0.6.0",
 ]
 
 templateflow = [

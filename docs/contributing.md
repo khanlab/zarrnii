@@ -6,7 +6,7 @@ Thank you for your interest in contributing to ZarrNii! This document provides g
 
 ### Prerequisites
 
-- Python 3.11 or higher
+- Python 3.12 or higher
 - Git
 - uv package manager (recommended) or pip
 
