@@ -260,6 +260,81 @@ class TestOmeZarrWriter:
             assert reloaded.data.shape == simple_ngff_image.data.shape
             assert list(reloaded.dims) == list(simple_ngff_image.dims)
 
+    @pytest.mark.parametrize(
+        "scaling_method,zarr_format,storage_options",
+        [
+            ("local_mean", 3, None),
+            ("local_mean", 3, {"chunks": (1, 8, 16, 16)}),
+            ("local_mean", 3, {"chunks": (1, 8, 8, 8), "shards": (1, 16, 32, 32)}),
+            ("local_mean", 2, {"chunks": (1, 8, 16, 16)}),
+            ("nearest", 3, None),
+            ("resize", 3, None),
+        ],
+    )
+    def test_save_ngff_image_with_ome_zarr_matches_write_image(
+        self, simple_ngff_image, scaling_method, zarr_format, storage_options
+    ):
+        """Writing one pyramid level at a time gives what ome-zarr's
+        write_image gives when it computes all levels in one pass."""
+        import zarr
+        from ome_zarr.scale import Methods
+        from ome_zarr.writer import write_image
+
+        from zarrnii.core import (
+            _compute_isotropic_scale_factors,
+            _ngff_image_to_ome_zarr_axes,
+            _ngff_image_to_ome_zarr_transforms,
+            _ome_zarr_geometry_kwargs,
+            _set_ome_zarr_geometry,
+            save_ngff_image_with_ome_zarr,
+        )
+
+        max_layer = 3
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "output.zarr")
+            save_ngff_image_with_ome_zarr(
+                simple_ngff_image,
+                output_path,
+                max_layer=max_layer,
+                scaling_method=scaling_method,
+                zarr_format=zarr_format,
+                storage_options=storage_options,
+            )
+
+            expected_path = os.path.join(tmpdir, "expected.zarr")
+            scale_factors = _compute_isotropic_scale_factors(
+                simple_ngff_image, max_layer
+            )
+            axes = _ngff_image_to_ome_zarr_axes(simple_ngff_image)
+            transforms = _ngff_image_to_ome_zarr_transforms(
+                simple_ngff_image, scale_factors
+            )
+            expected_group = zarr.open_group(
+                expected_path, mode="w", zarr_format=zarr_format
+            )
+            write_image(
+                image=simple_ngff_image.data,
+                group=expected_group,
+                scale_factors=scale_factors,
+                method=Methods(scaling_method),
+                axes=axes,
+                storage_options=storage_options,
+                compute=True,
+                **_ome_zarr_geometry_kwargs(simple_ngff_image, axes, transforms),
+            )
+            _set_ome_zarr_geometry(expected_group, axes, transforms)
+
+            output = zarr.open_group(output_path, mode="r")
+            expected = zarr.open_group(expected_path, mode="r")
+            assert output.attrs.asdict() == expected.attrs.asdict()
+            for level in range(max_layer):
+                out_array, expected_array = output[f"s{level}"], expected[f"s{level}"]
+                assert out_array.chunks == expected_array.chunks
+                assert out_array.dtype == expected_array.dtype
+                if zarr_format == 3:
+                    assert out_array.shards == expected_array.shards
+                assert_array_equal(out_array[:], expected_array[:])
+
     def test_save_ngff_image_with_ome_zarr_custom_scale_factors(
         self, simple_ngff_image
     ):

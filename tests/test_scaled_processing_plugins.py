@@ -432,6 +432,44 @@ class TestZarrNiiScaledProcessingIntegration:
         assert len(result.dims) == 5
 
 
+class TestInterpLinearSeparable:
+    """The map_blocks back-end interpolates one axis at a time; it must match
+    scipy.ndimage.map_coordinates(order=1, mode="nearest") on the full grid."""
+
+    @staticmethod
+    def _map_coordinates(lowres, axis_coords):
+        from scipy.ndimage import map_coordinates
+
+        grids = np.meshgrid(*axis_coords, indexing="ij")
+        coords = np.array([g.ravel() for g in grids])
+        return map_coordinates(lowres, coords, order=1, mode="nearest").reshape(
+            tuple(len(c) for c in axis_coords)
+        )
+
+    @pytest.mark.parametrize("factor", [0.5, 1.0, 2.0, 3.7, 32.0])
+    def test_matches_map_coordinates(self, factor):
+        from zarrnii.core import _interp_linear_separable
+
+        rng = np.random.default_rng(0)
+        for _ in range(50):
+            lowres_shape = tuple(int(n) for n in rng.integers(1, 10, 3))
+            lowres = rng.normal(size=lowres_shape).astype(np.float32)
+            axis_coords = []
+            for n in lowres_shape:
+                # a block anywhere in the fullres image, including past the edge
+                fullres = max(1, int(round(n * factor)))
+                start = int(rng.integers(0, fullres))
+                stop = int(rng.integers(start + 1, fullres + 1))
+                axis_coords.append(np.arange(start, stop) / factor)
+
+            result = _interp_linear_separable(lowres, axis_coords)
+
+            assert result.dtype == np.float32
+            np.testing.assert_allclose(
+                result, self._map_coordinates(lowres, axis_coords), atol=1e-5
+            )
+
+
 class TestScaledProcessingWorkflow:
     """Test complete scaled processing workflows."""
 
