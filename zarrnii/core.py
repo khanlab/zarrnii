@@ -1025,8 +1025,9 @@ def _ngff_image_to_ome_zarr_axes(ngff_image: nz.NgffImage) -> list:
             if ngff_image.axes_units and dim in ngff_image.axes_units:
                 axis["unit"] = ngff_image.axes_units[dim]
             else:
-                # Default to micrometer for space axes if not specified
-                axis["unit"] = "micrometer"
+                # Spatial values are stored in mm internally, so a missing unit
+                # means millimeter
+                axis["unit"] = "millimeter"
 
         axes.append(axis)
 
@@ -2547,11 +2548,12 @@ class ZarrNii:
             else:
                 # Spatial dimension
                 axis = {"name": dim, "type": "space"}
-                # Use actual unit from axes_units if available, otherwise default to micrometer
+                # Use actual unit from axes_units if available. Spatial values
+                # are stored in mm internally, so a missing unit means millimeter
                 if self._has_axis_unit(dim):
                     axis["unit"] = self.ngff_image.axes_units[dim]
                 else:
-                    axis["unit"] = "micrometer"
+                    axis["unit"] = "millimeter"
                 axes.append(axis)
         return axes
 
@@ -2681,8 +2683,9 @@ class ZarrNii:
             axes_units: Optional mapping of axis name to unit string (e.g.
                 ``{"x": "micrometer", "y": "micrometer", "z": "micrometer"}``).
                 All values must be valid OME-Zarr space units (see
-                :data:`VALID_AXES_UNITS`).  When ``None``, no unit metadata is
-                stored and viewers fall back to their defaults.  **Non-mm units
+                :data:`VALID_AXES_UNITS`).  When ``None``, *spacing* and
+                *origin* are taken to be in millimeters, and are written as
+                millimeters by :meth:`to_ome_zarr` and :meth:`to_nifti`.  **Non-mm units
                 are automatically converted to millimeters on import**; spacing
                 and origin are scaled accordingly and axes_units is updated to
                 ``'millimeter'``.  Pipelines that already use mm are unaffected.
@@ -4883,13 +4886,10 @@ class ZarrNii:
         # Get the spatial units from axes metadata (common for both branches)
         axes = self.axes
         spatial_axes = [ax for ax in axes if ax.get("type") == "space"]
-        source_unit = "micrometer"  # Default
+        source_unit = "millimeter"  # Default: internal values are in mm
 
         if spatial_axes:
-            source_unit = spatial_axes[0].get("unit", "micrometer")
-            # Handle None case (default to micrometer)
-            if source_unit is None:
-                source_unit = "micrometer"
+            source_unit = spatial_axes[0].get("unit") or "millimeter"
 
         output_spatial_unit = "mm"  # Default output unit for NIfTI
 

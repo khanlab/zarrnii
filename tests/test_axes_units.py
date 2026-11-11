@@ -76,6 +76,33 @@ class TestFromDarrAxesUnits:
                 data_4d, axes_units={"x": "micrometer", "y": "mm", "z": "micrometer"}
             )
 
+    def test_no_units_round_trips_through_ome_zarr(self, tmp_path):
+        """Without axes_units, spacing is mm and is written as mm (not um)."""
+        darr = da.zeros((1, 8, 8, 8), chunks=(1, 8, 8, 8), dtype=np.float32)
+        znii = ZarrNii.from_darr(darr, spacing=(0.01, 0.02, 0.03), origin=(1, 2, 3))
+        assert all(
+            ax["unit"] == "millimeter" for ax in znii.axes if ax["type"] == "space"
+        )
+        path = str(tmp_path / "nounits.ome.zarr")
+        znii.to_ome_zarr(path, max_layer=0)
+        back = ZarrNii.from_ome_zarr(path)
+        np.testing.assert_allclose(back.get_zooms(), [0.01, 0.02, 0.03])
+        np.testing.assert_allclose(back.get_origin(), [1, 2, 3])
+        np.testing.assert_allclose(back.get_affine_matrix(), znii.get_affine_matrix())
+
+    def test_no_units_round_trips_through_nifti(self, tmp_path):
+        """Without axes_units, to_nifti writes the mm spacing unchanged."""
+        import nibabel as nib
+
+        darr = da.zeros((1, 8, 8, 8), chunks=(1, 8, 8, 8), dtype=np.float32)
+        znii = ZarrNii.from_darr(darr, spacing=(0.01, 0.02, 0.03), origin=(1, 2, 3))
+        path = str(tmp_path / "nounits.nii.gz")
+        znii.to_nifti(path)
+        img = nib.load(path)
+        # NIfTI is XYZ; from_darr spacing/origin are in ZYX order
+        np.testing.assert_allclose(img.header.get_zooms()[:3], [0.03, 0.02, 0.01])
+        np.testing.assert_allclose(img.affine, znii.get_affine_matrix("XYZ"))
+
 
 class TestFromTifStackAxesUnits:
     """Tests for axes_units parameter in from_tif_stack."""
