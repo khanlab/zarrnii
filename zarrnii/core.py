@@ -5467,7 +5467,11 @@ class ZarrNii:
         if chunks is None or normalized_chunks == native_data_array.chunksize:
             data_array = native_data_array
         else:
-            data_array = native_data_array.rechunk(normalized_chunks)
+            # Read each dask chunk directly from the store (zarr reads the
+            # native Imaris chunks under it), rather than reading native chunks
+            # and rechunking, which adds a task per native chunk: a level-0
+            # whole brain has ~500k native 32x128x128 chunks.
+            data_array = da.from_zarr(imaris_store, chunks=normalized_chunks)
         selected_channel_labels = None
 
         if data_array.ndim == 5:
