@@ -171,7 +171,7 @@ def _crop_box(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Voxel box ``[v0, v1)`` of a displacement field covering a physical box."""
     inv = step._inv_affine()
-    shape = np.array(step._field_cxyz().shape[1:])
+    shape = np.array(step.field_shape)
     corners = np.array(np.meshgrid(*zip(lo, hi), indexing="ij")).reshape(3, -1)
     vox = inv[:3, :3] @ corners + inv[:3, 3:4]
     v0 = np.clip(np.floor(vox.min(axis=1)).astype(int) - margin, 0, shape)
@@ -183,18 +183,41 @@ def _crop_step(step: Any, lo: np.ndarray, hi: np.ndarray) -> Any:
     """Crop a non-affine step to the physical box ``[lo, hi]`` of its inputs."""
     if not isinstance(step, DisplacementTransform):
         return step
-    full = step._field_cxyz()
     v0, v1 = _crop_box(step, lo, hi)
     sub = (
         None
         if np.any(v1 <= v0)
-        else np.ascontiguousarray(
-            full[:, v0[0] : v1[0], v0[1] : v1[1], v0[2] : v1[2]], dtype=np.float32
-        )
+        else np.ascontiguousarray(step.read_field_box(v0, v1), dtype=np.float32)
     )
     return _CroppedDisplacement(
-        sub, v0.astype(np.float64), np.array(full.shape[1:]), step._inv_affine()
+        sub, v0.astype(np.float64), np.array(step.field_shape), step._inv_affine()
     )
+
+
+class _ZarrCropSpec:
+    """A displacement step whose task reads its crop from a zarr store."""
+
+    __slots__ = ("path", "v0", "v1", "full_shape", "inv_affine")
+
+    def __init__(self, path, v0, v1, full_shape, inv_affine):
+        self.path = path
+        self.v0, self.v1 = v0, v1
+        self.full_shape = full_shape
+        self.inv_affine = inv_affine
+
+    def materialize(self) -> "_CroppedDisplacement":
+        sub = None
+        if np.all(self.v1 > self.v0):
+            import zarr
+
+            arr = zarr.open_group(self.path, mode="r")["field"]
+            sl = (slice(None),) + tuple(
+                slice(int(a), int(b)) for a, b in zip(self.v0, self.v1)
+            )
+            sub = np.ascontiguousarray(arr[sl], dtype=np.float32)
+        return _CroppedDisplacement(
+            sub, self.v0.astype(np.float64), self.full_shape, self.inv_affine
+        )
 
 
 class _TiledCropSpec:
@@ -217,6 +240,9 @@ class _TiledCropSpec:
 def _materialize_steps(steps: Sequence[Any]) -> List[Any]:
     out = []
     for step in steps:
+        if isinstance(step, _ZarrCropSpec):
+            out.append(step.materialize())
+            continue
         if (
             isinstance(step, list)
             and len(step) == 2
@@ -778,11 +804,14 @@ def _tiled_step(dsk, name, i, step, lo, hi):
     """Graph form of a displacement step cropped to ``[lo, hi]`` (physical).
 
     Adds the field tiles it needs to ``dsk`` (once) and returns
-    ``[spec, [tile keys]]``.
+    ``[spec, [tile keys]]``. A field stored in zarr (``step.zarr_path``) is not
+    put in the graph: the task reads its crop from the store.
     """
-    full = step._field_cxyz()
-    shape = np.array(full.shape[1:])
+    shape = np.array(step.field_shape)
     v0, v1 = _crop_box(step, lo, hi)
+    if step.zarr_path is not None:
+        return _ZarrCropSpec(step.zarr_path, v0, v1, shape, step._inv_affine())
+    full = step._field_cxyz()
     keys, origins = [], []
     if np.all(v1 > v0):
         t0 = v0 // _WARP_TILE
@@ -806,7 +835,8 @@ def _step_token(step: Any) -> Any:
     if isinstance(step, np.ndarray):
         return step
     if isinstance(step, DisplacementTransform):
-        return (step.disp_xyz, np.asarray(step.disp_affine.matrix))
+        field = step.zarr_path if step.disp_xyz is None else step.disp_xyz
+        return (field, np.asarray(step.disp_affine.matrix))
     return id(step)
 
 

@@ -386,3 +386,43 @@ def test_matches_ants_apply_transforms(tmp_path):
         res = out.data.compute()[0]  # XYZ, like the NIfTI
         assert res.shape == expected.shape
         np.testing.assert_allclose(res, expected, atol=2e-3 * np.ptp(flo_np))
+
+
+@pytest.mark.parametrize("io", ["graph", "direct"])
+def test_zarr_backed_warp_matches_and_stays_out_of_graph(tmp_path, io):
+    import pickle
+
+    flo = _ramp((48, 48, 48), (1.0, 2.0, 3.0, 0.0), (0.05, 0.05, 0.05), (0, 0, 0))
+    flo.data = flo.data**2
+    warp_path = tmp_path / "warp.nii.gz"
+    _smooth_warp(warp_path, (40, 40, 40), (0.06,) * 3, (0.0, 0.0, 0.0), 0.1)
+    warp = DisplacementTransform.from_nifti(str(warp_path))
+    zwarp = warp.to_zarr(tmp_path / "warp.zarr", chunk=8)
+    assert zwarp.disp_xyz is None and zwarp.field_shape == (40, 40, 40)
+    ref = flo.ref_grid(zoom=1.5, chunks=16)
+
+    expected = flo.apply_transform(warp, ref_znimg=ref, io=io).data.compute()
+    out = flo.apply_transform(zwarp, ref_znimg=ref, io=io)
+    graph = dict(out.data.__dask_graph__())
+    # no field tiles, and no task carries field data
+    assert not any("warp" in str(k) for k in graph)
+    task_bytes = (
+        max(
+            len(pickle.dumps(v))
+            for k, v in graph.items()
+            if isinstance(k, tuple) and k[0] == out.data.name and io == "graph"
+        )
+        if io == "graph"
+        else 0
+    )
+    assert task_bytes < 20_000
+    # float32 storage: coordinates differ by ~1e-7 mm at most
+    np.testing.assert_allclose(out.data.compute(), expected, rtol=1e-5, atol=1e-5)
+
+    # the lazily opened transform evaluates points like the original
+    pts = np.random.default_rng(0).uniform(0, 2.4, size=(3, 100))
+    np.testing.assert_allclose(
+        DisplacementTransform.from_zarr(tmp_path / "warp.zarr").apply_transform(pts),
+        warp.apply_transform(pts),
+        atol=1e-6,
+    )
