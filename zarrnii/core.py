@@ -3316,9 +3316,16 @@ class ZarrNii:
         }
         omezarr_unit = nifti_to_omezarr_units.get(spatial_unit_code, "millimeter")
 
-        for i, dim in enumerate(spatial_dims):
-            scale[dim] = float(in_zooms[i])
-            translation[dim] = affine_matrix[i, 3]
+        # NIfTI voxel axes are i, j, k (x, y, z in XYZ order). Each data
+        # dimension takes the zoom of its own voxel axis, and the translation of
+        # the physical (world) axis that voxel axis maps to, as used by
+        # get_affine_matrix(); spatial_dims lists the dims in data order.
+        voxel_axis = {"x": 0, "y": 1, "z": 2}
+        for dim in spatial_dims:
+            j = voxel_axis[dim]
+            world_row = int(np.argmax(np.abs(affine_matrix[:3, j])))
+            scale[dim] = float(in_zooms[j])
+            translation[dim] = float(affine_matrix[world_row, 3])
             axes_units[dim] = omezarr_unit
 
         # Create NgffImage and normalize spatial metadata to mm.
