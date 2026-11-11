@@ -7,8 +7,8 @@ from typing import Tuple, Union
 
 import nibabel as nib
 import numpy as np
-from attrs import define
-from scipy.interpolate import interpn
+from attrs import define, field
+from scipy.ndimage import map_coordinates
 
 
 @define
@@ -289,6 +289,10 @@ class DisplacementTransform(Transform):
     disp_xyz: np.ndarray = None
     disp_grid: Tuple[np.ndarray, ...] = None
     disp_affine: AffineTransform = None
+    _field_cache: np.ndarray = field(default=None, init=False, repr=False, eq=False)
+    _inv_affine_cache: np.ndarray = field(
+        default=None, init=False, repr=False, eq=False
+    )
 
     @classmethod
     def from_nifti(cls, path: Union[str, bytes]) -> "DisplacementTransform":
@@ -343,22 +347,39 @@ class DisplacementTransform(Transform):
             Points outside the displacement field domain are filled with
             zero displacement (no transformation).
         """
+        vecs = np.asarray(vecs, dtype=np.float64)
+        single = vecs.ndim == 1
+        pts = vecs.reshape(vecs.shape[0], -1) if not single else vecs[:, None]
+
         # Transform points to voxel space of the displacement field
-        vox_vecs = self.disp_affine.invert() @ vecs
+        inv = self._inv_affine()
+        vox = inv[:3, :3] @ pts[:3] + inv[:3, 3:4]
 
-        # Initialize displacement vectors
-        disp_vecs = np.zeros(vox_vecs.shape)
-
-        # Interpolate displacement for each spatial dimension (x, y, z)
+        # Trilinear interpolation of each displacement component. As in ITK,
+        # points within half a voxel of the grid are clamped to its edge, and
+        # points further out get zero displacement (no transformation).
+        field_cxyz = self._field_cxyz()
+        n = np.array(field_cxyz.shape[1:])[:, None]
+        outside = np.any((vox < -0.5) | (vox > n - 0.5), axis=0)
+        disp = np.empty((3, vox.shape[1]), dtype=np.float64)
         for ax in range(3):
-            disp_vecs[ax, :] = interpn(
-                self.disp_grid,
-                self.disp_xyz[:, :, :, ax].squeeze(),
-                vox_vecs[:3, :].T,
-                method="linear",
-                bounds_error=False,
-                fill_value=0,
-            )
+            disp[ax] = map_coordinates(field_cxyz[ax], vox, order=1, mode="nearest")
+        disp[:, outside] = 0.0
 
-        # Add displacement to original coordinates
-        return vecs + disp_vecs
+        out = pts.copy()
+        out[:3] += disp
+        return out[:, 0] if single else out
+
+    def _inv_affine(self) -> np.ndarray:
+        if self._inv_affine_cache is None:
+            self._inv_affine_cache = np.linalg.inv(np.asarray(self.disp_affine.matrix))
+        return self._inv_affine_cache
+
+    def _field_cxyz(self) -> np.ndarray:
+        """Displacement field as a contiguous (3, X, Y, Z) array (cached)."""
+        if self._field_cache is None:
+            self._field_cache = np.ascontiguousarray(
+                np.moveaxis(np.asarray(self.disp_xyz)[..., :3], -1, 0),
+                dtype=np.float64,
+            )
+        return self._field_cache
