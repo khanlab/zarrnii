@@ -642,6 +642,51 @@ def plan_resample(
 # ---------------------------------------------------------------------------
 
 
+# Voxels per slab when a block is sampled slab by slab (bounds the per-task
+# memory for coordinates and sampled values to ~40 MB, whatever the block size).
+_SLAB_VOXELS = 1 << 21
+
+
+class _BlockCoords:
+    """Floating voxel coordinates of a block's voxels, produced slab by slab.
+
+    The chain is evaluated once on the block's lattice points (or per slab at
+    every voxel, for an exact lattice), and coordinates are upsampled for one
+    slab of rows (along the block's first axis) at a time.
+    """
+
+    def __init__(self, steps, positions, block_start, block_shape):
+        self.steps = steps
+        self.voxels = [block_start[a] + np.arange(block_shape[a]) for a in range(3)]
+        self.exact = all(
+            len(p) == len(v) and np.array_equal(p, v)
+            for p, v in zip(positions, self.voxels)
+        )
+        if not self.exact:
+            self.lattice, _ = evaluate_lattice(steps, positions)
+            self.axis_coords = [
+                np.interp(
+                    self.voxels[a],
+                    positions[a],
+                    np.arange(len(positions[a]), dtype=float),
+                )
+                for a in range(3)
+            ]
+
+    def slab(self, r0: int, r1: int) -> np.ndarray:
+        """``(3, r1 - r0, n1, n2)`` float32 coordinates of rows ``r0:r1``."""
+        from .core import _interp_linear_separable
+
+        if self.exact:
+            vox = [self.voxels[0][r0:r1], self.voxels[1], self.voxels[2]]
+            vals = apply_chain(self.steps, _grid_points(vox)).astype(np.float32)
+            return vals.reshape(3, r1 - r0, len(vox[1]), len(vox[2]))
+        axis_coords = [self.axis_coords[0][r0:r1], *self.axis_coords[1:]]
+        return np.stack(
+            [_interp_linear_separable(self.lattice[i], axis_coords) for i in range(3)]
+        )
+
+
 def _block_coords(
     steps: Sequence[Any],
     positions: Sequence[np.ndarray],
@@ -649,22 +694,11 @@ def _block_coords(
     block_shape: Sequence[int],
 ) -> List[np.ndarray]:
     """Floating voxel coordinates (float32) of each voxel in a block."""
-    from .core import _interp_linear_separable
-
-    voxels = [block_start[a] + np.arange(block_shape[a]) for a in range(3)]
-    if all(
-        len(p) == len(v) and np.array_equal(p, v) for p, v in zip(positions, voxels)
-    ):
-        # exact evaluation at every voxel
-        vals = apply_chain(steps, _grid_points(voxels)).astype(np.float32)
-        return list(vals.reshape(3, *block_shape))
-
-    lattice, _ = evaluate_lattice(steps, positions)
-    axis_coords = [
-        np.interp(voxels[a], positions[a], np.arange(len(positions[a]), dtype=float))
-        for a in range(3)
-    ]
-    return [_interp_linear_separable(lattice[i], axis_coords) for i in range(3)]
+    return list(
+        _BlockCoords(steps, positions, block_start, block_shape).slab(
+            0, int(block_shape[0])
+        )
+    )
 
 
 def _cast(values: np.ndarray, dtype: np.dtype) -> np.ndarray:
@@ -708,37 +742,63 @@ def resample_block(
     Returns:
         Array of shape ``(*lead, *block_shape)``.
     """
+    from scipy.ndimage import spline_filter
+
     block_shape = tuple(int(b) for b in block_shape)
     lead = subvol.shape[:-3]
-    steps = _materialize_steps(steps)
-    coords = _block_coords(steps, positions, block_start, block_shape)
-
-    # Samples outside the floating image's extent ([-0.5, n - 0.5] in voxels)
-    # are fill. Within it, edges are clamped (nearest), so a voxel centre that
-    # lands a rounding error outside [0, n - 1] still gets its value.
-    outside = np.zeros(block_shape, dtype=bool)
-    for a in range(3):
-        c = coords[a]
-        outside |= (c < -0.5) | (c > flo_shape[a] - 0.5)
-        c -= sub_lo[a]
-    coords = np.stack(coords)
+    coords = _BlockCoords(
+        _materialize_steps(steps), positions, block_start, block_shape
+    )
 
     sub = subvol.reshape((-1,) + subvol.shape[-3:])
     work_dtype = sub.dtype if order == 0 else np.result_type(sub.dtype, np.float32)
-    out = np.empty((sub.shape[0],) + block_shape, dtype=np.dtype(dtype))
-    for c in range(sub.shape[0]):
-        vals = map_coordinates(
-            sub[c],
-            coords,
-            order=order,
-            mode="nearest",
-            prefilter=order > 1,
-            output=work_dtype,
+    if order > 1:
+        # prefilter once, not once per slab
+        sub = np.stack(
+            [
+                spline_filter(ch, order=order, mode="nearest", output=np.float32)
+                for ch in sub
+            ]
         )
-        if outside.any():
-            vals[outside] = fill_value
-        out[c] = _cast(vals, out.dtype)
+    out = np.empty((sub.shape[0],) + block_shape, dtype=np.dtype(dtype))
+    lo = np.asarray(sub_lo, dtype=np.float32).reshape(3, 1, 1, 1)
+    hi = np.asarray(flo_shape, dtype=np.float32).reshape(3, 1, 1, 1) - 0.5
+
+    rows = max(1, _SLAB_VOXELS // max(block_shape[1] * block_shape[2], 1))
+    for r0 in range(0, block_shape[0], rows):
+        r1 = min(block_shape[0], r0 + rows)
+        c = coords.slab(r0, r1)
+        # Samples outside the floating image's extent ([-0.5, n - 0.5] in
+        # voxels) are fill. Within it, edges are clamped (nearest), so a voxel
+        # centre that lands a rounding error outside [0, n - 1] still gets its
+        # value.
+        outside = np.any((c < -0.5) | (c > hi), axis=0)
+        c -= lo
+        for ch in range(sub.shape[0]):
+            vals = map_coordinates(
+                sub[ch],
+                c,
+                order=order,
+                mode="nearest",
+                prefilter=False,
+                output=work_dtype,
+            )
+            if outside.any():
+                vals[outside] = fill_value
+            out[ch, r0:r1] = _cast(vals, out.dtype)
     return out.reshape(lead + block_shape)
+
+
+def _paste(sub, sub_lo, sub_hi, chunk, origin) -> None:
+    """Copy the part of ``chunk`` (origin ``origin``) inside ``sub``'s box."""
+    src, dst = [], []
+    for a in range(3):
+        c0 = origin[a]
+        c1 = c0 + chunk.shape[-3 + a]
+        s0, s1 = max(c0, sub_lo[a]), min(c1, sub_hi[a])
+        src.append(slice(s0 - c0, s1 - c0))
+        dst.append(slice(s0 - sub_lo[a], s1 - sub_lo[a]))
+    sub[(Ellipsis, *dst)] = chunk[(Ellipsis, *src)]
 
 
 def _assemble_and_resample(
@@ -754,14 +814,7 @@ def _assemble_and_resample(
         lead + tuple(h - lo for lo, h in zip(sub_lo, sub_hi)), dtype=chunks[0].dtype
     )
     for chunk, origin in zip(chunks, chunk_origins):
-        src, dst = [], []
-        for a in range(3):
-            c0 = origin[a]
-            c1 = c0 + chunk.shape[-3 + a]
-            s0, s1 = max(c0, sub_lo[a]), min(c1, sub_hi[a])
-            src.append(slice(s0 - c0, s1 - c0))
-            dst.append(slice(s0 - sub_lo[a], s1 - sub_lo[a]))
-        sub[(Ellipsis, *dst)] = chunk[(Ellipsis, *src)]
+        _paste(sub, sub_lo, sub_hi, chunk, origin)
     return resample_block(sub, sub_lo, *args)
 
 
@@ -793,8 +846,18 @@ def _inline_and_resample(
     """
     from dask.local import get_sync
 
-    chunks = get_sync(subgraph.dsk, keys)
-    return _assemble_and_resample(list(chunks), chunk_origins, sub_lo, sub_hi, *args)
+    # one input chunk in memory at a time, besides the stitched subvolume
+    sub = None
+    for key, origin in zip(keys, chunk_origins):
+        chunk = get_sync(subgraph.dsk, key)
+        if sub is None:
+            sub = np.empty(
+                chunk.shape[:-3] + tuple(h - lo for lo, h in zip(sub_lo, sub_hi)),
+                dtype=chunk.dtype,
+            )
+        _paste(sub, sub_lo, sub_hi, chunk, origin)
+        del chunk
+    return resample_block(sub, sub_lo, *args)
 
 
 _WARP_TILE = 32
