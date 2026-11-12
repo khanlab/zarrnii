@@ -426,3 +426,36 @@ def test_zarr_backed_warp_matches_and_stays_out_of_graph(tmp_path, io):
         warp.apply_transform(pts),
         atol=1e-6,
     )
+
+
+@pytest.mark.parametrize("interpolation", ["nearest", "linear", "cubic"])
+@pytest.mark.parametrize("coord_step", ["auto", 1])
+def test_slabs_match_single_pass(tmp_path, monkeypatch, interpolation, coord_step):
+    """Sampling a block slab by slab gives the same result as all at once."""
+    import zarrnii.resample as rs
+
+    flo = _ramp((40, 40, 40), (1.0, 2.0, 3.0, 0.0), (0.05, 0.05, 0.05), (0, 0, 0))
+    flo.data = flo.data**2
+    warp_path = tmp_path / "warp.nii.gz"
+    _smooth_warp(warp_path, (30, 30, 30), (0.07,) * 3, (0.0, 0.0, 0.0), 0.1)
+    warp = DisplacementTransform.from_nifti(str(warp_path))
+    kw = dict(ref_znimg=flo.ref_grid(chunks=20), interpolation=interpolation)
+    kw["coord_step"] = coord_step
+    whole = flo.apply_transform(warp, **kw).data.compute()
+    monkeypatch.setattr(rs, "_SLAB_VOXELS", 3 * 20 * 20)  # 3 rows per slab
+    slabs = flo.apply_transform(warp, **kw).data.compute()
+    np.testing.assert_array_equal(slabs, whole)
+
+
+def test_cubic_identity_reproduces_smooth_input():
+    flo = _ramp((30, 30, 30), (1.0, -2.0, 0.5, 3.0), (0.1, 0.1, 0.1), (0, 0, 0))
+    flo.data = flo.data**2
+    out = flo.apply_transform(
+        AffineTransform.identity(), ref_znimg=flo, interpolation="cubic"
+    )
+    np.testing.assert_allclose(
+        out.data.compute()[0, 3:-3, 3:-3, 3:-3],
+        flo.data.compute()[0, 3:-3, 3:-3, 3:-3],
+        rtol=1e-4,
+        atol=1e-4,
+    )
