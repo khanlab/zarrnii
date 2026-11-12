@@ -7,8 +7,8 @@ from typing import Tuple, Union
 
 import nibabel as nib
 import numpy as np
-from attrs import define
-from scipy.interpolate import interpn
+from attrs import define, field
+from scipy.ndimage import map_coordinates
 
 
 @define
@@ -284,11 +284,20 @@ class DisplacementTransform(Transform):
         disp_xyz: Displacement vectors at grid points (4D array: x, y, z, vector_component)
         disp_grid: Grid coordinates for displacement field
         disp_affine: Affine transformation from world to displacement field coordinates
+        zarr_path: If set, the field is stored in this zarr group (see
+            :meth:`to_zarr`) instead of ``disp_xyz``, and is only read when
+            needed. Block-wise resampling then reads just the part each block
+            needs from the store, instead of putting the field in the dask graph.
     """
 
     disp_xyz: np.ndarray = None
     disp_grid: Tuple[np.ndarray, ...] = None
     disp_affine: AffineTransform = None
+    zarr_path: str = None
+    _field_cache: np.ndarray = field(default=None, init=False, repr=False, eq=False)
+    _inv_affine_cache: np.ndarray = field(
+        default=None, init=False, repr=False, eq=False
+    )
 
     @classmethod
     def from_nifti(cls, path: Union[str, bytes]) -> "DisplacementTransform":
@@ -343,22 +352,109 @@ class DisplacementTransform(Transform):
             Points outside the displacement field domain are filled with
             zero displacement (no transformation).
         """
+        vecs = np.asarray(vecs, dtype=np.float64)
+        single = vecs.ndim == 1
+        pts = vecs.reshape(vecs.shape[0], -1) if not single else vecs[:, None]
+
         # Transform points to voxel space of the displacement field
-        vox_vecs = self.disp_affine.invert() @ vecs
+        inv = self._inv_affine()
+        vox = inv[:3, :3] @ pts[:3] + inv[:3, 3:4]
 
-        # Initialize displacement vectors
-        disp_vecs = np.zeros(vox_vecs.shape)
-
-        # Interpolate displacement for each spatial dimension (x, y, z)
+        # Trilinear interpolation of each displacement component. As in ITK,
+        # points within half a voxel of the grid are clamped to its edge, and
+        # points further out get zero displacement (no transformation).
+        field_cxyz = self._field_cxyz()
+        n = np.array(field_cxyz.shape[1:])[:, None]
+        outside = np.any((vox < -0.5) | (vox > n - 0.5), axis=0)
+        disp = np.empty((3, vox.shape[1]), dtype=np.float64)
         for ax in range(3):
-            disp_vecs[ax, :] = interpn(
-                self.disp_grid,
-                self.disp_xyz[:, :, :, ax].squeeze(),
-                vox_vecs[:3, :].T,
-                method="linear",
-                bounds_error=False,
-                fill_value=0,
-            )
+            disp[ax] = map_coordinates(field_cxyz[ax], vox, order=1, mode="nearest")
+        disp[:, outside] = 0.0
 
-        # Add displacement to original coordinates
-        return vecs + disp_vecs
+        out = pts.copy()
+        out[:3] += disp
+        return out[:, 0] if single else out
+
+    def to_zarr(
+        self, path: Union[str, bytes], chunk: int = 32
+    ) -> "DisplacementTransform":
+        """Save the field to a zarr group and return a transform backed by it.
+
+        The field is stored as float32, ``(3, X, Y, Z)`` with ``chunk``-voxel
+        chunks, with the field's voxel-to-world affine in the group attributes.
+        Use the returned transform with :meth:`ZarrNii.apply_transform` so that
+        each output block reads only the part of the field it needs, which keeps
+        a large field out of the dask graph (important with
+        ``dask.distributed``, where the graph is sent to the scheduler). The
+        store must be readable by every worker.
+
+        Args:
+            path: Path of the zarr group to write (overwritten if it exists).
+            chunk: Chunk size along each spatial axis.
+
+        Returns:
+            A :class:`DisplacementTransform` reading from ``path``.
+        """
+        import zarr
+
+        field_cxyz = self._field_cxyz()
+        group = zarr.open_group(str(path), mode="w")
+        arr = group.create_array(
+            "field",
+            shape=field_cxyz.shape,
+            chunks=(3, chunk, chunk, chunk),
+            dtype="float32",
+        )
+        arr[...] = field_cxyz.astype(np.float32)
+        group.attrs["affine"] = np.asarray(self.disp_affine.matrix).tolist()
+        return DisplacementTransform.from_zarr(path)
+
+    @classmethod
+    def from_zarr(cls, path: Union[str, bytes]) -> "DisplacementTransform":
+        """Open a displacement field saved with :meth:`to_zarr` (lazily)."""
+        import zarr
+
+        group = zarr.open_group(str(path), mode="r")
+        affine = np.asarray(group.attrs["affine"], dtype=np.float64)
+        return cls(disp_affine=AffineTransform.from_array(affine), zarr_path=str(path))
+
+    @property
+    def field_shape(self) -> Tuple[int, int, int]:
+        """Spatial shape (X, Y, Z) of the displacement field."""
+        if self._field_cache is not None:
+            return tuple(self._field_cache.shape[1:])
+        if self.disp_xyz is not None:
+            return tuple(np.shape(self.disp_xyz)[:3])
+        import zarr
+
+        return tuple(zarr.open_group(self.zarr_path, mode="r")["field"].shape[1:])
+
+    def read_field_box(self, v0, v1) -> np.ndarray:
+        """Field values ``(3, ...)`` in the voxel box ``[v0, v1)``."""
+        sl = (slice(None),) + tuple(slice(int(a), int(b)) for a, b in zip(v0, v1))
+        if self.zarr_path is not None and self._field_cache is None:
+            import zarr
+
+            arr = zarr.open_group(self.zarr_path, mode="r")["field"]
+            return np.asarray(arr[sl])
+        return self._field_cxyz()[sl]
+
+    def _inv_affine(self) -> np.ndarray:
+        if self._inv_affine_cache is None:
+            self._inv_affine_cache = np.linalg.inv(np.asarray(self.disp_affine.matrix))
+        return self._inv_affine_cache
+
+    def _field_cxyz(self) -> np.ndarray:
+        """Displacement field as a contiguous (3, X, Y, Z) array (cached)."""
+        if self._field_cache is None:
+            if self.disp_xyz is None and self.zarr_path is not None:
+                import zarr
+
+                arr = zarr.open_group(self.zarr_path, mode="r")["field"]
+                self._field_cache = np.ascontiguousarray(arr[...], dtype=np.float64)
+            else:
+                self._field_cache = np.ascontiguousarray(
+                    np.moveaxis(np.asarray(self.disp_xyz)[..., :3], -1, 0),
+                    dtype=np.float64,
+                )
+        return self._field_cache

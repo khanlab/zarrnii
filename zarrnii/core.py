@@ -4474,94 +4474,215 @@ class ZarrNii:
         *transforms: Transform,
         ref_znimg: "ZarrNii",
         spatial_dims: Optional[List[str]] = None,
+        ref_zoom: Optional[Union[float, Tuple[float, float, float]]] = None,
+        interpolation: Literal["linear", "nearest", "cubic"] = "linear",
+        fill_value: float = 0.0,
+        dtype: Optional[Any] = None,
+        chunks: Optional[Union[int, Tuple[int, int, int]]] = None,
+        coord_step: Union[str, int, Tuple[int, int, int]] = "auto",
+        coord_tol: float = 0.1,
+        io: Literal["graph", "direct"] = "graph",
     ) -> "ZarrNii":
-        """Apply spatial transformations to image data.
+        """Resample this image onto a reference grid through spatial transforms.
 
-        Transforms the image data to align with a reference image space using
-        the provided transformation(s). This enables registration, resampling,
-        and coordinate system conversions.
+        For each output voxel, the reference voxel is mapped to physical space
+        with the reference affine, through ``transforms`` in order, and into
+        this (floating) image's voxels with the inverse of its affine; the
+        floating image is then interpolated there. So ``transforms`` map
+        reference (e.g. template) physical points to floating (e.g. subject)
+        physical points, as for ANTs ``antsApplyTransforms``.
+
+        The computation is lazy and block-wise, and scales to whole-brain
+        light-sheet data:
+
+        * the transform chain is evaluated on a coarse lattice of control
+          points, which each block upsamples (exact for affine-only chains;
+          for displacement fields the lattice is refined until its error is
+          below ``coord_tol`` floating voxels);
+        * the floating region each output block needs is worked out before
+          any data is read, and blocks outside the floating image become fill
+          without reading anything;
+        * the floating image can be any dask array, including lazy operations
+          on it (corrections, downsampling, channel selection).
 
         Args:
-            *transforms: Variable number of Transform objects to apply sequentially.
-                Supported transform types:
-                - AffineTransform: Linear transformations (rotation, scaling, translation)
-                - DisplacementTransform: Non-linear deformation fields
-            ref_znimg: Reference ZarrNii image defining the target coordinate system,
-                grid spacing, and field of view for the output
-            spatial_dims: Names of spatial dimensions for transformation. If None,
-                automatically derived from axes_order
+            *transforms: Transforms applied, in order, to reference physical
+                points: :class:`AffineTransform`, :class:`DisplacementTransform`
+                or any :class:`Transform`.
+            ref_znimg: Reference image defining the output grid (shape, voxel
+                spacing, orientation, origin). Only its geometry is used.
+            spatial_dims: Deprecated and ignored.
+            ref_zoom: Optional zoom factor for the reference grid (scalar or
+                per spatial axis, in the reference's axes order), e.g. ``10``
+                to resample at 2.5 um onto a 25 um template's field of view.
+                See :meth:`ref_grid`.
+            interpolation: ``"linear"`` (default), ``"nearest"`` (for label
+                images) or ``"cubic"``.
+            fill_value: Value for output voxels outside the floating image.
+            dtype: Output dtype. Defaults to this image's dtype; integer
+                outputs are rounded and clipped.
+            chunks: Spatial chunk size of the output (int or 3-tuple, in the
+                reference's axes order). Defaults to the reference's chunks,
+                or 128 if the reference grid was zoomed.
+            coord_step: Lattice spacing, in output voxels, for evaluating the
+                transforms. ``"auto"`` (default) chooses it; ``1`` evaluates
+                every voxel exactly.
+            coord_tol: Allowed lattice error in floating voxels for
+                ``coord_step="auto"``.
+            io: ``"graph"`` (default): output blocks depend on the floating
+                image's dask chunks, so each input chunk is computed once.
+                ``"direct"``: each output block computes the input chunks it
+                needs itself, so blocks are independent (better for
+                ``dask.distributed`` and object stores, bounded memory), at
+                the cost of computing chunks shared by neighbouring blocks more
+                than once.
 
         Returns:
-            New ZarrNii instance with transformed data in reference space
-
-        Raises:
-            ValueError: If no transforms provided or reference image incompatible
-            TypeError: If transforms are not valid Transform objects
+            New ZarrNii on the reference grid with this image's non-spatial
+            dimensions (channels) and channel metadata.
 
         Examples:
-            >>> # Apply affine transformation
             >>> affine = AffineTransform.from_txt("transform.txt")
-            >>> transformed = moving.apply_transform(affine, ref_znimg=reference)
+            >>> out = moving.apply_transform(affine, ref_znimg=reference)
 
-            >>> # Apply multiple transforms sequentially
-            >>> affine = AffineTransform.identity()
             >>> warp = DisplacementTransform.from_nifti("warp.nii.gz")
-            >>> result = moving.apply_transform(affine, warp, ref_znimg=reference)
-
-        Notes:
-            - Transformations are applied in the order specified
-            - Output data inherits spatial properties from ref_znimg
-            - Uses interpolation for non-integer coordinate mappings
-            - Non-spatial dimensions (channels, time) are preserved
+            >>> out = moving.apply_transform(warp, ref_znimg=template, ref_zoom=10)
         """
-        if spatial_dims is None:
-            spatial_dims = (
-                ["z", "y", "x"] if self.axes_order == "ZYX" else ["x", "y", "z"]
-            )
-
-        # Initialize the list of transformations to apply
-        tfms_to_apply = [ref_znimg.affine]  # Start with the reference image affine
-
-        # Append all transformations passed as arguments
-        tfms_to_apply.extend(transforms)
-
-        # Append the inverse of the current image's affine
-        tfms_to_apply.append(self.affine.invert())
-
-        interp_znimg = ref_znimg.copy(
-            name=f"{self.name}_transformed_to_{ref_znimg.name}"
+        from .resample import (
+            INTERPOLATION_ORDERS,
+            build_resampled_array,
+            compose_chain,
+            plan_resample,
         )
 
-        # Try to get zarr store information for direct access (avoids nested compute)
-        try:
-            store_info = self.get_zarr_store_info()
-        except:
-            store_info = None
-
-        # Lazily apply the transformations using dask
-        if store_info is not None:
-            # Use direct zarr access to avoid nested compute() calls
-            interp_znimg.data = da.map_blocks(
-                interp_by_block,  # Function to interpolate each block
-                ref_znimg.data,  # Reference image data
-                dtype=np.float32,  # Output data type
-                transforms=tfms_to_apply,  # Transformations to apply
-                flo_store_path=store_info["store_path"],
-                flo_array_shape=store_info["array_shape"],
-                flo_dataset_path=store_info["dataset_path"],
-                flo_storage_options=None,  # TODO: Extract from dask array if available
+        if interpolation not in INTERPOLATION_ORDERS:
+            raise ValueError(
+                f"interpolation must be one of {list(INTERPOLATION_ORDERS)}, "
+                f"got {interpolation!r}"
             )
+        order = INTERPOLATION_ORDERS[interpolation]
+
+        if ref_zoom is not None:
+            ref_znimg = ref_znimg.ref_grid(zoom=ref_zoom, chunks=chunks)
+
+        ref_spatial = ref_znimg.shape[-3:]
+        if chunks is None:
+            out_chunks = ref_znimg.data.chunks[-3:]
         else:
-            # Fall back to passing ZarrNii instance (legacy behavior with nested compute)
-            interp_znimg.data = da.map_blocks(
-                interp_by_block,  # Function to interpolate each block
-                ref_znimg.data,  # Reference image data
-                dtype=np.float32,  # Output data type
-                transforms=tfms_to_apply,  # Transformations to apply
-                flo_znimg=self,  # Floating image to align (legacy)
+            out_chunks = da.core.normalize_chunks(
+                (chunks,) * 3 if np.isscalar(chunks) else tuple(chunks),
+                shape=ref_spatial,
             )
 
-        return interp_znimg
+        # reference voxel -> reference physical -> transforms -> floating voxel
+        steps = compose_chain([ref_znimg.affine, *transforms, self.affine.invert()])
+        plan = plan_resample(
+            steps,
+            ref_spatial,
+            out_chunks,
+            self.shape[-3:],
+            ref_spacing=ref_znimg.get_zooms(),
+            order=order,
+            coord_step=coord_step,
+            coord_tol=coord_tol,
+        )
+
+        out_dtype = np.dtype(self.data.dtype if dtype is None else dtype)
+        darr = build_resampled_array(
+            self.data,
+            plan,
+            order=order,
+            fill_value=fill_value,
+            dtype=out_dtype,
+            io=io,
+        )
+
+        out_dims = list(self.dims[:-3]) + list(ref_znimg.dims[-3:])
+        ref_scale, ref_trans = (
+            ref_znimg.ngff_image.scale,
+            ref_znimg.ngff_image.translation,
+        )
+        out_image = _derive_ngff_image(
+            ref_znimg.ngff_image,
+            data=darr,
+            dims=out_dims,
+            scale={d: ref_scale.get(d, 1.0) for d in out_dims},
+            translation={d: ref_trans.get(d, 0.0) for d in out_dims},
+            name=f"{self.name}_transformed_to_{ref_znimg.name}",
+        )
+        out = ZarrNii(
+            ngff_image=out_image,
+            axes_order=ref_znimg.axes_order,
+            xyz_orientation=ref_znimg.xyz_orientation,
+            _omero=self._omero,
+        )
+        return out
+
+    def ref_grid(
+        self,
+        zoom: Union[float, Tuple[float, float, float]] = 1.0,
+        chunks: Optional[Union[int, Tuple[int, int, int]]] = None,
+        dtype: Any = np.float32,
+    ) -> "ZarrNii":
+        """Lazy reference grid covering this image's field of view.
+
+        The grid has ``zoom`` times as many voxels along each spatial axis
+        (``zoom > 1`` gives smaller voxels), the same orientation, and the same
+        field of view: the outer edges of the first and last voxels line up
+        with this image's. Use it as ``ref_znimg`` in :meth:`apply_transform`,
+        e.g. to resample light-sheet data at 2.5 um onto a 25 um template.
+
+        Args:
+            zoom: Scalar or per spatial axis (in this image's axes order).
+            chunks: Spatial chunks of the (all-zero) data. Defaults to 128 when
+                zooming, otherwise to this image's chunks.
+            dtype: dtype of the placeholder data.
+
+        Returns:
+            New single-channel ZarrNii with all-zero lazy data.
+        """
+        zoom = np.broadcast_to(np.asarray(zoom, dtype=float), (3,))
+        if np.any(zoom <= 0):
+            raise ValueError(f"zoom must be positive, got {zoom}")
+        spatial_dims = list(self.dims[-3:])
+        old_shape = np.array(self.shape[-3:])
+        new_shape = np.maximum(np.round(old_shape * zoom).astype(int), 1)
+        # actual zoom after rounding, so the field of view is preserved exactly
+        eff_zoom = new_shape / old_shape
+
+        affine = self.get_affine_matrix()  # data-order voxel -> physical xyz
+        scale = dict(self.ngff_image.scale)  # updated per spatial dim below
+        translation = dict(self.ngff_image.translation)
+        for a, dim in enumerate(spatial_dims):
+            old_sp = float(scale.get(dim, 1.0))
+            scale[dim] = old_sp / eff_zoom[a]
+            # centre of new voxel 0, in old voxel coordinates along axis a
+            shift = -0.5 + 0.5 / eff_zoom[a]
+            col = affine[:3, a]
+            row = int(np.argmax(np.abs(col)))
+            translation[dim] = float(translation.get(dim, 0.0)) + float(
+                np.sign(col[row]) * old_sp * shift
+            )
+
+        if chunks is None:
+            chunks = 128 if np.any(eff_zoom != 1) else self.data.chunks[-3:]
+        if np.isscalar(chunks):
+            chunks = (chunks,) * 3
+        darr = da.zeros((1, *new_shape), dtype=dtype, chunks=(1, *chunks))
+        dims = ["c"] + spatial_dims
+        ref_image = _derive_ngff_image(
+            self.ngff_image,
+            data=darr,
+            dims=dims,
+            scale={d: scale.get(d, 1.0) for d in dims},
+            translation={d: translation.get(d, 0.0) for d in dims},
+            name=f"{self.name}_ref",
+        )
+        return ZarrNii(
+            ngff_image=ref_image,
+            axes_order=self.axes_order,
+            xyz_orientation=self.xyz_orientation,
+        )
 
     # I/O operations
     def to_ome_zarr(
@@ -5353,7 +5474,11 @@ class ZarrNii:
         if chunks is None or normalized_chunks == native_data_array.chunksize:
             data_array = native_data_array
         else:
-            data_array = native_data_array.rechunk(normalized_chunks)
+            # Read each dask chunk directly from the store (zarr reads the
+            # native Imaris chunks under it), rather than reading native chunks
+            # and rechunking, which adds a task per native chunk: a level-0
+            # whole brain has ~500k native 32x128x128 chunks.
+            data_array = da.from_zarr(imaris_store, chunks=normalized_chunks)
         selected_channel_labels = None
 
         if data_array.ndim == 5:
