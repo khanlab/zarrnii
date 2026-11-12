@@ -12,7 +12,7 @@ Console Scripts:
 import argparse
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 from zarrnii import ZarrNii
 
@@ -35,6 +35,19 @@ def parse_float_tuple(value: str) -> Tuple[float, float, float]:
 def parse_int_tuple(value: str) -> Tuple[int, ...]:
     """Parse comma-separated tuple of integers."""
     return tuple(int(x.strip()) for x in value.split(","))
+
+
+def _max_layer_arg(value: str) -> Union[int, str]:
+    """Parse --max-layer: a positive integer or 'auto'."""
+    if value.strip().lower() == "auto":
+        return "auto"
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("Expected a positive integer or 'auto'")
+    if n < 1:
+        raise argparse.ArgumentTypeError("Expected a positive integer or 'auto'")
+    return n
 
 
 def z2n():
@@ -277,9 +290,13 @@ Examples:
     # to_ome_zarr parameters
     parser.add_argument(
         "--max-layer",
-        type=int,
-        default=4,
-        help="Maximum number of pyramid levels (default: 4)",
+        type=_max_layer_arg,
+        default="auto",
+        help=(
+            "Number of pyramid levels, or 'auto' to downsample until the "
+            "coarsest level is at most 128 voxels along each axis "
+            "(default: auto)"
+        ),
     )
     parser.add_argument(
         "--scale-factors",

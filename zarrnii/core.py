@@ -26,7 +26,7 @@ import inspect
 import os
 import typing
 import warnings
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 import dask.array as da
 import fsspec
@@ -331,7 +331,7 @@ def load_ngff_image(
 def save_ngff_image(
     ngff_image: nz.NgffImage,
     store_or_path: Union[str, Any],
-    max_layer: int = 4,
+    max_layer: Union[int, str] = "auto",
     scale_factors: Optional[List[int]] = None,
     xyz_orientation: Optional[str] = None,
     **kwargs: Any,
@@ -346,7 +346,10 @@ def save_ngff_image(
         ngff_image: NgffImage object to save containing data and metadata
         store_or_path: Target store or path. Supports local paths, remote URLs,
             and .zip extensions for ZipStore creation
-        max_layer: Maximum number of pyramid levels to create (including level 0)
+        max_layer: Number of pyramid levels to create (including level 0), or
+            ``"auto"`` (default) to keep halving until the largest spatial
+            dimension of the coarsest level is at most 128 voxels. Ignored
+            when ``scale_factors`` is given.
         scale_factors: Custom scale factors for each pyramid level. If None,
             uses powers of 2: [2, 4, 8, ...]
         orientation: Anatomical orientation string (e.g., 'RAS', 'LPI') to store
@@ -376,6 +379,11 @@ def save_ngff_image(
     import zarr
 
     if scale_factors is None:
+        max_layer = _resolve_max_layer(
+            ngff_image,
+            max_layer,
+            lambda n: [{d: 2**i for d in "zyx"} for i in range(1, n)],
+        )
         scale_factors = [2**i for i in range(1, max_layer)]
 
     # Extract chunks from the input data if available
@@ -434,6 +442,66 @@ def save_ngff_image(
             except Exception:
                 # If we can't write orientation metadata, that's not critical
                 pass
+
+
+# With max_layer="auto", pyramid levels are added until the largest spatial
+# dimension of the coarsest level is at most this many voxels.
+AUTO_PYRAMID_MIN_SIZE = 128
+
+
+def _resolve_max_layer(
+    ngff_image: nz.NgffImage,
+    max_layer: Union[int, str],
+    factors_for: Callable[[int], List[Dict[str, Union[int, float]]]],
+    min_size: int = AUTO_PYRAMID_MIN_SIZE,
+) -> int:
+    """Turn ``max_layer`` (an int or ``"auto"``) into a number of levels.
+
+    For ``"auto"``, returns the smallest number of levels whose coarsest level
+    has every spatial dimension at most ``min_size`` voxels, using the
+    cumulative per-axis factors that ``factors_for(n_levels)`` produces (so
+    anisotropy-correcting first levels are accounted for). For isotropic
+    factors this is ``1 + ceil(log2(max(spatial_shape) / min_size))``.
+
+    Args:
+        ngff_image: Image to be written.
+        max_layer: Number of levels (including level 0), or ``"auto"``.
+        factors_for: Returns the cumulative scale factors (one dict per level
+            after level 0, keyed by spatial dim) for a given number of levels.
+        min_size: Target size of the largest spatial dimension at the
+            coarsest level.
+
+    Returns:
+        Number of pyramid levels, at least 1.
+    """
+    if isinstance(max_layer, str):
+        if max_layer != "auto":
+            raise ValueError(f"max_layer must be an int or 'auto', got {max_layer!r}")
+    else:
+        return int(max_layer)
+
+    spatial = {
+        dim.lower(): size
+        for dim, size in zip(ngff_image.dims, ngff_image.data.shape)
+        if dim.lower() in ("x", "y", "z")
+    }
+    if not spatial:
+        return 1
+
+    # Levels needed if every level halved every dim. An anisotropy-correcting
+    # first level can delay halving of the coarse dims, so search a little
+    # further than that.
+    n_halvings = max(0, int(np.ceil(np.log2(max(spatial.values()) / min_size))))
+    max_levels = 1 + n_halvings + 8
+    for n_levels in range(1, max_levels + 1):
+        factors = factors_for(n_levels)
+        coarsest = factors[-1] if factors else {}
+        if all(
+            size // max(1, int(coarsest.get(dim, 1))) <= min_size
+            for dim, size in spatial.items()
+        ):
+            return n_levels
+    return max_levels
 
 
 def _compute_isotropic_scale_factors(
@@ -603,7 +671,7 @@ def _set_ome_zarr_geometry(
 def save_ngff_image_with_ome_zarr(
     ngff_image: nz.NgffImage,
     store_or_path: Union[str, Any],
-    max_layer: int = 4,
+    max_layer: Union[int, str] = "auto",
     scale_factors: Optional[
         Union[List[int], List[Dict[str, int]], List[Dict[str, float]]]
     ] = None,
@@ -625,7 +693,10 @@ def save_ngff_image_with_ome_zarr(
         ngff_image: NgffImage object to save containing data and metadata
         store_or_path: Target store or path. Supports local paths, remote URLs,
             and .ozx or .zip extensions for OME-Zarr zip creation
-        max_layer: Maximum number of pyramid levels to create (including level 0)
+        max_layer: Number of pyramid levels to create (including level 0), or
+            ``"auto"`` (default) to keep downsampling until the largest spatial
+            dimension of the coarsest level is at most 128 voxels. Ignored
+            when ``scale_factors`` is given.
         scale_factors: Custom scale factors for each pyramid level. If None,
             automatically computes anisotropy-aware cumulative factors so that
             the first pyramid level brings all spatial dimensions to
@@ -696,6 +767,11 @@ def save_ngff_image_with_ome_zarr(
         # level corrects any voxel-size anisotropy before subsequent levels
         # apply uniform 2× downsampling.  Falls back to uniform 2× per level
         # when the data are already isotropic.
+        max_layer = _resolve_max_layer(
+            ngff_image,
+            max_layer,
+            lambda n: _compute_isotropic_scale_factors(ngff_image, n),
+        )
         scale_factors = _compute_isotropic_scale_factors(ngff_image, max_layer)
 
     # Convert scaling_method string to Methods enum for proper type safety
@@ -4711,7 +4787,7 @@ class ZarrNii:
     def to_ome_zarr(
         self,
         store_or_path: Union[str, Any],
-        max_layer: int = 4,
+        max_layer: Union[int, str] = "auto",
         scale_factors: Optional[Union[List[int], List[Dict[str, int]]]] = None,
         match_scale_factors_from: Optional[Union[str, Any]] = None,
         backend: str = "ome-zarr-py",
@@ -4731,8 +4807,12 @@ class ZarrNii:
                 - Remote URLs (s3://, gs://, etc.)
                 - ZIP files (.zip extension for compressed storage)
                 - Zarr store objects
-            max_layer: Maximum number of pyramid levels to create (including level 0).
-                Higher values create more downsampled levels
+            max_layer: Number of pyramid levels to create (including level 0),
+                or ``"auto"`` (default). ``"auto"`` keeps downsampling until
+                the largest spatial dimension of the coarsest level is at most
+                128 voxels (as Imaris does), so large images get enough levels
+                for an overview and small images don't get needless ones.
+                Ignored when ``scale_factors`` is given.
             scale_factors: Custom downsampling factors for each pyramid level.
                 If None (default), automatically computes anisotropy-aware
                 cumulative scale factors for the ``'ome-zarr-py'`` backend:
