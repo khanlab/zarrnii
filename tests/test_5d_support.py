@@ -84,7 +84,7 @@ class Test5DSupport:
         znimg = ZarrNii.from_ome_zarr(test_5d_dataset)
 
         # Should load all data: shape (t, z, y, x, c) = (3, 16, 32, 32, 2)
-        expected_shape = (3, 16, 32, 32, 2)
+        expected_shape = (3, 2, 16, 32, 32)
         assert znimg.darr.shape == expected_shape
 
         # Verify dimensions include time
@@ -96,13 +96,13 @@ class Test5DSupport:
         znimg = ZarrNii.from_ome_zarr(test_5d_dataset, timepoints=[0, 2])
 
         # Should load 2 timepoints: shape (t, z, y, x, c) = (2, 16, 32, 32, 2)
-        expected_shape = (2, 16, 32, 32, 2)
+        expected_shape = (2, 2, 16, 32, 32)
         assert znimg.darr.shape == expected_shape
 
         # Check data values - timepoint 0 should have values starting with 1000
         # timepoint 2 should have values starting with 3000
-        t0_data = znimg.darr[0, :, :, :, 0].compute()
-        t1_data = znimg.darr[1, :, :, :, 0].compute()  # This is actually timepoint 2
+        t0_data = znimg.darr[0, 0].compute()
+        t1_data = znimg.darr[1, 0].compute()  # This is actually timepoint 2
 
         # Timepoint 0, channel 0 should have value 1100 (1*1000 + 1*100)
         assert np.all(t0_data == 1100)
@@ -114,7 +114,7 @@ class Test5DSupport:
         znimg = ZarrNii.from_ome_zarr(test_5d_dataset, timepoints=[1], channels=[1])
 
         # Should load 1 timepoint, 1 channel: shape (t, z, y, x, c) = (1, 16, 32, 32, 1)
-        expected_shape = (1, 16, 32, 32, 1)
+        expected_shape = (1, 1, 16, 32, 32)
         assert znimg.darr.shape == expected_shape
 
         # Check data value - timepoint 1, channel 1 should have value 2200 (2*1000 + 2*100)
@@ -131,7 +131,7 @@ class Test5DSupport:
         # since crop dims are always defined x y z, x is the one cropped more..
 
         # Should maintain T and C dimensions but crop spatial ones
-        expected_shape = (3, 16, 16, 8, 2)  # (t, z_cropped, y_cropped, x_cropped, c)
+        expected_shape = (3, 2, 16, 16, 8)  # (t, c, z_cropped, y_cropped, x_cropped)
         assert cropped.darr.shape == expected_shape
 
     def test_downsample_5d_data(self, test_5d_dataset):
@@ -142,7 +142,7 @@ class Test5DSupport:
         downsampled = znimg.downsample(factors=2)
 
         # Should downsample spatial dimensions but preserve T and C
-        expected_shape = (3, 8, 16, 16, 2)  # (t, z/2, y/2, x/2, c)
+        expected_shape = (3, 2, 8, 16, 16)  # (t, c, z/2, y/2, x/2)
         assert downsampled.darr.shape == expected_shape
 
     def test_select_timepoints_method(self, test_5d_dataset):
@@ -153,7 +153,7 @@ class Test5DSupport:
         selected = znimg.select_timepoints(timepoints=[0, 2])
 
         # Should have selected timepoints
-        expected_shape = (2, 16, 32, 32, 2)
+        expected_shape = (2, 2, 16, 32, 32)
         assert selected.darr.shape == expected_shape
 
     def test_error_invalid_timepoint_index(self, test_5d_dataset):

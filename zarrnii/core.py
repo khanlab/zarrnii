@@ -26,6 +26,7 @@ import inspect
 import os
 import typing
 import warnings
+from types import SimpleNamespace
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import dask.array as da
@@ -305,16 +306,9 @@ def load_ngff_image(
         >>> # Load from ZIP store
         >>> img = load_ngff_image("/path/to/data.zarr.zip", level=1)
     """
-    import zarr
-
-    # Handle OME-Zarr zip files by creating a ZipStore
-    if isinstance(store_or_path, str) and _is_ome_zarr_zip_path(store_or_path):
-        store = zarr.storage.ZipStore(store_or_path, mode="r")
-        multiscales = nz.from_ngff_zarr(store, storage_options=storage_options)
-        store.close()
-    else:
-        # Load the multiscales object normally
-        multiscales = nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
+    # ngff-zarr reads local directories, remote URLs and .zip/.ozx archive
+    # paths directly (it no longer accepts zarr-python store objects).
+    multiscales = nz.from_ngff_zarr(store_or_path, storage_options=storage_options)
 
     # Get the specified level
     ngff_image = multiscales.images[level]
@@ -2418,6 +2412,13 @@ class ZarrNii:
             # The first key in a from_zarr graph typically contains the zarr array
             for key in graph.keys():
                 task = graph[key]
+                # ngff-zarr >= 0.52 reads through a zarrista array adapter that
+                # records its local store as ``store_path``/``node_path``
+                adapter_store = getattr(task, "store_path", None)
+                if adapter_store is not None and hasattr(task, "node_path"):
+                    task = SimpleNamespace(
+                        store=str(adapter_store), name=task.node_path or ""
+                    )
                 # Check if this is a zarr array
                 if hasattr(task, "store") and hasattr(task, "name"):
                     # Extract store information
@@ -2969,36 +2970,24 @@ class ZarrNii:
 
         # Load the multiscales object
         try:
+            # ngff-zarr reads local directories, remote URLs and .zip/.ozx
+            # archive paths directly (it no longer accepts zarr-python store
+            # objects).
             if isinstance(store_or_path, str):
-                # Handle OME-Zarr zip files by creating a ZipStore
-                if _is_ome_zarr_zip_path(store_or_path):
-                    import zarr
-
-                    store = zarr.storage.ZipStore(store_or_path, mode="r")
-                    multiscales = nz.from_ngff_zarr(
-                        store, storage_options=storage_options or {}
-                    )
-                    # Note: We'll close the store after extracting metadata
-                else:
-                    multiscales = nz.from_ngff_zarr(
-                        store_or_path, storage_options=storage_options or {}
-                    )
+                multiscales = nz.from_ngff_zarr(
+                    store_or_path, storage_options=storage_options or {}
+                )
             else:
                 multiscales = nz.from_ngff_zarr(store_or_path)
         except Exception as e:
-            # Fallback for older zarr/ngff_zarr versions
-            if isinstance(store_or_path, str):
-                if _is_ome_zarr_zip_path(store_or_path):
-                    import zarr
-
-                    store = zarr.storage.ZipStore(store_or_path, mode="r")
-                    multiscales = nz.from_ngff_zarr(store)
-                else:
-                    store = fsspec.get_mapper(store_or_path, **storage_options or {})
-                    multiscales = nz.from_ngff_zarr(store)
-            else:
-                store = store_or_path
+            # Fallback: read remote paths through an fsspec key-to-bytes mapping
+            if isinstance(store_or_path, str) and not _is_ome_zarr_zip_path(
+                store_or_path
+            ):
+                store = fsspec.get_mapper(store_or_path, **storage_options or {})
                 multiscales = nz.from_ngff_zarr(store)
+            else:
+                raise
 
         # Extract omero metadata from the already-parsed multiscales metadata.
         # ngff_zarr's from_ngff_zarr() correctly handles both v0.4 (omero at root

@@ -26,7 +26,7 @@ dependencies = [
     "numpy>=1.26.4",
     "scipy>=1.12.0",
     "pandas>=2.2.0",
-    "ngff-zarr[cli,dask-image,itk,tensorstore,validate]>=0.34.0",
+    "ngff-zarr[cli,dask-image,itk,validate]>=0.52.0",
     "scikit-image>=0.22.0",
     "h5py>=3.14.0",
     "pyyaml>=6.0",
@@ -137,7 +137,6 @@ hatch-vcs = "*"
 # extra needs itkwasm-image-io, which is not on conda-forge)
 dask-image = "*"
 itk = ">=5.3.0"
-tensorstore = "*"
 jsonschema = "*"
 
 [tool.flake8]

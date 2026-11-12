@@ -125,7 +125,7 @@ class TestChannelSelection:
 
         # Should load all 3 channels, shape should be (1, z, y, x) after slicing for single channel or (3, z, y, x) for all
         # Since we load all channels, expect shape to be (z, y, x, num_channels) -> (16, 32, 32, 3)
-        expected_shape = (16, 32, 32, 3)
+        expected_shape = (3, 16, 32, 32)
         assert znimg.darr.shape == expected_shape
 
         # Check that omero metadata is preserved
@@ -138,7 +138,7 @@ class TestChannelSelection:
         znimg = ZarrNii.from_ome_zarr(test_dataset, channel_labels=["Abeta"])
 
         # Should load only 1 channel: shape (z, y, x, 1) = (16, 32, 32, 1)
-        expected_shape = (16, 32, 32, 1)
+        expected_shape = (1, 16, 32, 32)
         assert znimg.darr.shape == expected_shape
 
         # Check data value - Abeta is channel index 1, so should have value 200
@@ -151,13 +151,13 @@ class TestChannelSelection:
         znimg = ZarrNii.from_ome_zarr(test_dataset, channel_labels=["DAPI", "GFP"])
 
         # Should load 2 channels: shape (z, y, x, 2) = (16, 32, 32, 2)
-        expected_shape = (16, 32, 32, 2)
+        expected_shape = (2, 16, 32, 32)
         assert znimg.darr.shape == expected_shape
 
         # Check data values for each channel
         # DAPI=channel 0=100, GFP=channel 2=300
-        channel_0_sum = znimg.darr[:, :, :, 0].compute().sum()
-        channel_1_sum = znimg.darr[:, :, :, 1].compute().sum()
+        channel_0_sum = znimg.darr[0].compute().sum()
+        channel_1_sum = znimg.darr[1].compute().sum()
         expected_sums = [100 * 16 * 32 * 32, 300 * 16 * 32 * 32]  # DAPI=100, GFP=300
         assert [channel_0_sum, channel_1_sum] == expected_sums
 
@@ -166,12 +166,12 @@ class TestChannelSelection:
         znimg = ZarrNii.from_ome_zarr(test_dataset, channels=[1, 2])
 
         # Should load 2 channels: shape (z, y, x, 2) = (16, 32, 32, 2)
-        expected_shape = (16, 32, 32, 2)
+        expected_shape = (2, 16, 32, 32)
         assert znimg.darr.shape == expected_shape
 
         # Check data values - indices 1 and 2 should have values 200 and 300
-        channel_0_sum = znimg.darr[:, :, :, 0].compute().sum()
-        channel_1_sum = znimg.darr[:, :, :, 1].compute().sum()
+        channel_0_sum = znimg.darr[0].compute().sum()
+        channel_1_sum = znimg.darr[1].compute().sum()
         expected_sums = [200 * 16 * 32 * 32, 300 * 16 * 32 * 32]
         assert [channel_0_sum, channel_1_sum] == expected_sums
 
@@ -219,7 +219,7 @@ class TestChannelSelection:
                 channel_labels=["GFP"],
                 set_channel_labels=["DAPI", "GFP"],
             )
-            assert znimg.darr.shape == (16, 32, 32, 1)
+            assert znimg.darr.shape == (1, 16, 32, 32)
             assert znimg.omero is not None
             assert [ch.label for ch in znimg.omero.channels] == ["GFP"]
 
@@ -244,12 +244,12 @@ class TestChannelSelection:
         znimg = ZarrNii.from_ome_zarr(test_dataset, channel_labels=["GFP", "DAPI"])
 
         # Should load 2 channels in the order specified by labels: (z, y, x, 2) = (16, 32, 32, 2)
-        expected_shape = (16, 32, 32, 2)
+        expected_shape = (2, 16, 32, 32)
         assert znimg.darr.shape == expected_shape
 
         # Check data values - GFP first (300), then DAPI (100)
-        channel_0_sum = znimg.darr[:, :, :, 0].compute().sum()
-        channel_1_sum = znimg.darr[:, :, :, 1].compute().sum()
+        channel_0_sum = znimg.darr[0].compute().sum()
+        channel_1_sum = znimg.darr[1].compute().sum()
         expected_sums = [300 * 16 * 32 * 32, 100 * 16 * 32 * 32]  # GFP=300, DAPI=100
         assert [channel_0_sum, channel_1_sum] == expected_sums
 
@@ -324,7 +324,7 @@ class TestChannelSelection:
         selected_znimg = znimg.select_channels(channels=[0, 2])
 
         # Should have shape (z, y, x, 2)
-        expected_shape = (16, 32, 32, 2)
+        expected_shape = (2, 16, 32, 32)
         assert selected_znimg.darr.shape == expected_shape
 
         # Check that omero metadata is filtered correctly
@@ -341,12 +341,12 @@ class TestChannelSelection:
         selected_znimg = znimg.select_channels(channel_labels=["GFP", "DAPI"])
 
         # Should have shape (z, y, x, 2)
-        expected_shape = (16, 32, 32, 2)
+        expected_shape = (2, 16, 32, 32)
         assert selected_znimg.darr.shape == expected_shape
 
         # Check data values - GFP first (300), then DAPI (100)
-        channel_0_sum = selected_znimg.darr[:, :, :, 0].compute().sum()
-        channel_1_sum = selected_znimg.darr[:, :, :, 1].compute().sum()
+        channel_0_sum = selected_znimg.darr[0].compute().sum()
+        channel_1_sum = selected_znimg.darr[1].compute().sum()
         expected_sums = [300 * 16 * 32 * 32, 100 * 16 * 32 * 32]  # GFP=300, DAPI=100
         assert [channel_0_sum, channel_1_sum] == expected_sums
 
@@ -414,7 +414,7 @@ class TestChannelSelection:
         assert znimg.omero.channels[1].label == "GFP"
 
         # Data shape should match
-        expected_shape = (16, 32, 32, 2)
+        expected_shape = (2, 16, 32, 32)
         assert znimg.darr.shape == expected_shape
 
     def test_select_channels_with_czyx_dimension_order(self):

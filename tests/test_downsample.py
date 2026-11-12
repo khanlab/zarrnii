@@ -176,7 +176,7 @@ def test_near_isotropic_downsampling(nifti_nib):
     # Create a new NgffImage with anisotropic scales
     # z is very fine (0.1), x and y are coarse (0.4)
     modified_image = nz.NgffImage(
-        data=original_image.data,
+        data=original_image.data.persist(),  # store is overwritten below
         dims=list(original_image.dims),
         scale={"c": 1.0, "z": 0.1, "y": 0.4, "x": 0.4},
         translation=original_image.translation,
@@ -254,7 +254,7 @@ def test_near_isotropic_downsampling_no_effect(nifti_nib):
 
     # Create a new NgffImage with isotropic scales
     modified_image = nz.NgffImage(
-        data=original_image.data,
+        data=original_image.data.persist(),  # store is overwritten below
         dims=list(original_image.dims),
         scale={"c": 1.0, "z": 1.0, "y": 1.0, "x": 1.0},
         translation=original_image.translation,
@@ -337,7 +337,7 @@ def test_near_isotropic_downsampling_skipped_when_multiple_dims(nifti_nib):
     # Create a new NgffImage where x and y are fine and z is coarse
     # This means both x and y would need downsampling to match z
     modified_image = nz.NgffImage(
-        data=original_image.data,
+        data=original_image.data.persist(),  # store is overwritten below
         dims=list(original_image.dims),
         scale={"c": 1.0, "z": coarse_scale, "y": fine_scale, "x": fine_scale},
         translation=original_image.translation,

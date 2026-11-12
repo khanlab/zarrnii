@@ -109,7 +109,7 @@ class TestEdgeCases:
 
             # Test using from_ome_zarr which handles the sequential selection properly
             znimg = ZarrNii.from_ome_zarr(store_path, timepoints=[0, 2])
-            assert znimg.darr.shape == (2, 8, 16, 16, 2)
+            assert znimg.darr.shape == (2, 2, 8, 16, 16)
 
     def test_load_ngff_image_with_channels_and_timepoints(self):
         """Test loading with both channels and timepoints in load_ngff_image function."""
@@ -121,7 +121,7 @@ class TestEdgeCases:
 
             # Test using from_ome_zarr which handles the sequential selection properly
             znimg = ZarrNii.from_ome_zarr(store_path, channels=[1], timepoints=[0, 2])
-            assert znimg.darr.shape == (2, 8, 16, 16, 1)
+            assert znimg.darr.shape == (2, 1, 8, 16, 16)
 
     def test_select_dimensions_from_image_no_time_axis(self):
         """Test _select_dimensions_from_image when no time axis exists."""
@@ -136,7 +136,7 @@ class TestEdgeCases:
             result = _select_dimensions_from_image(
                 ngff_image, multiscales, channels=[0], timepoints=None
             )
-            assert result.data.shape == (8, 16, 16, 1)
+            assert result.data.shape == (1, 8, 16, 16)
 
     def test_select_dimensions_from_image_no_channel_axis(self):
         """Test _select_dimensions_from_image when no channel axis exists."""
@@ -247,13 +247,13 @@ class TestEdgeCases:
 
             # Test various combinations
             test_cases = [
-                ({"timepoints": [0, 2, 3]}, (3, 8, 16, 16, 2)),
-                ({"channels": [0, 1]}, (4, 8, 16, 16, 2)),  # Use valid channel indices
+                ({"timepoints": [0, 2, 3]}, (3, 2, 8, 16, 16)),
+                ({"channels": [0, 1]}, (4, 2, 8, 16, 16)),  # Use valid channel indices
                 (
                     {"timepoints": [1], "channels": [1]},
-                    (1, 8, 16, 16, 1),
+                    (1, 1, 8, 16, 16),
                 ),  # Use valid channel index
-                ({"timepoints": [0, 1, 2], "channels": [0]}, (3, 8, 16, 16, 1)),
+                ({"timepoints": [0, 1, 2], "channels": [0]}, (3, 1, 8, 16, 16)),
             ]
 
             for kwargs, expected_shape in test_cases:
@@ -272,13 +272,13 @@ class TestEdgeCases:
 
             # Test selecting by channel labels
             znimg = ZarrNii.from_ome_zarr(store_path, channel_labels=["GFP"])
-            assert znimg.darr.shape == (2, 8, 16, 16, 1)
+            assert znimg.darr.shape == (2, 1, 8, 16, 16)
 
             # Test combining with timepoints
             znimg = ZarrNii.from_ome_zarr(
                 store_path, timepoints=[1], channel_labels=["DAPI"]
             )
-            assert znimg.darr.shape == (1, 8, 16, 16, 1)
+            assert znimg.darr.shape == (1, 1, 8, 16, 16)
 
     def test_error_conditions(self):
         """Test various error conditions."""
@@ -310,8 +310,8 @@ class TestEdgeCases:
 
             # Test with single timepoint and channel
             znimg = ZarrNii.from_ome_zarr(store_path, timepoints=[0], channels=[0])
-            assert znimg.darr.shape == (1, 8, 16, 16, 1)
+            assert znimg.darr.shape == (1, 1, 8, 16, 16)
 
             # Test select_timepoints with single timepoint
             selected = znimg.select_timepoints([0])
-            assert selected.darr.shape == (1, 8, 16, 16, 1)
+            assert selected.darr.shape == (1, 1, 8, 16, 16)
