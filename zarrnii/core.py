@@ -394,6 +394,10 @@ def save_ngff_image(
     multiscales = nz.to_multiscales(
         ngff_image, scale_factors=scale_factors, chunks=chunks
     )
+    if xyz_orientation:
+        _apply_flips_to_multiscales_translations(
+            multiscales, _axcodes2flips(xyz_orientation)
+        )
 
     # Check if the target is an OME-Zarr zip file (based on extension)
     if isinstance(store_or_path, str) and _is_ome_zarr_zip_path(store_or_path):
@@ -700,7 +704,9 @@ def save_ngff_image_with_ome_zarr(
     # Convert NgffImage metadata to ome-zarr format
     axes = _ngff_image_to_ome_zarr_axes(ngff_image)
     coordinate_transformations = _ngff_image_to_ome_zarr_transforms(
-        ngff_image, scale_factors
+        ngff_image,
+        scale_factors,
+        dim_flips=_axcodes2flips(xyz_orientation) if xyz_orientation else None,
     )
     geometry_kwargs = _ome_zarr_geometry_kwargs(
         ngff_image, axes, coordinate_transformations
@@ -1037,6 +1043,7 @@ def _ngff_image_to_ome_zarr_axes(ngff_image: nz.NgffImage) -> list:
 def _ngff_image_to_ome_zarr_transforms(
     ngff_image: nz.NgffImage,
     scale_factors: Union[List[int], List[Dict[str, Union[int, float]]]],
+    dim_flips: Optional[Dict[str, float]] = None,
 ) -> list:
     """Convert NgffImage scale/translation to ome-zarr coordinate_transformations.
 
@@ -1046,6 +1053,9 @@ def _ngff_image_to_ome_zarr_transforms(
             of integers (xy-only downsampling) or a list of dicts with per-axis
             factors (e.g. ``[{"z": 2, "y": 2, "x": 2}, ...]``).  Values may be
             floats when derived from exact source level shapes.
+        dim_flips: Optional mapping from spatial dim name to +1/-1, the sign of
+            that voxel axis in the index-to-world affine (see
+            ``_axcodes2flips``). Unlisted dims are taken as +1 (not flipped).
 
     Returns:
         List of coordinate transformations for each pyramid level
@@ -1093,9 +1103,12 @@ def _ngff_image_to_ome_zarr_transforms(
                 dim_factor = 1
             level_scale.append(base_scale[i] * dim_factor)
             # A downsampled voxel covers level-0 voxels 0..f-1, so its centre is
-            # shifted by (f - 1) / 2 level-0 voxels (same convention as ngff-zarr)
+            # (f - 1) / 2 level-0 voxels along the axis. The translation is the
+            # world position of voxel 0, so on a flipped axis (world coordinate
+            # decreasing with index) the shift is negative.
+            sign = _dim_flip(dim_flips, dim)
             level_translation.append(
-                base_translation[i] + base_scale[i] * (dim_factor - 1) / 2
+                base_translation[i] + sign * base_scale[i] * (dim_factor - 1) / 2
             )
 
         coordinate_transformations.append(
@@ -1540,6 +1553,7 @@ def downsample_ngff_image(
     factors: Union[int, List[int]],
     spatial_dims: List[str] = ["z", "y", "x"],
     method: str = "local_mean",
+    dim_flips: Optional[Dict[str, float]] = None,
 ) -> nz.NgffImage:
     """
     Downsample an NgffImage by the specified factors.
@@ -1558,6 +1572,9 @@ def downsample_ngff_image(
             the default), ``'resize'`` (linear interpolation with
             anti-aliasing), ``'nearest'`` (nearest neighbour, for labels) or
             ``'zoom'`` (``scipy.ndimage.zoom``)
+        dim_flips: Optional mapping from spatial dim name to +1/-1, the sign of
+            that voxel axis in the index-to-world affine (see
+            ``_axcodes2flips``). Unlisted dims are taken as +1 (not flipped).
 
     Returns:
         New downsampled NgffImage
@@ -1606,11 +1623,13 @@ def downsample_ngff_image(
         if f == 1 or dim not in new_scale:
             continue
         # A downsampled voxel covers input voxels 0..f-1, so its centre is
-        # shifted by (f - 1) / 2 input voxels. zoom aligns the first voxel
-        # with the input instead, so its translation is unchanged.
+        # (f - 1) / 2 input voxels along the axis; on a flipped axis that is a
+        # negative world shift. zoom aligns the first voxel with the input
+        # instead, so its translation is unchanged.
         if method != Methods.ZOOM:
+            sign = _dim_flip(dim_flips, dim)
             new_translation[dim] = (
-                new_translation.get(dim, 0.0) + new_scale[dim] * (f - 1) / 2
+                new_translation.get(dim, 0.0) + sign * new_scale[dim] * (f - 1) / 2
             )
         new_scale[dim] *= f
 
@@ -3973,7 +3992,11 @@ class ZarrNii:
             )
 
         downsampled_image = downsample_ngff_image(
-            self.ngff_image, factors, spatial_dims, method=method
+            self.ngff_image,
+            factors,
+            spatial_dims,
+            method=method,
+            dim_flips=_axcodes2flips(self.orientation),
         )
         return ZarrNii(
             ngff_image=downsampled_image,
@@ -8494,3 +8517,45 @@ def _axcodes2flips(axcodes, labels=None):
         dim_flips[dims[i]] = float(flip)
 
     return dim_flips
+
+
+def _dim_flip(dim_flips: Optional[Dict[str, float]], dim: str) -> float:
+    """Sign (+1/-1) of a dim's voxel axis in the affine; +1 if unknown."""
+    if not dim_flips:
+        return 1.0
+    return float(dim_flips.get(dim.lower(), 1.0))
+
+
+def _apply_flips_to_multiscales_translations(
+    multiscales: nz.Multiscales, dim_flips: Dict[str, float]
+) -> None:
+    """Fix the sign of ngff-zarr's half-block translation shift on flipped axes.
+
+    ``ngff_zarr.to_multiscales`` shifts each level's translation by
+    ``+(f - 1) / 2`` voxels, which assumes world coordinates increase with
+    voxel index. On an axis that is flipped in the affine the shift must be
+    negated, i.e. ``t_level = t0 - (t_level_ngff - t0)``. Updates both the
+    images and the multiscales metadata in place.
+    """
+    base = multiscales.images[0]
+    dims = list(base.dims)
+    base_t = {d: base.translation.get(d, 0.0) for d in dims}
+    signs = {d: _dim_flip(dim_flips, d) for d in dims}
+    if all(sgn > 0 for sgn in signs.values()):
+        return
+
+    for level, image in enumerate(multiscales.images):
+        if level == 0:
+            continue
+        for d in dims:
+            if signs[d] < 0 and d in image.translation:
+                image.translation[d] = base_t[d] - (image.translation[d] - base_t[d])
+        datasets = getattr(multiscales.metadata, "datasets", None)
+        if datasets is None or level >= len(datasets):
+            continue
+        for ct in datasets[level].coordinateTransformations or []:
+            if getattr(ct, "type", None) == "translation":
+                ct.translation = [
+                    (base_t[d] - (v - base_t[d]) if signs[d] < 0 else v)
+                    for d, v in zip(dims, ct.translation)
+                ]
