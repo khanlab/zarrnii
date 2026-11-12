@@ -149,7 +149,9 @@ options:
   --as-ref              Create as reference without loading data
   --zooms ZOOMS         Custom voxel sizes as comma-separated floats (e.g., '2.0,2.0,2.0')
   --max-layer MAX_LAYER
-                        Maximum number of pyramid levels (default: 4)
+                        Number of pyramid levels, or 'auto' to downsample
+                        until the coarsest level is at most 128 voxels along
+                        each axis (default: auto)
   --scale-factors SCALE_FACTORS
                         Custom scale factors as comma-separated integers (e.g., '2,4,8')
 ```

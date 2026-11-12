@@ -46,11 +46,13 @@ for key in sorted(store.keys()):
 # Load a single-resolution image
 znimg = ZarrNii.from_nifti("path/to/highres.nii")
 
-# Create multiscale OME-Zarr with default parameters
-znimg.to_ome_zarr(
-    "output_multiscale.zarr",
-    max_layer=4  # Creates 4 downsampling levels
-)
+# Create multiscale OME-Zarr with default parameters. By default
+# (max_layer="auto") levels are added until the coarsest level is at most
+# 128 voxels along each axis, so large images get a small overview level.
+znimg.to_ome_zarr("output_multiscale.zarr")
+
+# Or ask for a fixed number of levels (including level 0)
+znimg.to_ome_zarr("output_multiscale.zarr", max_layer=4)
 ```
 
 ### Custom Multiscale Parameters
