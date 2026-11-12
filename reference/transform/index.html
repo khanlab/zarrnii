@@ -849,6 +849,34 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform-attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attributes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attributes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform.field_shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        field_shape
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#zarrnii.transform.DisplacementTransform-functions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -876,6 +904,39 @@
     <span class="md-ellipsis">
       
         apply_transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform.to_zarr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_zarr
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform.from_zarr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_zarr
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform.read_field_box" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_field_box
       
     </span>
   </a>
@@ -1703,6 +1764,34 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform-attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attributes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attributes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform.field_shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        field_shape
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#zarrnii.transform.DisplacementTransform-functions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1730,6 +1819,39 @@
     <span class="md-ellipsis">
       
         apply_transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform.to_zarr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_zarr
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform.from_zarr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_zarr
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zarrnii.transform.DisplacementTransform.read_field_box" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_field_box
       
     </span>
   </a>
@@ -2655,6 +2777,17 @@ displacements for arbitrary coordinates.</p>
             <p>Affine transformation from world to displacement field coordinates</p>
           </div>
         </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="zarrnii.transform.DisplacementTransform.zarr_path">zarr_path</span></code></b>
+              (<code><span title="str">str</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>If set, the field is stored in this zarr group (see
+:meth:<code>to_zarr</code>) instead of <code>disp_xyz</code>, and is only read when
+needed. Block-wise resampling then reads just the part each block
+needs from the store, instead of putting the field in the dask graph.</p>
+          </div>
+        </li>
     </ul>
 
 
@@ -2673,7 +2806,29 @@ displacements for arbitrary coordinates.</p>
 
 
 
+<h4 id="zarrnii.transform.DisplacementTransform-attributes">Attributes</h4>
 
+<div class="doc doc-object doc-attribute">
+
+
+
+<h5 id="zarrnii.transform.DisplacementTransform.field_shape" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">DisplacementTransform</span><span class="o">.</span><span class="n">field_shape</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Spatial shape (X, Y, Z) of the displacement field.</p>
+
+    </div>
+
+</div>
 
 
 <h4 id="zarrnii.transform.DisplacementTransform-functions">Functions</h4>
@@ -2742,16 +2897,7 @@ displacements for arbitrary coordinates.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/transform.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">293</span>
-<span class="normal">294</span>
-<span class="normal">295</span>
-<span class="normal">296</span>
-<span class="normal">297</span>
-<span class="normal">298</span>
-<span class="normal">299</span>
-<span class="normal">300</span>
-<span class="normal">301</span>
-<span class="normal">302</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">302</span>
 <span class="normal">303</span>
 <span class="normal">304</span>
 <span class="normal">305</span>
@@ -2776,7 +2922,16 @@ displacements for arbitrary coordinates.</p>
 <span class="normal">324</span>
 <span class="normal">325</span>
 <span class="normal">326</span>
-<span class="normal">327</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="normal">327</span>
+<span class="normal">328</span>
+<span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span>
+<span class="normal">334</span>
+<span class="normal">335</span>
+<span class="normal">336</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">from_nifti</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;DisplacementTransform&quot;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Create DisplacementTransform from NIfTI file.</span>
 
@@ -2867,16 +3022,7 @@ zero displacement (no transformation).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>zarrnii/transform.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">329</span>
-<span class="normal">330</span>
-<span class="normal">331</span>
-<span class="normal">332</span>
-<span class="normal">333</span>
-<span class="normal">334</span>
-<span class="normal">335</span>
-<span class="normal">336</span>
-<span class="normal">337</span>
-<span class="normal">338</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">338</span>
 <span class="normal">339</span>
 <span class="normal">340</span>
 <span class="normal">341</span>
@@ -2902,7 +3048,19 @@ zero displacement (no transformation).</p>
 <span class="normal">361</span>
 <span class="normal">362</span>
 <span class="normal">363</span>
-<span class="normal">364</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vecs</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">364</span>
+<span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span>
+<span class="normal">371</span>
+<span class="normal">372</span>
+<span class="normal">373</span>
+<span class="normal">374</span>
+<span class="normal">375</span>
+<span class="normal">376</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">apply_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vecs</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply displacement transformation to coordinate vectors.</span>
 
 <span class="sd">    Transforms input coordinates by interpolating displacement vectors</span>
@@ -2919,25 +3077,237 @@ zero displacement (no transformation).</p>
 <span class="sd">        Points outside the displacement field domain are filled with</span>
 <span class="sd">        zero displacement (no transformation).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">vecs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">vecs</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+    <span class="n">single</span> <span class="o">=</span> <span class="n">vecs</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span>
+    <span class="n">pts</span> <span class="o">=</span> <span class="n">vecs</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">vecs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">single</span> <span class="k">else</span> <span class="n">vecs</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span>
+
     <span class="c1"># Transform points to voxel space of the displacement field</span>
-    <span class="n">vox_vecs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">disp_affine</span><span class="o">.</span><span class="n">invert</span><span class="p">()</span> <span class="o">@</span> <span class="n">vecs</span>
+    <span class="n">inv</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_inv_affine</span><span class="p">()</span>
+    <span class="n">vox</span> <span class="o">=</span> <span class="n">inv</span><span class="p">[:</span><span class="mi">3</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">]</span> <span class="o">@</span> <span class="n">pts</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">+</span> <span class="n">inv</span><span class="p">[:</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">:</span><span class="mi">4</span><span class="p">]</span>
 
-    <span class="c1"># Initialize displacement vectors</span>
-    <span class="n">disp_vecs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">vox_vecs</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
-
-    <span class="c1"># Interpolate displacement for each spatial dimension (x, y, z)</span>
+    <span class="c1"># Trilinear interpolation of each displacement component. As in ITK,</span>
+    <span class="c1"># points within half a voxel of the grid are clamped to its edge, and</span>
+    <span class="c1"># points further out get zero displacement (no transformation).</span>
+    <span class="n">field_cxyz</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field_cxyz</span><span class="p">()</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">field_cxyz</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:])[:,</span> <span class="kc">None</span><span class="p">]</span>
+    <span class="n">outside</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">((</span><span class="n">vox</span> <span class="o">&lt;</span> <span class="o">-</span><span class="mf">0.5</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">vox</span> <span class="o">&gt;</span> <span class="n">n</span> <span class="o">-</span> <span class="mf">0.5</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">disp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span> <span class="n">vox</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
-        <span class="n">disp_vecs</span><span class="p">[</span><span class="n">ax</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">interpn</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">disp_grid</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">disp_xyz</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="n">ax</span><span class="p">]</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(),</span>
-            <span class="n">vox_vecs</span><span class="p">[:</span><span class="mi">3</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
-            <span class="n">method</span><span class="o">=</span><span class="s2">&quot;linear&quot;</span><span class="p">,</span>
-            <span class="n">bounds_error</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-            <span class="n">fill_value</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-        <span class="p">)</span>
+        <span class="n">disp</span><span class="p">[</span><span class="n">ax</span><span class="p">]</span> <span class="o">=</span> <span class="n">map_coordinates</span><span class="p">(</span><span class="n">field_cxyz</span><span class="p">[</span><span class="n">ax</span><span class="p">],</span> <span class="n">vox</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;nearest&quot;</span><span class="p">)</span>
+    <span class="n">disp</span><span class="p">[:,</span> <span class="n">outside</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
 
-    <span class="c1"># Add displacement to original coordinates</span>
-    <span class="k">return</span> <span class="n">vecs</span> <span class="o">+</span> <span class="n">disp_vecs</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">pts</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">out</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">+=</span> <span class="n">disp</span>
+    <span class="k">return</span> <span class="n">out</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">single</span> <span class="k">else</span> <span class="n">out</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.transform.DisplacementTransform.to_zarr" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">DisplacementTransform</span><span class="o">.</span><span class="n">to_zarr</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">chunk</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Save the field to a zarr group and return a transform backed by it.</p>
+<p>The field is stored as float32, <code>(3, X, Y, Z)</code> with <code>chunk</code>-voxel
+chunks, with the field's voxel-to-world affine in the group attributes.
+Use the returned transform with :meth:<code>ZarrNii.apply_transform</code> so that
+each output block reads only the part of the field it needs, which keeps
+a large field out of the dask graph (important with
+<code>dask.distributed</code>, where the graph is sent to the scheduler). The
+store must be readable by every worker.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>path</code></b>
+              (<code><span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="bytes">bytes</span>]</code>)
+          –
+          <div class="doc-md-description">
+            <p>Path of the zarr group to write (overwritten if it exists).</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>chunk</code></b>
+              (<code><span title="int">int</span></code>, default:
+                  <code>32</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Chunk size along each spatial axis.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+<b><code>A</code></b> (              <code>&#39;DisplacementTransform&#39;</code>
+)          –
+          <div class="doc-md-description">
+            <p>class:<code>DisplacementTransform</code> reading from <code>path</code>.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/transform.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">378</span>
+<span class="normal">379</span>
+<span class="normal">380</span>
+<span class="normal">381</span>
+<span class="normal">382</span>
+<span class="normal">383</span>
+<span class="normal">384</span>
+<span class="normal">385</span>
+<span class="normal">386</span>
+<span class="normal">387</span>
+<span class="normal">388</span>
+<span class="normal">389</span>
+<span class="normal">390</span>
+<span class="normal">391</span>
+<span class="normal">392</span>
+<span class="normal">393</span>
+<span class="normal">394</span>
+<span class="normal">395</span>
+<span class="normal">396</span>
+<span class="normal">397</span>
+<span class="normal">398</span>
+<span class="normal">399</span>
+<span class="normal">400</span>
+<span class="normal">401</span>
+<span class="normal">402</span>
+<span class="normal">403</span>
+<span class="normal">404</span>
+<span class="normal">405</span>
+<span class="normal">406</span>
+<span class="normal">407</span>
+<span class="normal">408</span>
+<span class="normal">409</span>
+<span class="normal">410</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_zarr</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">],</span> <span class="n">chunk</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">32</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;DisplacementTransform&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Save the field to a zarr group and return a transform backed by it.</span>
+
+<span class="sd">    The field is stored as float32, ``(3, X, Y, Z)`` with ``chunk``-voxel</span>
+<span class="sd">    chunks, with the field&#39;s voxel-to-world affine in the group attributes.</span>
+<span class="sd">    Use the returned transform with :meth:`ZarrNii.apply_transform` so that</span>
+<span class="sd">    each output block reads only the part of the field it needs, which keeps</span>
+<span class="sd">    a large field out of the dask graph (important with</span>
+<span class="sd">    ``dask.distributed``, where the graph is sent to the scheduler). The</span>
+<span class="sd">    store must be readable by every worker.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        path: Path of the zarr group to write (overwritten if it exists).</span>
+<span class="sd">        chunk: Chunk size along each spatial axis.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        A :class:`DisplacementTransform` reading from ``path``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">zarr</span>
+
+    <span class="n">field_cxyz</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field_cxyz</span><span class="p">()</span>
+    <span class="n">group</span> <span class="o">=</span> <span class="n">zarr</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">),</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;w&quot;</span><span class="p">)</span>
+    <span class="n">arr</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">create_array</span><span class="p">(</span>
+        <span class="s2">&quot;field&quot;</span><span class="p">,</span>
+        <span class="n">shape</span><span class="o">=</span><span class="n">field_cxyz</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+        <span class="n">chunks</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">chunk</span><span class="p">,</span> <span class="n">chunk</span><span class="p">,</span> <span class="n">chunk</span><span class="p">),</span>
+        <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;float32&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">arr</span><span class="p">[</span><span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">field_cxyz</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;affine&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">disp_affine</span><span class="o">.</span><span class="n">matrix</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">DisplacementTransform</span><span class="o">.</span><span class="n">from_zarr</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.transform.DisplacementTransform.from_zarr" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">DisplacementTransform</span><span class="o">.</span><span class="n">from_zarr</span><span class="p">(</span><span class="n">path</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Open a displacement field saved with :meth:<code>to_zarr</code> (lazily).</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/transform.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">412</span>
+<span class="normal">413</span>
+<span class="normal">414</span>
+<span class="normal">415</span>
+<span class="normal">416</span>
+<span class="normal">417</span>
+<span class="normal">418</span>
+<span class="normal">419</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">from_zarr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;DisplacementTransform&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Open a displacement field saved with :meth:`to_zarr` (lazily).&quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">zarr</span>
+
+    <span class="n">group</span> <span class="o">=</span> <span class="n">zarr</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">),</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r&quot;</span><span class="p">)</span>
+    <span class="n">affine</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;affine&quot;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">disp_affine</span><span class="o">=</span><span class="n">AffineTransform</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span><span class="n">affine</span><span class="p">),</span> <span class="n">zarr_path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="zarrnii.transform.DisplacementTransform.read_field_box" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">zarrnii</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">DisplacementTransform</span><span class="o">.</span><span class="n">read_field_box</span><span class="p">(</span><span class="n">v0</span><span class="p">,</span> <span class="n">v1</span><span class="p">)</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Field values <code>(3, ...)</code> in the voxel box <code>[v0, v1)</code>.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>zarrnii/transform.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">432</span>
+<span class="normal">433</span>
+<span class="normal">434</span>
+<span class="normal">435</span>
+<span class="normal">436</span>
+<span class="normal">437</span>
+<span class="normal">438</span>
+<span class="normal">439</span>
+<span class="normal">440</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">read_field_box</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">v0</span><span class="p">,</span> <span class="n">v1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Field values ``(3, ...)`` in the voxel box ``[v0, v1)``.&quot;&quot;&quot;</span>
+    <span class="n">sl</span> <span class="o">=</span> <span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">),)</span> <span class="o">+</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">b</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">v0</span><span class="p">,</span> <span class="n">v1</span><span class="p">))</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">zarr_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field_cache</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">zarr</span>
+
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">zarr</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">zarr_path</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r&quot;</span><span class="p">)[</span><span class="s2">&quot;field&quot;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">arr</span><span class="p">[</span><span class="n">sl</span><span class="p">])</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_field_cxyz</span><span class="p">()[</span><span class="n">sl</span><span class="p">]</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

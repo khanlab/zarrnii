@@ -1031,6 +1031,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#resampling-large-images-into-template-space" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resampling Large Images into Template Space
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#multiple-transformations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1477,6 +1488,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#resampling-large-images-into-template-space" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resampling Large Images into Template Space
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#multiple-transformations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1609,6 +1631,47 @@ disp_transform = DisplacementTransform.from_nifti(&quot;displacement_field.nii&q
 # Apply displacement transformation
 deformed = znimg.apply_transform(disp_transform, ref_znimg=ref_znimg)
 </code></pre>
+<h3 id="resampling-large-images-into-template-space">Resampling Large Images into Template Space</h3>
+<p><code>apply_transform</code> maps each output (reference) voxel through the transforms
+into the floating image, so the transforms go from reference (template)
+physical space to floating (subject) physical space, as with
+<code>antsApplyTransforms</code>. It is lazy and block-wise, and works on whole-brain
+light-sheet data:</p>
+<pre><code class="language-python">from zarrnii import AffineTransform, DisplacementTransform, ZarrNii
+
+spim = ZarrNii.from_ome_zarr(&quot;sub-01_SPIM.ome.zarr&quot;, level=0, channel_labels=[&quot;PI&quot;])
+template = ZarrNii.from_nifti(&quot;template_25um.nii.gz&quot;, axes_order=&quot;ZYX&quot;)
+
+# template -&gt; subject: warp (in template space) first, then the affine
+warp = DisplacementTransform.from_nifti(&quot;template_to_subject_warp.nii.gz&quot;)
+affine = AffineTransform.from_txt(&quot;template_to_subject_affine_ras.txt&quot;)
+
+# 10x finer than the template (2.5 um) over the template's field of view
+out = spim.apply_transform(warp, affine, ref_znimg=template, ref_zoom=10, chunks=128)
+out.to_ome_zarr(&quot;sub-01_space-template_res-2p5um_SPIM.ome.zarr&quot;)
+</code></pre>
+<p>Useful options:</p>
+<ul>
+<li><code>ref_zoom</code>: zoom factor for the reference grid (see <code>ZarrNii.ref_grid</code>),
+  keeping its field of view.</li>
+<li><code>interpolation</code>: <code>"linear"</code> (default), <code>"nearest"</code> for label images, or
+  <code>"cubic"</code>.</li>
+<li><code>dtype</code>: output dtype (defaults to the input's; integers are rounded).</li>
+<li><code>chunks</code>: output chunk size; each block reads the floating region it maps to,
+  so 128 is a good default.</li>
+<li><code>coord_step</code> / <code>coord_tol</code>: the transforms are evaluated on a lattice of
+  control points and interpolated in between. The step is chosen
+  automatically so the error stays below <code>coord_tol</code> floating voxels (default
+  0.1); affine-only chains are exact, and <code>coord_step=1</code> evaluates every
+  voxel.</li>
+<li><code>io</code>: <code>"graph"</code> (default) shares input chunks between output blocks, so each
+  is read once; <code>"direct"</code> makes every output block read its own inputs, which
+  keeps blocks independent (good for <code>dask.distributed</code> and object stores) at
+  the cost of re-reading overlaps.</li>
+</ul>
+<p>Output blocks that fall outside the floating image are filled without reading
+any data, and the floating image may carry lazy operations (e.g. bias-field
+correction or channel selection).</p>
 <h3 id="multiple-transformations">Multiple Transformations</h3>
 <pre><code class="language-python"># Apply multiple transformations in sequence
 # Each transformation is applied sequentially
