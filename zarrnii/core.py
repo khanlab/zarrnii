@@ -390,6 +390,18 @@ def save_ngff_image(
             # Take the chunk size from the first spatial dimension (index 1)
             chunks = chunksize[1]
 
+    # Spatial values are stored in mm internally, so a missing spatial unit
+    # means millimeter (as in _ngff_image_to_ome_zarr_axes). Without this,
+    # ngff-zarr writes the axes with no unit and readers take micrometer.
+    spatial_dims = [d for d in ngff_image.dims if d in ("x", "y", "z")]
+    axes_units = dict(ngff_image.axes_units or {})
+    if any(d not in axes_units for d in spatial_dims):
+        for d in spatial_dims:
+            axes_units.setdefault(d, "millimeter")
+        ngff_image = _derive_ngff_image(
+            ngff_image, data=ngff_image.data, axes_units=axes_units
+        )
+
     # Create multiscales from the image, passing chunks to preserve original chunking
     multiscales = nz.to_multiscales(
         ngff_image, scale_factors=scale_factors, chunks=chunks

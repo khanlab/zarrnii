@@ -76,7 +76,9 @@ class TestFromDarrAxesUnits:
                 data_4d, axes_units={"x": "micrometer", "y": "mm", "z": "micrometer"}
             )
 
-    def test_no_units_round_trips_through_ome_zarr(self, tmp_path):
+    @pytest.mark.parametrize("backend", ["ome-zarr-py", "ngff-zarr"])
+    @pytest.mark.parametrize("max_layer", [1, 2])
+    def test_no_units_round_trips_through_ome_zarr(self, tmp_path, backend, max_layer):
         """Without axes_units, spacing is mm and is written as mm (not um)."""
         darr = da.zeros((1, 8, 8, 8), chunks=(1, 8, 8, 8), dtype=np.float32)
         znii = ZarrNii.from_darr(darr, spacing=(0.01, 0.02, 0.03), origin=(1, 2, 3))
@@ -84,8 +86,17 @@ class TestFromDarrAxesUnits:
             ax["unit"] == "millimeter" for ax in znii.axes if ax["type"] == "space"
         )
         path = str(tmp_path / "nounits.ome.zarr")
-        znii.to_ome_zarr(path, max_layer=0)
+        znii.to_ome_zarr(path, max_layer=max_layer, backend=backend)
         back = ZarrNii.from_ome_zarr(path)
+        import zarr
+
+        attrs = zarr.open_group(path, mode="r").attrs.asdict()
+        ms = attrs["ome"]["multiscales"] if "ome" in attrs else attrs["multiscales"]
+        assert all(
+            ax.get("unit") == "millimeter"
+            for ax in ms[0]["axes"]
+            if ax.get("type") == "space"
+        )
         np.testing.assert_allclose(back.get_zooms(), [0.01, 0.02, 0.03])
         np.testing.assert_allclose(back.get_origin(), [1, 2, 3])
         np.testing.assert_allclose(back.get_affine_matrix(), znii.get_affine_matrix())
