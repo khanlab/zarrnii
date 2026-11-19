@@ -66,6 +66,25 @@ znimg.to_ome_zarr(
 )
 ```
 
+### Writing to a Remote Store
+
+By default each pyramid level is computed from the level written before it, which is read back from the output.
+On object storage or behind an HTTP proxy, that downloads nearly everything again. With `pyramid_source="local"`
+nothing is read back: level 0 and the next level(s) are written from the same in-memory blocks, and the rest from a
+temporary local copy of one smaller level. The pyramid is the same (`scaling_method="local_mean"`, the default).
+
+```python
+znimg.to_ome_zarr(
+    remote_group,  # e.g. a zarr group on an fsspec S3 store
+    storage_options={"chunks": (1, 128, 128, 128), "shards": (1, 256, 256, 512)},
+    pyramid_source="local",
+    pyramid_tmp_dir="/tmp",  # fast local disk for the temporary level
+)
+```
+
+`pyramid_block_bytes` (default 256 MiB) bounds how much of level 0 each dask thread reads at once; a larger budget
+writes more levels directly from level 0's blocks.
+
 ## Working with Different Resolution Levels
 
 ### Processing at Different Scales
