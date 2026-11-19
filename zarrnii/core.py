@@ -599,7 +599,23 @@ def _compute_isotropic_scale_factors(
     return result
 
 
-def _write_image_level_by_level(image: da.Array, group, method, **kwargs) -> None:
+# Default memory budget for one block of the local pyramid writer (see
+# _write_pyramid_locally): a level-0 block holds whole shards of every level it
+# writes directly, so this bounds memory per dask thread.
+PYRAMID_BLOCK_BYTES = 256 * 2**20
+
+PYRAMID_SOURCES = ("store", "local")
+
+
+def _write_image_level_by_level(
+    image: da.Array,
+    group,
+    method,
+    pyramid_source: str = "store",
+    pyramid_tmp_dir: Optional[str] = None,
+    pyramid_block_bytes: int = PYRAMID_BLOCK_BYTES,
+    **kwargs,
+) -> None:
     """``ome_zarr.writer.write_image``, but computing one pyramid level at a time.
 
     ome-zarr derives every pyramid level from the level-0 graph and computes
@@ -607,20 +623,45 @@ def _write_image_level_by_level(image: da.Array, group, method, **kwargs) -> Non
     then rechunked, so dask holds partial blocks from across the whole image
     until they can be merged, and peak memory grows with the image size.
 
-    Here ``write_image`` only creates the arrays and the metadata. Level 0 is
-    then computed and stored, and each lower level is computed from the level
-    stored before it, with the same downsampling ome-zarr uses. Peak memory
-    then depends on the chunk size and the number of threads, not on the image
-    size. Level 0 is read back once more, which costs less than holding it.
+    Here ``write_image`` only creates the arrays and the metadata. With
+    ``pyramid_source="store"`` (the default), level 0 is then computed and
+    stored, and each lower level is computed from the level stored before it,
+    with the same downsampling ome-zarr uses. Peak memory then depends on the
+    chunk size and the number of threads, not on the image size. Level 0 is
+    read back once more, which costs less than holding it.
+
+    Reading levels back is slow when the store is remote. With
+    ``pyramid_source="local"`` (``local_mean`` only), see
+    :func:`_write_pyramid_locally`: nothing is read back from ``group``.
 
     Args:
         image: Full-resolution dask array.
         group: zarr group to write into.
         method: ``ome_zarr.scale.Methods`` used to downsample.
+        pyramid_source: ``"store"`` to build each lower level from the level
+            stored in ``group``; ``"local"`` to build them without reading
+            ``group``.
+        pyramid_tmp_dir: Directory for the local pyramid's temporary store
+            (``"local"`` only); defaults to the system temporary directory.
+        pyramid_block_bytes: Memory budget for one block of the local pyramid
+            (``"local"`` only).
         **kwargs: Other arguments for ``ome_zarr.writer.write_image``.
     """
-    from ome_zarr.scale import method_dispatch
+    from ome_zarr.scale import Methods, method_dispatch
     from ome_zarr.writer import write_image
+
+    if pyramid_source not in PYRAMID_SOURCES:
+        raise ValueError(
+            f"pyramid_source must be one of {PYRAMID_SOURCES}, got {pyramid_source!r}"
+        )
+    if pyramid_source == "local" and Methods(method) != Methods.LOCAL_MEAN:
+        warnings.warn(
+            f"pyramid_source='local' supports scaling_method='local_mean' only; "
+            f"building the pyramid from the store for {Methods(method).value!r}",
+            UserWarning,
+            stacklevel=3,
+        )
+        pyramid_source = "store"
 
     write_image(image=image, group=group, method=method, compute=False, **kwargs)
 
@@ -629,8 +670,14 @@ def _write_image_level_by_level(image: da.Array, group, method, **kwargs) -> Non
         attrs["ome"]["multiscales"] if "ome" in attrs else attrs["multiscales"]
     )
     paths = [dataset["path"] for dataset in multiscales[0]["datasets"]]
-    downsample = method_dispatch[method]
 
+    if pyramid_source == "local":
+        _write_pyramid_locally(
+            image, [group[path] for path in paths], pyramid_tmp_dir, pyramid_block_bytes
+        )
+        return
+
+    downsample = method_dispatch[method]
     level = image
     for idx, path in enumerate(paths):
         zarr_array = group[path]
@@ -645,6 +692,146 @@ def _write_image_level_by_level(image: da.Array, group, method, **kwargs) -> Non
         # instead rechunk to dask's "auto" size, i.e. larger blocks.)
         write_chunks = getattr(zarr_array, "shards", None) or zarr_array.chunks
         da.store(level.rechunk(write_chunks), zarr_array, lock=False)
+
+
+def _local_mean_factors(shape_hi, shape_lo) -> Tuple[int, ...]:
+    """Integer downsampling factors between two levels, as ome-zarr's local_mean."""
+    return tuple(int(hi / lo) for hi, lo in zip(shape_hi, shape_lo))
+
+
+def _local_mean_blockwise(
+    image: da.Array, factors: Tuple[int, ...], output_shape: Tuple[int, ...]
+) -> da.Array:
+    """Local-mean downsampling of each dask block, cropped to ``output_shape``.
+
+    Matches ``ome_zarr.dask_utils.local_mean`` (skimage's
+    ``downscale_local_mean`` with the same integer factors) when every block
+    boundary falls on a multiple of the factors: the partial window at the far
+    edge is dropped in both. Unlike ome-zarr's version, it keeps the blocks as
+    they are instead of rechunking the result, so each output block comes from
+    exactly one input block.
+    """
+    from skimage.transform import downscale_local_mean
+
+    def block(b):
+        return downscale_local_mean(b, factors).astype(b.dtype)
+
+    # every block boundary on a multiple of the factor, or windows straddle blocks
+    if any(c % f for axis, f in zip(image.chunks, factors) for c in axis[:-1]):
+        image = image.rechunk(
+            tuple(max(f, axis[0] // f * f) for axis, f in zip(image.chunks, factors))
+        )
+    chunks = tuple(
+        tuple(-(-c // f) for c in axis) for axis, f in zip(image.chunks, factors)
+    )
+    out = da.map_blocks(block, image, dtype=image.dtype, chunks=chunks)
+    return out[tuple(slice(0, n) for n in output_shape)]
+
+
+def _write_pyramid_locally(
+    image: da.Array,
+    arrays: list,
+    tmp_dir: Optional[str],
+    block_bytes: int,
+) -> None:
+    """Write a local-mean pyramid without reading any level back from its store.
+
+    For a remote store (object storage, an HTTP proxy), building each level
+    from the one just stored downloads every level again. Instead:
+
+    1. The source is read once, in blocks of whole level-0 shards (or chunks)
+       grown along each axis by the downsampling factors of the levels below,
+       so that downsampling a block gives whole shards of those levels too.
+       Levels 0 to k are written straight from these blocks, one task per
+       shard at every level, so no shard is written twice. k is the deepest
+       level whose block still fits ``block_bytes``.
+    2. Level k + 1, also from those blocks, goes to a temporary local zarr
+       store; each lower level is built from the local copy of the level
+       above, written to ``arrays`` and, if another level follows, locally.
+
+    Level k + 1 is the only one held on local disk. The values match the
+    store-based writer's: the same local mean, with block boundaries on
+    multiples of the factors.
+
+    Args:
+        image: Full-resolution dask array.
+        arrays: The pyramid's zarr arrays, level 0 first, created by
+            ``write_image(compute=False)``.
+        tmp_dir: Parent directory of the temporary store; the system's
+            temporary directory if None.
+        block_bytes: Largest level-0 block, in bytes, read in step 1.
+    """
+    import shutil
+    import tempfile
+
+    import zarr
+    from zarr.storage import LocalStore
+
+    def write_shape(array) -> Tuple[int, ...]:
+        return tuple(getattr(array, "shards", None) or array.chunks)
+
+    shard = write_shape(arrays[0])
+    steps = [
+        _local_mean_factors(arrays[i].shape, arrays[i + 1].shape)
+        for i in range(len(arrays) - 1)
+    ]
+
+    # deepest level whose shards a level-0 block of at most block_bytes can
+    # produce whole
+    direct, grown = 0, (1,) * len(shard)
+    for step in steps:
+        candidate = tuple(g * s for g, s in zip(grown, step))
+        size = int(np.prod([b * c for b, c in zip(shard, candidate)]))
+        if size * image.dtype.itemsize > block_bytes:
+            break
+        direct, grown = direct + 1, candidate
+
+    tmp_root = tempfile.mkdtemp(prefix="zarrnii-pyramid-", dir=tmp_dir)
+    try:
+
+        def local_copy(index: int, level: da.Array):
+            return zarr.create_array(
+                LocalStore(os.path.join(tmp_root, str(index))),
+                shape=level.shape,
+                dtype=level.dtype,
+                chunks=tuple(axis[0] for axis in level.chunks),
+            )
+
+        # 1. levels 0..direct from one read of the source, level direct + 1 to disk
+        level = image.rechunk(tuple(b * g for b, g in zip(shard, grown)))
+        stores = [da.store(level, arrays[0], lock=False, compute=False)]
+        for i in range(1, direct + 1):
+            level = _local_mean_blockwise(level, steps[i - 1], arrays[i].shape)
+            stores.append(da.store(level, arrays[i], lock=False, compute=False))
+        local = None
+        if direct + 1 < len(arrays):
+            below = _local_mean_blockwise(
+                level, steps[direct], arrays[direct + 1].shape
+            )
+            local = local_copy(direct + 1, below)
+            stores.append(da.store(below, local, lock=False, compute=False))
+        da.compute(*stores)
+
+        # 2. the rest from the local copy, a level at a time
+        for i in range(direct + 1, len(arrays)):
+            source = da.from_zarr(local)
+            stores = [
+                da.store(
+                    source.rechunk(write_shape(arrays[i])),
+                    arrays[i],
+                    lock=False,
+                    compute=False,
+                )
+            ]
+            local = None
+            if i + 1 < len(arrays):
+                below = _local_mean_blockwise(source, steps[i], arrays[i + 1].shape)
+                local = local_copy(i + 1, below)
+                stores.append(da.store(below, local, lock=False, compute=False))
+            da.compute(*stores)
+            shutil.rmtree(os.path.join(tmp_root, str(i)), ignore_errors=True)
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
 
 
 def _ome_zarr_geometry_kwargs(
@@ -693,6 +880,9 @@ def save_ngff_image_with_ome_zarr(
     compute: bool = True,
     zarr_format: int = 3,
     storage_options: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None,
+    pyramid_source: str = "store",
+    pyramid_tmp_dir: Optional[str] = None,
+    pyramid_block_bytes: int = PYRAMID_BLOCK_BYTES,
     **kwargs: Any,
 ) -> None:
     """Save an NgffImage to an OME-Zarr store using ome-zarr-py library.
@@ -737,6 +927,23 @@ def save_ngff_image_with_ome_zarr(
 
                 storage_options={"shards": (1, 64, 64, 64)}
 
+        pyramid_source: How the lower pyramid levels are built. ``"store"``
+            (default) builds each from the level just written, reading it back
+            from ``store_or_path``. ``"local"`` reads nothing back: level 0
+            and the next level(s) are written from the same in-memory blocks,
+            and the rest from a temporary local copy of one smaller level.
+            Use it when the store is remote (object storage, a proxy), where
+            reading every level back costs a download. Requires
+            ``scaling_method="local_mean"`` (other methods fall back to
+            ``"store"`` with a warning) and gives the same values. Applies
+            when the data are a dask array and ``compute`` is True.
+        pyramid_tmp_dir: Directory for the ``"local"`` pyramid's temporary
+            store, e.g. a node's fast local disk; defaults to the system's
+            temporary directory. It holds one level at most, smaller than
+            level 0, and is removed afterwards.
+        pyramid_block_bytes: For ``"local"``: the largest block of level 0, in
+            bytes, read at once by each dask thread (default 256 MiB). Larger
+            blocks let more levels be written directly from level 0's blocks.
         **kwargs: Additional arguments passed to ome_zarr.writer.write_image
 
     Raises:
@@ -820,7 +1027,13 @@ def save_ngff_image_with_ome_zarr(
             )
             if compute and isinstance(ngff_image.data, da.Array):
                 _write_image_level_by_level(
-                    ngff_image.data, store, method, **write_image_kwargs
+                    ngff_image.data,
+                    store,
+                    method,
+                    pyramid_source=pyramid_source,
+                    pyramid_tmp_dir=pyramid_tmp_dir,
+                    pyramid_block_bytes=pyramid_block_bytes,
+                    **write_image_kwargs,
                 )
             else:
                 write_image(
@@ -860,7 +1073,13 @@ def save_ngff_image_with_ome_zarr(
         )
         if compute and isinstance(ngff_image.data, da.Array):
             _write_image_level_by_level(
-                ngff_image.data, store, method, **write_image_kwargs
+                ngff_image.data,
+                store,
+                method,
+                pyramid_source=pyramid_source,
+                pyramid_tmp_dir=pyramid_tmp_dir,
+                pyramid_block_bytes=pyramid_block_bytes,
+                **write_image_kwargs,
             )
         else:
             write_image(
@@ -4861,7 +5080,9 @@ class ZarrNii:
             **kwargs: Additional arguments passed to the save function.
                 For 'ngff-zarr': passed to to_ngff_zarr function
                 For 'ome-zarr-py': passed to write_image (e.g., scaling_method,
-                compute)
+                compute), and ``pyramid_source="local"`` to build the pyramid
+                without reading levels back from the store, for remote stores
+                (see :func:`save_ngff_image_with_ome_zarr`)
 
         Returns:
             Self for method chaining
